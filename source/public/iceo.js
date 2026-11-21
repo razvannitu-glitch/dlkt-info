@@ -717,6 +717,25 @@ function cardNode(view, index, total, saved, automaticInsights = true) {
     }
     else
         attachInsight(node, card, automaticInsights, () => currentCardByNode.get(node) ?? card);
+    // Keep one semantic headline. Restore it before the photo error handler removes the figure.
+    if (photograph) {
+        const headline = node.querySelector('.card-content > h3');
+        const frame = photograph.querySelector('.card-photo-frame');
+        const image = frame?.querySelector('img[data-reviewed-photo]');
+        const content = node.querySelector('.card-content');
+        if (headline && frame && image && content) {
+            const restoreHeadline = () => {
+                if (headline.parentElement === frame) {
+                    content.querySelector('.card-kind')?.after(headline);
+                    node.classList.remove('photo-headline');
+                }
+            };
+            image.addEventListener('error', restoreHeadline, { capture: true, once: true });
+            frame.append(headline);
+            node.classList.add('photo-headline');
+            if (image.complete && image.naturalWidth === 0) restoreHeadline();
+        }
+    }
     return node;
 }
 function render() {
