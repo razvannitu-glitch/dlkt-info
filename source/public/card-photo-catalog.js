@@ -69,39 +69,169 @@ export function usableContextPhoto(photo, now) {
         && commonsUrl(photo.assetUrl, true) && commonsUrl(photo.creditUrl) && photo.sourceUrl === photo.creditUrl
         && contextLicenses[photo.license] === photo.licenseUrl && photo.fit === 'contain';
 }
-export function contextPhotoSubject(card) {
-    const title = card.title.toLowerCase();
-    if (/\b(?:equestrian|dressage|show[ -]?jumping|horse riding|horse racing|horses?)\b/u.test(title))
-        return 'equestrian';
-    if (/\b(?:roadworks?|road closures?|potholes?|street resurfacing|bridge repairs?|traffic diversions?|detours?)\b/u.test(title))
-        return 'roadworks';
-    if (/\b(?:concerts?|orchestra|singers?|live music|musicians?|opera|albums?|music festivals?)\b/u.test(title))
-        return 'music';
-    if (/\b(?:football|soccer|uefa|fifa|premier league)\b/u.test(title))
-        return 'football';
-    if (/\b(?:parents?|parenting|families|family|children|babies|baby|childcare|guardianship|care leavers)\b/u.test(title))
-        return 'family';
-    if (/\b(?:schools?|students?|teachers?|universit(?:y|ies)|classrooms?|curriculum|scholarships?)\b/u.test(title))
-        return 'education';
-    if (/\b(?:doctors?|hospitals?|patients?|vaccines?|medical|medicine|disease|health|cancer|first aid|cpr)\b/u.test(title))
-        return 'health';
-    if (/\b(?:weather|storms?|hurricanes?|tornadoes?|heatwaves?|flooding|rainfall|snowfall|climate)\b/u.test(title))
-        return 'weather';
-    if (/\b(?:flights?|airports?|airlines?|aviation|tourism|tourists?|holidays?|travel|visas?)\b/u.test(title))
-        return 'travel';
-    if (/\b(?:supermarkets?|groceries|shopping|retailers?|discounts?|black friday|food prices)\b/u.test(title))
-        return 'shopping';
-    const category = card.sourceIds?.find(id => id.startsWith('news-'))?.slice(5);
-    const categories = { world: 'world', business: 'business', technology: 'technology', money: 'business', health: 'health', sport: 'football', gaming: 'technology', culture: 'music', shopping: 'shopping', travel: 'travel', work: 'business', education: 'education', family: 'family', science: 'science', environment: 'weather', 'public-affairs': 'world', 'digital-life': 'technology', food: 'shopping', housing: 'roadworks', weather: 'weather' };
-    if (category && categories[category])
-        return categories[category];
-    const topics = { technology: 'technology', business: 'business', regulation: 'world', opportunities: 'business', science: 'science', environment: 'weather', health: 'health', 'public-affairs': 'world', world: 'world', 'digital-life': 'technology', culture: 'music', money: 'business', space: 'science', weather: 'weather', energy: 'weather', 'work-education': 'education', housing: 'roadworks', travel: 'travel', food: 'shopping', sport: 'football', other: 'education' };
-    return card.topic ? topics[card.topic] : 'world';
+const folded = (value) => value.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase();
+function articleUrl(value) {
+    if (!value)
+        return null;
+    try {
+        const url = new URL(value);
+        return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password ? url : null;
+    }
+    catch {
+        return null;
+    }
 }
-export function contextPhotoFor(card, now = Date.now()) {
+function articlePath(url) {
+    if (!url)
+        return '';
+    try {
+        return folded(decodeURIComponent(url.pathname));
+    }
+    catch {
+        return '';
+    }
+}
+const sportsPaths = [
+    ['cricket', /\/(?:cricket|t20|ipl)(?:\/|$)/u],
+    ['tennis', /\/(?:tennis|atp|wta)(?:\/|$)/u],
+    ['basketball', /\/(?:basketball|nba|wnba)(?:\/|$)/u],
+    ['rugby', /\/(?:rugby|rugby-union|rugby-league)(?:\/|$)/u],
+    ['football', /\/(?:football|soccer)(?:\/|$)/u],
+    ['equestrian', /\/(?:equestrian|horse-racing|dressage)(?:\/|$)/u],
+];
+const sportsHeadlines = [
+    ['cricket', /\b(?:cricket|t20|twenty20|indian premier league|pakistan super league|(?:ipl|odi) (?:finals?|matches?|series|tournaments?|teams?)|wickets?|ashes (?:tests?|series|tour))\b/u],
+    ['tennis', /\b(?:tennis|(?:atp|wta) (?:tour|finals?|rankings?|players?|tournaments?|matches?)|wimbledon|roland garros)\b/u],
+    ['basketball', /\b(?:basketball|nba|wnba)\b/u],
+    ['rugby', /\b(?:rugby|six nations)\b/u],
+    ['football', /\b(?:football|soccer|uefa|fifa|premier league)\b/u],
+    ['equestrian', /\b(?:equestrian|dressage|show[ -]?jumping|horse riding|horse racing|horses?)\b/u],
+];
+const headlineSubjects = [
+    ['gaming', /\b(?:gaming|gamers?|video games?|game consoles?|playstation|ps5|grand theft auto|gta[ -]?(?:vi|6))\b/u],
+    ['cinema', /\b(?:cinema|films?|movies?|hollywood|oscars?|bafta|box office)\b/u],
+    ['art', /\b(?:museums?|art galleries|art gallery|art exhibitions?|visual arts?|paintings?|sculptures?|sculptors?)\b/u],
+    ['roadworks', /\b(?:roadworks?|potholes?|street resurfacing|bridge repairs?)\b/u],
+    ['housing', /\b(?:housing|apartments?|mortgages?|real estate|residential|new homes?|rental homes?|rental market|house prices|home prices|property prices|property market|rent(?:s|al)?(?: increases?| rises?| costs?))\b/u],
+    ['energy', /\b(?:solar (?:panels?|power|energy|farms?|electrification)|photovoltaic)\b/u],
+    ['technology', /\b(?:processors?|semiconductors?|microchips?|computer chips?|motherboards?|software|smartphones?|laptops?|artificial intelligence|ai models?|machine learning|cloud computing|data cent(?:er|re)s|cybersecurity)\b/u],
+    ['music', /\b(?:concerts?|orchestras?|symphon(?:y|ies)|recitals?|live music|music festivals?|musicians?|singers?|new albums?|album releases?|opera)\b/u],
+    ['education', /\b(?:schools?|students?|teachers?|universit(?:y|ies)|classrooms?|curriculum|scholarships?|tuition|education)\b/u],
+    ['family', /\b(?:parents?|parenting|families|family|children|babies|baby|childcare|guardianship|care leavers)\b/u],
+    ['health', /\b(?:doctors?|hospitals?|patients?|vaccines?|medical|medicine|disease|health|cancer|first aid|cpr)\b/u],
+    ['weather', /\b(?:weather|storms?|hurricanes?|tornadoes?|heatwaves?|flooding|rainfall|snowfall|weather forecasts?)\b/u],
+    ['travel', /\b(?:flights?|airports?|airlines?|aviation|tourism|tourists?|holidays?|travel|visas?)\b/u],
+    ['shopping', /\b(?:supermarkets?|groceries|shopping|retailers?|discounts?|black friday|food prices)\b/u],
+    ['science', /\b(?:laborator(?:y|ies)|microscopes?|laboratory research|biology|biologists?|chemistry|chemical research)\b/u],
+    ['business', /\b(?:stock markets?|stocks?|shares?|ipo|earnings|quarterly profits?|corporate|companies|company|enterprise|mergers?|acquisitions?)\b/u],
+];
+const subjectPaths = [
+    ['gaming', /\/(?:gaming|video-games)(?:\/|$)/u],
+    ['cinema', /\/(?:film|films|movies|cinema)(?:\/|$)/u],
+    ['art', /\/(?:art|visual-art|museums)(?:\/|$)/u],
+    ['housing', /\/(?:housing|real-estate|property-market)(?:\/|$)/u],
+    ['technology', /\/(?:technology|tech|computing)(?:\/|$)/u],
+    ['energy', /\/(?:solar-energy|solar-power|photovoltaic)(?:\/|$)/u],
+];
+/** A foreign-country mention or ambiguous city cannot be outweighed by a UK investor or feed path. */
+function photoRegion(title, path, uk) {
+    const places = `${title} ${path.replace(/[\/_-]/gu, ' ')}`;
+    const romania = /\b(?:romania|romanian|bucharest|bucuresti)\b/u.test(places);
+    const foreign = /\b(?:canada|canadian|ontario|british columbia|new england|united states|usa|american|india|indian|china|chinese|russia|russian|australia|australian|new zealand|france|french|germany|german|italy|italian|spain|spanish|portugal|portuguese|ireland|irish|japan|japanese|brazil|brazilian|mexico|mexican|netherlands|dutch|switzerland|swiss|sweden|swedish|norway|norwegian|denmark|danish|poland|polish|turkey|turkish|ukraine|ukrainian|egypt|egyptian|israel|israeli|pakistan|bangladesh|south africa|nigeria|singapore)\b/u.test(places.replace(/\bnorthern ireland\b/gu, ''))
+        || /\b(?:us|u\.s\.) (?:economy|inflation|housing|house prices|apartments|interest rates|pensions|government)\b/u.test(title) || /\/(?:us|us-news)(?:\/|$)/u.test(path);
+    if (foreign || uk && romania)
+        return null;
+    return uk ? 'uk' : romania ? 'romania' : null;
+}
+function geographicSubject(subject, region) {
+    if (subject !== 'housing')
+        return subject;
+    if (region === 'uk')
+        return 'uk-housing';
+    if (region === 'romania')
+        return 'ro-housing';
+    return subject;
+}
+/** Missing or conflicting subject evidence deliberately produces no decorative photograph. */
+export function contextPhotoSubject(card) {
+    const raw = folded(card.title), url = articleUrl(card.sourceUrl), path = articlePath(url);
+    // Occupation, relatives and location are not the subject of a crime or military report.
+    if (/\b(?:murder(?:ed|s)?|kill(?:ed|ing|ings)?|shooting|stabbing|rape|sexual assault|sexual abuse|abuse allegations?|criminal|crime|arrest(?:ed|s)?|charged with|criminal charges|faces? charges|on trial|faces? trial|appears? in court|court case|court hears|lawsuits?|police|prison|jail|prosecutors?|sentenced|fraud|corruption|gunman|massacre|bomb(?:ing|ed|s)?|airstrikes?|missiles?|war|military|troops?|soldiers?|army|armed forces|invasion)\b/u.test(raw)
+        || /\/(?:crime|military|war)(?:\/|$)/u.test(path))
+        return null;
+    const title = raw
+        .replace(/\b(?:fair[\s\p{Pd}]+weather|political storms?|political football|weather the storm|storm of criticism|horse[ -]trading|dark horse|trojan horse|school of thought|parent compan(?:y|ies)|family business|family office|family of (?:chips|processors|products)|opera browser|photo albums?)\b/gu, ' ');
+    const uk = /\b(?:uk|britain|british|united kingdom|england|scotland|wales|northern ireland|sunderland|westminster|downing street|house of commons|house of lords|sterling|gbp)\b/u.test(title)
+        || /\/(?:uk|uk-news|uk-politics)(?:\/|$)|\/news\/uk(?:-|\/)/u.test(path);
+    const region = photoRegion(title, path, uk);
+    const guardianPolitics = (url?.hostname === 'www.theguardian.com' || url?.hostname === 'theguardian.com') && path.startsWith('/politics/');
+    for (const [subject, pattern] of sportsPaths)
+        if (pattern.test(path))
+            return subject;
+    for (const [subject, pattern] of sportsHeadlines)
+        if (pattern.test(title))
+            return subject;
+    if (/\b(?:xi|jinping)\b/u.test(title) && /\bputin\b/u.test(title))
+        return 'china-russia';
+    if (/\b(?:united nations|un security council|un general assembly)\b/u.test(title) || /\bUN\b/u.test(card.title))
+        return 'diplomacy';
+    const euro = /\b(?:euros?|eurozone|ecb|european central bank)\b|€/u.test(title) || url?.hostname === 'www.ecb.europa.eu' || url?.hostname === 'ecb.europa.eu';
+    if (euro && /\b(?:inflation|interest rates?|savings|pensions?|coins?|currency|banknotes?|exchange rates?|monetary|deposits?|eurozone)\b/u.test(title))
+        return 'money';
+    if (region === 'uk' && /\b(?:inflation|interest rates?|savings|pensions?|sterling|gbp|monetary|economy|gdp|bank of england)\b/u.test(title))
+        return 'uk-economy';
+    const euPolitics = /\b(?:european union|european commission|european parliament|european council|council of the european union)\b/u.test(title) || /\bEU\b/u.test(card.title);
+    if (euPolitics && /\b(?:deals?|agreements?|negotiations?|treaties|treaty)\b/u.test(title))
+        return 'eu-politics';
+    // The reviewed gaming photographs show PlayStation equipment, not other platforms or casinos.
+    const unrelatedGaming = /\b(?:casinos?|gambling|betting|poker|slot machines?)\b/u.test(title)
+        || /\b(?:nintendo|xbox|steam deck)\b/u.test(title) && !/\b(?:playstation|ps5)\b/u.test(title);
+    for (const [subject, pattern] of headlineSubjects) {
+        if (pattern.test(title))
+            return subject === 'gaming' && unrelatedGaming ? null : geographicSubject(subject, region);
+    }
+    for (const [subject, pattern] of subjectPaths) {
+        if (pattern.test(path))
+            return subject === 'gaming' && unrelatedGaming ? null : geographicSubject(subject, region);
+    }
+    if (guardianPolitics || uk && /\b(?:politics|political|government|parliament|minister|labour|conservatives?|tories|reform|elections?|mps|westminster|downing street|house of commons|house of lords)\b/u.test(title))
+        return 'uk-politics';
+    if (euPolitics)
+        return 'eu-politics';
+    const us = /\b(?:united states|usa)\b/u.test(title) || /\bUS\b|\bU\.S\./u.test(card.title);
+    if (/\b(?:white house|us president|u\.s\. president|united states president|president (?:donald )?trump|trump administration)\b/u.test(title)
+        || us && /\b(?:federal|government|presiden(?:t|cy)|congress|senate)\b/u.test(title)
+        || /\/(?:us|usa)\/politics(?:\/|$)|\/politics\/us(?:\/|$)/u.test(path))
+        return 'us-politics';
+    return null;
+}
+/** Non-secret public identity only. Tracking query parameters and fragments never select a photo. */
+function photoIdentity(card) {
+    const url = articleUrl(card.sourceUrl);
+    return url ? `${url.origin}${url.pathname.replace(/\/+$/u, '') || '/'}` : folded(card.title).replace(/\s+/gu, ' ').trim();
+}
+function selectionScore(value) {
+    let hash = 2166136261;
+    for (const character of value)
+        hash = Math.imul(hash ^ (character.codePointAt(0) ?? 0), 16777619);
+    return hash >>> 0;
+}
+export function contextPhotoFor(card, now = Date.now(), photos = CONTEXT_PHOTOS) {
     const subject = contextPhotoSubject(card);
-    return CONTEXT_PHOTOS.find(photo => photo.subject === subject && usableContextPhoto(photo, now))
-        ?? CONTEXT_PHOTOS.find(photo => photo.subject === 'world' && usableContextPhoto(photo, now)) ?? null;
+    if (subject === null)
+        return null;
+    const identity = photoIdentity(card);
+    let selected = null, score = -1;
+    for (const photo of photos) {
+        if (photo.subject !== subject || !usableContextPhoto(photo, now))
+            continue;
+        const candidateScore = selectionScore(`${identity}\n${photo.key}`);
+        if (candidateScore > score || candidateScore === score && selected !== null && photo.key < selected.key) {
+            selected = photo;
+            score = candidateScore;
+        }
+    }
+    return selected;
 }
 /** Exact reviewed article photograph first; explicitly labelled topic context otherwise. */
 export function displayPhotoFor(card, now = Date.now()) {
