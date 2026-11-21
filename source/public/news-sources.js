@@ -87,13 +87,21 @@ export function publisherForNewsUrl(value) {
         return null;
     }
 }
+/** Reviewed publisher-edition tags, not a claim to detect every article's language. */
+export const NEWS_SOURCE_LANGUAGES = Object.freeze([
+    'en', 'fr', 'ja', 'es', 'ar', 'de', 'pt-BR', 'pt-002', 'sq', 'am', 'bn', 'bs', 'bg', 'zh-Hans', 'zh-Hant', 'hr',
+    'fa-AF', 'el', 'ha', 'hi', 'id', 'sw', 'mk', 'ps', 'fa-IR', 'pl', 'ro', 'ru', 'sr', 'tr', 'uk', 'ur',
+]);
 const publication = (publisherId, countryCode, countryName, coverage, ...editions) => Object.freeze({ publisherId, countryCode, countryName, coverage, editions: Object.freeze(editions.map(([path, language]) => Object.freeze({ path, language }))) });
 /** Publication provenance only. A publisher's country or edition never establishes a story's location. */
 export const NEWS_PUBLICATION_SCOPES = Object.freeze([
     publication('ap', 'US', 'United States', 'Global reporting', ['/article/', 'en']),
     publication('bbc', 'GB', 'United Kingdom', 'Global reporting', ['/news/', 'en'], ['/sport/', 'en'], ['/japanese/', 'ja']),
     publication('guardian', 'GB', 'United Kingdom', 'Global reporting', ['/', 'en']),
-    publication('france24', 'FR', 'France', 'Global reporting', ['/fr/', 'fr'], ['/en/', 'en']),
+    publication('france24', 'FR', 'France', 'Global reporting', ['/fr/', 'fr'], ['/en/', 'en'], ['/es/', 'es'], ['/ar/', 'ar']),
+    // Edition paths/hreflang labels checked in DW's official language navigation2026-11-21.
+    // No DW RSS subscription or additional article origin is enabled by these labels.
+    publication('dw', 'DE', 'Germany', 'Global reporting', ['/en/', 'en'], ['/fr/', 'fr'], ['/de/', 'de'], ['/es/', 'es'], ['/ar/', 'ar'], ['/pt-br/', 'pt-BR'], ['/pt-002/', 'pt-002'], ['/sq/', 'sq'], ['/am/', 'am'], ['/bn/', 'bn'], ['/bs/', 'bs'], ['/bg/', 'bg'], ['/zh/', 'zh-Hans'], ['/zh-hant/', 'zh-Hant'], ['/hr/', 'hr'], ['/fa-af/', 'fa-AF'], ['/el/', 'el'], ['/ha/', 'ha'], ['/hi/', 'hi'], ['/id/', 'id'], ['/sw/', 'sw'], ['/mk/', 'mk'], ['/ps/', 'ps'], ['/fa-ir/', 'fa-IR'], ['/pl/', 'pl'], ['/ro/', 'ro'], ['/ru/', 'ru'], ['/sr/', 'sr'], ['/tr/', 'tr'], ['/uk/', 'uk'], ['/ur/', 'ur']),
     publication('japan-times', 'JP', 'Japan', 'Japan and global reporting', ['/', 'en']),
     publication('the-hindu', 'IN', 'India', 'India and global reporting', ['/', 'en']),
     publication('abc-au', 'AU', 'Australia', 'Australia and global reporting', ['/news/', 'en']),
@@ -165,6 +173,8 @@ export const NEWS_DISCOVERY_INDEXES = Object.freeze([
     { id: 'the-hindu-news', publisherId: 'the-hindu', url: 'https://www.thehindu.com/sitemap/googlenews/all/all.xml' },
     // Public endpoints and channel identities checked2026-11-21. Original article metadata remains mandatory.
     { id: 'france24-fr-news', publisherId: 'france24', url: 'https://www.france24.com/fr/rss', format: 'rss', language: 'fr', feedTitle: "France 24 - Infos, news & actualités - L'information internationale en direct", feedHome: 'https://www.france24.com/fr/', articlePath: '/fr/' },
+    { id: 'france24-es-news', publisherId: 'france24', url: 'https://www.france24.com/es/rss', format: 'rss', language: 'es', feedTitle: 'France 24 - Noticias y actualidad internacional en vivo', feedHome: 'https://www.france24.com/es/', articlePath: '/es/' },
+    { id: 'france24-ar-news', publisherId: 'france24', url: 'https://www.france24.com/ar/rss', format: 'rss', language: 'ar', feedTitle: 'فرانس 24 – الأخبار والأحداث الدولية على مدار الساعة', feedHome: 'https://www.france24.com/ar/', articlePath: '/ar/' },
     { id: 'japan-times-news', publisherId: 'japan-times', url: 'https://www.japantimes.co.jp/feed/', format: 'rss', language: 'en', feedTitle: 'Latest articles - The Japan Times', feedHome: 'https://www.japantimes.co.jp/', articlePath: '/' },
     { id: 'guardian-africa-news', publisherId: 'guardian', url: 'https://www.theguardian.com/world/africa/rss', format: 'rss', language: 'en', feedTitle: 'Africa | The Guardian', feedHome: 'https://www.theguardian.com/world/africa', articlePath: '/' },
 ].map(index => Object.freeze(index)));

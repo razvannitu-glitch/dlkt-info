@@ -24,6 +24,18 @@ const context=(selectedCity=null,category=null,extra={})=>({city:selectedCity,ca
 const ids=views=>views.map(view=>view.card.id);
 const geo=name=>contextFromPublisherCategories('gv-world',[name]);
 
+test('country context follows original Spanish Arabic German and Portuguese names independently of UI language',()=>{
+  const examples=[['DE','Deutschland beschließt neue Regeln für Schulen'],['ES','Espanha anuncia novas regras para universidades'],['IT','Italia anuncia un nuevo programa de transporte'],['JP','Japón abre un nuevo museo nacional'],['DE','ألمانيا تعلن خطة جديدة للمدارس'],['FR','فرنسا تفتتح متحفا وطنيا جديدا'],['US','الولايات المتحدة تعلن اتفاقا جديدا'],['GB','Reino Unido anuncia un acuerdo internacional']];
+  for(const [index,[countryCode,title]] of examples.entries()){
+    const original=Object.freeze(card(100+index,title));const selected=selectExploreCards([original],context(null,null,{countryCode}),now);
+    assert.equal(selected.national.length,1,title);assert.equal(selected.local.length,0);assert.equal(selected.national[0].card.title,title);
+    assert.match(selected.national[0].explore.label,/national context, not proof of a local event/u);
+  }
+  const headquartersOnly=card(120,'La universidad anuncia un nuevo museo',{publisher:'France 24',sourceUrl:'https://www.france24.com/es/20261121-fixture'});
+  assert.equal(selectExploreCards([headquartersOnly],context(null,null,{countryCode:'FR'}),now).matchedCount,0);
+  assert.equal(selectExploreCards([card(121,'اتفاق تجاري جديد بين شركات دولية')],context(null,null,{countryCode:'DE'}),now).matchedCount,0);
+});
+
 test('five catalog cities preserve category and remembered state while URL reopens each selection',()=>{
   const home=Object.freeze({cityId:'683506',topics:Object.freeze(['science'])});
   let state=selectExploreCategory(EMPTY_EXPLORE_STATE,'culture');

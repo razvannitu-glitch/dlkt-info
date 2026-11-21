@@ -5,7 +5,7 @@ import type {EvidenceCard,SourceResult} from './contracts.js';
 import {cardContent} from './card-validation.js';
 import {collectFrontpageHighlights} from './news-frontpages.js';
 import {EDITORIAL_CATEGORY_TOPICS,classifyNewsHeadline,headlineDiscoveryPriority,type PublicEditorialCategory} from './editorial-categories.js';
-import {NEWS_INDEX_URL,NEWS_PUBLISHERS,NEWS_CATEGORY_SOURCES,NEWS_UNCLASSIFIED_SOURCE,NEWS_FEATURED_SOURCE,NEWS_DISCOVERY_INDEXES,canonicalNewsUrl,publisherForNewsUrl,sourcePublicationContext,type NewsDiscoveryIndex,type NewsSourceLanguage} from './news-sources.js';
+import {NEWS_INDEX_URL,NEWS_PUBLISHERS,NEWS_CATEGORY_SOURCES,NEWS_UNCLASSIFIED_SOURCE,NEWS_FEATURED_SOURCE,NEWS_DISCOVERY_INDEXES,canonicalNewsUrl,publisherForNewsUrl,sourcePublicationContext,sourceLanguage,type NewsDiscoveryIndex,type NewsSourceLanguage} from './news-sources.js';
 
 /** Untrusted discovery metadata. indexedAt is never a publisher publication date. */
 export interface NewsCandidate {readonly sourceUrl:string;readonly title:string;readonly publisher:string;readonly indexedAt:string;readonly category:PublicEditorialCategory|null}
@@ -32,9 +32,9 @@ export function validateNewsCandidate(value:unknown,now:number):NewsCandidate|nu
 /** No query-specific brand/event priorities. This is a cheap acquisition order, not a truth score. */
 function acquisitionScore(value:NewsCandidate):number{
   const text=value.title.toLowerCase().normalize('NFKD').replace(/(\p{Script=Latin})\p{M}+/gu,'$1').normalize('NFC');
-  return (/\b(?:announces?|launch(?:es|ed)?|approves?|agrees?|signs?|wins?|discovers?|reveals?|cuts?|raises?|opens?|closes?|elections?|earthquake|ceasefire|record|new|first|annonce|annoncent|lance|lancent|approuve|approuvent|signe|signent|remporte|decouvre|decouvrent|revele|ouvre|nouveau|nouvelle|premier|premiere|seisme|cessez-le-feu)\b|発表|発売|承認|合意|締結|優勝|発見|開設|初めて|停戦/u.test(text)?10:0)
-    -(/\b(?:review|opinion|horoscope|quiz|best deals|buying guide|how to|what to know|explained|live updates|avis|tribune|guide d'achat|comment faire|ce qu'il faut savoir|en direct)\b|社説|論説|占い|クイズ|購入ガイド|ライブ更新/u.test(text)?8:0)
-    -(/\?$/u.test(text)?4:0);
+  return (/\b(?:announces?|launch(?:es|ed)?|approves?|agrees?|signs?|wins?|discovers?|reveals?|cuts?|raises?|opens?|closes?|elections?|earthquake|ceasefire|record|new|first|annonce|annoncent|lance|lancent|approuve|approuvent|signe|signent|remporte|decouvre|decouvrent|revele|ouvre|nouveau|nouvelle|premier|premiere|seisme|cessez-le-feu|anuncia|anuncian|lanza|lanzan|aprueba|firman|gana|descubren|nuevo|nueva|estrena|kundigt|startet|genehmigt|vereinbart|entdeckt|offnet|neue?r?|erstmals|lanca|aprova|vence|descobre|novo|nova|primeiro|primeira)\b|يعلن|تعلن|يطلق|تطلق|يوافق|توافق|يكتشف|تكتشف|جديد|発表|発売|承認|合意|締結|優勝|発見|開設|初めて|停戦/u.test(text)?10:0)
+    -(/\b(?:review|opinion|horoscope|quiz|best deals|buying guide|how to|what to know|explained|live updates|avis|tribune|guide d'achat|comment faire|ce qu'il faut savoir|en direct|horoscopo|guia de compra|como hacer|en vivo|meinung|horoskop|kaufberatung|opiniao|ao vivo)\b|(?<!\p{L})(?:رأي|الأبراج|دليل الشراء|بث مباشر)(?!\p{L})|社説|論説|占い|クイズ|購入ガイド|ライブ更新/u.test(text)?8:0)
+    -(/[?؟]$/u.test(text)?4:0);
 }
 function candidatePriority(value:NewsCandidate):number {
   return value.category===null?0:headlineDiscoveryPriority(value.title,value.category);
@@ -112,8 +112,12 @@ export function readNewsCandidates(xml:string,now:number):readonly NewsCandidate
 }
 function matchingIndexLanguage(value:unknown,expected:NewsSourceLanguage):boolean{
   if(typeof value!=='string'||!/^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/iu.test(value))return false;
-  const primary=value.toLowerCase().split('-')[0];
-  return (expected==='en'?['en','eng']:expected==='fr'?['fr','fra','fre']:['ja','jpn']).includes(primary??'');
+  const primary=value.toLowerCase().split('-')[0],wanted=expected.toLowerCase(),expectedPrimary=wanted.split('-')[0];
+  const aliases:Readonly<Record<string,readonly string[]>>={en:['en','eng'],fr:['fr','fra','fre'],ja:['ja','jpn'],es:['es','spa'],ar:['ar','ara'],de:['de','deu','ger'],pt:['pt','por']};
+  if(!expectedPrimary||!(aliases[expectedPrimary]??[expectedPrimary]).includes(primary??''))return false;
+  // A primary-language index may declare a region (e.g. es-419). A specifically
+  // configured regional/script edition must not silently accept another one.
+  return !wanted.includes('-')||value.toLowerCase()===wanted;
 }
 /** RSS dates need an explicit timezone and valid calendar date; no locale-dependent date guessing. */
 function rssPublicationDate(value:unknown):string|null{
@@ -164,19 +168,23 @@ export function readPublisherNewsCandidates(xml:string,index:NewsDiscoveryIndex,
   return mergeNewsCandidates(candidates,now);
 }
 function tokens(text:string):Set<string>{return new Set(text.normalize('NFKC').toLowerCase().match(/[\p{L}\p{N}]+/gu)?.filter(word=>word.length>1&&!['the','and','with','for','from','this','that','into','of','to','in','on','at','by','an','as','is','a'].includes(word))??[]);}
-export function matchingNewsHeadline(a:string,b:string,publisherLabel?:string):boolean{
+export function matchingNewsHeadline(a:string,b:string,publisherLabel?:string,language?:NewsSourceLanguage|null):boolean{
   if(publisherLabel&&NEWS_PUBLISHERS.some(row=>row.label===publisherLabel)){
     // Remove only an explicitly separated suffix for this bound publisher.
     // This preserves meaningful numbers while accepting the actual brand "France 24".
     const suffix=new RegExp(`\\s+[–—|:-]\\s+${publisherLabel.replace(/[.*+?^${}()|[\]\\]/gu,'\\$&')}\\s*$`,'iu');
     a=a.replace(suffix,'');b=b.replace(suffix,'');
   }
+  // Additional reviewed editions have no token/negation rules here. Preserve
+  // access for their exact original titles without claiming semantic equivalence.
+  const same=():boolean=>a.normalize('NFKC').toLowerCase()===b.normalize('NFKC').toLowerCase();
+  if(language&&!(['en','fr','es','ar','de','pt-BR','pt-002'] as readonly string[]).includes(language))return same();
   // CJK has no reliable word boundaries here. Require the same normalized title,
   // rather than letting token overlap erase a negation in a Japanese clause.
-  if(/[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u.test(a+b))return a.normalize('NFKC').toLowerCase()===b.normalize('NFKC').toLowerCase();
+  if(/[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u.test(a+b))return same();
   const x=tokens(a),y=tokens(b);if(x.size<3||y.size<3)return a.normalize('NFKC').toLowerCase()===b.normalize('NFKC').toLowerCase();
   const shared=[...x].filter(word=>y.has(word)).length;
-  const critical=(v:string):string=>[...(v.toLowerCase().match(/\b(?:not|never|no|without|pas|jamais|sans|aucun|aucune|ni)\b|\d+(?:[.,]\d+)*/gu)??[])].sort().join('|');
+  const critical=(v:string):string=>[...(v.normalize('NFKC').toLowerCase().replace(/(\p{Script=Arabic})\p{M}+/gu,'$1').match(/(?<![\p{L}\p{N}])(?:not|never|no|without|pas|jamais|sans|aucun|aucune|ni|sin|nunca|jam[aá]s|ning[uú]n|ninguna|tampoco|nicht|ohne|nie|keinerlei|kein(?:e|en|em|er|es)?|n[aã]o|sem|nenhum|nenhuma|لا|ولا|ليس|ليست|لم|ولم|لن|ولن|دون|بدون|غير|وغير)(?![\p{L}\p{N}])|\p{Nd}+(?:[.,٫٬]\p{Nd}+)*/gu)??[])].sort().join('|');
   return shared/Math.min(x.size,y.size)>=0.7&&shared/Math.max(x.size,y.size)>=0.55&&critical(a)===critical(b);
 }
 function publicationDate(raw:unknown):string|null{
@@ -205,7 +213,7 @@ export function readNewsArticleMetadata(html:string,candidate:NewsCandidate,fina
     try{const declared=canonicalNewsUrl(new URL(canonicalLinks[0],finalUrl).href);if(!declared||publisherForNewsUrl(declared)?.id!==publisher.id)return null;canonical=declared;}catch{return null;}
   }
   const titles:string[]=[],dates:string[]=[];
-  const add=(headline:unknown,date:unknown):void=>{const title=titleText(headline),stamp=publicationDate(date);if(title&&stamp&&matchingNewsHeadline(candidate.title,title,publisher.label)){titles.push(title);dates.push(stamp);}};
+  const add=(headline:unknown,date:unknown):void=>{const title=titleText(headline),stamp=publicationDate(date);if(title&&stamp&&matchingNewsHeadline(candidate.title,title,publisher.label,sourceLanguage(canonical))){titles.push(title);dates.push(stamp);}};
   let nodes=0;
   const inspect=(value:unknown,depth=0):void=>{
     if(depth>8||++nodes>200)return;

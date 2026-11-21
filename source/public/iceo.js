@@ -1,3 +1,5 @@
+import { getLocale, translate as tr, translatedCategory, countryLabel, setupLanguage, applyInterfaceLanguage } from './i18n-browser.js';
+import { sourceLanguage } from './news-sources.js';
 import { photoNode, integratePhotoHeadline } from './card-photo-browser.js';
 import { setupExplore } from './explore-browser.js';
 import { contextForCard } from './context.js';
@@ -24,7 +26,7 @@ import { captureCheckpoint, compareCheckpoint, focusedSnapshot, compareFocusedCh
 import { DeviceMemory, memoryError } from './device-memory.js';
 import { safeLink, validCard } from './card-validation.js';
 import { attachInsight, pruneInsights } from './insight-browser.js';
-import { selectReadingCards, readingCard, safeLocale } from './reader.js';
+import { selectReadingCards, readingCard } from './reader.js';
 const TOPICS = PUBLIC_TOPICS;
 const labels = TOPIC_LABELS;
 function required(selector) {
@@ -104,11 +106,11 @@ function memoryControls() {
         const saved = deviceState.cards.some(entry => entry.id === b.dataset.saveCard);
         const label = b.querySelector('.save-label');
         if (label)
-            label.textContent = saved ? 'Saved here' : 'Save here';
+            label.textContent = saved ? tr('savedCard') : tr('saveCard');
         else
-            b.textContent = saved ? 'Saved here' : 'Save here';
+            b.textContent = saved ? tr('savedCard') : tr('saveCard');
         b.setAttribute('aria-pressed', String(saved));
-        b.title = saved ? 'Remove this card from this browser' : 'Save this card in this browser only';
+        b.title = saved ? tr('savedCard') : tr('saveCard');
         b.disabled = deviceBusy;
     });
     comparisonControls();
@@ -528,7 +530,7 @@ function valid(value) {
 function formatted(value, dayOnly = false, utc = false) {
     const options = dayOnly ? { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }
         : { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short', ...(utc ? { timeZone: 'UTC' } : {}) };
-    return new Intl.DateTimeFormat(safeLocale(navigator.language || 'en-GB'), options).format(new Date(value));
+    return new Intl.DateTimeFormat(getLocale(), options).format(new Date(value));
 }
 function make(tag, className, text) {
     const node = document.createElement(tag);
@@ -624,6 +626,7 @@ function cardNode(view, index, total, saved, automaticInsights = true) {
     const card = view.card, presentation = editorialCardPresentation(view, saved !== undefined);
     node.dataset.notice = view.noticeState;
     node.dataset.cardId = card.id;
+    const originalText = (element, record = card) => { element.dir = 'auto'; element.lang = sourceLanguage(record) ?? ''; element.setAttribute('translate', 'no'); };
     const evidence = node.querySelector('.evidence');
     currentCardByNode.set(node, card);
     const coverage = contextForCard(card);
@@ -635,7 +638,7 @@ function cardNode(view, index, total, saved, automaticInsights = true) {
     node.dataset.coverage = coverage.basis;
     const editorialCategory = 'category' in view && typeof view.category === 'string' && PUBLIC_EDITORIAL_CATEGORIES.includes(view.category) ? view.category : null;
     const unclassified = 'editorial' in view && object(view.editorial) && view.editorial.classification === 'unclassified';
-    put('.card-topic', unclassified ? 'Other topics' : editorialCategory ? EDITORIAL_CATEGORY_LABELS[editorialCategory] : labels[card.topic]);
+    put('.card-topic', unclassified ? tr('otherTopics') : editorialCategory ? translatedCategory(editorialCategory) : labels[card.topic]);
     if (editorialCategory)
         node.dataset.editorialCategory = editorialCategory;
     put('.card-index', `${String(index + 1).padStart(2, '0')} / ${String(total).padStart(2, '0')}`);
@@ -645,6 +648,8 @@ function cardNode(view, index, total, saved, automaticInsights = true) {
         kind.hidden = !presentation.kindLabel;
     put('h3', presentation.headline);
     const title = node.querySelector('h3'), sourceUrl = safeLink(card.sourceUrl);
+    for (const original of node.querySelectorAll('h3,.card-context,.card-publisher'))
+        originalText(original);
     if (title && sourceUrl) {
         const titleLink = make('a', 'card-title-link', presentation.headline);
         titleLink.href = sourceUrl;
@@ -667,30 +672,38 @@ function cardNode(view, index, total, saved, automaticInsights = true) {
         readingContext?.after(make('p', 'card-scope-note', presentation.safetyNote));
     if (card.summary !== undefined && card.summary !== view.context) {
         const excerpt = make('p', 'card-context publisher-excerpt');
-        excerpt.append(make('strong', '', 'Publisher excerpt: '), document.createTextNode(card.summary));
+        const wording = make('span', '', card.summary);
+        originalText(wording);
+        excerpt.append(make('strong', '', tr('publisherExcerpt') + ': '), wording);
         readingContext?.after(excerpt);
     }
     evidence?.append(guide);
     const link = node.querySelector('.source-link');
-    if (link)
+    if (link) {
         link.href = safeLink(card.sourceUrl) ?? '#';
+        const icon = link.querySelector('svg');
+        link.replaceChildren(document.createTextNode(tr('openSource') + ' '));
+        if (icon)
+            link.append(icon);
+    }
     const deadline = node.querySelector('.card-deadline');
     if (deadline && card.deadline) {
         deadline.hidden = false;
         deadline.textContent = `Listed closing date: ${formatted(card.deadline, true)}${view.noticeState === 'awarded' ? ' · not an application deadline for this award' : ''}`;
     }
     const details = node.querySelector('.evidence dl');
-    for (const [key, value] of [['Original title', card.title], ['Publisher', card.publisher], ['Source checked', formatted(card.observedAt, false, true)], ['Publication timestamp', formatted(card.date, card.dateLabel === 'Document date')], ['Document identity', card.identity], ['Date meaning', view.dateLabel]]) {
+    for (const [key, value] of [[tr('originalTitle'), card.title], [tr('publisher'), card.publisher], [tr('sourceChecked'), formatted(card.observedAt, false, true)], [tr('published'), formatted(card.date, card.dateLabel === 'Document date')], ['Document identity', card.identity], ['Date meaning', view.dateLabel]]) {
         const detail = make('dd', '', value);
-        if (key === 'Source checked')
+        if (key === tr('sourceChecked'))
             detail.dataset.sourceChecked = 'true';
+        if (key === tr('originalTitle') || key === tr('publisher'))
+            originalText(detail);
         details?.append(make('dt', '', key), detail);
     }
     details?.append(make('dt', '', 'Publisher coverage'), make('dd', '', coverage.label), make('dt', '', 'Coverage meaning'), make('dd', '', coverage.boundary));
     put('.card-boundary', card.boundary);
     put('.card-attribution', card.attribution);
-    if (presentation.originalTitleInDetails)
-        put('.evidence summary', 'Full title & source details');
+    put('.evidence summary', tr('sourceDetails'));
     const related = node.querySelector('.related');
     if (related && view.related.length) {
         related.hidden = false;
@@ -704,6 +717,7 @@ function cardNode(view, index, total, saved, automaticInsights = true) {
                 continue;
             const row = make('li', '');
             const a = make('a', '', `${item.version ?? item.title} · ${formatted(item.date)}`);
+            originalText(a, item);
             a.href = url;
             a.target = '_blank';
             a.rel = 'noopener noreferrer';
@@ -715,10 +729,11 @@ function cardNode(view, index, total, saved, automaticInsights = true) {
     if (button && fallback) {
         const label = button.querySelector('.share-label');
         if (label)
-            label.textContent = 'Share card';
+            label.textContent = tr('shareCard');
         else
-            button.textContent = 'Share card';
-        button.setAttribute('aria-label', 'Share this DLKT card');
+            button.textContent = tr('shareCard');
+        button.setAttribute('aria-label', tr('shareCard'));
+        button.title = tr('shareCard');
         fallback.setAttribute('aria-label', 'DLKT card link to copy');
         button.addEventListener('click', () => { void shareCard(currentCardByNode.get(node) ?? card, { button, fallback, announce: message => { announcement.textContent = message; toast(message); } }); });
     }
@@ -968,19 +983,27 @@ function renderDiscovery() {
     const live = liveEdition.present(candidate, contextKey, now, applyPublicUpdate);
     applyPublicUpdate = false;
     const today = live.selection;
-    button.textContent = live.changes.total ? 'Show updates' : 'Refresh';
-    button.setAttribute('aria-label', live.changes.total ? `Show updates: ${editionUpdateLabel(live.changes)}` : 'Refresh daily top');
+    button.textContent = live.changes.total ? (getLocale() === 'en' ? 'Show updates' : tr('refresh') + ' · ' + new Intl.NumberFormat(getLocale()).format(live.changes.total)) : tr('refresh');
+    button.setAttribute('aria-label', getLocale() === 'en' ? (live.changes.total ? `Show updates: ${editionUpdateLabel(live.changes)}` : 'Refresh daily top') : button.textContent);
     const editionState = publicEditionState(today, { snapshotState: snapshot?.state ?? null, loading: loading || !initialCheckStarted, failed: lastLoadFailed });
     const loadingPhase = discoveryLoading.phase({ pending: editionState === 'pending', unavailable: editionState === 'unavailable', firstCount: today.first.length, moreCount: today.more.length });
     section.dataset.loading = loadingPhase;
     renderDiscoveryLoading(discoveryLoadingElements, loadingPhase);
+    discoveryLoadingElements.hint.textContent = tr('originalContentNote');
+    discoveryLoadingElements.personalise.textContent = tr('navPersonalise');
+    discoveryLoadingElements.retry.textContent = tr('refresh');
+    if (getLocale() !== 'en' && loadingPhase !== 'hidden') {
+        discoveryLoadingElements.title.textContent = tr(editionState === 'unavailable' ? 'storiesUnavailable' : 'loadingStories');
+        discoveryLoadingElements.copy.textContent = tr(editionState === 'unavailable' ? 'refreshHint' : 'homeContext');
+        discoveryLoadingElements.status.textContent = tr(editionState === 'unavailable' ? 'storiesUnavailable' : 'checkingSources');
+    }
     const local = selectHomeLocal(contextualLocal, contextualCity, now);
     const suppressLocalPending = (loadingPhase === 'initial' || loadingPhase === 'slow') && !local.cards.length;
     const awaitingLocal = contextualLocationPending || contextualCity !== null && contextualLocalState === 'loading';
-    required('#today-heading').textContent = "Today's top";
+    required('#today-heading').textContent = tr('todayTop');
     required('#home-location').textContent = contextualCity
-        ? `${contextualCity.name} · ${contextualCity.country}${contextualLocation === 'estimated' ? ' · approximate' : ''}`
-        : contextualLocationPending ? 'Finding your city…' : 'Choose a city for local updates.';
+        ? `${contextualCity.name} · ${countryLabel(contextualCity.countryCode, contextualCity.country)}${contextualLocation === 'estimated' ? ' · approximate' : ''}`
+        : contextualLocationPending ? tr('lookupLoading') : tr('chooseCity');
     const discoveryDelay = nextDailyEditionDelay(today, now), returnDelay = checkpoint ? nextReturnDelay(snapshot, selectReturnBrief(checkpoint, null, now, false).topics, now) : null;
     const localDelay = local.expiresAt === null ? null : Math.max(25, local.expiresAt - now + 25);
     const delays = [discoveryDelay, returnDelay, localDelay].filter((n) => n !== null);
@@ -990,7 +1013,7 @@ function renderDiscovery() {
     // Publication reading does not wait for city lookup. The existing selector owns eligibility.
     appendPublicEdition(host, today, (view, index, total) => {
         const node = cardNode(view, index, total, undefined, false);
-        node.dataset.liveSignature = editionCardSignature(view.card);
+        node.dataset.liveSignature = JSON.stringify([getLocale(), editionCardSignature(view.card)]);
         return node;
     }, editionState);
     if (loadingPhase !== 'hidden')
@@ -999,7 +1022,7 @@ function renderDiscovery() {
     if (!suppressLocalPending && (contextualCity || contextualLocationPending)) {
         const label = make('div', 'discovery-section-label');
         label.id = 'home-local-heading';
-        label.append(make('h2', '', contextualCity ? `In ${contextualCity.name}` : 'Local information'));
+        label.append(make('h2', '', contextualCity ? tr('todayLocalTitle', { city: contextualCity.name }) : tr('navMyCity')));
         host.append(label);
     }
     for (const item of local.cards) {
@@ -1034,9 +1057,15 @@ function renderDiscovery() {
     }
     appendPublicContinuation(host, today, (view, index, total) => {
         const node = cardNode(view, index, total, undefined, false);
-        node.dataset.liveSignature = editionCardSignature(view.card);
+        node.dataset.liveSignature = JSON.stringify([getLocale(), editionCardSignature(view.card)]);
         return node;
     }, continuationCount);
+    const end = host.querySelector('#home-edition-end h2');
+    if (end)
+        end.textContent = tr('endOfTop');
+    const continuation = host.querySelector('#home-more-button');
+    if (continuation)
+        continuation.textContent = tr('showMore', { count: Math.min(20, Math.max(0, today.more.length - continuationCount)), remaining: Math.max(0, today.more.length - continuationCount) });
     reconcileDiscovery(target, host);
     pruneInsights();
     const publicationState = editionState === 'unavailable' ? 'Publications could not be checked. Refresh to try again.' : today.first.length + today.more.length ? dailyEditionSummary(today) : editionState === 'pending' ? 'Checking connected publications…' : 'No current publications meet this selection.';
@@ -1045,8 +1074,10 @@ function renderDiscovery() {
     const updates = live.changes.total ? ` ${editionUpdateLabel(live.changes)}. Select Show updates when you are ready; your reading position stays stable.` : '';
     const noteText = (snapshot ? `${formatted(snapshot.generatedAt, true)} · Source check ${formatted(snapshot.generatedAt)}. ` : '') + publicationState + sourceState + localState + updates;
     if (loadingPhase === 'hidden') {
-        const checkedTime = snapshot ? new Intl.DateTimeFormat(safeLocale(navigator.language || 'en-GB'), { hour: '2-digit', minute: '2-digit' }).format(new Date(snapshot.generatedAt)) : null;
-        const compact = compactEditionStatus({ state: editionState, count: today.first.length, continuation: today.more.length, checkedTime, refreshing: loading && !automaticPublicLoad, refreshFailed: lastLoadFailed && snapshot !== null, partial: snapshot?.state === 'partial' || today.daily?.completeCoverage === false, updates: live.changes.total });
+        const checkedTime = snapshot ? new Intl.DateTimeFormat(getLocale(), { hour: '2-digit', minute: '2-digit' }).format(new Date(snapshot.generatedAt)) : null;
+        const compact = getLocale() === 'en' ? compactEditionStatus({ state: editionState, count: today.first.length, continuation: today.more.length, checkedTime, refreshing: loading && !automaticPublicLoad, refreshFailed: lastLoadFailed && snapshot !== null, partial: snapshot?.state === 'partial' || today.daily?.completeCoverage === false, updates: live.changes.total })
+            : editionState === 'unavailable' ? tr('storiesUnavailable') : editionState === 'pending' && !today.first.length && !today.more.length ? tr('loadingStories')
+                : [tr('matchingStories', { count: today.first.length }), checkedTime ? tr('checkedAt', { time: checkedTime }) : '', lastLoadFailed && snapshot ? tr('refreshUnavailable') : loading && !automaticPublicLoad ? tr('checkingUpdates') : '', snapshot?.state === 'partial' || today.daily?.completeCoverage === false ? tr('partialCoverage') : ''].filter(Boolean).join(' · ');
         if (note.textContent !== compact)
             note.textContent = compact;
     }
@@ -1280,9 +1311,11 @@ function openOrganizationFocus() {
     document.dispatchEvent(new CustomEvent('dlkt:reader-selected'));
     return true;
 }
+setupLanguage();
 worldExplorer = setupExplore({ snapshot: () => snapshot, loading: () => loading, failed: () => lastLoadFailed,
     card: (view, index, total) => cardNode(view, index, total, undefined, false), reconcile: reconcileDiscovery,
     refresh: () => { void load(); }, saved: memoryControls });
+document.addEventListener('dlkt:language-changed', () => { applyInterfaceLanguage(); render(); });
 const organizationPreview = openOrganizationFocus();
 window.addEventListener('hashchange', openOrganizationFocus);
 // Public cards do not wait for browser storage, location or a saved-profile restoration.

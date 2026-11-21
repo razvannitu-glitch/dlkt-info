@@ -84,3 +84,11 @@ for(const [source,target] of [['browser','connections-browser'],['types','connec
 }
 
 writeFileSync('public/data-guards.js',readFileSync('.build/src/data/guards.js','utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,''));
+
+for(const name of ['catalog','locale','browser']){
+ const compiled=readFileSync(`.build/src/i18n/${name}.js`,'utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'').replaceAll('../iceo/','./').replaceAll("'./catalog.js'","'./i18n-catalog.js'").replaceAll("'./locale.js'","'./i18n-locale.js'");
+ writeFileSync(`public/i18n-${name}.js`,compiled);
+}
+for(const name of ['iceo','explore-browser']){
+ const js=readFileSync(`public/${name}.js`,'utf8').replaceAll("'../i18n/browser.js'","'./i18n-browser.js'").replaceAll("'../i18n/locale.js'","'./i18n-locale.js'");writeFileSync(`public/${name}.js`,js);
+}

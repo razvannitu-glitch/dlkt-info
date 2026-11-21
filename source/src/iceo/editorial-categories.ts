@@ -6,7 +6,7 @@ export const PUBLIC_EDITORIAL_CATEGORIES = [
   'work','education','family','science','environment','public-affairs','digital-life','food','housing','weather',
 ] as const;
 export type PublicEditorialCategory = typeof PUBLIC_EDITORIAL_CATEGORIES[number];
-export const EDITORIAL_CATEGORIES_VERSION = 'dlkt-public-editorial-categories-4' as const;
+export const EDITORIAL_CATEGORIES_VERSION = 'dlkt-public-editorial-categories-5' as const;
 
 export const EDITORIAL_CATEGORY_LABELS:Readonly<Record<PublicEditorialCategory,string>>=Object.freeze({
   world:'World & geopolitics',business:'Business & economy',technology:'AI & technology',money:'Money & cost of living',
@@ -56,6 +56,13 @@ export function editorialHeadlineSignals(value:string,category:PublicEditorialCa
   add('research-finding',['science','health','environment'],/\b(?:decouvrent|decouverte|une etude revele|une etude montre|resultats de l'essai)\b|研究.*発見|研究.*解明|臨床試験.*結果/u);
   add('competition-result',['sport','gaming'],/\b(?:remporte|remportent|record du monde|victoire en finale)\b|優勝|世界新記録|決勝.*勝利/u);
   add('economic-development',['business','money','work'],/\b(?:resultats trimestriels|fusion d'entreprises|taux d'interet|accord commercial|droits de douane|introduction en bourse)\b|決算.*発表|企業.*買収|企業.*合併|金利.*引き|貿易協定|関税/u);
+  add('diplomatic-development',['world'],/\b(?:alto el fuego|acuerdo de paz|cumbre bilateral|waffenstillstand|friedensabkommen|gipfeltreffen|cessar-fogo|acordo de paz|cimeira bilateral|cupula bilateral)\b|وقف إطلاق النار|اتفاق سلام|قمة ثنائية/u);
+  add('investigation-or-regulatory-action',['world','public-affairs','business','money','technology','digital-life','shopping','health'],/\b(?:abre una investigacion|investigacion antimonopolio|kartellverfahren|ermittlungen gegen|abre uma investigacao|investigacao antitruste)\b|تحقيق بشأن|تحقيق لمكافحة الاحتكار/u);
+  add('policy-change',['world','public-affairs','business','money','work','education','health','environment','housing','digital-life'],/\b(?:aprueba una ley|nueva ley|resultados electorales|neues gesetz|wahlergebnis|aprova uma lei|nova lei|resultados eleitorais)\b|قانون جديد|نتائج الانتخابات|البرلمان يقر/u);
+  add('product-or-service-change',['technology','gaming','shopping','travel'],/\b(?:lanza|lanzan|fecha de lanzamiento|nueva ruta|neues produkt|stellt.*vor|erscheinungstermin|lanca|data de lancamento|nova rota)\b|إطلاق منتج|موعد الإصدار|خدمة جديدة|يفتتح خطا/u);
+  add('research-finding',['science','health','environment'],/\b(?:descubren|estudio revela|forscher entdecken|studie zeigt|descobrem|estudo revela)\b|علماء يكتشفون|دراسة تكشف|نتائج التجربة السريرية/u);
+  add('competition-result',['sport','gaming'],/\b(?:gana la final|record mundial|gewinnt das finale|weltrekord|vence a final|recorde mundial)\b|يفوز بالنهائي|رقم قياسي عالمي/u);
+  add('economic-development',['business','money','work'],/\b(?:resultados trimestrales|tipos de interes|acuerdo comercial|aranceles|quartalszahlen|zinssatz|handelsabkommen|resultados trimestrais|taxa de juros|acordo comercial)\b|نتائج مالية|أسعار الفائدة|اتفاق تجاري|رسوم جمركية/u);
   return Object.freeze(signals);
 }
 
@@ -159,8 +166,118 @@ const JAPANESE_SUBJECTS:readonly (readonly [PublicEditorialCategory,RegExp])[]=[
 const FRENCH_SECTIONS:Readonly<Record<string,PublicEditorialCategory>>=Object.freeze({
   economie:'business',technologie:'technology',technologies:'technology',sante:'health',sports:'sport',culture:'culture',voyage:'travel',education:'education',sciences:'science',planete:'environment',politique:'public-affairs',cuisine:'food',meteo:'weather',
 });
+const SPANISH_SUBJECTS:readonly (readonly [PublicEditorialCategory,RegExp])[]=[
+  ['gaming',/\b(?:videojuegos?|deportes electronicos|playstation|xbox|nintendo|gta (?:vi|6))\b/u],
+  ['family',/\b(?:crianza|permiso parental|licencia parental|guarderias?|lactancia|adopcion de menores|cuidado infantil)\b/u],
+  ['shopping',/\b(?:compras|rebajas|descuentos comerciales|black friday|comparador de precios|guia de compra)\b/u],
+  ['sport',/\b(?:futbol|rugby|tenis|baloncesto|beisbol|ciclismo|natacion|atletismo|juegos olimpicos|copa del mundo|liga de campeones|formula 1|deportes?|fifa)\b/u],
+  ['weather',/\b(?:huracanes?|tifones?|ciclones?|tornados?|terremotos?|inundaciones?|incendios forestales|tsunami|ola de calor|alerta meteorologica|tormentas?|nevadas?)\b/u],
+  ['digital-life',/\b(?:ciberseguridad|ciberataques?|filtracion de datos|robo de datos|ransomware|phishing|privacidad digital|derechos digitales|seguridad en linea|contrasenas?)\b/u],
+  ['health',/\b(?:salud|medicina|vacunas?|vacunacion|hospitales?|cancer|enfermedades?|ensayos? clinicos?|pacientes?|demencia|diabetes|cuidados intensivos|primeros auxilios)\b/u],
+  ['science',/\b(?:ciencia|cientificos?|investigadores?|astronomia|astrofisica|agujeros? negros?|fisica|quimica|biologia|arqueologia|sonda espacial|exoplanetas?|telescopios?|astronautas?|galaxias|fusion nuclear)\b/u],
+  ['environment',/\b(?:clima|climatico|medio ambiente|biodiversidad|contaminacion|emisiones de carbono|deforestacion|energias? renovables?|combustibles fosiles|glaciares|ecosistemas|cop\d{2})\b/u],
+  ['food',/\b(?:alimentacion|seguridad alimentaria|recetas?|cocina|restaurantes?|agricultura|agricultores?|alergenos?)\b/u],
+  ['housing',/\b(?:viviendas?|alquileres?|inquilinos?|urbanismo|personas sin hogar|inmobiliari[oa]s?|hipotecas?)\b/u],
+  ['education',/\b(?:educacion|escuelas?|universidades?|estudiantes?|becas?|matriculas?|programas escolares|aulas?)\b/u],
+  ['work',/\b(?:empleos?|desempleo|trabajadores?|contratacion|despidos?|condiciones laborales|mercado laboral|huelga)\b/u],
+  ['travel',/\b(?:viajes?|turismo|turistas?|vuelos?|aerolineas?|aeropuertos?|aviacion|ferrocarriles?|trenes?|pasaportes?|visados?|cruceros?|transporte|carreteras?)\b/u],
+  ['money',/\b(?:finanzas personales|costo de vida|coste de vida|presupuesto familiar|ahorros?|pensiones?|jubilacion|tarjetas de credito|precios al consumidor|impuesto sobre la renta)\b/u],
+  ['technology',/\b(?:inteligencia artificial|tecnologia|software|semiconductores?|chips?|robotica|computacion cuantica|telefonos inteligentes|realidad virtual)\b/u],
+  ['business',/\b(?:economia|economico|empresas?|beneficios|ingresos|bolsa de valores|acciones|inversores?|inversiones?|inflacion|tipos de interes|aranceles|acuerdos comerciales|bancos?)\b/u],
+  ['culture',/\b(?:cultura|artes|musica|musicos?|orquestas?|peliculas?|cine|actores?|actrices|television|museos?|patrimonio|festivales?|conciertos?|libros?|novelas?|teatro|exposiciones?)\b/u],
+  ['world',/\b(?:guerra|alto el fuego|conflicto armado|invasion|misiles?|ataques? aereos?|ataques? con drones|diplomacia|diplomatic[oa]s?|cumbre bilateral|asuntos exteriores|humanitari[oa]s?|negociaciones de paz|sanciones|relaciones internacionales)\b/u],
+  ['public-affairs',/\b(?:politica|elecciones|parlamento|senado|presidente|primer ministro|gobierno|alcalde|justicia|tribunal|leyes?|legislacion|votantes|democracia|derechos civiles|candidatos?|coalicion|manifestaciones?|protestas?)\b/u],
+];
+const GERMAN_SUBJECTS:readonly (readonly [PublicEditorialCategory,RegExp])[]=[
+  ['gaming',/\b(?:videospiele?|computerspiele?|gaming|e-sport|playstation|xbox|nintendo)\b/u],
+  ['family',/\b(?:elternzeit|kinderbetreuung|kindertagesstatten|erziehung|stillen|adoption von kindern|pflegeeltern)\b/u],
+  ['shopping',/\b(?:einkaufen|rabatte?|black friday|preisvergleich|kaufberatung|verbraucherprodukte)\b/u],
+  ['sport',/\b(?:fu(?:ss|ß)ball(?:spiel|mannschaft|liga|turnier)?|rugby|tennis|basketball|baseball|radsport|schwimmen|leichtathletik|olympia|olympische spiele|weltmeisterschaft|bundesliga|formel 1|sport)\b/u],
+  ['weather',/\b(?:hurrikans?|taifune?|tornados?|erdbeben|uberschwemmungen|hochwasser|waldbrande|tsunami|hitzewelle|unwetter|schneesturm)\b/u],
+  ['digital-life',/\b(?:cybersicherheit|cyberangriffe?|datenleck|datendiebstahl|ransomware|phishing|datenschutz|digitale rechte|passworter)\b/u],
+  ['health',/\b(?:gesundheit|medizin|impfstoffe?|impfung|krankenhauser|krankenhaus|krebs|krankheiten|klinische studie|patienten|demenz|diabetes|erste hilfe)\b/u],
+  ['science',/\b(?:wissenschaft|forscher|forschung|astronomie|astrophysik|schwarze locher|physik|chemie|biologie|archaologie|raumsonde|exoplaneten?|teleskope?|astronauten|galaxien|kernfusion)\b/u],
+  ['environment',/\b(?:klima(?:wandel|schutz)?|umwelt|biodiversitat|umweltverschmutzung|co2-emissionen|abholzung|erneuerbare energien|fossile brennstoffe)\b/u],
+  ['food',/\b(?:lebensmittel|rezepte?|kochen|restaurants?|landwirtschaft|lebensmittelsicherheit|allergene?)\b/u],
+  ['housing',/\b(?:wohnungsmarkt|wohnungen|wohnraum|mieten|mieter|stadtplanung|obdachlosigkeit|immobilien|hypotheken)\b/u],
+  ['education',/\b(?:bildung|schulen?|universitaten|universitat|studierende|studenten|stipendien|lehrplan|studiengebuhren|schulunterricht)\b/u],
+  ['work',/\b(?:arbeitsplatze|arbeitslosigkeit|arbeitnehmer|beschaftigte|einstellungen|entlassungen|arbeitsbedingungen|arbeitsmarkt|streik)\b/u],
+  ['travel',/\b(?:reisen|tourismus|touristen|fluge|fluggesellschaften|flughafen|luftfahrt|eisenbahn|zuge|reisepasse|visa|kreuzfahrten|verkehr|stra(?:ss|ß)ensperrungen)\b/u],
+  ['money',/\b(?:private finanzen|lebenshaltungskosten|haushaltsbudget|ersparnisse|renten?|altersvorsorge|kreditkarten|verbraucherpreise|einkommensteuer)\b/u],
+  ['technology',/\b(?:kunstliche intelligenz|technologie|software|halbleiter|computerchips|robotik|quantencomputer|smartphones?|virtuelle realitat)\b/u],
+  ['business',/\b(?:wirtschaft|unternehmen|gewinne|umsatz|aktienmarkt|aktien|investoren|investitionen|inflation|zinsen|zolle|handelsabkommen|banken)\b/u],
+  ['culture',/\b(?:kultur|kunst|musik|musiker|filme?|kino|schauspieler|fernsehen|museum|museen|kulturerbe|festivals?|konzerte?|bucher|romane?|theater|ausstellungen)\b/u],
+  ['world',/\b(?:krieg|waffenruhe|waffenstillstand|bewaffneter konflikt|invasion|raketen|luftangriffe?|diplomatie|gipfeltreffen|au(?:ss|ß)enpolitik|humanitare hilfe|friedensverhandlungen|sanktionen)\b/u],
+  ['public-affairs',/\b(?:politik|wahlen|parlament|bundestag|prasident|kanzler|regierung|burgermeister|gericht|gesetze?|gesetzgebung|wahler|demokratie|burgerrechte|proteste?)\b/u],
+];
+const PORTUGUESE_SUBJECTS:readonly (readonly [PublicEditorialCategory,RegExp])[]=[
+  ['gaming',/\b(?:videogames?|videojogos?|jogos eletronicos|esportes eletronicos|playstation|xbox|nintendo)\b/u],
+  ['family',/\b(?:parentalidade|licenca parental|creches?|amamentacao|adocao de criancas|cuidados infantis)\b/u],
+  ['shopping',/\b(?:compras|descontos|black friday|comparacao de precos|guia de compra|produtos de consumo)\b/u],
+  ['sport',/\b(?:futebol|rugbi|tenis|basquete|beisebol|ciclismo|natacao|atletismo|jogos olimpicos|copa do mundo|liga dos campeoes|formula 1|esportes?|desportos?|fifa)\b/u],
+  ['weather',/\b(?:furacoes|tufao|tornados?|terremotos?|sismos?|inundacoes|enchentes|incendios florestais|tsunami|onda de calor|alerta meteorologico|tempestades?|nevascas?)\b/u],
+  ['digital-life',/\b(?:ciberseguranca|ciberataques?|ataques ciberneticos|vazamento de dados|fuga de dados|ransomware|phishing|privacidade digital|direitos digitais|seguranca online|senhas)\b/u],
+  ['health',/\b(?:saude|medicina|vacinas?|vacinacao|hospitais|hospital|cancer|cancro|doencas?|ensaios? clinicos?|pacientes?|demencia|diabetes|cuidados intensivos|primeiros socorros)\b/u],
+  ['science',/\b(?:ciencia|cientistas?|pesquisa cientifica|astronomia|astrofisica|buracos? negros?|fisica|quimica|biologia|arqueologia|sonda espacial|exoplanetas?|telescopios?|astronautas?|galaxias|fusao nuclear)\b/u],
+  ['environment',/\b(?:clima|climatic[oa]s?|meio ambiente|biodiversidade|poluicao|emissoes de carbono|desmatamento|energias? renovaveis|combustiveis fosseis|geleiras|ecossistemas)\b/u],
+  ['food',/\b(?:alimentacao|seguranca alimentar|receitas culinarias|culinaria|restaurantes?|agricultura|agricultores?|alergenos?)\b/u],
+  ['housing',/\b(?:moradia|habitacao|alugueis|inquilinos|urbanismo|sem-abrigo|imobiliari[oa]s?|hipotecas?)\b/u],
+  ['education',/\b(?:educacao|escolas?|universidades?|estudantes?|bolsas de estudo|propinas|mensalidades escolares|curriculo escolar|salas de aula)\b/u],
+  ['work',/\b(?:empregos?|desemprego|trabalhadores|contratacao|demissoes|despedimentos|condicoes de trabalho|mercado de trabalho|greve)\b/u],
+  ['travel',/\b(?:viagem|viagens|turismo|turistas?|voos?|companhias aereas|aeroportos?|aviacao|ferrovias|trens|comboios|passaportes?|vistos|cruzeiros?|transporte|estradas)\b/u],
+  ['money',/\b(?:financas pessoais|custo de vida|orcamento familiar|poupanca|pensoes|aposentadoria|cartoes de credito|precos ao consumidor|imposto de renda)\b/u],
+  ['technology',/\b(?:inteligencia artificial|tecnologia|software|semicondutores?|chips?|robotica|computacao quantica|smartphones?|realidade virtual)\b/u],
+  ['business',/\b(?:economia|economic[oa]s?|empresas?|lucros?|faturamento|bolsa de valores|acoes|investidores?|investimentos?|inflacao|juros|tarifas|acordos comerciais|bancos?)\b/u],
+  ['culture',/\b(?:cultura|artes|musica|musicos?|orquestras?|filmes?|cinema|atores?|atrizes|televisao|museus?|patrimonio|festivais|concertos?|livros?|romances?|teatro|exposicoes)\b/u],
+  ['world',/\b(?:guerra|cessar-fogo|conflito armado|invasao|misseis|ataques aereos|diplomacia|diplomatic[oa]s?|cupula bilateral|cimeira bilateral|negociacoes de paz|sancoes|relacoes internacionais)\b/u],
+  ['public-affairs',/\b(?:politica|eleicoes|parlamento|senado|presidente|primeiro-ministro|governo|prefeito|justica|tribunal|leis?|legislacao|eleitores|democracia|direitos civis|candidatos?|coligacao|manifestacoes|protestos?)\b/u],
+];
+const ARABIC_SUBJECTS:readonly (readonly [PublicEditorialCategory,RegExp])[]=[
+  ['gaming',/ألعاب الفيديو|العاب الفيديو|ألعاب إلكترونية|الألعاب الإلكترونية|بلايستيشن|نينتندو/u],
+  ['family',/تربية الأطفال|تربية الاطفال|إجازة الوالدين|حضانة الأطفال|دور الحضانة|الرضاعة|تبني طفل|تبني الأطفال/u],
+  ['shopping',/التسوق|تخفيضات تجارية|الجمعة السوداء|مقارنة الأسعار|دليل الشراء|منتجات استهلاكية/u],
+  ['sport',/كرة القدم|كرة السلة|كرة المضرب|التنس|البيسبول|السباحة|ألعاب القوى|الألعاب الأولمبية|كأس العالم|دوري أبطال|الفورمولا|بطولة فرنسا|الفيفا|الرياضة/u],
+  ['weather',/إعصار|أعاصير|زلزال|زلازل|فيضانات|حرائق الغابات|تسونامي|موجة حر|عاصفة|عواصف|ثلوج كثيفة/u],
+  ['digital-life',/الأمن السيبراني|هجوم سيبراني|هجمات سيبرانية|تسريب بيانات|تسريب البيانات|برمجيات الفدية|التصيد الإلكتروني|الخصوصية الرقمية|الحقوق الرقمية|كلمات المرور/u],
+  ['health',/الصحة|الرعاية الصحية|الطب(?!\p{L})|لقاح|لقاحات|تطعيم|مستشفى|مستشفيات|السرطان|أمراض|تجربة سريرية|تجارب سريرية|مرضى|الخرف|السكري|العناية المركزة/u],
+  ['science',/علماء|بحث علمي|أبحاث علمية|علم الفلك|الفيزياء|الكيمياء|علم الأحياء|علم الآثار|مسبار فضائي|كوكب خارجي|تلسكوب|رواد الفضاء|مجرات|ثقب أسود|الاندماج النووي/u],
+  ['environment',/المناخ|التنوع البيولوجي|التلوث|انبعاثات الكربون|إزالة الغابات|الطاقة المتجددة|الوقود الأحفوري|الاحتباس الحراري/u],
+  ['food',/سلامة الغذاء|سلامة الأغذية|وصفات الطبخ|الطهي|المطاعم|الزراعة|المزارعين|حساسية الطعام/u],
+  ['housing',/الإسكان|أزمة السكن|إيجارات|الإيجار|المستأجرين|التخطيط العمراني|المشردين|العقارات|الرهن العقاري/u],
+  ['education',/التعليم|المدارس|مدارس|الجامعات|جامعة|الطلاب|منح دراسية|المناهج الدراسية|الرسوم الدراسية|الفصول الدراسية/u],
+  ['work',/التوظيف|البطالة|الموظفين|العمال|تسريح|سوق العمل|ظروف العمل|إضراب/u],
+  ['travel',/السفر|السياحة|السياح|رحلات جوية|الطيران|المطارات|(?:ال|لل)سكك الحديدية|القطارات|جوازات السفر|التأشيرات|النقل العام|إغلاق الطرق/u],
+  ['money',/التمويل الشخصي|تكلفة المعيشة|غلاء المعيشة|ميزانية الأسرة|الادخار|المعاشات|التقاعد|بطاقات الائتمان|أسعار المستهلك|ضريبة الدخل/u],
+  ['technology',/(?:ال|لل)ذكاء الاصطناعي|ذكاء اصطناعي|التكنولوجيا|البرمجيات|أشباه الموصلات|رقائق الحاسوب|الروبوتات|الحوسبة الكمية|الهواتف الذكية|الواقع الافتراضي/u],
+  ['business',/الاقتصاد|اقتصاد|الشركات|أرباح|البورصة|أسهم|المستثمرين|استثمارات|التضخم|أسعار الفائدة|رسوم جمركية|اتفاق تجاري|البنوك/u],
+  ['culture',/الثقافة|الفنون|الموسيقى|الموسيقيين|أفلام|فيلم|السينما|الممثلين|التلفزيون|المتاحف|التراث|مهرجان|حفلات موسيقية|رواية|روايات|المسرح|معرض فني/u],
+  ['world',/الحرب|حرب|وقف إطلاق النار|نزاع مسلح|غزو|صواريخ|غارات|الدبلوماسية|قمة ثنائية|الشؤون الخارجية|مساعدات إنسانية|مفاوضات السلام|عقوبات|العلاقات الدولية|الجيش|مقاتلات/u],
+  ['public-affairs',/السياسة|انتخابات|الانتخابات|البرلمان|مجلس الشيوخ|الرئيس|رئاسة|رئيس الوزراء|الحكومة|حزب|ائتلاف|العمدة|المحكمة|قانون|تشريع|الناخبين|الديمقراطية|الحقوق المدنية|احتجاج|مظاهرات/u],
+];
+function additionalLocalizedSubject(title:string,path:string):PublicEditorialCategory|null|undefined{
+  const language=/^\/(es|de|pt-br|pt-002|ar)(?:\/|$)/u.exec(path)?.[1];
+  if(!language)return undefined;
+  const folded=title.normalize('NFKD').replace(/(\p{Script=Latin})\p{M}+/gu,'$1').normalize('NFC');
+  if(language==='es'){
+    if(/\b(?:resultados trimestrales|beneficios trimestrales|mercados bursatiles|wall street|guerra de precios)\b|\bfusion\b[^.!?]{0,50}\b(?:empresas?|bancos?)\b/u.test(folded))return 'business';
+    if(/\bciencia ficcion\b/u.test(folded)&&/\b(?:peliculas?|cine|novelas?)\b/u.test(folded))return 'culture';
+    return SPANISH_SUBJECTS.find(([,pattern])=>pattern.test(folded))?.[0]??null;
+  }
+  if(language==='de'){
+    if(/\b(?:quartalszahlen|quartalsgewinn|borsengang|preiskrieg)\b/u.test(folded))return 'business';
+    return GERMAN_SUBJECTS.find(([,pattern])=>pattern.test(folded))?.[0]??null;
+  }
+  if(language==='ar'){
+    if(/الوقود الأحفوري/u.test(title))return 'environment';
+    if(/أرباح الشركات|نتائج مالية|حرب الأسعار/u.test(title))return 'business';
+    return ARABIC_SUBJECTS.find(([,pattern])=>pattern.test(title))?.[0]??null;
+  }
+  if(/\b(?:resultados trimestrais|lucros trimestrais|guerra de precos)\b|\bfusao\b[^.!?]{0,50}\b(?:empresas?|bancos?)\b/u.test(folded))return 'business';
+  return PORTUGUESE_SUBJECTS.find(([,pattern])=>pattern.test(folded))?.[0]??null;
+}
 function localizedNewsSubject(title:string,url:URL):PublicEditorialCategory|null|undefined{
-  if(/[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(title)||/^\/japanese(?:\/|$)/u.test(url.pathname)){
+  const additional=additionalLocalizedSubject(title,url.pathname);if(additional!==undefined)return additional;
+  if((!/^\/fr(?:\/|$)/u.test(url.pathname)&&/[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(title))||/^\/japanese(?:\/|$)/u.test(url.pathname)){
     if(/(?:企業|会社|銀行).*(?:合併|買収)|(?:合併|買収).*(?:企業|会社|銀行)/u.test(title))return 'business';
     return JAPANESE_SUBJECTS.find(([,pattern])=>pattern.test(title))?.[0]??null;
   }

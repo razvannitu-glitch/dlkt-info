@@ -16,7 +16,7 @@ test('publication provenance separates source language, publisher country and st
   assert.equal(NEWS_PUBLISHERS.length,70);
   assert.equal(sourceLanguage(frUrl),'fr');assert.equal(sourceLanguage({sourceUrl:jaUrl}),'ja');
   assert.equal(sourceLanguage('https://www.france24.com/en/africa/fixture'),'en');
-  assert.equal(sourceLanguage('https://www.france24.com/ar/fixture'),null);
+  assert.equal(sourceLanguage('https://www.france24.com/ar/fixture'),'ar');
   assert.equal(sourceLanguage('https://www.france24.com/fixture'),null);
   assert.equal(sourceLanguage('https://www.bbc.com/arabic/articles/fixture'),null);
   assert.equal(sourceLanguage('https://www.bbc.com/japanese-extra/fixture'),null);

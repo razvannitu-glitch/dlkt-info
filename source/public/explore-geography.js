@@ -29,7 +29,9 @@ function namesForCountry(code) {
     if (known)
         return known;
     const values = new Set(COUNTRY_ALIASES[code] ?? []);
-    for (const language of ['en', 'fr', 'ja']) {
+    // Match the original wording of the verified acquisition editions. Interface
+    // language and publisher headquarters never become geographical evidence.
+    for (const language of ['en', 'fr', 'ja', 'es', 'ar', 'de', 'pt']) {
         try {
             const value = new Intl.DisplayNames([language], { type: 'region', fallback: 'none' }).of(code);
             if (value && value !== code)

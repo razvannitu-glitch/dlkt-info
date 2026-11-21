@@ -1,5 +1,7 @@
+import {getLocale,translate as tr,translatedCategory,countryLabel,languageLabel} from '../i18n/browser.js';
+import {localeUrl} from '../i18n/locale.js';
 import {object,validCity,type City} from '../local/contracts.js';
-import {PUBLIC_EDITORIAL_CATEGORIES,EDITORIAL_CATEGORY_LABELS,type PublicEditorialCategory} from '../iceo/editorial-categories.js';
+import {PUBLIC_EDITORIAL_CATEGORIES,type PublicEditorialCategory} from '../iceo/editorial-categories.js';
 import {sourceLanguage} from '../iceo/news-sources.js';
 import {editionCardSignature} from '../iceo/live-edition.js';
 import type {IceoSnapshot} from '../iceo/contracts.js';
@@ -55,10 +57,17 @@ export function setupExplore(options:ExploreOptions):ExploreController {
  let searchTimer:ReturnType<typeof setTimeout>|undefined,expiryTimer:ReturnType<typeof setTimeout>|undefined;
  let lastSelectionKey='',returnFocus:HTMLElement|null=null;
  const placeCache=new Map<string,PlaceResult>();
- for(const category of PUBLIC_EDITORIAL_CATEGORIES){const option=node('option','',EDITORIAL_CATEGORY_LABELS[category]);option.value=category;categories.append(option);}
+ function localizeControls():void {
+  const allCategories=node('option','',tr('allCategories'));allCategories.value='';categories.replaceChildren(allCategories);
+  for(const category of PUBLIC_EDITORIAL_CATEGORIES){const option=node('option','',translatedCategory(category));option.value=category;categories.append(option);}
+  const allCountries=node('option','',tr('allCountries'));allCountries.value='';countries.replaceChildren(allCountries);
+  for(const item of countryList){const option=node('option','',countryLabel(item.code,item.name));option.value=item.code;countries.append(option);}
+  categories.value=state.category??'';countries.value=state.countryCode??city?.countryCode??'';
+ }
+ localizeControls();
 
  function cancelSearch():void {++searchTicket;searchAbort?.abort();searchAbort=null;clearTimeout(searchTimer);matches.replaceChildren();matches.hidden=true;query.setAttribute('aria-expanded','false');}
- function countryName(code:string|null):string{return code?countryList.find(value=>value.code===code)?.name??code:'Around the world';}
+ function countryName(code:string|null):string{return code?countryLabel(code,countryList.find(value=>value.code===code)?.name??code):tr('aroundWorld');}
  function close(updateUrl=true,restoreFocus=true):void {
   if(!state.active)return;state={...state,active:false};++placeTicket;placeAbort?.abort();placePending=false;cancelSearch();clearTimeout(expiryTimer);
   section.hidden=true;delete document.body.dataset.worldExplore;navigation.setAttribute('aria-expanded','false');navigation.removeAttribute('aria-current');
@@ -90,8 +99,8 @@ export function setupExplore(options:ExploreOptions):ExploreController {
   try{
    const data=await json('/api/places?countries=1',AbortSignal.timeout(12000));
    if(!object(data)||!Array.isArray(data.countries)||data.countries.length>300||!data.countries.every(validCountry))throw Error('EXPLORE_COUNTRIES_INVALID');
-   countryList=data.countries;for(const item of countryList){const option=node('option','',item.name);option.value=item.code;countries.append(option);}countries.disabled=false;present();
-  }catch{countries.disabled=true;countries.title='Country list unavailable. City search is still available.';}
+   countryList=data.countries;localizeControls();countries.disabled=false;present();
+  }catch{countries.disabled=true;countries.title=tr('countriesError');}
   finally{countryPending=false;}
  }
  async function resolvePlace():Promise<void>{
@@ -108,54 +117,54 @@ export function setupExplore(options:ExploreOptions):ExploreController {
   finally{if(ticket===placeTicket){placePending=false;present();}}
  }
  async function lookup():Promise<void>{
-  const text=query.value.trim();cancelSearch();if(!text){searchStatus.textContent='Type a city, then choose its country.';return;}
-  const ticket=searchTicket;searchAbort=new AbortController();const controller=searchAbort;searchStatus.textContent='Finding cities…';
+  const text=query.value.trim();cancelSearch();if(!text){searchStatus.textContent=tr('lookupHint');return;}
+  const ticket=searchTicket;searchAbort=new AbortController();const controller=searchAbort;searchStatus.textContent=tr('lookupLoading');
   try{
    const data=await json('/api/places?q='+encodeURIComponent(text),AbortSignal.any([controller.signal,AbortSignal.timeout(12000)]));
    if(ticket!==searchTicket||!state.active)return;
    if(!object(data)||!Array.isArray(data.cities)||data.cities.length>8||!data.cities.every(validCity))throw Error('EXPLORE_CITIES_INVALID');
    for(const place of data.cities){
-    const item=node('li',''),button=node('button','');button.type='button';button.append(node('strong','',place.name),node('span','',[place.region,place.country].filter(Boolean).join(' · ')));
+    const item=node('li',''),button=node('button','');button.type='button';button.append(node('strong','',place.name),node('span','',[place.region,countryLabel(place.countryCode,place.country)].filter(Boolean).join(' · ')));
     button.addEventListener('click',()=>write(selectExploreCity(state,place),true));item.append(button);matches.append(item);
    }
-   matches.hidden=data.cities.length===0;query.setAttribute('aria-expanded',String(!matches.hidden));searchStatus.textContent=data.cities.length?'Choose the place you want to explore.':'No matching city. Try its local name or a nearby larger city.';
-  }catch(error){if(ticket!==searchTicket||controller.signal.aborted)return;searchStatus.textContent='City search is unavailable. Try again.';}
+   matches.hidden=data.cities.length===0;query.setAttribute('aria-expanded',String(!matches.hidden));searchStatus.textContent=data.cities.length?tr('lookupChoose'):tr('lookupEmpty');
+  }catch(error){if(ticket!==searchTicket||controller.signal.aborted)return;searchStatus.textContent=tr('lookupError');}
  }
  function update():void {
   clearTimeout(expiryTimer);if(!state.active)return;
   const snapshot=options.snapshot(),loading=options.loading(),now=Date.now();
   refresh.disabled=loading||placePending;grid.setAttribute('aria-busy',String(loading||placePending));
-  const name=city?`${city.name}, ${city.country}`:state.cityId?'Opening city…':countryName(state.countryCode);
+  const name=city?`${city.name}, ${countryName(city.countryCode)}`:state.cityId?tr('openingPlace'):countryName(state.countryCode);
   placeTitle.textContent=name;
-  placeDate.textContent=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'long',year:'numeric',timeZone:city?.timezone??'UTC'}).format(now)+(city?' · '+city.timezone.replaceAll('_',' '):' · UTC');
-  countryView.hidden=!city;countryView.textContent=city?`Explore ${city.country}`:'Explore this country';resetCategory.hidden=state.category===null;
+  placeDate.textContent=new Intl.DateTimeFormat(getLocale(),{weekday:'short',day:'numeric',month:'long',year:'numeric',timeZone:city?.timezone??'UTC'}).format(now)+(city?' · '+city.timezone.replaceAll('_',' '):' · UTC');
+  countryView.hidden=!city;countryView.textContent=city?tr('exploreCountry',{country:countryName(city.countryCode)}):tr('viewCountry');resetCategory.hidden=state.category===null;
   if(placePending||placeFailed||!snapshot||snapshot.state==='unavailable'){
    grid.replaceChildren();moreWrap.hidden=true;empty.hidden=false;
-   emptyTitle.textContent=placePending?'Opening this place…':placeFailed?'This place could not be opened.':loading?'Loading current stories…':'Current stories are unavailable.';
-   emptyCopy.textContent=placePending?'Your home city and interests stay as they are.':placeFailed?'Choose the city again, or search for another place.':'Use Refresh to check the connected sources again.';
-   status.textContent=placePending?'Finding the selected city.':placeFailed?'Place lookup unavailable.':loading?'Checking the connected publications.':'A current source snapshot could not be loaded.';
-   coverage.textContent='Coverage is shown once current publications and the selected place have loaded.';lastSelectionKey='';return;
+   emptyTitle.textContent=placePending?tr('openingPlace'):placeFailed?tr('placeError'):loading?tr('loadingStories'):tr('storiesUnavailable');
+   emptyCopy.textContent=placePending?tr('homeUnchanged'):placeFailed?tr('chooseAgain'):tr('refreshHint');
+   status.textContent=placePending?tr('lookupLoading'):placeFailed?tr('placeError'):loading?tr('checkingSources'):tr('storiesUnavailable');
+   coverage.textContent=tr('coveragePending');lastSelectionKey='';return;
   }
   const selection=selectExploreCards(snapshot.cards,{city,countryCode:state.countryCode,category:state.category,cityAliases:aliases},now);
   const visible=selection.cards.slice(0,pageSize);
-  const checked=new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:city?.timezone??'UTC'}).format(new Date(snapshot.generatedAt));
-  status.textContent=`${selection.matchedCount} matching ${selection.matchedCount===1?'story':'stories'} · Last 24 hours · Checked ${checked}${city?'':' UTC'}${snapshot.state==='partial'?' · Partial coverage':''}${loading?' · Checking for updates…':options.failed()?' · Latest refresh unavailable':''}`;
-  coverage.textContent=`This view searches ${selection.eligibleCount} eligible publications across the connected snapshot. ${selection.local.length} city matches and ${selection.national.length} country matches are available for this selection. Sources are incomplete and a missing match does not mean nothing happened in this place. Original headlines are retained; no automatic translation is applied.`;
-  const key=JSON.stringify([state.cityId,state.countryCode,state.category,pageSize,visible.map(item=>[editionCardSignature(item.card),item.explore.scope,item.explore.label])]);
+  const checked=new Intl.DateTimeFormat(getLocale(),{hour:'2-digit',minute:'2-digit',timeZone:city?.timezone??'UTC'}).format(new Date(snapshot.generatedAt));
+  status.textContent=[tr('matchingStories',{count:selection.matchedCount}),tr('last24Hours'),tr('checkedAt',{time:checked+(city?'':' UTC')}),snapshot.state==='partial'?tr('partialCoverage'):'',loading?tr('checkingUpdates'):options.failed()?tr('refreshUnavailable'):''].filter(Boolean).join(' · ');
+  coverage.textContent=tr('coverage',{total:selection.eligibleCount,local:selection.local.length,national:selection.national.length});
+  const key=JSON.stringify([getLocale(),state.cityId,state.countryCode,state.category,pageSize,visible.map(item=>[editionCardSignature(item.card),item.explore.scope,item.explore.label])]);
   if(key!==lastSelectionKey){
    const host=document.createElement('div');let previousScope='';
    visible.forEach((item,index)=>{
     if(item.explore.scope!==previousScope&&item.explore.scope!=='world'){
      const heading=node('div','discovery-section-label');heading.id='world-scope-'+item.explore.scope;
-     heading.append(node('h3','',item.explore.scope==='city'?`Mentioning ${city?.name??'this city'}`:`Country context · ${countryName(state.countryCode??city?.countryCode??null)}`));host.append(heading);previousScope=item.explore.scope;
+     heading.append(node('h3','',item.explore.scope==='city'?tr('mentioning',{city:city?.name??tr('city')}):tr('countryContext',{country:countryName(state.countryCode??city?.countryCode??null)})));host.append(heading);previousScope=item.explore.scope;
     }
     const article=options.card(item,index,selection.matchedCount);article.dataset.exploreScope=item.explore.scope;
-    const language=sourceLanguage(item.card),languageLabel=language?new Intl.DisplayNames(['en'],{type:'language'}).of(language):null;
-    const placeLabel=item.explore.scope==='city'?`${city?.name??'City'} mentioned`:item.explore.scope==='country'?`${countryName(state.countryCode??city?.countryCode??null)} · Country context`:'';
-    const label=[placeLabel,languageLabel&&language!=='en'?`${languageLabel}-language source`:''].filter(Boolean).join(' · ');
-    article.dataset.liveSignature=JSON.stringify([editionCardSignature(item.card),item.explore.scope,item.explore.label,language]);
+    const language=sourceLanguage(item.card),editionLanguage=language?languageLabel(language):null;
+    const placeLabel=item.explore.scope==='city'?tr('mentioning',{city:city?.name??tr('city')}):item.explore.scope==='country'?tr('countryContext',{country:countryName(state.countryCode??city?.countryCode??null)}):'';
+    const label=[placeLabel,editionLanguage?tr('sourceLanguage',{language:editionLanguage}):''].filter(Boolean).join(' · ');
+    article.dataset.liveSignature=JSON.stringify([getLocale(),editionCardSignature(item.card),item.explore.scope,item.explore.label,language]);
     if(label)article.querySelector('.card-content')?.prepend(node('p','world-card-place',label));
-    if(item.explore.scope!=='world')article.querySelector('.evidence')?.append(node('p','world-place-evidence',item.explore.label));
+    if(item.explore.scope!=='world'){const evidence=node('p','world-place-evidence',item.explore.label);evidence.lang='en';evidence.dir='ltr';article.querySelector('.evidence')?.append(evidence);}
     host.append(article);
    });
    const anchor=[...grid.querySelectorAll<HTMLElement>('article')].find(article=>{const r=article.getBoundingClientRect();return r.bottom>0&&r.top<innerHeight;});
@@ -163,9 +172,9 @@ export function setupExplore(options:ExploreOptions):ExploreController {
    if(anchor?.isConnected&&top!==undefined){const offset=anchor.getBoundingClientRect().top-top;if(Math.abs(offset)>1)window.scrollBy(0,offset);}
    lastSelectionKey=key;options.saved();
   }
-  empty.hidden=visible.length>0;emptyTitle.textContent=city?`No matching stories for ${city.name}.`:state.countryCode?`No matching stories for ${countryName(state.countryCode)}.`:'No matching stories in this category.';
-  emptyCopy.textContent='No current publication in the connected sources matches this place and category. Explore the country, change the category, or choose another place.';
-  moreWrap.hidden=visible.length>=selection.matchedCount;more.textContent=`Show ${Math.min(PAGE_SIZE,selection.matchedCount-visible.length)} more · ${selection.matchedCount-visible.length} available`;
+  empty.hidden=visible.length>0;emptyTitle.textContent=city?tr('noMatches',{place:city.name}):state.countryCode?tr('noMatches',{place:countryName(state.countryCode)}):tr('noCategoryMatches');
+  emptyCopy.textContent=tr('noMatchesHint');
+  moreWrap.hidden=visible.length>=selection.matchedCount;more.textContent=tr('showMore',{count:Math.min(PAGE_SIZE,selection.matchedCount-visible.length),remaining:selection.matchedCount-visible.length});
   if(document.visibilityState==='visible')expiryTimer=setTimeout(update,60000);
  }
  function open():void {write({...state,active:true},true);void loadCountries();}
@@ -188,9 +197,9 @@ export function setupExplore(options:ExploreOptions):ExploreController {
  more.addEventListener('click',()=>{const before=pageSize;pageSize+=PAGE_SIZE;update();const item=grid.querySelectorAll<HTMLElement>('article')[before];const heading=item?.querySelector<HTMLElement>('h3');if(heading){heading.tabIndex=-1;heading.focus({preventScroll:true});}});
  refresh.addEventListener('click',()=>{if(placeFailed)void resolvePlace();else options.refresh();void loadCountries();});
  element<HTMLButtonElement>('world-copy').addEventListener('click',()=>{void(async()=>{
-  const url=exploreUrl(new URL('/',window.location.origin),state);copyFallback.hidden=true;
-  try{if(!navigator.clipboard?.writeText)throw Error('CLIPBOARD_UNAVAILABLE');await navigator.clipboard.writeText(url);copyStatus.textContent='View link copied. Stories update as sources change.';}
-  catch{copyFallback.value=url;copyFallback.hidden=false;copyFallback.focus();copyFallback.select();copyStatus.textContent='Copy the selected link. Stories update as sources change.';}
+  const url=localeUrl(exploreUrl(new URL('/',window.location.origin),state),getLocale());copyFallback.hidden=true;
+  try{if(!navigator.clipboard?.writeText)throw Error('CLIPBOARD_UNAVAILABLE');await navigator.clipboard.writeText(url);copyStatus.textContent=tr('linkCopied');}
+  catch{copyFallback.value=url;copyFallback.hidden=false;copyFallback.focus();copyFallback.select();copyStatus.textContent=tr('copyLinkFallback');}
  })();});
  window.addEventListener('popstate',()=>{cancelSearch();searchStatus.textContent='';copyStatus.textContent='';copyFallback.hidden=true;const next=parseExploreState(window.location.href);if(!next.active){close(false);state=next;present();return;}state=next;pageSize=PAGE_SIZE;lastSelectionKey='';void resolvePlace();void loadCountries();});
  for(const id of ['entry-today','entry-return','entry-saved','entry-show-city'])element<HTMLButtonElement>(id).addEventListener('click',()=>close(true,false));
@@ -198,6 +207,7 @@ export function setupExplore(options:ExploreOptions):ExploreController {
  document.addEventListener('dlkt:city-selected',event=>{if(!(event instanceof CustomEvent)||!object(event.detail)||event.detail.restored===true||event.detail.estimated===true)return;close(true,false);});
  document.addEventListener('dlkt:daily-selected',event=>{if(event instanceof CustomEvent&&object(event.detail)&&event.detail.restored===true)return;close(true,false);});
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')update();else clearTimeout(expiryTimer);});
+ document.addEventListener('dlkt:language-changed',()=>{cancelSearch();searchStatus.textContent='';copyStatus.textContent='';copyFallback.hidden=true;lastSelectionKey='';localizeControls();present();});
  if(state.active){void resolvePlace();void loadCountries();}else present();
  return Object.freeze({update});
 }

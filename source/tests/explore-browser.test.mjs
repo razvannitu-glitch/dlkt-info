@@ -102,6 +102,43 @@ test('same publication changes reconciliation identity when geographical evidenc
  const snapshot={cards:[card],generatedAt:now,state:'ready'};const h=harness(t,'https://www.dlkt.ee/?explore=1',{snapshot});await tick();
  const world=h.renderings.at(-1)[0];assert.ok(world);assert.equal(world.scope,'world');
  h.click(cities.tokyo.id);await h.resolveCity(cities.tokyo);const local=h.renderings.at(-1)[0];
- assert.equal(local.id,world.id);assert.equal(local.scope,'city');assert.notEqual(local.signature,world.signature);assert.match(local.text,/Tokyo mentioned/);assert.match(local.text,/not independently verified/);
+ assert.equal(local.id,world.id);assert.equal(local.scope,'city');assert.notEqual(local.signature,world.signature);assert.match(local.text,/Mentioning Tokyo/);assert.match(local.text,/not independently verified/);
  h.click('world-everywhere');const again=h.renderings.at(-1)[0];assert.equal(again.id,world.id);assert.equal(again.signature,world.signature);assert.doesNotMatch(again.text,/not independently verified/);
+});
+
+test('Romanian presentation changes country/category labels without changing the selected geography',async t=>{
+ const h=harness(t,'https://www.dlkt.ee/?explore=1&country=JP&category=culture&lang=ro');await tick();
+ assert.equal(h.ids.get('world-place-title').textContent,'Japonia');
+ assert.equal(h.ids.get('world-country').value,'JP');assert.equal(h.ids.get('world-category').value,'culture');
+ assert.match(h.ids.get('world-category').textContent,/Cultură/);
+ assert.equal(h.ids.get('world-empty-title').textContent,'Știrile actuale nu sunt disponibile.');
+ assert.deepEqual(h.writes,[]);assert.deepEqual(h.events,[]);
+});
+
+test('changing language cancels an in-flight search and late city results cannot restore old-language UI',async t=>{
+ const h=harness(t);await tick();h.ids.get('world-city-query').value='Paris';h.ids.get('world-search').dispatchEvent(new Event('submit',{cancelable:true}));
+ const old=h.pending('q','Paris');assert.ok(old);
+ h.win.location.searchParams.set('lang','ar');h.doc.dispatchEvent(new CustomEvent('dlkt:language-changed',{detail:{locale:'ar'}}));
+ assert.equal(old.signal.aborted,true);old.resolve({cities:[cities.paris]});await tick();
+ assert.equal(h.ids.get('world-city-results').hidden,true);assert.equal(h.ids.get('world-city-results').children.length,0);
+ assert.match(h.ids.get('world-place-title').textContent,/[\u0600-\u06ff]/u);assert.deepEqual(h.writes,[]);
+});
+
+test('locale changes update card presentation while retaining the exact original source record',async t=>{
+ const now=new Date().toISOString();const card=Object.freeze({id:'c'.repeat(24),identity:'multilingual-source-fixture',title:'Tokyo opens a new public museum',kind:'publication',topic:'culture',publisher:'Controlled publisher',sourceUrl:'https://globalvoices.org/2026/11/21/controller-fixture/',sourceIds:Object.freeze(['gv-world']),date:now,dateLabel:'Published',observedAt:now,contentHash:'d'.repeat(64),boundary:'Controlled fixture.',deadline:null,version:null,attribution:'Controlled publisher',sourceState:'verified'});
+ const before=JSON.stringify(card);const h=harness(t,'https://www.dlkt.ee/?explore=1',{snapshot:{cards:[card],generatedAt:now,state:'ready'}});await tick();
+ const english=h.renderings.at(-1)[0];h.win.location.searchParams.set('lang','ja');h.doc.dispatchEvent(new CustomEvent('dlkt:language-changed',{detail:{locale:'ja'}}));
+ const japanese=h.renderings.at(-1)[0];assert.equal(japanese.id,english.id);assert.notEqual(japanese.signature,english.signature);
+ assert.match(japanese.text,/Tokyo opens a new public museum/);assert.equal(JSON.stringify(card),before);assert.deepEqual(h.writes,[]);
+ h.pop('https://www.dlkt.ee/?explore=1&country=FR&lang=ro');await tick();assert.equal(h.ids.get('world-place-title').textContent,'Franța');
+});
+
+test('shared Explore URLs retain the chosen language and exclude unrelated private query values',async t=>{
+ const original=Object.getOwnPropertyDescriptor(globalThis,'navigator'),copied=[];
+ Object.defineProperty(globalThis,'navigator',{configurable:true,value:{languages:['de-DE'],clipboard:{writeText:async value=>{copied.push(value);}}}});
+ t.after(()=>original?Object.defineProperty(globalThis,'navigator',original):delete globalThis.navigator);
+ const h=harness(t,'https://www.dlkt.ee/?explore=1&country=JP&category=culture&lang=ro&private=excluded#private-anchor');await tick();
+ h.click('world-copy');await tick();assert.equal(copied.length,1);const url=new URL(copied[0]);
+ assert.equal(url.searchParams.get('lang'),'ro');assert.equal(url.searchParams.get('country'),'JP');assert.equal(url.searchParams.get('category'),'culture');
+ assert.equal(url.searchParams.has('private'),false);assert.equal(url.hash,'');assert.deepEqual(h.writes,[]);
 });
