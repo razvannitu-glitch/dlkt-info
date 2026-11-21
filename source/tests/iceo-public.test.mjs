@@ -48,3 +48,14 @@ test('calendar assets preserve exact compiled code and resolve only curated brow
   for(const match of script.matchAll(/(?:from\s*|import\s*\()(['"])(\.\/[^'"]+\.js)\1/gu))assert.ok(read('public/'+match[2].slice(2)).length>0,`${file}: ${match[2]}`);
  }
 });
+
+test('editorial photo headline stays semantic and has an image-error fallback',()=>{
+ const css=read('public/iceo.css'),js=read('public/iceo.js'),html=read('public/iceo.html');
+ assert.match(js,/const headline = node\.querySelector\('\.card-content > h3'\)/u);
+ assert.match(js,/image\.addEventListener\('error', restoreHeadline/u);
+ assert.match(js,/content\.querySelector\('\.card-kind'\)\?\.after\(headline\)/u);
+ assert.match(css,/\.info-card\.photo-headline \.card-photo-frame::after/u);
+ assert.match(css,/rgba\(0,0,0,\.94\)/u);
+ assert.match(css,/@media\(max-width:600px\).*photo-headline/u);
+ assert.match(html,/<h3><\/h3>/u);
+});
