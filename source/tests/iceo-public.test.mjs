@@ -52,7 +52,7 @@ test('calendar assets preserve exact compiled code and resolve only curated brow
 test('editorial photo headline stays semantic and has an image-error fallback',()=>{
  const css=read('public/iceo.css'),js=read('public/iceo.js'),html=read('public/iceo.html');
  assert.match(js,/const headline = node\.querySelector\('\.card-content > h3'\)/u);
- assert.match(js,/image\.addEventListener\('error', restoreHeadline/u);
+ assert.match(js,/frame\.addEventListener\('error', restoreHeadline, \{ capture: true/u);
  assert.match(js,/content\.querySelector\('\.card-kind'\)\?\.after\(headline\)/u);
  assert.match(css,/\.info-card\.photo-headline \.card-photo-frame::after/u);
  assert.match(css,/rgba\(0,0,0,\.94\)/u);
