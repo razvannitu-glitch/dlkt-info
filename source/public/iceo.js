@@ -730,7 +730,7 @@ function cardNode(view, index, total, saved, automaticInsights = true) {
                     node.classList.remove('photo-headline');
                 }
             };
-            image.addEventListener('error', restoreHeadline, { capture: true, once: true });
+            frame.addEventListener('error', restoreHeadline, { capture: true, once: true });
             frame.append(headline);
             node.classList.add('photo-headline');
             if (image.complete && image.naturalWidth === 0) restoreHeadline();
