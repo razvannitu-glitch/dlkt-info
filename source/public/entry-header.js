@@ -25,7 +25,7 @@ export function setupHeader() {
         for (const item of nav.querySelectorAll('[aria-current]'))
             item.removeAttribute('aria-current');
         const view = document.body.dataset.entryView;
-        const selected = view === 'start' ? 'entry-today' : view === 'topics' && document.querySelector('[data-view="saved"][aria-pressed="true"]') ? 'entry-saved' : null;
+        const selected = document.body.dataset.worldExplore === 'active' ? 'world-nav' : view === 'start' ? 'entry-today' : view === 'topics' && document.querySelector('[data-view="saved"][aria-pressed="true"]') ? 'entry-saved' : null;
         if (selected)
             document.getElementById(selected)?.setAttribute('aria-current', 'page');
     };
@@ -67,6 +67,7 @@ export function setupHeader() {
     nav.addEventListener('focusout', event => { const next = event.relatedTarget; if (next instanceof Node && !nav.contains(next) && next !== toggle)
         close(false); });
     document.addEventListener('dlkt:entry-view', current);
+    document.addEventListener('dlkt:explore-view', current);
     document.addEventListener('dlkt:reader-selected', () => queueMicrotask(current));
     narrow.addEventListener('change', layout);
     layout();

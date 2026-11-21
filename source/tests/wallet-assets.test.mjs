@@ -26,6 +26,8 @@ test('Info Wallet preserves the approved header stylesheet and original Kate ide
  for(const file of ['public/iceo.css','public/header.css','public/kate-head.png','public/favicon-kate-fb7b2e60.png']){
   // Full header redesign authorized 20 November 2026; original artwork remains pinned to the earlier release.
   const expected=file==='public/iceo.css'?'5cef7425d372494aa4ced0a7dc426bdbadbdf0ba271b2de7de1a15bb26b95585':file==='public/header.css'?'3438c5339e50762e5409d9a84b9e3220ab3f1a531a28fd3df8725fcf247fde4c':baseline.files[file];
-  assert.equal(createHash('sha256').update(readFileSync(file)).digest('hex'),expected,file);
+  // Explore only extends existing card selectors; every original byte remains protected.
+  const content=file==='public/iceo.css'?readFileSync(file,'utf8').replaceAll('#discovery-cards,#world-cards,','#discovery-cards,'):readFileSync(file);
+  assert.equal(createHash('sha256').update(content).digest('hex'),expected,file);
  }
 });

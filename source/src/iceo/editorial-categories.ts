@@ -6,7 +6,7 @@ export const PUBLIC_EDITORIAL_CATEGORIES = [
   'work','education','family','science','environment','public-affairs','digital-life','food','housing','weather',
 ] as const;
 export type PublicEditorialCategory = typeof PUBLIC_EDITORIAL_CATEGORIES[number];
-export const EDITORIAL_CATEGORIES_VERSION = 'dlkt-public-editorial-categories-3' as const;
+export const EDITORIAL_CATEGORIES_VERSION = 'dlkt-public-editorial-categories-4' as const;
 
 export const EDITORIAL_CATEGORY_LABELS:Readonly<Record<PublicEditorialCategory,string>>=Object.freeze({
   world:'World & geopolitics',business:'Business & economy',technology:'AI & technology',money:'Money & cost of living',
@@ -47,6 +47,15 @@ export function editorialHeadlineSignals(value:string,category:PublicEditorialCa
     &&/\b(?:wins?|won|champions?|world record|final result|tournament result|title victory)\b/u.test(title))signals.push('competition-result');
   if(['business','money','work'].includes(category)
     &&/\b(?:earnings|merger|acquisition|interest rate|inflation|jobs report|employment report|trade deal|tariffs?|ipo|initial public offering|stock market debut|(?:shares?|stocks?) (?:slumps?|plunges?|tumbles?|falls?|rises?|surges?))\b/u.test(title))signals.push('economic-development');
+  const folded=title.normalize('NFKD').replace(/(\p{Script=Latin})\p{M}+/gu,'$1').normalize('NFC');
+  const add=(signal:EditorialHeadlineSignal,categories:readonly PublicEditorialCategory[],pattern:RegExp):void=>{if(categories.includes(category)&&pattern.test(folded)&&!signals.includes(signal))signals.push(signal);};
+  add('diplomatic-development',['world'],/\b(?:cessez-le-feu|accord de paix|negociations? de paix|sommet diplomatique|sommet bilateral)\b|停戦合意|和平合意|首脳会談|核軍縮協議/u);
+  add('investigation-or-regulatory-action',['world','public-affairs','business','money','technology','digital-life','shopping','health'],/\b(?:ouvre une enquete|ouvrent une enquete|enquete antitrust|enquete pour|sanctions reglementaires|controle des exportations)\b|独占禁止法違反|当局が調査|規制当局.*調査|輸出規制/u);
+  add('policy-change',['world','public-affairs','business','money','work','education','health','environment','housing','digital-life'],/\b(?:adopte une loi|adoptent une loi|nouvelle loi|nouvelles regles|resultats des elections|interdit|interdisent)\b|法案.*可決|新法.*成立|選挙結果|規制.*導入/u);
+  add('product-or-service-change',['technology','gaming','shopping','travel'],/\b(?:lance|lancent|devoile|devoilent|date de sortie|nouvelle liaison)\b|発売日.*発表|新製品.*発表|新型.*発表|サービス.*開始|新路線.*開設/u);
+  add('research-finding',['science','health','environment'],/\b(?:decouvrent|decouverte|une etude revele|une etude montre|resultats de l'essai)\b|研究.*発見|研究.*解明|臨床試験.*結果/u);
+  add('competition-result',['sport','gaming'],/\b(?:remporte|remportent|record du monde|victoire en finale)\b|優勝|世界新記録|決勝.*勝利/u);
+  add('economic-development',['business','money','work'],/\b(?:resultats trimestriels|fusion d'entreprises|taux d'interet|accord commercial|droits de douane|introduction en bourse)\b|決算.*発表|企業.*買収|企業.*合併|金利.*引き|貿易協定|関税/u);
   return Object.freeze(signals);
 }
 
@@ -102,6 +111,70 @@ const SECTIONS:Readonly<Record<string,PublicEditorialCategory>>=Object.freeze({
   food:'food',recipes:'food',housing:'housing','real-estate':'housing',weather:'weather',
 });
 
+/** Reviewed language rules preserve original headlines; an unknown subject stays unknown. */
+const FRENCH_SUBJECTS:readonly (readonly [PublicEditorialCategory,RegExp])[]=[
+  ['gaming',/\b(?:jeux? video|jeu en ligne|esport|playstation|xbox|nintendo|grand theft auto)\b/u],
+  ['family',/\b(?:parentalite|conge parental|garde d'enfants|creches?|allaitement|adoption d'enfants|parents adoptifs)\b/u],
+  ['shopping',/\b(?:soldes|promotions commerciales|black friday|cyber monday|comparateur de prix|guide d'achat|produits de consommation)\b/u],
+  ['sport',/\b(?:football|rugby|tennis|basketball|baseball|cyclisme|natation|athletisme|jeux olympiques|coupe du monde|ligue des champions|formule 1|grand prix|tournoi|sportifs?)\b/u],
+  ['weather',/\b(?:ouragans?|typhons?|cyclones?|tornades?|seismes?|tremblements de terre|inondations?|feux de foret|incendies de foret|tsunami|canicules?|alerte meteo|tempetes?|chutes de neige)\b/u],
+  ['digital-life',/\b(?:cybersecurite|cyberattaques?|fuite de donnees|fuites de donnees|rancongiciels?|hameconnage|vie privee numerique|droits numeriques|reseaux sociaux|securite en ligne|mots? de passe)\b/u],
+  ['health',/\b(?:sante|medecine|medicale?s?|vaccins?|vaccination|hopitaux|hopital|cancer|maladies?|essais? cliniques?|patients?|demence|diabete|premiers secours)\b/u],
+  ['science',/\b(?:scientifiques?|recherche scientifique|chercheurs?|astronomie|astrophysique|trous? noirs?|etoiles? a neutrons|physique|chimie|biologie|fossiles?(?!\s+(?:combustibles|energetiques)\b)|archeologie|sonde spatiale|exoplanetes?|telescopes?|astronautes?|galaxies|fusion nucleaire)\b/u],
+  ['environment',/\b(?:climat|climatique|environnement|biodiversite|pollution|emissions de carbone|deforestation|energies? renouvelables?|combustibles fossiles|transition energetique)\b/u],
+  ['food',/\b(?:alimentation|alimentaire|recettes?|cuisine|restaurants?|agriculture|agriculteurs?|rappel alimentaire|allergenes?)\b/u],
+  ['housing',/\b(?:logements?|prix de l'immobilier|loyers?|locataires?|urbanisme|sans-abri|immobilier|prets? immobiliers?)\b/u],
+  ['education',/\b(?:education|ecoles?|universites?|etudiants?|bourses? d'etudes|programmes? scolaires?|frais de scolarite|examens? scolaires?|salles? de classe|apprentissage)\b/u],
+  ['work',/\b(?:emplois?|chomage|salaries?|travailleurs?|recrutement|licenciements?|conditions de travail|marche du travail|greve)\b/u],
+  ['travel',/\b(?:voyages?|tourisme|touristes?|vols? aeriens?|compagnies? aeriennes?|aeroports?|aviation|chemins? de fer|trains?|passeports?|visas?|croisieres?|transports?|circulation routiere|fermetures? de routes?)\b/u],
+  ['money',/\b(?:finances? personnelles?|cout de la vie|vie chere|budget des menages|epargne|retraites?|pensions?|cartes? de credit|prix a la consommation|impot sur le revenu)\b/u],
+  ['technology',/\b(?:intelligence artificielle|technologies?|logiciels?|semi-conducteurs?|puces? informatiques?|robotique|informatique quantique|smartphones?|ordinateurs?|realite virtuelle)\b/u],
+  ['business',/\b(?:economie|economique|entreprises?|benefices?|chiffre d'affaires|marches? boursiers?|investisseurs?|investissements?|inflation|taux d'interet|droits de douane|accords? commerciaux|banques?|guerre des prix)\b/u],
+  ['culture',/\b(?:culture|culturel|arts contemporains|biennale|musique|musiciens?|films?|cinema|acteurs?|actrices|television|musees?|patrimoine|festivals?|concerts?|livres?|romans?|theatre|expositions?|photographie)\b/u],
+  ['world',/\b(?:guerres?|cessez-le-feu|conflits? armes?|invasion|missiles?|combats|attaques? de drones?|frappes aeriennes|echange de frappes|diplomatie|diplomatique|sommet bilateral|sommet diplomatique|affaires etrangeres|humanitaire|negociations? de paix|sanctions|relations internationales|defense militaire)\b/u],
+  ['public-affairs',/\b(?:politique|elections?|presidentielle|legislatives|parlement|senat|president|premier ministre|gouvernement|maire|municipales|justice|tribunal|verdict|proces|jurisprudence|negociations de coalition|manifestations?|manifestants?|manifeste(?:nt)?|mobilisation|loi|legislation|electeurs?|democratie|droits civiques|candidature)\b/u],
+];
+const JAPANESE_SUBJECTS:readonly (readonly [PublicEditorialCategory,RegExp])[]=[
+  ['gaming',/ビデオゲーム|ゲームソフト|ゲーム機|オンラインゲーム|ｅスポーツ|eスポーツ|任天堂|プレイステーション|ニンテンドー/u],
+  ['family',/子育て|育児休業|育児休暇|保育所|保育園|児童養護|養子縁組/u],
+  ['shopping',/ブラックフライデー|買い物|価格比較|購入ガイド|セール開催|消費者製品/u],
+  ['sport',/サッカー|ラグビー|テニス|バスケットボール|野球|五輪|オリンピック|陸上競技|ワールドカップ|水泳|競泳|大相撲|スポーツ/u],
+  ['weather',/台風|竜巻|地震|洪水|浸水|豪雨|山火事|津波|猛暑|大雪|暴風|気象警報/u],
+  ['digital-life',/サイバー攻撃|サイバーセキュリティ|情報漏えい|情報流出|個人情報.*流出|ランサムウェア|フィッシング|ネット上の安全|パスワード/u],
+  ['health',/医療|健康|ワクチン|病院|がん治療|癌|感染症|臨床試験|患者|認知症|糖尿病|救急医療/u],
+  ['science',/科学|研究者|天文学|宇宙|ブラックホール|中性子星|物理学|化学|生物学|考古学|探査機|望遠鏡|銀河|核融合/u],
+  ['environment',/気候変動|地球温暖化|生物多様性|環境汚染|温室効果ガス|森林破壊|再生可能エネルギー|脱炭素|化石燃料/u],
+  ['food',/食品|料理|レシピ|レストラン|農業|食の安全|食物アレルギー/u],
+  ['housing',/住宅|家賃|不動産|住宅ローン|入居者|都市計画|ホームレス/u],
+  ['education',/教育|学校|大学|学生|奨学金|授業料|入学試験|教室/u],
+  ['work',/雇用|失業|従業員|労働者|採用|人員削減|解雇|労働市場|職場環境/u],
+  ['travel',/旅行|観光|航空|空港|鉄道|列車|旅券|パスポート|交通|通行止め/u],
+  ['money',/家計|生活費|貯蓄|年金|クレジットカード|消費者物価|所得税/u],
+  ['technology',/人工知能|半導体|ソフトウェア|ロボット|量子コンピューター|スマートフォン|生成ai|仮想現実/u],
+  ['business',/経済|企業|業績|決算|株式市場|株価|投資家|投資|インフレ|金利|関税|貿易協定|銀行/u],
+  ['culture',/文化|音楽|映画|俳優|女優|美術館|博物館|文化遺産|コンサート|小説|演劇|展覧会/u],
+  ['world',/戦争|停戦|武力紛争|侵攻|ミサイル|空爆|外交|首脳会談|人道支援|和平交渉|経済制裁|国際関係/u],
+  ['public-affairs',/政治|選挙|国会|大統領|首相|政府|市長|裁判所|法案|有権者|民主主義|公民権/u],
+];
+const FRENCH_SECTIONS:Readonly<Record<string,PublicEditorialCategory>>=Object.freeze({
+  economie:'business',technologie:'technology',technologies:'technology',sante:'health',sports:'sport',culture:'culture',voyage:'travel',education:'education',sciences:'science',planete:'environment',politique:'public-affairs',cuisine:'food',meteo:'weather',
+});
+function localizedNewsSubject(title:string,url:URL):PublicEditorialCategory|null|undefined{
+  if(/[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(title)||/^\/japanese(?:\/|$)/u.test(url.pathname)){
+    if(/(?:企業|会社|銀行).*(?:合併|買収)|(?:合併|買収).*(?:企業|会社|銀行)/u.test(title))return 'business';
+    return JAPANESE_SUBJECTS.find(([,pattern])=>pattern.test(title))?.[0]??null;
+  }
+  if(!/^\/fr(?:\/|$)/u.test(url.pathname))return undefined;
+  const folded=title.normalize('NFKD').replace(/(\p{Script=Latin})\p{M}+/gu,'$1').normalize('NFC').replace(/[’‘]/gu,"'");
+  if(/\b(?:energies?|combustibles?) fossiles\b|\bcop\d{2}\b/u.test(folded))return 'environment';
+  if(/\bfusion\b/u.test(folded)&&/\b(?:ecoles?|universites?)\b/u.test(folded)&&!/\b(?:entreprises?|banques?|societes?)\b/u.test(folded))return 'education';
+  if(/\b(?:resultats trimestriels|chiffre d'affaires|introduction en bourse|guerre des prix)\b|\bfusion\b[^.!?]{0,50}\b(?:entreprises?|banques?|societes?)\b/u.test(folded))return 'business';
+  const category=FRENCH_SUBJECTS.find(([,pattern])=>pattern.test(folded))?.[0];
+  if(category)return category;
+  for(const segment of url.pathname.split('/')){const category=Object.hasOwn(FRENCH_SECTIONS,segment)?FRENCH_SECTIONS[segment]:undefined;if(category)return category;}
+  return null;
+}
+
 /** Reviewed specialist-publication scope, used only after actual headline/section evidence. */
 const SPECIALIST_PUBLISHERS:Readonly<Record<string,PublicEditorialCategory>>=Object.freeze(Object.fromEntries<PublicEditorialCategory>(
   ([
@@ -130,6 +203,7 @@ export function classifyNewsHeadline(title:string,sourceUrl:string):PublicEditor
   try{url=new URL(sourceUrl);}catch{return null;}
   if(url.protocol!=='https:'||url.username||url.password||url.port)return null;
   const normalized=title.normalize('NFKC').toLowerCase();
+  const localized=localizedNewsSubject(normalized,url);if(localized!==undefined)return localized;
   // An editorial cartoon is commentary, not a new diplomatic event or a quota-filling news item.
   if(/\s[–—-]\s*cartoon\s*$/u.test(normalized))return null;
   // The nature of the reported development matters more than the company sector.

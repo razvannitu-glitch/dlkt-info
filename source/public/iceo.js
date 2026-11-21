@@ -1,4 +1,5 @@
 import { photoNode, integratePhotoHeadline } from './card-photo-browser.js';
+import { setupExplore } from './explore-browser.js';
 import { contextForCard } from './context.js';
 import { nextDailyEditionDelay, selectContextualToday } from './contextual-today.js';
 import { LiveEdition, editionCardSignature, editionUpdateLabel, PUBLIC_EDITION_POLL_MS, publicEditionPollDelay } from './live-edition.js';
@@ -52,6 +53,7 @@ const discoveryLoadingElements = {
 const discoveryLoading = new DiscoveryLoading(() => renderDiscovery());
 let initialCheckStarted = false;
 let snapshot = null, loading = false, mode = 'briefing';
+let worldExplorer = null;
 const snapshotProgress = new SnapshotProgress();
 let lastLoadRegressed = false;
 let renderTimer;
@@ -922,7 +924,7 @@ function reconcileDiscovery(target, next) {
         const freshCard = currentCardByNode.get(node);
         if (freshCard)
             currentCardByNode.set(existing, freshCard);
-        for (const selector of ['.card-index', '.card-date', '.contextual-reason', '[data-source-checked]']) {
+        for (const selector of ['.card-index', '.card-date', '.contextual-reason', '.world-card-place', '[data-source-checked]']) {
             const before = existing.querySelector(selector), after = node.querySelector(selector);
             if (before && after)
                 before.textContent = after.textContent;
@@ -940,6 +942,7 @@ function reconcileDiscovery(target, next) {
 }
 function renderDiscovery() {
     clearTimeout(discoveryExpiry);
+    worldExplorer?.update();
     renderReturnBrief();
     const section = required('#discovery'), target = required('#discovery-cards'), host = document.createElement('div'), note = required('#discovery-status'), button = required('#discovery-refresh');
     button.disabled = loading;
@@ -1277,6 +1280,9 @@ function openOrganizationFocus() {
     document.dispatchEvent(new CustomEvent('dlkt:reader-selected'));
     return true;
 }
+worldExplorer = setupExplore({ snapshot: () => snapshot, loading: () => loading, failed: () => lastLoadFailed,
+    card: (view, index, total) => cardNode(view, index, total, undefined, false), reconcile: reconcileDiscovery,
+    refresh: () => { void load(); }, saved: memoryControls });
 const organizationPreview = openOrganizationFocus();
 window.addEventListener('hashchange', openOrganizationFocus);
 // Public cards do not wait for browser storage, location or a saved-profile restoration.

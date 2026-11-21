@@ -87,6 +87,49 @@ export function publisherForNewsUrl(value) {
         return null;
     }
 }
+const publication = (publisherId, countryCode, countryName, coverage, ...editions) => Object.freeze({ publisherId, countryCode, countryName, coverage, editions: Object.freeze(editions.map(([path, language]) => Object.freeze({ path, language }))) });
+/** Publication provenance only. A publisher's country or edition never establishes a story's location. */
+export const NEWS_PUBLICATION_SCOPES = Object.freeze([
+    publication('ap', 'US', 'United States', 'Global reporting', ['/article/', 'en']),
+    publication('bbc', 'GB', 'United Kingdom', 'Global reporting', ['/news/', 'en'], ['/sport/', 'en'], ['/japanese/', 'ja']),
+    publication('guardian', 'GB', 'United Kingdom', 'Global reporting', ['/', 'en']),
+    publication('france24', 'FR', 'France', 'Global reporting', ['/fr/', 'fr'], ['/en/', 'en']),
+    publication('japan-times', 'JP', 'Japan', 'Japan and global reporting', ['/', 'en']),
+    publication('the-hindu', 'IN', 'India', 'India and global reporting', ['/', 'en']),
+    publication('abc-au', 'AU', 'Australia', 'Australia and global reporting', ['/news/', 'en']),
+    publication('rte', 'IE', 'Ireland', 'Ireland and global reporting', ['/news/', 'en']),
+    publication('cna', 'SG', 'Singapore', 'Singapore, Asia and global reporting', ['/', 'en']),
+    publication('straits-times', 'SG', 'Singapore', 'Singapore, Asia and global reporting', ['/', 'en']),
+    // The New York Times also publishes other language editions. Only its dated English path is declared below.
+    publication('nytimes', 'US', 'United States', 'United States and global reporting'),
+]);
+const publicationScopes = new Map(NEWS_PUBLICATION_SCOPES.map(value => [value.publisherId, value]));
+const editionPath = (path, prefix) => prefix === '/' || path === prefix.slice(0, -1) || path.startsWith(prefix);
+/** Source-edition language, not automatic detection of the language of an individual article. */
+export function sourcePublicationContext(value) {
+    const raw = typeof value === 'string' ? value : value.sourceUrl;
+    if (raw.length > 3000 || /[\u0000-\u0020\u007f<>\\]/u.test(raw))
+        return null;
+    let url;
+    try {
+        url = new URL(raw);
+    }
+    catch {
+        return null;
+    }
+    if (url.protocol !== 'https:' || url.username || url.password || url.port)
+        return null;
+    // This source already belongs to the reviewed-feed registry; it is not added to news discovery's origin allowlist.
+    if (url.origin === 'https://www.sanews.gov.za' && ['/south-africa/', '/features/'].some(path => editionPath(url.pathname, path)))
+        return Object.freeze({ language: 'en', publisherCountryCode: 'ZA', publisherCountryName: 'South Africa', coverage: 'South African government reporting', basis: 'reviewed-publisher' });
+    const publisher = byOrigin.get(url.origin), scope = publisher ? publicationScopes.get(publisher.id) : undefined;
+    if (!scope)
+        return null;
+    const edition = scope.editions.find(value => editionPath(url.pathname, value.path));
+    const language = edition?.language ?? (scope.publisherId === 'nytimes' && /^\/\d{4}\//u.test(url.pathname) ? 'en' : null);
+    return Object.freeze({ language, publisherCountryCode: scope.countryCode, publisherCountryName: scope.countryName, coverage: scope.coverage, basis: 'reviewed-publisher' });
+}
+export function sourceLanguage(value) { return sourcePublicationContext(value)?.language ?? null; }
 /** Strip only known tracking fields; preserve URL parameters that identify the article. */
 export function canonicalNewsUrl(value) {
     if (!publisherForNewsUrl(value))
@@ -120,6 +163,10 @@ export const NEWS_DISCOVERY_INDEXES = Object.freeze([
     { id: 'education-week-news', publisherId: 'edweek', url: 'https://www.edweek.org/news-sitemap-content.xml' },
     { id: 'weather-channel-news', publisherId: 'weather-channel', url: 'https://weather.com/api/payload/v1/sitemaps/en-US/news.xml' },
     { id: 'the-hindu-news', publisherId: 'the-hindu', url: 'https://www.thehindu.com/sitemap/googlenews/all/all.xml' },
+    // Public endpoints and channel identities checked2026-11-21. Original article metadata remains mandatory.
+    { id: 'france24-fr-news', publisherId: 'france24', url: 'https://www.france24.com/fr/rss', format: 'rss', language: 'fr', feedTitle: "France 24 - Infos, news & actualités - L'information internationale en direct", feedHome: 'https://www.france24.com/fr/', articlePath: '/fr/' },
+    { id: 'japan-times-news', publisherId: 'japan-times', url: 'https://www.japantimes.co.jp/feed/', format: 'rss', language: 'en', feedTitle: 'Latest articles - The Japan Times', feedHome: 'https://www.japantimes.co.jp/', articlePath: '/' },
+    { id: 'guardian-africa-news', publisherId: 'guardian', url: 'https://www.theguardian.com/world/africa/rss', format: 'rss', language: 'en', feedTitle: 'Africa | The Guardian', feedHome: 'https://www.theguardian.com/world/africa', articlePath: '/' },
 ].map(index => Object.freeze(index)));
 const newsSource = (id, label, topic) => Object.freeze({
     id, label, publisher: 'Reviewed news discovery', topic,

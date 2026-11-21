@@ -11,7 +11,13 @@ for(const [source,target] of [['account/contracts','account-contracts'],['accoun
  if(source==='account/browser')compiled=compiled.replaceAll("'./contracts.js'","'./account-contracts.js'");
  writeFileSync(`public/${target}.js`,compiled);
 }
-const main=readFileSync('public/iceo.js','utf8').replaceAll("'../edition/browser.js'","'./edition-browser.js'").replaceAll("'../local/contracts.js'","'./local-contracts.js'").replaceAll("'../local/card-node.js'","'./local-card-node.js'").replaceAll("'../local/presentation.js'","'./local-presentation.js'");writeFileSync('public/iceo.js',main);
+const main=readFileSync('public/iceo.js','utf8').replaceAll("'../edition/browser.js'","'./edition-browser.js'").replaceAll("'../local/contracts.js'","'./local-contracts.js'").replaceAll("'../local/card-node.js'","'./local-card-node.js'").replaceAll("'../local/presentation.js'","'./local-presentation.js'").replaceAll("'../explore/browser.js'","'./explore-browser.js'");writeFileSync('public/iceo.js',main);
+for(const name of ['state','selection','geography','browser']){
+ const compiled=readFileSync(`.build/src/explore/${name}.js`,'utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'')
+  .replaceAll('../iceo/','./').replaceAll("'../local/contracts.js'","'./local-contracts.js'")
+  .replaceAll("'./state.js'","'./explore-state.js'").replaceAll("'./selection.js'","'./explore-selection.js'").replaceAll("'./geography.js'","'./explore-geography.js'");
+ writeFileSync(`public/explore-${name}.js`,compiled);
+}
 const homeLocal=readFileSync('public/home-local.js','utf8').replaceAll("'../local/contracts.js'","'./local-contracts.js'").replaceAll("'../local/news-policy.js'","'./local-news-policy.js'");writeFileSync('public/home-local.js',homeLocal);
 
 for(const name of ['browser','contracts','memory','presentation','card-node','event-calendar','places','discovery','reference-places','news-policy','startup']){

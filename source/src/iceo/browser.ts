@@ -1,4 +1,5 @@
 import {photoNode,integratePhotoHeadline} from '../media/browser.js';
+import {setupExplore,type ExploreController} from '../explore/browser.js';
 import {contextForCard} from './context.js';
 import {nextDailyEditionDelay,selectContextualToday} from './contextual-today.js';
 import {LiveEdition,editionCardSignature,editionUpdateLabel,PUBLIC_EDITION_POLL_MS,publicEditionPollDelay} from './live-edition.js';
@@ -51,6 +52,7 @@ const discoveryLoadingElements:DiscoveryLoadingElements={
 const discoveryLoading=new DiscoveryLoading(()=>renderDiscovery());
 let initialCheckStarted=false;
 let snapshot:IceoSnapshot|null=null,loading=false,mode:ReaderSettings['mode']='briefing';
+let worldExplorer:ExploreController|null=null;
 const snapshotProgress=new SnapshotProgress();
 let lastLoadRegressed=false;
 let renderTimer:ReturnType<typeof setTimeout>|undefined;
@@ -462,7 +464,7 @@ function reconcileDiscovery(target:HTMLElement,next:HTMLElement):void {
     existing.className=node.className;
     if(node.dataset.editionPart)existing.dataset.editionPart=node.dataset.editionPart;else delete existing.dataset.editionPart;
     const freshCard=currentCardByNode.get(node);if(freshCard)currentCardByNode.set(existing,freshCard);
-    for(const selector of ['.card-index','.card-date','.contextual-reason','[data-source-checked]']){
+    for(const selector of ['.card-index','.card-date','.contextual-reason','.world-card-place','[data-source-checked]']){
       const before=existing.querySelector(selector),after=node.querySelector(selector);if(before&&after)before.textContent=after.textContent;
     }
     return existing;
@@ -473,6 +475,7 @@ function reconcileDiscovery(target:HTMLElement,next:HTMLElement):void {
 }
 function renderDiscovery():void {
   clearTimeout(discoveryExpiry);
+  worldExplorer?.update();
   renderReturnBrief();
   const section=required<HTMLElement>('#discovery'),target=required<HTMLElement>('#discovery-cards'),host=document.createElement('div'),note=required<HTMLElement>('#discovery-status'),button=required<HTMLButtonElement>('#discovery-refresh');
   button.disabled=loading;
@@ -649,6 +652,9 @@ function openOrganizationFocus():boolean {
  render();if(!snapshot&&!loading)void load();
  document.dispatchEvent(new CustomEvent('dlkt:reader-selected'));return true;
 }
+worldExplorer=setupExplore({snapshot:()=>snapshot,loading:()=>loading,failed:()=>lastLoadFailed,
+ card:(view,index,total)=>cardNode(view,index,total,undefined,false),reconcile:reconcileDiscovery,
+ refresh:()=>{void load();},saved:memoryControls});
 const organizationPreview=openOrganizationFocus();
 window.addEventListener('hashchange',openOrganizationFocus);
 // Public cards do not wait for browser storage, location or a saved-profile restoration.

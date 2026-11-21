@@ -1,15 +1,29 @@
 import {cityJson} from './city-data.js';
 import {object,validCity,finite,type City} from './contracts.js';
-interface IndexedCity {readonly city:City;readonly names:readonly string[];readonly context:string;readonly population:number}
+interface IndexedCity {readonly city:City;readonly names:readonly string[];readonly originalNames:readonly string[];readonly context:string;readonly population:number}
 export function normalizePlace(text:string):string{return text.normalize('NFKD').replace(/\p{M}/gu,'').toLocaleLowerCase('en').replace(/[^\p{L}\p{N}]+/gu,' ').trim();}
 let index:readonly IndexedCity[]|null=null;let byId:ReadonlyMap<string,City>|null=null;
 function catalog():readonly IndexedCity[]{
  if(index)return index;const data:unknown=JSON.parse(cityJson);if(!object(data)||data.version!=='dlkt-cities-1'||!Array.isArray(data.rows)||data.rows.length>100000)throw Error('CITY_CATALOG_INVALID');
  const zones=new Set<string>();const ids=new Set<string>();
- index=data.rows.map((row:unknown)=>{if(!Array.isArray(row)||row.length!==10||!Array.isArray(row[9])||row[9].some(n=>typeof n!=='string'))throw Error('CITY_CATALOG_INVALID');const c={id:row[0],name:row[1],countryCode:row[2],country:row[3],region:row[4],lat:row[5],lon:row[6],timezone:row[7]};if(!validCity(c)||!finite(row[8],0,1000000000)||ids.has(c.id))throw Error('CITY_CATALOG_INVALID');if(!zones.has(c.timezone)){new Intl.DateTimeFormat('en',{timeZone:c.timezone});zones.add(c.timezone);}ids.add(c.id);return{city:c,names:[c.name,...row[9] as string[]].map(normalizePlace),context:normalizePlace(c.country+' '+c.countryCode+' '+c.region),population:row[8]};});
+ index=data.rows.map((row:unknown)=>{if(!Array.isArray(row)||row.length!==10||!Array.isArray(row[9])||row[9].some(n=>typeof n!=='string'))throw Error('CITY_CATALOG_INVALID');const c={id:row[0],name:row[1],countryCode:row[2],country:row[3],region:row[4],lat:row[5],lon:row[6],timezone:row[7]};if(!validCity(c)||!finite(row[8],0,1000000000)||ids.has(c.id))throw Error('CITY_CATALOG_INVALID');if(!zones.has(c.timezone)){new Intl.DateTimeFormat('en',{timeZone:c.timezone});zones.add(c.timezone);}ids.add(c.id);return{city:c,names:[c.name,...row[9] as string[]].map(normalizePlace),originalNames:[c.name,...row[9] as string[]],context:normalizePlace(c.country+' '+c.countryCode+' '+c.region),population:row[8]};});
  byId=new Map(index.map(x=>[x.city.id,x.city]));return index;
 }
 export function findCity(id:string):City|null{catalog();return byId?.get(id)??null;}
+/** Public reference metadata only; never a person's home or saved preferences. */
+export function cityAliases(id:string):readonly string[]{
+ const item=catalog().find(value=>value.city.id===id);
+ if(!item)return Object.freeze([]);
+ const names=[...new Set(item.originalNames.map(name=>name.normalize('NFC').trim()))].filter(name=>name.length<=100&&(name.length>=3||name.length===2&&/^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]+$/u.test(name)));
+ // The cap must not discard a city's native name behind many Latin transliterations.
+ const scripts=[/\p{Script=Han}/u,/\p{Script=Hiragana}/u,/\p{Script=Katakana}/u,/\p{Script=Hangul}/u,/\p{Script=Cyrillic}/u,/\p{Script=Arabic}/u,/\p{Script=Greek}/u,/\p{Script=Hebrew}/u,/\p{Script=Devanagari}/u,/\p{Script=Thai}/u];
+ const priority=[names[0],...scripts.flatMap(script=>names.filter(name=>script.test(name)).slice(0,2)),...names].filter((name):name is string=>name!==undefined);
+ return Object.freeze([...new Set(priority)].slice(0,32));
+}
+export function listCountries():readonly {readonly code:string;readonly name:string}[]{
+ const countries=new Map<string,string>();for(const item of catalog())countries.set(item.city.countryCode,item.city.country);
+ return Object.freeze([...countries].map(([code,name])=>Object.freeze({code,name})).sort((a,b)=>a.name.localeCompare(b.name,'en')));
+}
 export function searchCities(input:string,country:string|null=null,limit=8):readonly City[]{
  if(input.length>100||!Number.isInteger(limit)||limit<1||limit>12)throw Error('CITY_SEARCH_INVALID');const q=normalizePlace(input);if(!q)return[];const tokens=q.split(' ');
  return catalog().map(x=>{const primary=x.names[0]??'';const alias=(q.length>1||!/^[a-z0-9]$/u.test(q))&&x.names.some(n=>n.startsWith(q));const all=q.length>1&&tokens.every(t=>x.names.some(n=>n.split(' ').some(p=>p.startsWith(t)))||x.context.split(' ').some(p=>p.startsWith(t)));return{x,score:primary===q?0:q.length>1&&x.names.includes(q)?1:primary.startsWith(q)?2:alias?3:all?4:9};}).filter(v=>v.score<9).sort((a,b)=>a.score-b.score||Number(b.x.city.countryCode===country)-Number(a.x.city.countryCode===country)||b.x.population-a.x.population||a.x.city.id.localeCompare(b.x.city.id)).slice(0,limit).map(v=>v.x.city);

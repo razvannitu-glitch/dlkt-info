@@ -1,5 +1,5 @@
 /* The approved editorial card treatment. All ink derives from the DLKT palette. */
-:is(#discovery-cards,#cards)>.info-card.editorial-card{
+:is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card{
  --card-bg:var(--white);--card-ink:var(--black);--card-title:var(--black);
  --card-muted:var(--muted);--card-rule:var(--line);--card-action:var(--black);
  --card-action-ink:var(--white);--card-hover:var(--black);--card-hover-ink:var(--white);
@@ -8,15 +8,15 @@
 .info-card.editorial-card>header{padding:22px 22px 0;font-size:14px;line-height:1.4}
 .info-card.editorial-card .card-index{display:none}
 .info-card.editorial-card .card-content{padding:18px 22px 20px}
-:is(#discovery-cards,#cards)>.info-card.editorial-card h3{
+:is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card h3{
  display:block;-webkit-line-clamp:unset;overflow:visible;max-height:none;
  font-size:clamp(1.5rem,2.6vw,1.8rem);line-height:1.16;letter-spacing:-.035em;
  margin:0 0 16px;overflow-wrap:anywhere;color:var(--black);
 }
-:is(#discovery-cards,#cards)>.info-card.editorial-card .card-title-link{
+:is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card .card-title-link{
  color:inherit;text-decoration:none;display:inline;padding:0;min-height:0;
 }
-:root :is(#discovery-cards,#cards)>.info-card.editorial-card .card-title-link:not(:disabled):hover{
+:root :is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card .card-title-link:not(:disabled):hover{
  background:transparent!important;color:inherit!important;border-color:transparent!important;
  text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:4px;
 }
@@ -24,7 +24,7 @@
 .info-card.editorial-card .card-publisher{font-weight:700}
 .info-card.editorial-card .card-kind{font-size:.8125rem;margin:0 0 9px;line-height:1.5}
 .info-card.editorial-card .card-kind:empty{display:none}
-:is(#discovery-cards,#cards)>.info-card.editorial-card .card-context{
+:is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card .card-context{
  display:block;-webkit-line-clamp:unset;overflow:visible;font-size:1rem;line-height:1.6;
  color:var(--black);margin:12px 0;
 }
@@ -35,7 +35,7 @@
 .info-card.editorial-card .card-actions{
  display:flex;flex-wrap:nowrap;gap:8px!important;border-top:0;padding:0;margin-top:18px;
 }
-:is(#discovery-cards,#cards)>.info-card.editorial-card .card-actions>.source-link{
+:is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card .card-actions>.source-link{
  order:-1;flex:1;justify-content:center;background:var(--black);color:var(--white);
  border-color:var(--black);min-height:46px;border-radius:8px;font-size:.875rem;padding:11px 12px;
 }
@@ -82,11 +82,11 @@
  content:"";position:absolute;left:0;right:0;bottom:100%;height:70px;z-index:-1;pointer-events:none;
  background:linear-gradient(to top,color-mix(in srgb,var(--black) 86%,transparent),transparent);
 }
-:is(#discovery-cards,#cards)>.info-card.editorial-card .card-photo-headline h3{
+:is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card .card-photo-headline h3{
  color:var(--white);margin:0;font-size:clamp(1.5rem,2.6vw,1.8rem);line-height:1.16;
 }
-:is(#discovery-cards,#cards)>.info-card.editorial-card .card-photo-headline a{color:var(--white)}
-:is(#discovery-cards,#cards)>.info-card.editorial-card .card-photo-headline a:focus-visible{outline-color:var(--white)}
+:is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card .card-photo-headline a{color:var(--white)}
+:is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card .card-photo-headline a:focus-visible{outline-color:var(--white)}
 .photo-editorial.photo-title-long .card-photo-headline{margin-top:-24px;background:var(--black)}
 .photo-editorial.photo-title-long .card-photo-headline:before{background:linear-gradient(to top,var(--black),transparent)}
 .info-card.editorial-card .card-photo-caption{
@@ -99,8 +99,8 @@
 .photo-editorial.photo-unavailable .card-topic{padding:0;background:transparent;color:var(--muted)}
 .photo-editorial.photo-unavailable .card-photo-headline{margin:0;padding:18px 22px 0;background:var(--white);color:var(--black)}
 .photo-editorial.photo-unavailable .card-photo-headline:before{display:none}
-:is(#discovery-cards,#cards)>.info-card.editorial-card .photo-unavailable .card-photo-headline :is(h3,a){color:var(--black)}
-:is(#discovery-cards,#cards)>.info-card.editorial-card .photo-unavailable .card-photo-headline a:focus-visible{outline-color:var(--black)}
+:is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card .photo-unavailable .card-photo-headline :is(h3,a){color:var(--black)}
+:is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card .photo-unavailable .card-photo-headline a:focus-visible{outline-color:var(--black)}
 .photo-editorial.photo-unavailable .card-photo-caption{display:none}
 .card-photo-evidence{border-top:1px solid var(--line);padding:8px 0 14px;margin-top:12px}
 .card-photo-evidence .details-label{font-weight:700;color:var(--black)}

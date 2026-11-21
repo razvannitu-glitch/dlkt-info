@@ -5,7 +5,7 @@ import type {EvidenceCard,SourceResult} from './contracts.js';
 import {cardContent} from './card-validation.js';
 import {collectFrontpageHighlights} from './news-frontpages.js';
 import {EDITORIAL_CATEGORY_TOPICS,classifyNewsHeadline,headlineDiscoveryPriority,type PublicEditorialCategory} from './editorial-categories.js';
-import {NEWS_INDEX_URL,NEWS_CATEGORY_SOURCES,NEWS_UNCLASSIFIED_SOURCE,NEWS_FEATURED_SOURCE,NEWS_DISCOVERY_INDEXES,canonicalNewsUrl,publisherForNewsUrl,type NewsDiscoveryIndex} from './news-sources.js';
+import {NEWS_INDEX_URL,NEWS_PUBLISHERS,NEWS_CATEGORY_SOURCES,NEWS_UNCLASSIFIED_SOURCE,NEWS_FEATURED_SOURCE,NEWS_DISCOVERY_INDEXES,canonicalNewsUrl,publisherForNewsUrl,sourcePublicationContext,type NewsDiscoveryIndex,type NewsSourceLanguage} from './news-sources.js';
 
 /** Untrusted discovery metadata. indexedAt is never a publisher publication date. */
 export interface NewsCandidate {readonly sourceUrl:string;readonly title:string;readonly publisher:string;readonly indexedAt:string;readonly category:PublicEditorialCategory|null}
@@ -31,9 +31,9 @@ export function validateNewsCandidate(value:unknown,now:number):NewsCandidate|nu
 }
 /** No query-specific brand/event priorities. This is a cheap acquisition order, not a truth score. */
 function acquisitionScore(value:NewsCandidate):number{
-  const text=value.title.toLowerCase();
-  return (/\b(?:announces?|launch(?:es|ed)?|approves?|agrees?|signs?|wins?|discovers?|reveals?|cuts?|raises?|opens?|closes?|elections?|earthquake|ceasefire|record|new|first)\b/u.test(text)?10:0)
-    -(/\b(?:review|opinion|horoscope|quiz|best deals|buying guide|how to|what to know|explained|live updates)\b/u.test(text)?8:0)
+  const text=value.title.toLowerCase().normalize('NFKD').replace(/(\p{Script=Latin})\p{M}+/gu,'$1').normalize('NFC');
+  return (/\b(?:announces?|launch(?:es|ed)?|approves?|agrees?|signs?|wins?|discovers?|reveals?|cuts?|raises?|opens?|closes?|elections?|earthquake|ceasefire|record|new|first|annonce|annoncent|lance|lancent|approuve|approuvent|signe|signent|remporte|decouvre|decouvrent|revele|ouvre|nouveau|nouvelle|premier|premiere|seisme|cessez-le-feu)\b|発表|発売|承認|合意|締結|優勝|発見|開設|初めて|停戦/u.test(text)?10:0)
+    -(/\b(?:review|opinion|horoscope|quiz|best deals|buying guide|how to|what to know|explained|live updates|avis|tribune|guide d'achat|comment faire|ce qu'il faut savoir|en direct)\b|社説|論説|占い|クイズ|購入ガイド|ライブ更新/u.test(text)?8:0)
     -(/\?$/u.test(text)?4:0);
 }
 function candidatePriority(value:NewsCandidate):number {
@@ -46,15 +46,29 @@ function fairNewsOrder(values:readonly NewsCandidate[],limit:number,featuredUrls
   const groups=new Map<NewsCandidate['category'],NewsCandidate[]>();
   for(const row of values){const group=groups.get(row.category)??[];group.push(row);groups.set(row.category,group);}
   const queues=[...groups.values()].map(rows=>{
-    // Vary publishers within the same evidence tier; never trade a stronger signal for variety.
+    // Vary publication countries and publishers within the same evidence tier.
+    // Country describes supply diversity, never the reported event's location.
     const tiers=new Map<number,NewsCandidate[]>();
     for(const row of [...rows].sort(compare)){const tier=tiers.get(rank(row))??[];tier.push(row);tiers.set(rank(row),tier);}
     const ordered:NewsCandidate[]=[];
     for(const tier of tiers.values()){
-      const publishers=new Map<string,{rows:NewsCandidate[];cursor:number}>();
-      for(const row of tier){const queue=publishers.get(row.publisher)??{rows:[],cursor:0};queue.rows.push(row);publishers.set(row.publisher,queue);}
+      const regions=new Map<string,Map<string,{rows:NewsCandidate[];cursor:number}>>();
+      for(const row of tier){
+        const region=sourcePublicationContext(row.sourceUrl)?.publisherCountryCode??'unreviewed';
+        const publishers=regions.get(region)??new Map<string,{rows:NewsCandidate[];cursor:number}>();
+        const queue=publishers.get(row.publisher)??{rows:[],cursor:0};queue.rows.push(row);publishers.set(row.publisher,queue);regions.set(region,publishers);
+      }
+      const regionQueues=[...regions.values()].map(publishers=>{
+        const rows:NewsCandidate[]=[];
+        for(;;){
+          const active=[...publishers.values()].filter(queue=>queue.cursor<queue.rows.length).sort((a,b)=>compare(a.rows[a.cursor]!,b.rows[b.cursor]!));
+          if(!active.length)break;
+          for(const queue of active)rows.push(queue.rows[queue.cursor++]!);
+        }
+        return {rows,cursor:0};
+      });
       for(;;){
-        const active=[...publishers.values()].filter(queue=>queue.cursor<queue.rows.length).sort((a,b)=>compare(a.rows[a.cursor]!,b.rows[b.cursor]!));
+        const active=regionQueues.filter(queue=>queue.cursor<queue.rows.length).sort((a,b)=>compare(a.rows[a.cursor]!,b.rows[b.cursor]!));
         if(!active.length)break;
         for(const queue of active)ordered.push(queue.rows[queue.cursor++]!);
       }
@@ -96,19 +110,52 @@ export function readNewsCandidates(xml:string,now:number):readonly NewsCandidate
   }
   return mergeNewsCandidates(candidates,now);
 }
-/** Google News publication_date is only a candidate filter; the original article must still agree. */
+function matchingIndexLanguage(value:unknown,expected:NewsSourceLanguage):boolean{
+  if(typeof value!=='string'||!/^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/iu.test(value))return false;
+  const primary=value.toLowerCase().split('-')[0];
+  return (expected==='en'?['en','eng']:expected==='fr'?['fr','fra','fre']:['ja','jpn']).includes(primary??'');
+}
+/** RSS dates need an explicit timezone and valid calendar date; no locale-dependent date guessing. */
+function rssPublicationDate(value:unknown):string|null{
+  if(typeof value!=='string')return null;
+  const iso=publicationDate(value);if(iso)return iso;
+  const match=/^(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s*)?(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})\s+(\d{2}):(\d{2}):(\d{2})\s+(GMT|UTC|UT|[+-]\d{4})$/iu.exec(value);
+  if(!match)return null;
+  const month=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'].indexOf(match[2]!.toLowerCase())+1;
+  const zone=/^[+-]/u.test(match[7]!)?match[7]!:'Z';
+  return publicationDate(`${match[3]}-${String(month).padStart(2,'0')}-${match[1]!.padStart(2,'0')}T${match[4]}:${match[5]}:${match[6]}${zone}`);
+}
+/** Index dates only filter candidates. The bound original headline and publication date must still agree. */
 export function readPublisherNewsCandidates(xml:string,index:NewsDiscoveryIndex,now:number):readonly NewsCandidate[]{
   const registered=NEWS_DISCOVERY_INDEXES.find(row=>row.id===index.id);
-  if(!registered||registered.url!==index.url||registered.publisherId!==index.publisherId)throw new Error('NEWS_INDEX_NOT_REGISTERED');
+  if(!registered||(['url','publisherId','format','language','feedTitle','feedHome','articlePath'] as const).some(key=>registered[key]!==index[key]))throw new Error('NEWS_INDEX_NOT_REGISTERED');
   if(Buffer.byteLength(xml)>HTML_BYTES||/<!\s*(?:DOCTYPE|ENTITY)/iu.test(xml)||XMLValidator.validate(xml)!==true)throw new Error('NEWS_INDEX_XML_INVALID');
-  const parsed:unknown=new XMLParser({ignoreAttributes:false,removeNSPrefix:true,parseTagValue:false,parseAttributeValue:false,trimValues:true}).parse(xml);
+  // RSS atom:link/dc:language are distinct from channel link/language; collapsing
+  // namespaces would corrupt the identity check on the reviewed live feeds.
+  const parsed:unknown=new XMLParser({ignoreAttributes:false,removeNSPrefix:registered.format!=='rss',parseTagValue:false,parseAttributeValue:false,trimValues:true}).parse(xml);
+  if(registered.format==='rss'){
+    if(!object(parsed)||!object(parsed.rss)||!object(parsed.rss.channel))throw new Error('NEWS_INDEX_SCHEMA_INVALID');
+    const channel=parsed.rss.channel;
+    if(channel.title!==registered.feedTitle||channel.link!==registered.feedHome||!matchingIndexLanguage(channel.language,registered.language??'en'))throw new Error('NEWS_INDEX_IDENTITY_INVALID');
+    const entries:unknown[]=channel.item===undefined?[]:Array.isArray(channel.item)?channel.item:[channel.item];
+    if(entries.length>5000)throw new Error('NEWS_INDEX_TOO_MANY_ITEMS');
+    const candidates:NewsCandidate[]=[];
+    for(const entry of entries){
+      if(!object(entry)||typeof entry.link!=='string')continue;
+      const sourceUrl=canonicalNewsUrl(entry.link),publisher=publisherForNewsUrl(entry.link),title=titleText(entry.title),date=rssPublicationDate(entry.pubDate);
+      if(!sourceUrl||!publisher||publisher.id!==registered.publisherId||!title||!date||Date.parse(date)<now-DAY||Date.parse(date)>now+300_000)continue;
+      if(!registered.articlePath||!new URL(sourceUrl).pathname.startsWith(registered.articlePath))continue;
+      candidates.push({sourceUrl,title,publisher:publisher.label,indexedAt:new Date(now).toISOString(),category:classifyNewsHeadline(title,sourceUrl)});
+    }
+    return mergeNewsCandidates(candidates,now);
+  }
   if(!object(parsed)||!object(parsed.urlset))throw new Error('NEWS_INDEX_SCHEMA_INVALID');
   const entries:unknown[]=parsed.urlset.url===undefined?[]:Array.isArray(parsed.urlset.url)?parsed.urlset.url:[parsed.urlset.url];
   if(entries.length>5000)throw new Error('NEWS_INDEX_TOO_MANY_ITEMS');
   const candidates:NewsCandidate[]=[];
   for(const entry of entries){
     if(!object(entry)||typeof entry.loc!=='string'||!object(entry.news)||!object(entry.news.publication))continue;
-    if(!['en','eng','en-us','en-gb'].includes(String(entry.news.publication.language).toLowerCase()))continue;
+    if(!matchingIndexLanguage(entry.news.publication.language,registered.language??'en'))continue;
     const sourceUrl=canonicalNewsUrl(entry.loc),publisher=publisherForNewsUrl(entry.loc),title=titleText(entry.news.title),date=publicationDate(entry.news.publication_date);
     if(!sourceUrl||!publisher||publisher.id!==index.publisherId||!title||!date||Date.parse(date)<now-DAY||Date.parse(date)>now+300_000)continue;
     const category=classifyNewsHeadline(title,sourceUrl);
@@ -117,10 +164,19 @@ export function readPublisherNewsCandidates(xml:string,index:NewsDiscoveryIndex,
   return mergeNewsCandidates(candidates,now);
 }
 function tokens(text:string):Set<string>{return new Set(text.normalize('NFKC').toLowerCase().match(/[\p{L}\p{N}]+/gu)?.filter(word=>word.length>1&&!['the','and','with','for','from','this','that','into','of','to','in','on','at','by','an','as','is','a'].includes(word))??[]);}
-export function matchingNewsHeadline(a:string,b:string):boolean{
+export function matchingNewsHeadline(a:string,b:string,publisherLabel?:string):boolean{
+  if(publisherLabel&&NEWS_PUBLISHERS.some(row=>row.label===publisherLabel)){
+    // Remove only an explicitly separated suffix for this bound publisher.
+    // This preserves meaningful numbers while accepting the actual brand "France 24".
+    const suffix=new RegExp(`\\s+[–—|:-]\\s+${publisherLabel.replace(/[.*+?^${}()|[\]\\]/gu,'\\$&')}\\s*$`,'iu');
+    a=a.replace(suffix,'');b=b.replace(suffix,'');
+  }
+  // CJK has no reliable word boundaries here. Require the same normalized title,
+  // rather than letting token overlap erase a negation in a Japanese clause.
+  if(/[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u.test(a+b))return a.normalize('NFKC').toLowerCase()===b.normalize('NFKC').toLowerCase();
   const x=tokens(a),y=tokens(b);if(x.size<3||y.size<3)return a.normalize('NFKC').toLowerCase()===b.normalize('NFKC').toLowerCase();
   const shared=[...x].filter(word=>y.has(word)).length;
-  const critical=(v:string):string=>[...(v.toLowerCase().match(/\b(?:not|never|no|without)\b|\d+(?:[.,]\d+)*/gu)??[])].sort().join('|');
+  const critical=(v:string):string=>[...(v.toLowerCase().match(/\b(?:not|never|no|without|pas|jamais|sans|aucun|aucune|ni)\b|\d+(?:[.,]\d+)*/gu)??[])].sort().join('|');
   return shared/Math.min(x.size,y.size)>=0.7&&shared/Math.max(x.size,y.size)>=0.55&&critical(a)===critical(b);
 }
 function publicationDate(raw:unknown):string|null{
@@ -149,7 +205,7 @@ export function readNewsArticleMetadata(html:string,candidate:NewsCandidate,fina
     try{const declared=canonicalNewsUrl(new URL(canonicalLinks[0],finalUrl).href);if(!declared||publisherForNewsUrl(declared)?.id!==publisher.id)return null;canonical=declared;}catch{return null;}
   }
   const titles:string[]=[],dates:string[]=[];
-  const add=(headline:unknown,date:unknown):void=>{const title=titleText(headline),stamp=publicationDate(date);if(title&&stamp&&matchingNewsHeadline(candidate.title,title)){titles.push(title);dates.push(stamp);}};
+  const add=(headline:unknown,date:unknown):void=>{const title=titleText(headline),stamp=publicationDate(date);if(title&&stamp&&matchingNewsHeadline(candidate.title,title,publisher.label)){titles.push(title);dates.push(stamp);}};
   let nodes=0;
   const inspect=(value:unknown,depth=0):void=>{
     if(depth>8||++nodes>200)return;

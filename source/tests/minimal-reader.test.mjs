@@ -1,6 +1,14 @@
 import test from'node:test';import assert from'node:assert/strict';import{readFileSync}from'node:fs';import{parseDocument,DomUtils}from'htmlparser2';
 const html=readFileSync('public/iceo.html','utf8'),css=readFileSync('public/iceo.css','utf8'),js=readFileSync('src/iceo/browser.ts','utf8');const doc=parseDocument(html);const all=fn=>DomUtils.findAll(fn,doc.children);const byId=id=>all(n=>n.attribs?.id===id)[0];
-test('reader has one primary heading and no duplicate marketing hero or sidebar',()=>{assert.equal(all(n=>n.name==='h1').length,1);assert.equal(all(n=>n.name==='aside').length,0);assert.equal(byId('entry-title').name,'h1');assert.equal(byId('result-heading').name,'h2');});
+test('reader has one primary heading per exclusive view and no duplicate marketing hero or sidebar',()=>{
+ const headings=all(n=>n.name==='h1');
+ const initiallyVisible=node=>{for(let parent=node;parent;parent=parent.parent)if(parent.attribs?.hidden!==undefined)return false;return true;};
+ assert.deepEqual(headings.map(node=>node.attribs.id),['entry-title','world-title']);
+ assert.deepEqual(headings.filter(initiallyVisible).map(node=>node.attribs.id),['entry-title']);
+ assert.notEqual(byId('world-explore').attribs.hidden,undefined);
+ assert.match(readFileSync('public/explore.css','utf8'),/body\[data-world-explore=active\] \.reader-shell>section:not\(#world-explore\)/u);
+ assert.equal(all(n=>n.name==='aside').length,0);assert.equal(byId('entry-title').name,'h1');assert.equal(byId('result-heading').name,'h2');
+});
 test('all document element IDs are unique',()=>{const ids=all(n=>Boolean(n.attribs?.id)).map(n=>n.attribs.id);assert.equal(new Set(ids).size,ids.length);});
 test('personalisation is an initially closed labelled native dialog',()=>{const dialog=byId('personalise');assert.equal(dialog.name,'dialog');assert.equal(dialog.attribs.open,undefined);assert.equal(dialog.attribs['aria-labelledby'],'focus-title');assert.ok(byId('close-focus'));assert.match(js,/panel\.showModal\(\)/u);assert.match(js,/panel\.close\(\)/u);});
 test('exactly three primary modes; full source records remain accessible in More',()=>{const nav=all(n=>n.attribs?.class==='view-switch')[0];const buttons=DomUtils.findAll(n=>n.name==='button',nav.children);assert.deepEqual(buttons.map(b=>b.attribs['data-view']),['briefing','changes','saved']);const records=all(n=>n.attribs?.['data-view']==='records');assert.equal(records.length,1);assert.ok(DomUtils.textContent(byId('reader-more')).includes('Explore all records'));});

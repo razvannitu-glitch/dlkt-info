@@ -15,3 +15,15 @@ test('old, future, inaccurate, out-of-range and extra location fields are reject
 test('local forecast endpoint accepts only canonical city and never arbitrary lat/lon or source URLs',async()=>{const before=calls;for(const q of ['?lat=44&lon=26','?city=683506&city=2643743','?url=https://api.met.no','?city=683506&lat=44',''])assert.equal((await fetch(base+'/api/local'+q)).status,400);assert.equal(calls,before);});
 test('unsupported methods are denied before reading or collecting data',async()=>{for(const path of ['/api/local?city=683506','/api/places?q=B'])assert.equal((await fetch(base+path,{method:'DELETE'})).status,405);});
 test('source failure remains explicit and retry cache is short',async()=>{const r=await fetch(base+'/api/local?city=683506');const d=await r.json();assert.equal(r.status,200);assert.equal(d.state,'unavailable');assert.equal(d.cards.length,0);assert.match(r.headers.get('cache-control'),/s-maxage=15/);});
+
+
+test('Explore country catalog and native city aliases are public bounded reference metadata',async()=>{
+ const countryResponse=await fetch(base+'/api/places?countries=1');const catalog=await countryResponse.json();
+ assert.equal(countryResponse.status,200);assert.equal(countryResponse.headers.get('set-cookie'),null);
+ assert.ok(catalog.countries.length>150&&catalog.countries.length<=300);
+ assert.ok(catalog.countries.some(country=>country.code==='JP'&&country.name==='Japan'));
+ assert.equal(new Set(catalog.countries.map(country=>country.code)).size,catalog.countries.length);
+ const place=await fetch(base+'/api/places?id=2988507');const value=await place.json();
+ assert.equal(value.cities[0].id,'2988507');assert.ok(value.cityAliases.length<=32);assert.ok(value.cityAliases.includes('パリ'));assert.equal(value.cityAliases.includes('ハリ'),false);
+ assert.equal((await fetch(base+'/api/places?countries=1&country=JP')).status,400);
+});

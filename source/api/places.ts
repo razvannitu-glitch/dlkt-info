@@ -1,5 +1,5 @@
 import type {IncomingMessage,ServerResponse} from 'node:http';
-import {searchCities,findCity,suggestCity,nearbyCities} from '../src/local/cities.js';
+import {searchCities,findCity,suggestCity,nearbyCities,cityAliases,listCountries} from '../src/local/cities.js';
 import {object,finite} from '../src/local/contracts.js';
 import {bodyJson,sameOrigin} from '../src/account/http.js';
 function header(req:IncomingMessage,key:string):string{const v=req.headers[key];return typeof v==='string'&&v.length<=200?v:'';}
@@ -11,7 +11,8 @@ export async function handlePlaces(req:IncomingMessage,res:ServerResponse):Promi
  if(req.method==='GET'){
   if(entries.length!==1){send(400,{error:'PLACE_QUERY_INVALID'});return;}const [key,value]=entries[0]??[];
   if(key==='q'&&value!==undefined&&value.length<=100){send(200,{cities:searchCities(value,header(req,'x-vercel-ip-country')),scope:'GeoNames cities15000: larger cities and capitals; not an address search.'});return;}
-  if(key==='id'&&value&&/^\d{1,12}$/u.test(value)){const city=findCity(value);send(city?200:404,{cities:city?[city]:[]});return;}
+  if(key==='id'&&value&&/^\d{1,12}$/u.test(value)){const city=findCity(value);send(city?200:404,{cities:city?[city]:[],cityAliases:city?cityAliases(city.id):[]});return;}
+  if(key==='countries'&&value==='1'){send(200,{countries:listCountries()});return;}
   if(key==='hint'&&value==='1'){
    // These headers are only suggestions; they never authorize or select a location.
    const country=header(req,'x-vercel-ip-country');let name='';try{name=decodeURIComponent(header(req,'x-vercel-ip-city'));}catch{/* No guess on malformed data. */}
