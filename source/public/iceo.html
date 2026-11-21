@@ -5,7 +5,7 @@
 <meta name="theme-color" content="#f66061"><meta name="description" content="Daily Life. Key Things. A useful daily top and more current information, with visible dates and original sources. Global developments, your city and specialist interests.">
 <title>DLKT INFO — Daily Life. Key Things.</title>
 <link rel="canonical" href="https://www.dlkt.ee/"><link rel="shortcut icon" href="/favicon.ico?v=kate-fb7b2e60" type="image/x-icon"><link rel="icon" href="/favicon-kate-fb7b2e60.png" type="image/png" sizes="180x180">
-<link rel="apple-touch-icon" href="/kate-head.png"><link rel="manifest" href="/manifest.webmanifest"><link rel="stylesheet" href="/iceo.css"><link rel="stylesheet" href="/header.css"><link rel="stylesheet" href="/weather-motion.css"><link rel="stylesheet" href="/personal-inbox.css"><script src="/entry-browser.js" type="module"></script><script src="/iceo.js" type="module"></script><script src="/local-browser.js" type="module"></script><script src="/daily-browser.js" type="module"></script><script src="/glance-browser.js" type="module"></script><script src="/wallet-home-browser.js" type="module"></script>
+<link rel="apple-touch-icon" href="/kate-head.png"><link rel="manifest" href="/manifest.webmanifest"><link rel="stylesheet" href="/iceo.css"><link rel="stylesheet" href="/header.css"><link rel="stylesheet" href="/loading.css"><link rel="stylesheet" href="/weather-motion.css"><link rel="stylesheet" href="/personal-inbox.css"><script src="/entry-browser.js" type="module"></script><script src="/iceo.js" type="module"></script><script src="/local-browser.js" type="module"></script><script src="/daily-browser.js" type="module"></script><script src="/glance-browser.js" type="module"></script><script src="/wallet-home-browser.js" type="module"></script>
 </head>
 <body id="top" data-entry-view="start">
 <a class="skip" href="#briefing">Skip to briefing</a>
@@ -16,7 +16,30 @@
 <p id="glance-screen-summary" class="sr-only"></p><p class="glance-ticker-empty">Your signals are hidden. Customize to bring them back.</p><p id="glance-status" class="glance-status" role="status" aria-live="polite"></p>
 </section>
 <main class="reader-shell">
-<section id="discovery" class="discovery" aria-labelledby="entry-title" aria-busy="true"><header class="discovery-heading"><h1 id="entry-title" tabindex="-1"><span id="discovery-title"><span id="today-heading">Today's top</span><span class="title-dot">.</span></span></h1><button id="discovery-refresh" class="secondary" type="button" aria-label="Refresh daily top">Refresh</button></header><div class="home-context"><p id="home-location" class="privacy-note">The daily top, plus local information for your city.</p><button id="home-city" type="button" class="text-button" aria-haspopup="dialog" aria-controls="place-dialog">Change city</button></div><p id="discovery-status" class="status" role="status" aria-live="polite">Checking the connected sources…</p><div id="discovery-cards"></div><p class="discovery-end">A compact top, local information and more current reports to explore. Topics help you browse, including specialist interests. Publication dates and connected-source coverage stay visible.</p></section>
+<section id="discovery" class="discovery" data-loading="initial" aria-labelledby="entry-title"><header class="discovery-heading"><h1 id="entry-title" tabindex="-1"><span id="discovery-title"><span id="today-heading">Today's top</span><span class="title-dot">.</span></span></h1><button id="discovery-refresh" class="secondary" type="button" aria-label="Refresh daily top">Refresh</button></header><div class="home-context"><p id="home-location" class="privacy-note">The daily top, plus local information for your city.</p><button id="home-city" type="button" class="text-button" aria-haspopup="dialog" aria-controls="place-dialog">Change city</button></div><p id="discovery-status" class="status sr-only" role="status" aria-live="polite">Loading today's stories.</p>
+<div id="discovery-loading" class="edition-loading" data-phase="initial" aria-labelledby="discovery-loading-title">
+  <div class="edition-loading-intro">
+    <div class="edition-loading-copy">
+      <p id="discovery-loading-kicker" class="edition-loading-kicker">YOUR DAILY PICTURE</p>
+      <h2 id="discovery-loading-title" class="edition-loading-title">Your day, coming into focus.</h2>
+      <p id="discovery-loading-copy" class="edition-loading-description">Loading today's stories from connected sources.</p>
+      <div class="edition-loading-actions"><button id="discovery-loading-personalise" type="button" class="secondary" aria-haspopup="dialog" aria-controls="personalise">Make it yours <span aria-hidden="true">&#8594;</span></button><button id="discovery-loading-retry" type="button" class="primary" hidden>Try again</button></div>
+      <p id="discovery-loading-hint" class="edition-loading-hint">Choose your interests while we load.</p>
+    </div>
+    <div class="edition-loading-scene" aria-hidden="true">
+      <div class="edition-loading-orbit"></div>
+      <div class="edition-loading-mini edition-loading-mini-a"><span class="edition-loading-mini-label">DAILY LIFE</span><span class="edition-loading-mini-line"></span><span class="edition-loading-mini-line short"></span><span class="edition-loading-mini-box"></span></div>
+      <div class="edition-loading-mini edition-loading-mini-b"><span class="edition-loading-mini-label">KEY THINGS</span><span class="edition-loading-mini-line"></span><span class="edition-loading-mini-line short"></span><span class="edition-loading-mini-box"></span></div>
+      <div class="edition-loading-mini edition-loading-mini-c"><span class="edition-loading-mini-label">YOUR DAY</span><span class="edition-loading-mini-line"></span><span class="edition-loading-mini-line short"></span><span class="edition-loading-mini-box"></span></div>
+    </div>
+  </div>
+  <div class="edition-loading-grid" aria-hidden="true">
+    <div class="edition-loading-card"><div class="edition-loading-card-meta"><span class="edition-loading-line"></span></div><span class="edition-loading-line"></span><span class="edition-loading-line short"></span><span class="edition-loading-line small"></span><div class="edition-loading-card-actions"></div></div>
+    <div class="edition-loading-card"><div class="edition-loading-card-meta"><span class="edition-loading-line"></span></div><span class="edition-loading-line"></span><span class="edition-loading-line short"></span><span class="edition-loading-line small"></span><div class="edition-loading-card-actions"></div></div>
+  </div>
+</div>
+<noscript><p class="privacy-note">Enable JavaScript to load current stories. The menu links remain available.</p></noscript>
+<div id="discovery-cards" aria-busy="true"></div><p class="discovery-end">A compact top, local information and more current reports to explore. Topics help you browse, including specialist interests. Publication dates and connected-source coverage stay visible.</p></section>
 <section id="wallet-home" class="info-card" aria-labelledby="wallet-home-title" aria-busy="true"><div class="card-content"><h2 id="wallet-home-title">Your Info Wallet</h2><p id="wallet-home-status" class="status" role="status" aria-live="polite">Checking private profile availability…</p><p class="privacy-note">Updates from the accounts you authorize. Available connections are checked while this page is open; each service determines what it can provide.</p><ul id="wallet-home-updates" class="personal-inbox-updates"></ul><div class="card-actions"><a class="source-link" href="/wallet">Open Info Wallet</a><button id="wallet-home-refresh" class="text-button" type="button" hidden>Check personal updates</button></div></div></section>
 <section id="entry" class="entry" aria-labelledby="entry-options-title"><details id="entry-options"><summary id="entry-options-title">Explore a city or topic</summary>
 <div id="entry-introduction"><p class="entry-acronym">Daily Life. Key Things.</p><button type="button" class="primary entry-primary" data-daily-build>Find my key things <span aria-hidden="true">&#8594;</span></button></div>

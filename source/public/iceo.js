@@ -3,6 +3,7 @@ import { contextForCard } from './context.js';
 import { nextDailyEditionDelay, selectContextualToday } from './contextual-today.js';
 import { LiveEdition, editionCardSignature, editionUpdateLabel, PUBLIC_EDITION_POLL_MS, publicEditionPollDelay } from './live-edition.js';
 import { appendPublicEdition, appendPublicContinuation, dailyEditionSummary, publicEditionState } from './home-edition.js';
+import { DiscoveryLoading, renderDiscoveryLoading, bindDiscoveryLoadingActions } from './loading.js';
 import { selectHomeLocal } from './home-local.js';
 import { localCardNode } from './local-card-node.js';
 import { localCoverageReading } from './local-presentation.js';
@@ -41,6 +42,13 @@ const health = required('#source-health'), checked = required('#checked-at');
 const refresh = required('#refresh'), briefing = required('#briefing');
 const panel = required('#personalise'), template = required('#card-template');
 const feedback = required('#selection-note'), announcement = required('#reader-announcement');
+const discoveryLoadingElements = {
+    panel: required('#discovery-loading'), title: required('#discovery-loading-title'),
+    copy: required('#discovery-loading-copy'), personalise: required('#discovery-loading-personalise'),
+    hint: required('#discovery-loading-hint'), retry: required('#discovery-loading-retry'),
+    status: required('#discovery-status'),
+};
+const discoveryLoading = new DiscoveryLoading(() => renderDiscovery());
 let initialCheckStarted = false;
 let snapshot = null, loading = false, mode = 'briefing';
 const snapshotProgress = new SnapshotProgress();
@@ -762,6 +770,7 @@ async function load(automatic = false) {
     lastPublicCheckAttempt = Date.now();
     initialCheckStarted = true;
     loading = true;
+    discoveryLoading.begin();
     automaticPublicLoad = automatic;
     refresh.disabled = true;
     briefing.setAttribute('aria-busy', 'true');
@@ -840,6 +849,7 @@ async function load(automatic = false) {
         }
     }
     finally {
+        discoveryLoading.finish();
         loading = false;
         automaticPublicLoad = false;
         refresh.disabled = false;
@@ -889,9 +899,12 @@ function reconcileDiscovery(target, next) {
 function renderDiscovery() {
     clearTimeout(discoveryExpiry);
     renderReturnBrief();
-    const target = required('#discovery-cards'), host = document.createElement('div'), note = required('#discovery-status'), button = required('#discovery-refresh');
+    const section = required('#discovery'), target = required('#discovery-cards'), host = document.createElement('div'), note = required('#discovery-status'), button = required('#discovery-refresh');
     button.disabled = loading;
+    target.setAttribute('aria-busy', String(loading));
     if (document.body.dataset.entryView !== 'start') {
+        section.dataset.loading = 'hidden';
+        renderDiscoveryLoading(discoveryLoadingElements, 'hidden');
         target.replaceChildren();
         pruneInsights();
         return;
@@ -913,7 +926,11 @@ function renderDiscovery() {
     button.textContent = live.changes.total ? 'Show updates' : 'Refresh';
     button.setAttribute('aria-label', live.changes.total ? `Show updates: ${editionUpdateLabel(live.changes)}` : 'Refresh daily top');
     const editionState = publicEditionState(today, { snapshotState: snapshot?.state ?? null, loading: loading || !initialCheckStarted, failed: lastLoadFailed });
+    const loadingPhase = discoveryLoading.phase({ pending: editionState === 'pending', unavailable: editionState === 'unavailable', firstCount: today.first.length, moreCount: today.more.length });
+    section.dataset.loading = loadingPhase;
+    renderDiscoveryLoading(discoveryLoadingElements, loadingPhase);
     const local = selectHomeLocal(contextualLocal, contextualCity, now);
+    const suppressLocalPending = (loadingPhase === 'initial' || loadingPhase === 'slow') && !local.cards.length;
     const awaitingLocal = contextualLocationPending || contextualCity !== null && contextualLocalState === 'loading';
     required('#today-heading').textContent = "Today's top";
     required('#home-location').textContent = contextualCity
@@ -931,8 +948,10 @@ function renderDiscovery() {
         node.dataset.liveSignature = editionCardSignature(view.card);
         return node;
     }, editionState);
+    if (loadingPhase !== 'hidden')
+        host.querySelector('#home-edition-pending, #home-edition-unavailable')?.remove();
     // Local source records stay contiguous and distinct from the global daily top.
-    if (contextualCity || contextualLocationPending) {
+    if (!suppressLocalPending && (contextualCity || contextualLocationPending)) {
         const label = make('div', 'discovery-section-label');
         label.id = 'home-local-heading';
         label.append(make('h2', '', contextualCity ? `In ${contextualCity.name}` : 'Local information'));
@@ -946,7 +965,7 @@ function renderDiscovery() {
         node.dataset.cityId = contextualCity.id;
         host.append(node);
     }
-    if (!local.cards.length && (contextualCity || contextualLocationPending)) {
+    if (!suppressLocalPending && !local.cards.length && (contextualCity || contextualLocationPending)) {
         const state = make('div', 'discovery-section-label');
         state.id = 'home-local-state';
         state.setAttribute('role', 'status');
@@ -975,13 +994,12 @@ function renderDiscovery() {
     }, continuationCount);
     reconcileDiscovery(target, host);
     pruneInsights();
-    required('#discovery').setAttribute('aria-busy', String(loading));
-    const publicationState = editionState === 'unavailable' ? 'Publications could not be checked. Refresh to try again.' : today.first.length ? dailyEditionSummary(today) : editionState === 'pending' ? 'Checking connected publications…' : 'No current publications meet this selection.';
+    const publicationState = editionState === 'unavailable' ? 'Publications could not be checked. Refresh to try again.' : today.first.length + today.more.length ? dailyEditionSummary(today) : editionState === 'pending' ? 'Checking connected publications…' : 'No current publications meet this selection.';
     const sourceState = loading && !automaticPublicLoad ? ' Checking for updates…' : lastLoadFailed && snapshot ? ' Refresh unavailable; retained source checks are not newly verified.' : snapshot?.state === 'partial' ? ' Some source coverage is incomplete.' : '';
     const localState = awaitingLocal ? ' Local information is still being checked below.' : local.cards.length ? ` ${local.cards.length} local cards are available separately below.` : contextualCity ? ' Local coverage is shown below.' : '';
     const updates = live.changes.total ? ` ${editionUpdateLabel(live.changes)}. Select Show updates when you are ready; your reading position stays stable.` : '';
     const noteText = (snapshot ? `${formatted(snapshot.generatedAt, true)} · Source check ${formatted(snapshot.generatedAt)}. ` : '') + publicationState + sourceState + localState + updates;
-    if (note.textContent !== noteText)
+    if (loadingPhase === 'hidden' && note.textContent !== noteText)
         note.textContent = noteText;
     const anchor = anchors.find(item => item.node.isConnected);
     if (anchor) {
@@ -1070,6 +1088,7 @@ document.addEventListener('dlkt:entry-view', event => {
 });
 function openSettings() { if (!panel.open)
     panel.showModal(); query.focus(); }
+bindDiscoveryLoadingActions(discoveryLoadingElements, { personalise: openSettings, retry: () => required('#discovery-refresh').click() }, { settings: panel, settingsFallback: required('#personalise-button'), menuFallback: required('#header-menu'), retryTarget: required('#entry-title') });
 function closeSettings() { panel.close(); }
 required('#close-focus').addEventListener('click', closeSettings);
 required('#focus-summary-button').addEventListener('click', openSettings);

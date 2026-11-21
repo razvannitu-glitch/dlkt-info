@@ -3,6 +3,7 @@ import {contextForCard} from './context.js';
 import {nextDailyEditionDelay,selectContextualToday} from './contextual-today.js';
 import {LiveEdition,editionCardSignature,editionUpdateLabel,PUBLIC_EDITION_POLL_MS,publicEditionPollDelay} from './live-edition.js';
 import {appendPublicEdition,appendPublicContinuation,dailyEditionSummary,publicEditionState} from './home-edition.js';
+import {DiscoveryLoading,renderDiscoveryLoading,bindDiscoveryLoadingActions,type DiscoveryLoadingElements} from './loading.js';
 import {selectHomeLocal} from './home-local.js';
 import {localCardNode} from '../local/card-node.js';
 import {localCoverageReading} from '../local/presentation.js';
@@ -40,6 +41,13 @@ const health=required<HTMLElement>('#source-health'),checked=required<HTMLElemen
 const refresh=required<HTMLButtonElement>('#refresh'),briefing=required<HTMLElement>('#briefing');
 const panel=required<HTMLDialogElement>('#personalise'),template=required<HTMLTemplateElement>('#card-template');
 const feedback=required<HTMLElement>('#selection-note'),announcement=required<HTMLElement>('#reader-announcement');
+const discoveryLoadingElements:DiscoveryLoadingElements={
+ panel:required<HTMLElement>('#discovery-loading'),title:required<HTMLElement>('#discovery-loading-title'),
+ copy:required<HTMLElement>('#discovery-loading-copy'),personalise:required<HTMLButtonElement>('#discovery-loading-personalise'),
+ hint:required<HTMLElement>('#discovery-loading-hint'),retry:required<HTMLButtonElement>('#discovery-loading-retry'),
+ status:required<HTMLElement>('#discovery-status'),
+};
+const discoveryLoading=new DiscoveryLoading(()=>renderDiscovery());
 let initialCheckStarted=false;
 let snapshot:IceoSnapshot|null=null,loading=false,mode:ReaderSettings['mode']='briefing';
 const snapshotProgress=new SnapshotProgress();
@@ -398,7 +406,7 @@ function render():void {
   briefing.setAttribute('aria-busy','false');memoryControls();
 }
 async function load(automatic=false):Promise<void>{
-  if(loading)return;clearTimeout(publicRefreshTimer);lastPublicCheckAttempt=Date.now();initialCheckStarted=true;loading=true;automaticPublicLoad=automatic;refresh.disabled=true;briefing.setAttribute('aria-busy','true');if(!automatic)status.textContent='Checking the available source snapshot…';renderDiscovery();if(savedView&&!automatic)savedCards();
+  if(loading)return;clearTimeout(publicRefreshTimer);lastPublicCheckAttempt=Date.now();initialCheckStarted=true;loading=true;discoveryLoading.begin();automaticPublicLoad=automatic;refresh.disabled=true;briefing.setAttribute('aria-busy','true');if(!automatic)status.textContent='Checking the available source snapshot…';renderDiscovery();if(savedView&&!automatic)savedCards();
   try{
     const headers:Record<string,string>={Accept:'application/json'};if(publicEtag&&snapshot)headers['If-None-Match']=publicEtag;
     const response=await fetch('/api/iceo',{credentials:'omit',cache:'no-cache',headers,signal:AbortSignal.timeout(45000)});
@@ -420,7 +428,7 @@ async function load(automatic=false):Promise<void>{
     else if(savedView){render();}
     else{heading.textContent='Source check unavailable';status.textContent='No verified snapshot could be loaded. Retry the source check.';empty.hidden=false;emptyCopy.textContent='No synthetic information is substituted.';}
     }
-  }finally{loading=false;automaticPublicLoad=false;refresh.disabled=false;briefing.setAttribute('aria-busy','false');if(savedView&&!automatic)savedCards();renderDiscovery();memoryControls();schedulePublicRefresh();}
+  }finally{discoveryLoading.finish();loading=false;automaticPublicLoad=false;refresh.disabled=false;briefing.setAttribute('aria-busy','false');if(savedView&&!automatic)savedCards();renderDiscovery();memoryControls();schedulePublicRefresh();}
 }
 
 /** Reuse unchanged article nodes, including focused controls and expanded source details. */
@@ -447,9 +455,10 @@ function reconcileDiscovery(target:HTMLElement,next:HTMLElement):void {
 function renderDiscovery():void {
   clearTimeout(discoveryExpiry);
   renderReturnBrief();
-  const target=required<HTMLElement>('#discovery-cards'),host=document.createElement('div'),note=required<HTMLElement>('#discovery-status'),button=required<HTMLButtonElement>('#discovery-refresh');
+  const section=required<HTMLElement>('#discovery'),target=required<HTMLElement>('#discovery-cards'),host=document.createElement('div'),note=required<HTMLElement>('#discovery-status'),button=required<HTMLButtonElement>('#discovery-refresh');
   button.disabled=loading;
-  if(document.body.dataset.entryView!=='start'){target.replaceChildren();pruneInsights();return;}
+  target.setAttribute('aria-busy',String(loading));
+  if(document.body.dataset.entryView!=='start'){section.dataset.loading='hidden';renderDiscoveryLoading(discoveryLoadingElements,'hidden');target.replaceChildren();pruneInsights();return;}
   const anchors=applyPublicUpdate?[]:[...target.querySelectorAll<HTMLElement>('article')].flatMap(node=>{const rect=node.getBoundingClientRect();return rect.top<innerHeight&&rect.bottom>0?[{node,top:rect.top}]:[];});
   const now=Date.now();
   const city=contextualCity&&contextualLocation!=='estimated'?{id:contextualCity.id,name:contextualCity.name,countryCode:contextualCity.countryCode,confirmed:true as const}:undefined;
@@ -463,7 +472,11 @@ function renderDiscovery():void {
   button.textContent=live.changes.total?'Show updates':'Refresh';
   button.setAttribute('aria-label',live.changes.total?`Show updates: ${editionUpdateLabel(live.changes)}`:'Refresh daily top');
   const editionState=publicEditionState(today,{snapshotState:snapshot?.state??null,loading:loading||!initialCheckStarted,failed:lastLoadFailed});
+  const loadingPhase=discoveryLoading.phase({pending:editionState==='pending',unavailable:editionState==='unavailable',firstCount:today.first.length,moreCount:today.more.length});
+  section.dataset.loading=loadingPhase;
+  renderDiscoveryLoading(discoveryLoadingElements,loadingPhase);
   const local=selectHomeLocal(contextualLocal,contextualCity,now);
+  const suppressLocalPending=(loadingPhase==='initial'||loadingPhase==='slow')&&!local.cards.length;
   const awaitingLocal=contextualLocationPending||contextualCity!==null&&contextualLocalState==='loading';
   required<HTMLElement>('#today-heading').textContent="Today's top";
   required<HTMLElement>('#home-location').textContent=contextualCity
@@ -478,14 +491,15 @@ function renderDiscovery():void {
   appendPublicEdition(host,today,(view,index,total)=>{
     const node=cardNode(view,index,total,undefined,false);node.dataset.liveSignature=editionCardSignature(view.card);return node;
   },editionState);
+  if(loadingPhase!=='hidden')host.querySelector('#home-edition-pending, #home-edition-unavailable')?.remove();
   // Local source records stay contiguous and distinct from the global daily top.
-  if(contextualCity||contextualLocationPending){
+  if(!suppressLocalPending&&(contextualCity||contextualLocationPending)){
     const label=make('div','discovery-section-label');label.id='home-local-heading';
     label.append(make('h2','',contextualCity?`In ${contextualCity.name}`:'Local information'));
     host.append(label);
   }
   for(const item of local.cards){if(!contextualCity)break;const node=localCardNode(item,contextualCity,now);node.dataset.homeLocalId=item.id;node.dataset.cityId=contextualCity.id;host.append(node);}
-  if(!local.cards.length&&(contextualCity||contextualLocationPending)){
+  if(!suppressLocalPending&&!local.cards.length&&(contextualCity||contextualLocationPending)){
     const state=make('div','discovery-section-label');state.id='home-local-state';state.setAttribute('role','status');
     const expired=contextualLocalState==='loaded'&&contextualLocal!==null;
     state.append(make('p','privacy-note',awaitingLocal?'Checking local updates…':expired?'The local check has expired. Refresh to see current local information.':contextualLocalState==='unavailable'?'Local information could not be checked. Refresh to try again.':'No current local cards were verified. Check local sources or choose another city.'));
@@ -502,13 +516,12 @@ function renderDiscovery():void {
     const node=cardNode(view,index,total,undefined,false);node.dataset.liveSignature=editionCardSignature(view.card);return node;
   },continuationCount);
   reconcileDiscovery(target,host);pruneInsights();
-  required<HTMLElement>('#discovery').setAttribute('aria-busy',String(loading));
-  const publicationState=editionState==='unavailable'?'Publications could not be checked. Refresh to try again.':today.first.length?dailyEditionSummary(today):editionState==='pending'?'Checking connected publications…':'No current publications meet this selection.';
+  const publicationState=editionState==='unavailable'?'Publications could not be checked. Refresh to try again.':today.first.length+today.more.length?dailyEditionSummary(today):editionState==='pending'?'Checking connected publications…':'No current publications meet this selection.';
   const sourceState=loading&&!automaticPublicLoad?' Checking for updates…':lastLoadFailed&&snapshot?' Refresh unavailable; retained source checks are not newly verified.':snapshot?.state==='partial'?' Some source coverage is incomplete.':'';
   const localState=awaitingLocal?' Local information is still being checked below.':local.cards.length?` ${local.cards.length} local cards are available separately below.`:contextualCity?' Local coverage is shown below.':'';
   const updates=live.changes.total?` ${editionUpdateLabel(live.changes)}. Select Show updates when you are ready; your reading position stays stable.`:'';
   const noteText=(snapshot?`${formatted(snapshot.generatedAt,true)} · Source check ${formatted(snapshot.generatedAt)}. `:'')+publicationState+sourceState+localState+updates;
-  if(note.textContent!==noteText)note.textContent=noteText;
+  if(loadingPhase==='hidden'&&note.textContent!==noteText)note.textContent=noteText;
   const anchor=anchors.find(item=>item.node.isConnected);if(anchor){const offset=anchor.node.getBoundingClientRect().top-anchor.top;if(Math.abs(offset)>1)window.scrollBy(0,offset);}
   memoryControls();
 }
@@ -550,6 +563,7 @@ document.addEventListener('dlkt:entry-view',event=>{
   if(event.detail.view==='start'&&!snapshot&&!loading)void load();else renderDiscovery();
 });
 function openSettings():void{if(!panel.open)panel.showModal();query.focus();}
+bindDiscoveryLoadingActions(discoveryLoadingElements,{personalise:openSettings,retry:()=>required<HTMLButtonElement>('#discovery-refresh').click()},{settings:panel,settingsFallback:required<HTMLButtonElement>('#personalise-button'),menuFallback:required<HTMLButtonElement>('#header-menu'),retryTarget:required<HTMLElement>('#entry-title')});
 function closeSettings():void{panel.close();}
 required<HTMLButtonElement>('#close-focus').addEventListener('click',closeSettings);
 required<HTMLButtonElement>('#focus-summary-button').addEventListener('click',openSettings);
