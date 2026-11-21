@@ -1,4 +1,4 @@
-import {photoNode} from '../media/browser.js';
+import {photoNode,integratePhotoHeadline} from '../media/browser.js';
 import {contextForCard} from './context.js';
 import {nextDailyEditionDelay,selectContextualToday} from './contextual-today.js';
 import {LiveEdition,editionCardSignature,editionUpdateLabel,PUBLIC_EDITION_POLL_MS,publicEditionPollDelay} from './live-edition.js';
@@ -11,7 +11,8 @@ import {validCity,currentLocalSnapshot,type City,type LocalSnapshot} from '../lo
 import {selectReturnBrief,nextReturnDelay} from './return-brief.js';
 import {selectSavedUpdates,nextSavedUpdateDelay,SnapshotProgress,type SavedUpdate,type SavedUpdates} from './saved-updates.js';
 import {cardLink} from '../share/link.js';
-import {cardGuideNode,publicationAge} from './card-guide.js';
+import {cardGuideNode} from './card-guide.js';
+import {editorialCardPresentation,compactEditionStatus} from './editorial-presentation.js';
 import {organizationSetupFromHash,organizationReadingSettings} from '../organizations/setup.js';
 import {cardCreditsNode} from './credits.js';
 import {PUBLIC_TOPICS,TOPIC_LABELS} from './topics.js';
@@ -92,7 +93,7 @@ function memoryControls():void{
   document.querySelectorAll<HTMLButtonElement>('[data-memory-write]').forEach(b=>{b.disabled=deviceBusy;});
   document.querySelectorAll<HTMLButtonElement>('[data-save-card]').forEach(b=>{
     const saved=deviceState.cards.some(entry=>entry.id===b.dataset.saveCard);
-    b.textContent=saved?'Saved here':'Save here';b.setAttribute('aria-pressed',String(saved));
+    const label=b.querySelector('.save-label');if(label)label.textContent=saved?'Saved here':'Save here';else b.textContent=saved?'Saved here':'Save here';b.setAttribute('aria-pressed',String(saved));
     b.title=saved?'Remove this card from this browser':'Save this card in this browser only';b.disabled=deviceBusy;
   });
   comparisonControls();
@@ -336,27 +337,36 @@ async function shareSource(card:EvidenceCard,button:HTMLButtonElement,fallback:H
 function cardNode(view:ReadingCard,index:number,total:number,saved?:SavedCard,automaticInsights=true):HTMLElement{
   const fragment=template.content.cloneNode(true) as DocumentFragment;
   const node=fragment.querySelector<HTMLElement>('article');if(!node)throw new Error('READER_TEMPLATE_INVALID');
+  node.classList.add('editorial-card');
   const put=(selector:string,value:string):void=>{const el=node.querySelector<HTMLElement>(selector);if(el)el.textContent=value;};
   const photograph=photoNode(view.card);if(photograph)node.querySelector('header')?.after(photograph);
-  const card=view.card;node.dataset.notice=view.noticeState;node.dataset.cardId=card.id;
+  const card=view.card,presentation=editorialCardPresentation(view,saved!==undefined);node.dataset.notice=view.noticeState;node.dataset.cardId=card.id;
+  const evidence=node.querySelector<HTMLElement>('.evidence');
   currentCardByNode.set(node,card);
   const coverage=contextForCard(card);
-  if('reason' in view&&typeof view.reason==='string'){const why=make('p','card-kind contextual-reason',view.reason);node.querySelector('h3')?.before(why);node.dataset.contextual='true';}
+  if('reason' in view&&typeof view.reason==='string'){const why=make('p','contextual-reason',view.reason);evidence?.append(why);node.dataset.contextual='true';}
   node.dataset.coverage=coverage.basis;
   const editorialCategory='category' in view&&typeof view.category==='string'&&(PUBLIC_EDITORIAL_CATEGORIES as readonly string[]).includes(view.category)?view.category as PublicEditorialCategory:null;
   const unclassified='editorial' in view&&object(view.editorial)&&view.editorial.classification==='unclassified';
   put('.card-topic',unclassified?'Other topics':editorialCategory?EDITORIAL_CATEGORY_LABELS[editorialCategory]:labels[card.topic]);
   if(editorialCategory)node.dataset.editorialCategory=editorialCategory;put('.card-index',`${String(index+1).padStart(2,'0')} / ${String(total).padStart(2,'0')}`);
-  put('.card-kind',`${view.label}${card.sourceState==='stale'?' · older snapshot':''}`);put('h3',view.heading);
-  const credit=cardCreditsNode(card);if(credit)node.querySelector('h3')?.after(credit);
-  put('.card-context',view.context);put('.card-publisher',card.publisher);
-  put('.card-date',`${view.dateLabel}: ${formatted(card.date,true)}${publicationAge(card,Date.now())?' · '+publicationAge(card,Date.now()):''}`);
+  put('.card-kind',presentation.kindLabel);const kind=node.querySelector<HTMLElement>('.card-kind');if(kind)kind.hidden=!presentation.kindLabel;
+  put('h3',presentation.headline);
+  const title=node.querySelector<HTMLElement>('h3'),sourceUrl=safeLink(card.sourceUrl);
+  if(title&&sourceUrl){const titleLink=make('a','card-title-link',presentation.headline);titleLink.href=sourceUrl;titleLink.target='_blank';titleLink.rel='noopener noreferrer';title.replaceChildren(titleLink);}
+  const credit=cardCreditsNode(card);if(credit)node.querySelector('.card-meta')?.after(credit);
+  put('.card-context',presentation.visibleContext??'');put('.card-publisher',card.publisher);
+  put('.card-date',`${view.dateLabel==='Published'?'':view.dateLabel+': '}${formatted(card.date,true)}`);
   const readingContext=node.querySelector('.card-context'),guide=cardGuideNode(card);
+  if(readingContext instanceof HTMLElement)readingContext.hidden=presentation.visibleContext===null;
+  if(presentation.detailContext)evidence?.append(make('p','card-detail-context',presentation.detailContext));
+  if(presentation.safetyNote)readingContext?.after(make('p','card-scope-note',presentation.safetyNote));
   if(card.summary!==undefined&&card.summary!==view.context){
     const excerpt=make('p','card-context publisher-excerpt');
     excerpt.append(make('strong','','Publisher excerpt: '),document.createTextNode(card.summary));
-    readingContext?.after(excerpt,guide);
-  }else readingContext?.after(guide);
+    readingContext?.after(excerpt);
+  }
+  evidence?.append(guide);
   const link=node.querySelector<HTMLAnchorElement>('.source-link');if(link)link.href=safeLink(card.sourceUrl)??'#';
   const deadline=node.querySelector<HTMLElement>('.card-deadline');
   if(deadline&&card.deadline){deadline.hidden=false;deadline.textContent=`Listed closing date: ${formatted(card.deadline,true)}${view.noticeState==='awarded'?' · not an application deadline for this award':''}`;}
@@ -364,12 +374,12 @@ function cardNode(view:ReadingCard,index:number,total:number,saved?:SavedCard,au
   for(const [key,value]of [['Original title',card.title],['Publisher',card.publisher],['Source checked',formatted(card.observedAt,false,true)],['Publication timestamp',formatted(card.date,card.dateLabel==='Document date')],['Document identity',card.identity],['Date meaning',view.dateLabel]]){const detail=make('dd','',value);if(key==='Source checked')detail.dataset.sourceChecked='true';details?.append(make('dt','',key),detail);}
   details?.append(make('dt','','Publisher coverage'),make('dd','',coverage.label),make('dt','','Coverage meaning'),make('dd','',coverage.boundary));
   put('.card-boundary',card.boundary);put('.card-attribution',card.attribution);
-  if(view.shortened)put('.evidence summary','Full title & source details');
+  if(presentation.originalTitleInDetails)put('.evidence summary','Full title & source details');
   const related=node.querySelector<HTMLDetailsElement>('.related');
   if(related&&view.related.length){related.hidden=false;const summary=related.querySelector('summary');if(summary)summary.textContent='grouping' in view&&view.grouping==='matching-headlines'?`${view.related.length} matching publisher listing${view.related.length===1?'':'s'} · not independent confirmation`:`${view.related.length} other listed version${view.related.length===1?'':'s'}`;const list=related.querySelector('ul');
     for(const item of view.related){const url=safeLink(item.sourceUrl);if(!url)continue;const row=make('li','');const a=make('a','',`${item.version??item.title} · ${formatted(item.date)}`);a.href=url;a.target='_blank';a.rel='noopener noreferrer';row.append(a);list?.append(row);}}
   const button=node.querySelector<HTMLButtonElement>('.share-source'),fallback=node.querySelector<HTMLInputElement>('.share-fallback');
-  if(button&&fallback){button.textContent='Share card';button.setAttribute('aria-label','Share this DLKT card');fallback.setAttribute('aria-label','DLKT card link to copy');button.addEventListener('click',()=>{void shareCard(currentCardByNode.get(node)??card,{button,fallback,announce:message=>{announcement.textContent=message;toast(message);}});});}
+  if(button&&fallback){const label=button.querySelector('.share-label');if(label)label.textContent='Share card';else button.textContent='Share card';button.setAttribute('aria-label','Share this DLKT card');fallback.setAttribute('aria-label','DLKT card link to copy');button.addEventListener('click',()=>{void shareCard(currentCardByNode.get(node)??card,{button,fallback,announce:message=>{announcement.textContent=message;toast(message);}});});}
   const sourceShare=make('button','text-button','Share original source');sourceShare.type='button';const sourceFallback=make('input','share-fallback');sourceFallback.type='text';sourceFallback.readOnly=true;sourceFallback.hidden=true;sourceFallback.setAttribute('aria-label','Original source link to copy');sourceShare.addEventListener('click',()=>{void shareSource(card,sourceShare,sourceFallback);});node.querySelector('.evidence')?.append(sourceShare,sourceFallback);
   const save=node.querySelector<HTMLButtonElement>('.save-card');
   if(save){save.dataset.saveCard=card.id;save.addEventListener('click',()=>{
@@ -377,10 +387,19 @@ function cardNode(view:ReadingCard,index:number,total:number,saved?:SavedCard,au
     void writeDevice(()=>exists?device.remove(card.id):device.save(currentCardByNode.get(node)??card),exists?'Card removed from this browser.':'Card saved in this browser only.');
   });}
   if(saved){
-    put('.card-kind',`Saved copy · ${view.label}`);
     const note=make('p','saved-copy-note',`Saved here ${formatted(saved.savedAt)}. Original source check ${formatted(card.observedAt)}. This saved copy is retained; current comparisons appear separately when available.`);
-    node.querySelector('.card-content')?.prepend(note);
+    evidence?.append(note);
   }else attachInsight(node,card,automaticInsights,()=>currentCardByNode.get(node)??card);
+  if(photograph&&title){
+    integratePhotoHeadline(photograph,title,node.querySelector<HTMLElement>(':scope > header')??undefined);
+    const photoDetails=photograph.querySelector<HTMLDetailsElement>('.photo-details');
+    if(photoDetails&&evidence){
+      const photoEvidence=make('div','card-photo-evidence');photoEvidence.append(make('p','details-label','About this image'));
+      for(const child of [...photoDetails.children])if(child.tagName!=='SUMMARY')photoEvidence.append(child);
+      const photoCredit=photograph.querySelector('.card-photo-credit');if(photoCredit)photoEvidence.append(photoCredit.cloneNode(true));
+      evidence.append(photoEvidence);photoDetails.remove();
+    }
+  }
   return node;
 }
 function render():void {
@@ -480,8 +499,8 @@ function renderDiscovery():void {
   const awaitingLocal=contextualLocationPending||contextualCity!==null&&contextualLocalState==='loading';
   required<HTMLElement>('#today-heading').textContent="Today's top";
   required<HTMLElement>('#home-location').textContent=contextualCity
-    ?`${contextualCity.country} · ${contextualLocation==='estimated'?'approximate city from your connection':contextualLocation==='saved'?'your saved city':'chosen for this visit'}`
-    :contextualLocationPending?'Finding your local edition…':'City not identified. Choose a city for local updates.';
+    ?`${contextualCity.name} · ${contextualCity.country}${contextualLocation==='estimated'?' · approximate':''}`
+    :contextualLocationPending?'Finding your city…':'Choose a city for local updates.';
   const discoveryDelay=nextDailyEditionDelay(today,now),returnDelay=checkpoint?nextReturnDelay(snapshot,selectReturnBrief(checkpoint,null,now,false).topics,now):null;
   const localDelay=local.expiresAt===null?null:Math.max(25,local.expiresAt-now+25);
   const delays=[discoveryDelay,returnDelay,localDelay].filter((n):n is number=>n!==null);
@@ -521,7 +540,15 @@ function renderDiscovery():void {
   const localState=awaitingLocal?' Local information is still being checked below.':local.cards.length?` ${local.cards.length} local cards are available separately below.`:contextualCity?' Local coverage is shown below.':'';
   const updates=live.changes.total?` ${editionUpdateLabel(live.changes)}. Select Show updates when you are ready; your reading position stays stable.`:'';
   const noteText=(snapshot?`${formatted(snapshot.generatedAt,true)} · Source check ${formatted(snapshot.generatedAt)}. `:'')+publicationState+sourceState+localState+updates;
-  if(loadingPhase==='hidden'&&note.textContent!==noteText)note.textContent=noteText;
+  if(loadingPhase==='hidden'){
+    const checkedTime=snapshot?new Intl.DateTimeFormat(safeLocale(navigator.language||'en-GB'),{hour:'2-digit',minute:'2-digit'}).format(new Date(snapshot.generatedAt)):null;
+    const compact=compactEditionStatus({state:editionState,count:today.first.length,continuation:today.more.length,checkedTime,refreshing:loading&&!automaticPublicLoad,refreshFailed:lastLoadFailed&&snapshot!==null,partial:snapshot?.state==='partial'||today.daily?.completeCoverage===false,updates:live.changes.total});
+    if(note.textContent!==compact)note.textContent=compact;
+  }
+  const editionDetails=required<HTMLDetailsElement>('#discovery-details');editionDetails.hidden=loadingPhase!=='hidden';
+  const detailCopy=required<HTMLElement>('#discovery-details-copy');
+  const locationDetail=contextualCity?` City: ${contextualCity.name}, ${contextualCity.country}. ${contextualLocation==='estimated'?'Approximate city from your connection; no precise location is known.':contextualLocation==='saved'?'Using your saved city.':'Chosen for this visit.'}`:'';
+  if(detailCopy.textContent!==noteText+locationDetail)detailCopy.textContent=noteText+locationDetail;
   const anchor=anchors.find(item=>item.node.isConnected);if(anchor){const offset=anchor.node.getBoundingClientRect().top-anchor.top;if(Math.abs(offset)>1)window.scrollBy(0,offset);}
   memoryControls();
 }

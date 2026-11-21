@@ -191,9 +191,13 @@ function selectionScore(value:string):number {
 }
 export function contextPhotoFor(card:ContextPhotoInput,now=Date.now(),photos:readonly ContextPhoto[]=CONTEXT_PHOTOS):ContextPhoto|null {
  const subject=contextPhotoSubject(card);if(subject===null)return null;
+ // This reviewed image depicts a named campus, not education in every country.
+ // Query strings, fragments and broad feed labels cannot establish that place.
+ const miskolc=/\bmiskolc\b/u.test(`${folded(card.title)} ${articlePath(articleUrl(card.sourceUrl)).replace(/[\/_-]/gu,' ')}`);
  const identity=photoIdentity(card);let selected:ContextPhoto|null=null,score=-1;
  for(const photo of photos){
   if(photo.subject!==subject||!usableContextPhoto(photo,now))continue;
+  if(photo.key==='context-education'&&!miskolc)continue;
   const candidateScore=selectionScore(`${identity}\n${photo.key}`);
   if(candidateScore>score||candidateScore===score&&selected!==null&&photo.key<selected.key){selected=photo;score=candidateScore;}
  }

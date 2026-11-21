@@ -33,7 +33,7 @@ test('specific headlines and public article paths select the matching subject ra
   [{title:'Road closures during bridge repairs',topic:'travel'},'roadworks'],
   [{title:'Parents and children return to the park',topic:'public-affairs'},'family'],
   [{title:'First aid training for volunteers',topic:'business'},'health'],
-  [{title:'Scholarships for university students',topic:'business'},'education'],
+  [{title:'Scholarships for University of Miskolc students',topic:'business'},'education'],
   [{title:'Enterprise adoption rises',topic:'business'},'business'],
   [{title:'T20 World Cup campaign begins',topic:'sport'},'cricket'],
   [{title:'IPL final set for Sunday',topic:'sport'},'cricket'],
@@ -73,6 +73,26 @@ test('specific headlines and public article paths select the matching subject ra
   if(eligible.length){assert.ok(photo,expected);assert.equal(photo.subject,expected);assert.ok(eligible.includes(photo));assert.match(photo.path,/^\/card-media\/[a-f0-9]{16}\.jpg$/u);assert.match(photo.caption,/^Context photo: /u);assert.match(photo.changeNote,/Not the reported event/u);assert.ok(photo.credit);}
   else assert.equal(photo,null,expected+' has no reviewed matching asset');
  }
+});
+test('the named Miskolc campus does not illustrate unrelated education headlines',()=>{
+ const unrelated=[
+  {title:'CJP seeks consultation before Telangana’s proposed merger of BIE with Directorate of School Education',topic:'business',sourceIds:['news-business']},
+  {title:'Scholarships for university students',topic:'business'},
+  {title:'China and Russia launch a university student exchange'},
+  {title:'University students receive scholarships',sourceUrl:'https://example.test/education/story?place=Miskolc#Miskolc'},
+  {title:'University students receive scholarships',sourceUrl:'https://miskolc.example.test/education/story'},
+ ];
+ for(const input of unrelated){
+  assert.equal(contextPhotoSubject(input),'education');
+  assert.equal(contextPhotoFor(input,now),null,JSON.stringify(input));
+ }
+ for(const input of [
+  {title:'University of Miskolc students return to the reading room'},
+  {title:'University students return to the reading room',sourceUrl:'https://example.test/education/miskolc/library'},
+ ])assert.equal(contextPhotoFor(input,now)?.key,'context-education');
+ const expired=CONTEXT_PHOTOS.find(photo=>photo.key==='context-education');
+ assert.ok(expired);
+ assert.equal(contextPhotoFor({title:'University of Miskolc students return'},Date.parse(expired.reviewBy)+1,[expired]),null);
 });
 test('country conflicts and ambiguous city names never select a country-specific building or currency',()=>{
  for(const title of [

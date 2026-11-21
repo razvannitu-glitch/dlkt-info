@@ -48,6 +48,36 @@ test('actual category-discovery provenance is the strongest category hint',()=>{
   assert.equal(editorialCategory(multi),'gaming');assert.equal(editorialCategory({...multi,sourceIds:[...multi.sourceIds].reverse()}),'gaming');
 });
 
+test('education-institution mergers do not become corporate deals, including cached business hints',()=>{
+  const title='CJP seeks consultation before Telangana’s proposed merger of BIE with Directorate of School Education';
+  const url='https://publisher.example/news/verified-item';
+  assert.equal(classifyNewsHeadline(title,url),'education');
+  assert.equal(classifyNewsHeadline('Two universities propose a merger after consultation',url),'education');
+  const cached=card(1,'business',{title,sourceIds:['news-business','editorial-frontpage']});
+  const before=JSON.stringify(cached);
+  assert.deepEqual(classifyEditorialCard(cached),{category:'education',basis:'category-discovery'});
+  const ranked=rankEditorialCards([cached],now)[0];
+  assert.equal(ranked.category,'education');
+  assert.ok(ranked.editorial.signals.includes('publisher-frontpage'));
+  assert.equal(JSON.stringify(cached),before);
+  for(const corporate of [
+    'Two software companies announce a merger',
+    'Bank merger includes a new education programme for schools',
+    'A software merger creates classroom tools for schools',
+    'An education company merger boosts shareholder returns',
+    'Schools receive grants as investors agree a merger',
+    'University merger partners report record quarterly revenue',
+  ]){
+    assert.equal(classifyNewsHeadline(corporate,url),'business',corporate);
+    assert.equal(editorialCategory(card(2,'business',{title:corporate})),'business',corporate);
+  }
+  assert.equal(classifyNewsHeadline('Astronomers observe a stellar merger',url),'science');
+  assert.equal(classifyNewsHeadline('University researchers observe a stellar merger',url),'science');
+  assert.equal(editorialCategory(card(3,'education',{title,sourceIds:['news-education']})),'education');
+  assert.equal(editorialCategory(card(4,'business',{title,sourceIds:['news-unclassified']})),null);
+  assert.equal(editorialCategory(card(5,'public-affairs',{title,sourceIds:['news-public-affairs']})),'public-affairs');
+});
+
 test('legacy gaps do not become shopping, gaming or parenting from vague titles',()=>{
   const recall=card(1,'food',{sourceIds:['govuk-products'],topic:'food',title:'Product recall: a child safety warning for consumers'});
   assert.equal(editorialCategory(recall),'food');

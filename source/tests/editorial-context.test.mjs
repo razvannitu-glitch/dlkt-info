@@ -80,6 +80,34 @@ test('only explicitly provided interests affect relevance; cards and source cont
  assert.throws(()=>rankEditorialCards([],now,context(null,['health','health'])),/DAILY_EDITION_CONTEXT_INVALID/);
 });
 
+test('cached education-institution mergers use the corrected interest without mutating the stored topic',()=>{
+ const title='CJP seeks consultation before Telangana’s proposed merger of BIE with Directorate of School Education';
+ const cached=card(1,'business',{title,sourceIds:['news-business','editorial-frontpage']});
+ const before=JSON.stringify(cached);
+ const education=editorialRelevance(cached,context(null,['work-education']));
+ assert.equal(education.explicitInterest,true);
+ assert.match(education.reasons.join(' '),/explicitly selected Work & education interest/);
+ assert.doesNotMatch(education.reasons.join(' '),/Economy & business/);
+ const business=editorialRelevance(cached,context(null,['business']));
+ assert.equal(business.explicitInterest,false);
+ assert.doesNotMatch(business.reasons.join(' '),/Economy & business/);
+ assert.equal(editorialRelevance(cached,context()).explicitInterest,false);
+ const ranked=rankEditorialCards([cached],now,context(null,['work-education']))[0];
+ assert.equal(ranked.category,'education');
+ assert.equal(ranked.editorial.relevance.explicitInterest,true);
+ assert.match(ranked.reason,/Work & education/);
+ assert.doesNotMatch(ranked.reason,/Economy & business/);
+ assert.equal(JSON.stringify(cached),before);
+ for(const title of ['Two software companies announce a merger','Bank merger includes an education programme for schools']){
+  const corporate=card(2,'business',{title});
+  assert.equal(editorialRelevance(corporate,context(null,['business'])).explicitInterest,true);
+  assert.equal(editorialRelevance(corporate,context(null,['work-education'])).explicitInterest,false);
+ }
+ const differentHint=card(3,'public-affairs',{title,topic:'business',sourceIds:['news-public-affairs']});
+ assert.equal(editorialRelevance(differentHint,context(null,['business'])).explicitInterest,true);
+ assert.equal(editorialRelevance(differentHint,context(null,['work-education'])).explicitInterest,false);
+});
+
 test('global essentials remain ahead of personal preferences and can exceed ordinary category and publisher caps',()=>{
  const essentials=[
   card(1,'world',{publisher:'Shared publisher',title:'Countries sign a ceasefire agreement after negotiations'}),

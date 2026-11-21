@@ -1,5 +1,6 @@
 import { contextForCard } from './context.js';
 import { PUBLIC_TOPICS, TOPIC_LABELS } from './topics.js';
+import { editorialInterestTopic } from './editorial-categories.js';
 const NEUTRAL = Object.freeze({ countryCode: null, preferredTopics: Object.freeze([]) });
 export function validateEditorialContext(context) {
     if (context.countryCode !== null && !/^[A-Za-z]{2}$/u.test(context.countryCode)
@@ -78,7 +79,8 @@ export function editorialRelevance(card, context = NEUTRAL) {
     // Require corroborating country context for every city name. A saved "Paris"
     // alone cannot distinguish France from Texas, and "Reading" may be a verb.
     const cityMention = context.city !== undefined && country !== null && cityWording(card.title, context.city.name);
-    const explicitInterest = context.preferredTopics.includes(card.topic), reasons = [];
+    const interestTopic = editorialInterestTopic(card);
+    const explicitInterest = context.preferredTopics.includes(interestTopic), reasons = [];
     if (cityMention)
         reasons.push(`Headline mentions your confirmed city, ${context.city?.name}, with matching country context; this is not verified event-location evidence.`);
     if (categoryMatch)
@@ -86,6 +88,6 @@ export function editorialRelevance(card, context = NEUTRAL) {
     else if (mention)
         reasons.push(`Headline mentions ${label ?? code}; this is a wording match, not proof of the event location or personal impact.`);
     if (explicitInterest)
-        reasons.push(`From your explicitly selected ${TOPIC_LABELS[card.topic]} interest.`);
+        reasons.push(`From your explicitly selected ${TOPIC_LABELS[interestTopic]} interest.`);
     return Object.freeze({ country, cityMention, explicitInterest, priority: (cityMention ? 8 : 0) + (categoryMatch ? 4 : mention ? 2 : 0) + (explicitInterest ? 1 : 0), reasons: Object.freeze(reasons) });
 }

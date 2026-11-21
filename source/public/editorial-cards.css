@@ -1,0 +1,128 @@
+/* The approved editorial card treatment. All ink derives from the DLKT palette. */
+:is(#discovery-cards,#cards)>.info-card.editorial-card{
+ --card-bg:var(--white);--card-ink:var(--black);--card-title:var(--black);
+ --card-muted:var(--muted);--card-rule:var(--line);--card-action:var(--black);
+ --card-action-ink:var(--white);--card-hover:var(--black);--card-hover-ink:var(--white);
+ border-radius:14px;background:var(--white);color:var(--black);align-self:start;
+}
+.info-card.editorial-card>header{padding:22px 22px 0;font-size:14px;line-height:1.4}
+.info-card.editorial-card .card-index{display:none}
+.info-card.editorial-card .card-content{padding:18px 22px 20px}
+:is(#discovery-cards,#cards)>.info-card.editorial-card h3{
+ display:block;-webkit-line-clamp:unset;overflow:visible;max-height:none;
+ font-size:clamp(1.5rem,2.6vw,1.8rem);line-height:1.16;letter-spacing:-.035em;
+ margin:0 0 16px;overflow-wrap:anywhere;color:var(--black);
+}
+:is(#discovery-cards,#cards)>.info-card.editorial-card .card-title-link{
+ color:inherit;text-decoration:none;display:inline;padding:0;min-height:0;
+}
+:root :is(#discovery-cards,#cards)>.info-card.editorial-card .card-title-link:not(:disabled):hover{
+ background:transparent!important;color:inherit!important;border-color:transparent!important;
+ text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:4px;
+}
+.info-card.editorial-card .card-meta{font-size:.875rem;line-height:1.5;gap:4px 10px;margin:0 0 10px}
+.info-card.editorial-card .card-publisher{font-weight:700}
+.info-card.editorial-card .card-kind{font-size:.8125rem;margin:0 0 9px;line-height:1.5}
+.info-card.editorial-card .card-kind:empty{display:none}
+:is(#discovery-cards,#cards)>.info-card.editorial-card .card-context{
+ display:block;-webkit-line-clamp:unset;overflow:visible;font-size:1rem;line-height:1.6;
+ color:var(--black);margin:12px 0;
+}
+.info-card.editorial-card .card-scope-note,.info-card.editorial-card .card-deadline{
+ font-size:.875rem;line-height:1.55;margin:12px 0;
+}
+.info-card.editorial-card .card-credits{font-size:.8125rem;line-height:1.5;margin:9px 0}
+.info-card.editorial-card .card-actions{
+ display:flex;flex-wrap:nowrap;gap:8px!important;border-top:0;padding:0;margin-top:18px;
+}
+:is(#discovery-cards,#cards)>.info-card.editorial-card .card-actions>.source-link{
+ order:-1;flex:1;justify-content:center;background:var(--black);color:var(--white);
+ border-color:var(--black);min-height:46px;border-radius:8px;font-size:.875rem;padding:11px 12px;
+}
+.info-card.editorial-card .card-actions>:is(.save-card,.share-source){
+ display:inline-flex;align-items:center;justify-content:center;flex:0 0 46px;
+ width:46px;min-width:46px;min-height:46px;padding:10px;border:1px solid var(--line);border-radius:8px;
+ background:var(--white);color:var(--black);
+}
+.info-card.editorial-card .save-card[aria-pressed=true] svg{fill:currentColor}
+.info-card.editorial-card .evidence{padding:0 22px;border-top:1px solid var(--line)}
+.info-card.editorial-card .evidence>summary{font-size:.8125rem;min-height:48px;padding-top:13px;padding-bottom:13px}
+.info-card.editorial-card .evidence :is(p,dl,.card-guide){font-size:.875rem;line-height:1.6;overflow-wrap:anywhere}
+.info-card.editorial-card .evidence .contextual-reason{margin:12px 0}
+.info-card.editorial-card .evidence .card-guide{border:0;padding:0;margin:12px 0}
+.card-photo-label{
+ position:absolute;top:14px;right:14px;padding:6px 9px;z-index:2;
+ color:var(--white);background:color-mix(in srgb,var(--black) 92%,transparent);
+ border-radius:5px;font-size:.75rem;line-height:1.35;max-width:calc(48% - 20px);
+}
+.card-photo-frame{position:relative}
+.card-photo-caption .card-photo-credit{display:inline;line-height:1.6}
+.card-photo-caption .photo-details{margin-top:4px}
+.card-photo-caption .photo-details summary{font-size:.8125rem;min-height:36px}
+.card-photo-caption .photo-details p{font-size:.875rem;line-height:1.6}
+.info-card.editorial-card .card-photo{margin:0}
+.photo-editorial .card-photo-visual{position:relative;isolation:isolate;background:var(--black);color:var(--white)}
+.photo-editorial .card-photo-frame{aspect-ratio:16/10;min-width:0;min-height:10rem;background:var(--black)}
+.photo-editorial .card-photo-frame img{height:100%;width:100%;object-fit:cover}
+.photo-editorial.photo-contain .card-photo-frame img{object-fit:contain}
+.photo-editorial .card-photo-overline{
+ position:absolute;top:14px;left:16px;z-index:3;display:flex;align-items:start;
+ max-width:calc(52% - 20px);padding:0;font-size:.8125rem;line-height:1.4;
+}
+.photo-editorial .card-topic{
+ background:color-mix(in srgb,var(--black) 92%,transparent);color:var(--white);
+ border-radius:5px;padding:6px 9px;overflow-wrap:anywhere;
+}
+.photo-editorial .card-topic:before{display:none}
+.photo-editorial .card-photo-headline{
+ position:relative;z-index:1;padding:0 22px 22px;margin-top:-48px;
+ background:color-mix(in srgb,var(--black) 86%,transparent);color:var(--white);
+}
+.photo-editorial .card-photo-headline:before{
+ content:"";position:absolute;left:0;right:0;bottom:100%;height:70px;z-index:-1;pointer-events:none;
+ background:linear-gradient(to top,color-mix(in srgb,var(--black) 86%,transparent),transparent);
+}
+:is(#discovery-cards,#cards)>.info-card.editorial-card .card-photo-headline h3{
+ color:var(--white);margin:0;font-size:clamp(1.5rem,2.6vw,1.8rem);line-height:1.16;
+}
+:is(#discovery-cards,#cards)>.info-card.editorial-card .card-photo-headline a{color:var(--white)}
+:is(#discovery-cards,#cards)>.info-card.editorial-card .card-photo-headline a:focus-visible{outline-color:var(--white)}
+.photo-editorial.photo-title-long .card-photo-headline{margin-top:-24px;background:var(--black)}
+.photo-editorial.photo-title-long .card-photo-headline:before{background:linear-gradient(to top,var(--black),transparent)}
+.info-card.editorial-card .card-photo-caption{
+ padding:10px 22px 0;font-size:.75rem;line-height:1.6;color:var(--muted);background:var(--white);
+}
+.info-card.editorial-card .card-photo-caption a{min-height:24px;min-width:24px;padding:1px 0;display:inline-flex;align-items:center}
+.info-card.editorial-card .card-photo-caption+.card-content{padding-top:13px}
+.photo-editorial.photo-unavailable .card-photo-visual{background:var(--white);color:var(--black)}
+.photo-editorial.photo-unavailable .card-photo-overline{position:static;max-width:none;padding:22px 22px 0}
+.photo-editorial.photo-unavailable .card-topic{padding:0;background:transparent;color:var(--muted)}
+.photo-editorial.photo-unavailable .card-photo-headline{margin:0;padding:18px 22px 0;background:var(--white);color:var(--black)}
+.photo-editorial.photo-unavailable .card-photo-headline:before{display:none}
+:is(#discovery-cards,#cards)>.info-card.editorial-card .photo-unavailable .card-photo-headline :is(h3,a){color:var(--black)}
+:is(#discovery-cards,#cards)>.info-card.editorial-card .photo-unavailable .card-photo-headline a:focus-visible{outline-color:var(--black)}
+.photo-editorial.photo-unavailable .card-photo-caption{display:none}
+.card-photo-evidence{border-top:1px solid var(--line);padding:8px 0 14px;margin-top:12px}
+.card-photo-evidence .details-label{font-weight:700;color:var(--black)}
+.card-photo-evidence .card-photo-credit{font-size:.8125rem}
+#discovery-status:not(.sr-only){font-size:.875rem;line-height:1.65;margin:6px 0 0;color:var(--muted)}
+#discovery-details{margin:4px 0 24px;font-size:.8125rem;line-height:1.6;color:var(--muted)}
+#discovery-details summary{display:inline-flex;align-items:center;min-height:36px;padding:4px 0;text-decoration:underline;text-underline-offset:3px}
+#discovery-details p{font-size:.875rem;line-height:1.65;margin:8px 0 18px;max-width:78ch}
+.home-context{gap:12px}
+#home-location{font-size:.875rem;line-height:1.5}
+@media(max-width:600px){
+ .info-card.editorial-card>header{padding:19px 18px 0}
+ .info-card.editorial-card .card-content{padding:16px 18px 18px}
+ .photo-editorial .card-photo-headline{padding:0 18px 21px}
+ .info-card.editorial-card .card-photo-caption{padding:9px 18px 0}
+ .info-card.editorial-card .evidence{padding:0 18px}
+ .photo-editorial.photo-unavailable .card-photo-overline{padding:19px 18px 0}
+ .photo-editorial.photo-unavailable .card-photo-headline{padding:17px 18px 0}
+}
+@media(max-width:350px){
+ .photo-editorial .card-photo-overline{left:12px;max-width:calc(52% - 18px);font-size:.75rem}
+ .card-photo-label{right:12px;font-size:.6875rem;max-width:calc(48% - 18px)}
+ .info-card.editorial-card .card-actions{gap:6px!important}
+ .info-card.editorial-card .card-actions>.source-link{font-size:.8125rem;padding-left:8px;padding-right:8px}
+}

@@ -98,6 +98,16 @@ const SPECIALIST_PUBLISHERS = Object.freeze(Object.fromEntries([
     ['travelandleisure.com', 'travel'], ['cntraveler.com', 'travel'], ['lonelyplanet.com', 'travel'],
     ['foodandwine.com', 'food'], ['foodsafetynews.com', 'food'],
 ].flatMap(([host, category]) => [[host, category], [`www.${host}`, category]])));
+const FINANCIAL_DEVELOPMENT = /\b(?:earnings|quarterly profits?|annual profits?|quarterly revenue|annual revenue|stock markets?|stock exchange|share price|ipo|initial public offering|stock market debut|(?:shares?|stocks?) (?:slumps?|plunges?|slides?|tumbles?|falls?|rises?|rall(?:y|ies)|surges?|soars?|jumps?|drops?|gains?|trading))\b/u;
+const ASTRONOMICAL_MERGER = /\b(?:stellar|astronom(?:y|ers?)|black holes?|neutron stars?|galaxies)\b/u;
+/** A school-system merger is not a corporate deal merely because it says "merger". */
+function educationInstitutionMerger(title) {
+    return /\bmergers?\b/u.test(title)
+        && /\b(?:schools?|universit(?:y|ies)|colleges?|education (?:departments?|boards?|directorates?|ministries)|(?:departments?|boards?|directorates?|ministries) of (?:school |intermediate |higher )?education)\b/u.test(title)
+        && !/\b(?:compan(?:y|ies)|corporate|corporations?|firms?|banks?|banking|software|shareholders?|investors?|acquisitions?)\b/u.test(title)
+        && !ASTRONOMICAL_MERGER.test(title)
+        && !FINANCIAL_DEVELOPMENT.test(title);
+}
 /** Discovery classification uses explicit subjects/section names, never a guessed global-topic fallback. */
 export function classifyNewsHeadline(title, sourceUrl) {
     if (!title.trim() || title.length > 4000 || /[\u0000-\u001f\u007f]/u.test(title))
@@ -116,8 +126,10 @@ export function classifyNewsHeadline(title, sourceUrl) {
     if (/\s[–—-]\s*cartoon\s*$/u.test(normalized))
         return null;
     // The nature of the reported development matters more than the company sector.
-    const financial = /\b(?:earnings|quarterly profits?|annual profits?|quarterly revenue|annual revenue|stock markets?|stock exchange|share price|ipo|initial public offering|stock market debut|(?:shares?|stocks?) (?:slumps?|plunges?|slides?|tumbles?|falls?|rises?|rall(?:y|ies)|surges?|soars?|jumps?|drops?|gains?|trading))\b/u.test(normalized);
-    const merger = /\b(?:mergers?|acquisitions?)\b/u.test(normalized) && !/\b(?:stellar|astronom(?:y|ers?)|black holes?|neutron stars?|galaxies)\b/u.test(normalized);
+    const financial = FINANCIAL_DEVELOPMENT.test(normalized);
+    const merger = /\b(?:mergers?|acquisitions?)\b/u.test(normalized) && !ASTRONOMICAL_MERGER.test(normalized);
+    if (educationInstitutionMerger(normalized))
+        return 'education';
     if (financial || merger)
         return 'business';
     if (/\b(?:budget cuts?|spending cuts?|cost[- ]cutting|cost[- ]savings?|efficiency savings|round of savings)\b/u.test(normalized)
@@ -164,6 +176,10 @@ export function classifyEditorialCard(card) {
     const title = card.title.normalize('NFKC').toLowerCase();
     const subjects = SUBJECTS.filter(([, pattern]) => pattern.test(title)).map(([category]) => category);
     const hints = PUBLIC_EDITORIAL_CATEGORIES.filter(category => card.sourceIds.some(id => newsCategoryFromSourceId(id) === category));
+    // Correct only the old generic-merger discovery hint. Preserve the original
+    // card/source IDs and discovery provenance, including a checked frontpage link.
+    if (hints.length === 1 && hints[0] === 'business' && educationInstitutionMerger(title))
+        return Object.freeze({ category: 'education', basis: 'category-discovery' });
     if (hints.length) {
         const category = subjects.find(value => hints.includes(value)) ?? hints[0];
         return category === undefined ? null : Object.freeze({ category, basis: 'category-discovery' });
@@ -183,4 +199,11 @@ export function classifyEditorialCard(card) {
 }
 export function editorialCategory(card) {
     return classifyEditorialCard(card)?.category ?? null;
+}
+/** Match the corrected school-merger discovery hint without rewriting saved Topics. */
+export function editorialInterestTopic(card) {
+    if (card.topic !== 'business' || !card.sourceIds.includes('news-business')
+        || card.sourceIds.some(id => { const category = newsCategoryFromSourceId(id); return category !== null && category !== 'business'; }))
+        return card.topic;
+    return classifyEditorialCard(card)?.category === 'education' ? EDITORIAL_CATEGORY_TOPICS.education : card.topic;
 }
