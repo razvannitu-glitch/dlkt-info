@@ -1,0 +1,15 @@
+# Current-city edition — DLKT INFO 0.9.42
+
+Opening the reader requests one approximate current city from the hosting connection. An old saved city or personal briefing does not establish the reader's present location. A manual city choice during the visit wins over a late hint. Unknown location remains explicit; GPS is never requested automatically. City selection in the header, search and chooser opens the same card edition. Existing personal reading and saved comparisons remain separate.
+
+Connected journalism: B365 and Buletin de Bucuresti only, keyed to canonical Bucharest identity 683506/RO/Europe/Bucharest. Each item requires a reviewed fixed feed, correct feed identity, exact article origin and allowed path, explicit place reference in its displayed headline/excerpt, publication date with timezone, required source credit and bounded text. Publisher country or the feed title alone is not article locality. No arbitrary URL or visitor profile is sent to the publishers.
+
+Items older than 72 hours, future dates beyond the permitted clock tolerance and five-minute source checks are rejected or expired. Publication, retrieval and event times remain distinct. Metadata and short excerpts are displayed within the reviewed publisher limits; no article photos or full articles are copied. Each source has independent failure and backoff; failure is never an all-clear. Rights review expires 18 December 2026 unless renewed after verification.
+
+The finite homepage selects up to eight press stories and twelve cards overall, at most four stories per publisher and three per topic. Freshness bands, practical subject matter, publisher breadth and topic breadth are explicit editorial rules. Only identical normalized headlines or exact article URLs are grouped. Similar or contradictory reporting is not automatically declared the same story. Operator records from multiple Bucharest sectors may produce one CMTEB overview retaining source provenance. Neither a city match nor a sector overview establishes impact on the reader's address.
+
+World cards remain inside an optional closed section. For a known city, the ticker prefers the same eligible local news selection, then a dated upcoming city event; any global fallback must match an explicitly chosen topic. Ticker motion, dimensions, no-button behaviour, brand and CSS remain unchanged.
+
+Coverage is limited: two Bucharest press feeds and existing city/operator sources do not deliver comprehensive worldwide local journalism. An additional documented geographic discovery service could not be validated in the target runtime during this work, so it is not connected. More publishers and cities need verified access, rights, geographic relevance and failure behaviour before admission.
+
+Acceptance evidence belongs to city-edition-20261118: raw independent reviews, focused tests, exact-commit release gate, controlled browser cases with unchanged candidate payloads, and unmocked public checks after release. Chromium mobile emulation is not a physical iPhone/Safari certification.

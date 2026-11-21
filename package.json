@@ -1,0 +1,41 @@
+{
+  "name": "@dlkt/info-core",
+  "version": "0.9.46",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "setup": "npm ci --ignore-scripts --no-audit --no-fund",
+    "build": "npm --prefix source run build",
+    "typecheck": "npm --prefix source run typecheck",
+    "test:packaging": "node --test tests/packaging.test.mjs",
+    "test": "npm run test:packaging && npm --prefix source test",
+    "verify": "npm run test:packaging && npm --prefix source run verify",
+    "verify:release": "npm run test:packaging && node bootstrap.mjs --check && npm --prefix source run verify:release",
+    "source:pin": "node scripts/pin-source.mjs",
+    "package:check": "node bootstrap.mjs --check",
+    "package:local": "node bootstrap.mjs --local"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.16",
+    "@types/node": "22.15.30",
+    "@types/react": "19.3.0",
+    "@types/ws": "8.18.2",
+    "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "@resvg/resvg-wasm": "2.4.0",
+    "@vercel/blob": "2.9.0",
+    "@vercel/functions": "3.11.3",
+    "fast-xml-parser": "5.12.0",
+    "htmlparser2": "12.0.0",
+    "react": "19.3.1",
+    "satori": "0.33.5"
+  },
+  "overrides": {
+    "zod": "4.6.7",
+    "fflate": "0.7.5"
+  }
+}

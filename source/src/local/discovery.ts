@@ -1,0 +1,18 @@
+import type {City,LocalCard} from './contracts.js';
+export type LocalInterest='all'|'events'|'food'|'culture'|'administration'|'transport'|'outdoors'|'local';
+export interface LocalDiscovery {readonly interest:Exclude<LocalInterest,'all'>;readonly title:string;readonly note:string;readonly url:string}
+const maps=(city:City,term:string):string=>'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(`${term} in ${city.name}, ${city.country}`);
+/** Deliberate outbound searches, never advertised as connected or checked feeds. */
+export function localDiscovery(city:City):readonly LocalDiscovery[]{
+ const bucharest=city.id==='683506',palma=city.id==='2512989',london=city.id==='2643743';
+ return[
+  {interest:'events',title:'Events & culture',note:bucharest?'Open the ARCUB agenda. Dates and tickets are checked at the organiser.':palma?'Open the municipal culture agenda. Confirm tickets with the organiser.':'Search for local event venues. Event schedules are not connected here.',url:bucharest?'https://arcub.ro/agenda':palma?'https://www.palmacultura.com/index.php?Idi=2':maps(city,'event venues')},
+  {interest:'food',title:'Food & drink',note:'Explore restaurants, cafes and bars on the map. Check opening hours, menus and bookings with the venue.',url:maps(city,'restaurants cafes bars')},
+  {interest:'culture',title:'Arts & museums',note:'Find museums and galleries. Confirm current exhibitions, access and admission at the venue.',url:maps(city,'museums galleries')},
+  {interest:'transport',title:'Getting around',note:bucharest?'Open STB notices for bus and tram changes. This is not a live road-traffic feed.':palma?'Open TIB operator notices. Other local services may differ.':london?'Open TfL service status before travelling.':'Explore public transport on the map. Live disruption coverage is not connected here.',url:bucharest?'https://www.stb.ro/info.php':palma?'https://www.tib.org/es/avisos':london?'https://tfl.gov.uk/tube-dlr-overground/status/':maps(city,'public transport')},
+  {interest:'administration',title:'City & public services',note:bucharest?'Open Bucharest City Hall for official announcements and public services.':palma?'Open Palma City Council announcements.':'Find the local city hall. Check official notices and public services at the source.',url:bucharest?'https://www.pmb.ro/':palma?'https://noticies.palma.es/inici':maps(city,'city hall')},
+  {interest:'outdoors',title:'Family & outdoors',note:'Explore parks and playgrounds. Access, safety and scheduled activities are not verified by this map search.',url:maps(city,'parks playgrounds')},
+  {interest:'local',title:'Around the city',note:bucharest?'Open B365 for local reporting. Articles are read at the publisher.':'Explore local points of interest on the map. This is discovery, not a current-news feed.',url:bucharest?'https://b365.ro/':maps(city,'local attractions')},
+ ];
+}
+export function cardInterest(card:LocalCard):LocalInterest {return card.kind==='local-news'&&card.news?(card.news.topic==='transport'?'transport':card.news.topic==='culture'?'culture':card.news.topic==='events'?'events':'local'):card.kind==='event'?'events':card.kind==='municipal-news'||card.kind==='utility-notice'?'administration':card.kind==='forecast'?'all':'transport';}

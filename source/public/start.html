@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f66061">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="Build a finite, trusted DLKT briefing in four transparent steps.">
+  <meta name="robots" content="noindex,nofollow">
+  <title>DLKT — Build your companion</title>
+  <link rel="shortcut icon" href="/favicon.ico?v=kate-fb7b2e60" type="image/x-icon"><link rel="icon" href="/favicon-kate-fb7b2e60.png" type="image/png" sizes="180x180">
+  <link rel="stylesheet" href="/start.css">
+  <script src="/bridge.js" defer></script>
+  <script src="/trust-data.js" defer></script>
+  <script src="/action-data.js" defer></script>
+  <script src="/start.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#activation-main">Skip to activation</a>
+  <header class="activation-header">
+    <a class="activation-brand" href="/" aria-label="DLKT home"><span class="brand-signal" aria-hidden="true"><i></i><i></i><i></i></span><span>DLKT</span></a>
+    <div class="header-title"><span>First-run activation</span><strong>Your rules. One finite briefing.</strong></div>
+    <div class="header-actions"><span class="preview-chip"><i aria-hidden="true"></i>Synthetic preview</span><a href="/live">Live official</a><a href="/delta">Delta First</a><a href="/companion">Open Companion</a></div>
+  </header>
+
+  <main id="activation-main">
+    <section class="activation-hero" aria-labelledby="activation-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span aria-hidden="true"></span>DLKT 0.9.0</p>
+        <h1 id="activation-title">Build your brief.<br><em>Not another feed.</em></h1>
+        <p>You decide what deserves attention, what evidence qualifies and when the result should arrive. DLKT turns those choices into a finite, inspectable Companion session.</p>
+      </div>
+      <div class="hero-geometry" aria-hidden="true"><span class="orbit orbit-one"></span><span class="orbit orbit-two"></span><b>04</b><small>explicit steps</small></div>
+      <dl class="hero-metrics"><div><dt data-metric-topics>03</dt><dd>topics selected</dd></div><div><dt data-metric-entities>00</dt><dd>entities tracked</dd></div><div><dt data-metric-cards>04</dt><dd>projected cards</dd></div><div><dt>00</dt><dd>hidden rules</dd></div></dl>
+    </section>
+
+    <section class="activation-shell" aria-label="First-run activation flow">
+      <nav class="activation-progress" aria-label="Activation steps" data-progress>
+        <button type="button" class="is-active" data-step-button="interests"><span>01</span><strong>Interests</strong><small>What matters</small></button>
+        <button type="button" data-step-button="trust"><span>02</span><strong>Trust</strong><small>What qualifies</small></button>
+        <button type="button" data-step-button="delivery"><span>03</span><strong>Delivery</strong><small>When it arrives</small></button>
+        <button type="button" data-step-button="preview"><span>04</span><strong>Preview</strong><small>What you built</small></button>
+      </nav>
+
+      <section class="activation-workspace">
+        <header class="workspace-heading"><div><p data-step-kicker>01 · Interests</p><h2 data-step-title>Tell it what matters.</h2></div><p data-step-explanation>Choose broad domains, then add the exact companies, products, laws or places you want followed.</p></header>
+
+        <div class="activation-panel is-active" data-step-panel="interests">
+          <section class="choice-section"><div class="section-heading"><span>Domains</span><small>At least one</small></div><div class="topic-grid" data-topic-grid>
+            <button type="button" aria-pressed="true" data-topic="technology"><b>Technology</b><span>Products, platforms, AI and infrastructure</span></button>
+            <button type="button" aria-pressed="false" data-topic="business"><b>Business</b><span>Companies, pricing and market movement</span></button>
+            <button type="button" aria-pressed="true" data-topic="regulation"><b>Regulation</b><span>Official rules, consultations and decisions</span></button>
+            <button type="button" aria-pressed="true" data-topic="opportunities"><b>Opportunities</b><span>Funding, tenders and openings</span></button>
+            <button type="button" aria-pressed="false" data-topic="supply"><b>Supply</b><span>Availability, routes and procurement</span></button>
+          </div></section>
+
+          <section class="entity-section"><div class="section-heading"><span>Tracked entities</span><small><b data-entity-count>0</b> selected</small></div><form class="entity-form" data-entity-form><label for="entity-input">Company, product, law, place or topic</label><div><input id="entity-input" data-entity-input maxlength="80" autocomplete="off" placeholder="Example: OpenAI or EU AI Act"><button type="submit">Add <span aria-hidden="true">＋</span></button></div><p data-entity-feedback>Specific entities narrow a broad topic without hiding the rule.</p></form><div class="entity-chips" data-entity-chips aria-live="polite"></div><div class="starter-entities"><span>Synthetic examples</span><button type="button" data-entity-suggestion="DEMO AI Platform">DEMO AI Platform</button><button type="button" data-entity-suggestion="DEMO EU File">DEMO EU File</button><button type="button" data-entity-suggestion="DEMO Innovation Fund">DEMO Innovation Fund</button></div></section>
+        </div>
+
+        <div class="activation-panel" data-step-panel="trust" hidden>
+          <section class="choice-section"><div class="section-heading"><span>Evidence standard</span><small>Visible and reversible</small></div><div class="trust-grid">
+            <button type="button" data-trust-preset="strict"><span>Strict</span><b>Official. Confirmed. Fresh.</b><p>Two sources, no active conflicts, maximum evidence age 24 hours.</p><small>Lowest noise</small></button>
+            <button type="button" class="is-active" data-trust-preset="balanced"><span>Balanced</span><b>Primary and corroborated.</b><p>Two sources, conflicts excluded, maximum evidence age 72 hours.</p><small>Recommended</small></button>
+            <button type="button" data-trust-preset="open"><span>Open</span><b>Broader signals, clearly labelled.</b><p>Single-source signals and warned conflicts may enter the briefing.</p><small>Maximum coverage</small></button>
+          </div></section>
+          <div class="trust-options"><label><span>Minimum materiality</span><select data-min-materiality><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option><option value="critical">Critical</option></select></label><label class="switch-row"><input type="checkbox" data-actionable-only><span><b>Actionable changes only</b><small>Exclude changes with no clear next step.</small></span></label></div>
+          <aside class="trust-proof"><span>What this controls</span><p data-trust-proof>Corroborated or confirmed information from primary or official sources. Active contradictions are excluded.</p></aside>
+        </div>
+
+        <div class="activation-panel" data-step-panel="delivery" hidden>
+          <div class="delivery-grid"><label><span>Your timezone</span><select data-timezone><option value="Europe/Bucharest" selected>Europe / Bucharest</option><option value="Europe/London">Europe / London</option><option value="America/New_York">America / New York</option><option value="Asia/Tokyo">Asia / Tokyo</option><option value="Australia/Sydney">Australia / Sydney</option></select><small>The schedule follows daylight-saving changes.</small></label><label><span>Daily delivery time</span><input type="time" value="08:00" data-delivery-time><small>One finite briefing at the time you choose.</small></label><label><span>Attention budget</span><input data-card-limit type="number" inputmode="numeric" min="1" step="1" value="6" required><small>You choose the finite size of each briefing.</small></label></div>
+          <section class="delivery-clock"><div><span>Next briefing</span><strong data-delivery-summary>08:00</strong><small data-timezone-summary>Europe/Bucharest</small></div><i aria-hidden="true"></i><p>Urgent alerts remain off in first-run activation. Delivery rules can be changed later in the Companion.</p></section>
+        </div>
+
+        <div class="activation-panel" data-step-panel="preview" hidden>
+          <div class="activation-result"><div class="result-copy"><p>Activation preview</p><h2>Your Companion has a clear contract.</h2><strong data-result-line>3 topics · 0 entities · Balanced trust · 6-card briefing</strong><p data-result-explanation>The current synthetic dataset would produce 4 cards. Real collection and persistence remain disabled until the dedicated database is provisioned.</p></div><div class="result-number"><span>Projected finite briefing</span><b data-result-count>04</b><small>cards, not links</small></div></div>
+          <dl class="activation-summary"><div><dt>Topics</dt><dd data-summary-topics>Technology, Regulation, Opportunities</dd></div><div><dt>Tracked entities</dt><dd data-summary-entities>Broad topics only</dd></div><div><dt>Evidence</dt><dd data-summary-trust>Balanced · Corroborated · Primary · 72h</dd></div><div><dt>Delivery</dt><dd data-summary-delivery>08:00 · Europe/Bucharest · 6 cards</dd></div></dl>
+          <div class="activation-boundary"><span>Preview boundary</span><p>Open the session immediately, or save this exact contract through secure email verification when account infrastructure is active.</p></div>
+          <section class="activation-account-handoff" data-account-handoff aria-labelledby="handoff-title">
+            <div class="account-handoff-copy"><span>Cross-device handoff</span><h3 id="handoff-title">Save this exact contract.</h3><p data-account-status aria-live="polite">Checking secure account availability…</p></div>
+            <div class="account-handoff-actions">
+              <button type="button" class="save-open-action" data-save-open disabled><span>Save & open Companion</span><b aria-hidden="true">→</b></button>
+              <form class="handoff-form" data-account-email-form hidden novalidate>
+                <label for="activation-email">Email</label>
+                <div><input id="activation-email" data-account-email type="email" inputmode="email" autocomplete="email" maxlength="254" required><button type="submit">Send code</button></div>
+              </form>
+              <form class="handoff-form" data-account-code-form hidden novalidate>
+                <label for="activation-code">One-time code</label>
+                <div><input id="activation-code" data-account-code type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 -]{6,14}" maxlength="14" required><button type="submit">Verify & save</button></div>
+                <button type="button" class="handoff-secondary" data-change-email>Use another email</button>
+              </form>
+              <div class="handoff-signed-in" data-account-signed-in hidden><span>Signed in securely</span><strong data-account-user></strong><button type="button" data-account-sign-out>Sign out</button></div>
+            </div>
+          </section>
+        </div>
+
+        <footer class="activation-actions"><button type="button" class="secondary-action" data-back hidden>← Back</button><div class="step-state"><span data-step-position>Step 1 of 4</span><i><b data-progress-fill></b></i></div><button type="button" class="primary-action" data-next>Continue <span aria-hidden="true">→</span></button><a class="primary-action launch-action" data-launch href="/companion" hidden>Open my Companion <span aria-hidden="true">→</span></a></footer>
+      </section>
+
+      <aside class="activation-rail"><div class="rail-heading"><span>Live contract</span><strong>Everything stays inspectable.</strong></div><dl><div><dt>Topics</dt><dd data-rail-topics>03</dd></div><div><dt>Entities</dt><dd data-rail-entities>00</dd></div><div><dt>Trust</dt><dd data-rail-trust>Balanced</dd></div><div><dt>At</dt><dd data-rail-time>08:00</dd></div><div><dt>Cards</dt><dd data-rail-max>06</dd></div></dl><div class="rail-rules"><span>Permanent safeguards</span><p>Finite output</p><p>Provenance visible</p><p>Contradictions labelled</p><p>No browser storage</p><p>No automatic execution</p></div></aside>
+    </section>
+
+    <section class="activation-principles" aria-label="Activation principles"><div><span>01</span><b>Specific beats generic.</b><p>Broad topics establish coverage. Entities focus attention.</p></div><div><span>02</span><b>Trust is a user rule.</b><p>No opaque score silently decides what reaches you.</p></div><div><span>03</span><b>Attention has a budget.</b><p>The briefing stops at the maximum you choose.</p></div><div><span>04</span><b>Activation is reversible.</b><p>The complete session state travels in a readable URL.</p></div></section>
+  </main>
+  <div class="activation-toast" data-toast hidden role="status" aria-live="polite"><strong data-toast-title>Updated</strong><span data-toast-copy>Your activation contract changed.</span></div>
+  <footer class="activation-footer"><span>DLKT · First-Run Activation</span><strong>Finite · Explicit · Session only · v0.8.8</strong></footer>
+</body>
+</html>

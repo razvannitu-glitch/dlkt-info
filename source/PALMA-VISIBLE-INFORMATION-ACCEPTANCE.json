@@ -1,0 +1,62 @@
+{
+  "objective": "Expose verified Palma information and source results in normal reading without opening disclosures.",
+  "baseline": {
+    "commit": "9ea2eb46d1fe3f3635f49cbc3063864b671af609",
+    "deployment": "dpl_FSifa5bWLwrWvMKCaFtNH6KdL9cW",
+    "manifestFiles": 427,
+    "observedAt": "2026-11-15T17:39:53.243Z"
+  },
+  "scope": [
+    "src/local/presentation.ts",
+    "src/local/browser.ts",
+    "public/local-presentation.js",
+    "public/local-browser.js",
+    "tests/local-presentation.test.mjs",
+    "tests/browser/palma-visible-information.mjs",
+    "release metadata"
+  ],
+  "protected": [
+    "CSS, theme, logo and layout rules",
+    "source acquisition, robots, per-source limits and provenance",
+    "5-minute source expiry and city guards",
+    "browser-only optional memory and source actions"
+  ],
+  "criteria": [
+    {
+      "id": "C1",
+      "assertion": "Municipal cards are present in the normal feed with no collapsed ancestor."
+    },
+    {
+      "id": "C2",
+      "assertion": "Transport operator wording already retained in evidence is readable in the primary card without loss or reinterpretation."
+    },
+    {
+      "id": "C3",
+      "assertion": "Empty, unavailable, partial and expired source results are distinguishable and visible; no all-clear is inferred."
+    },
+    {
+      "id": "C4",
+      "assertion": "Unconnected categories remain visible without claiming coverage or inventing data."
+    },
+    {
+      "id": "C5",
+      "assertion": "Existing event admission qualifiers, city identity, provenance, expiry and source links remain correct; stylesheet hashes unchanged."
+    }
+  ],
+  "evidence": {
+    "unit": "Deterministic presentation cases and existing release gate",
+    "browser": "Controlled source-response fixtures plus separate live source observation",
+    "review": "Independent review of exact diff"
+  },
+  "layers": {
+    "knowledge": "Existing typed local snapshots only",
+    "trust": "Preserve publisher text, source check timestamps, coverage and hashes",
+    "action": "Existing read-only official-source links; no new account, email or payment action"
+  },
+  "resources": {
+    "sandbox": "One existing named sandbox; stop when done",
+    "newServices": 0,
+    "newModelCalls": 0,
+    "releaseGateRuns": 1
+  }
+}

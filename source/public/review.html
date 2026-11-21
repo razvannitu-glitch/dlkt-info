@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f66061">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="Synthetic visual preview of the DLKT human review console.">
+  <meta name="robots" content="noindex,nofollow">
+  <title>DLKT — Internal Review Console</title>
+  <link rel="shortcut icon" href="/favicon.ico?v=kate-fb7b2e60" type="image/x-icon"><link rel="icon" href="/favicon-kate-fb7b2e60.png" type="image/png" sizes="180x180">
+  <link rel="stylesheet" href="/review.css">
+  <script src="/review.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#review-main">Skip to review console</a>
+
+  <header class="review-header">
+    <a class="review-brand" href="/" aria-label="DLKT home">
+      <span class="brand-signal" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="brand-dlkt">DLKT</span>
+    </a>
+    <div class="review-header-title">
+      <span>Internal</span>
+      <strong>Review Console</strong>
+    </div>
+    <div class="review-header-actions">
+      <span class="environment-badge"><i aria-hidden="true"></i>Synthetic preview</span>
+      <a class="back-link" href="/">Back to product <span aria-hidden="true">↗</span></a>
+    </div>
+  </header>
+
+  <main id="review-main">
+    <section class="review-intro" aria-labelledby="review-title">
+      <div class="review-intro-copy">
+        <p class="console-eyebrow"><span aria-hidden="true"></span>Human gate · zero automatic publication</p>
+        <h1 id="review-title">See the change.<br><em>Verify the card.</em></h1>
+        <p class="intro-summary">Every candidate is reconstructed from atomic claims, its previous state and exact provenance. Approval records an internal decision. It never publishes automatically.</p>
+      </div>
+      <div class="review-intro-art" aria-hidden="true">
+        <span class="review-orbit orbit-one"></span>
+        <span class="review-orbit orbit-two"></span>
+        <span class="review-pulse"></span>
+        <span class="review-monogram">Δ</span>
+        <div class="art-note"><b>Delta First</b><span>Only material change enters review.</span></div>
+      </div>
+      <dl class="intro-metrics" aria-label="Preview safeguards">
+        <div><dt>03</dt><dd>synthetic candidates</dd></div>
+        <div><dt>12</dt><dd>maximum cards per trial</dd></div>
+        <div><dt>00</dt><dd>automatic publications</dd></div>
+        <div><dt>01</dt><dd>human decision required</dd></div>
+      </dl>
+    </section>
+
+    <section class="console-shell" aria-label="Synthetic internal review console">
+      <aside class="review-queue" aria-labelledby="queue-title">
+        <div class="panel-heading">
+          <div>
+            <p class="panel-kicker">Private queue</p>
+            <h2 id="queue-title">Changes to review</h2>
+          </div>
+          <span class="queue-count" data-queue-count>3</span>
+        </div>
+        <div class="queue-tabs" role="tablist" aria-label="Review queue filters">
+          <button type="button" class="is-active" role="tab" aria-selected="true" data-queue-filter="pending">Pending</button>
+          <button type="button" role="tab" aria-selected="false" data-queue-filter="decided">Decided</button>
+        </div>
+        <div class="queue-list" data-queue-list aria-live="polite"></div>
+        <div class="queue-footer">
+          <span><i aria-hidden="true"></i>Private ledger only</span>
+          <b>J / K to navigate</b>
+        </div>
+      </aside>
+
+      <section class="review-workspace" aria-labelledby="candidate-title">
+        <div class="workspace-toolbar">
+          <div class="candidate-identity">
+            <span data-candidate-position>01 / 03</span>
+            <strong data-candidate-entity>DEMO-EU-001</strong>
+          </div>
+          <div class="workspace-controls">
+            <button type="button" aria-label="Previous candidate" data-candidate-prev>←</button>
+            <button type="button" aria-label="Next candidate" data-candidate-next>→</button>
+          </div>
+        </div>
+
+        <article class="review-card" data-review-card>
+          <header class="review-card-header">
+            <div class="card-tags">
+              <span class="kind-tag" data-card-kind>Changed</span>
+              <span class="source-tag" data-card-source>Official source</span>
+              <span class="synthetic-tag">Synthetic</span>
+            </div>
+            <span class="card-time" data-card-time>Observed 21:00 UTC</span>
+          </header>
+
+          <div class="review-card-body">
+            <p class="card-topic" data-card-topic>EU regulation</p>
+            <h2 id="candidate-title" data-card-title>The official proposal listing changed.</h2>
+            <p class="card-direct" data-card-direct>The direct answer will appear here.</p>
+
+            <div class="card-explanation-grid">
+              <section>
+                <p class="section-label">Why it matters</p>
+                <p data-card-why>This change affects the way the document should be tracked.</p>
+              </section>
+              <section>
+                <p class="section-label">What changed</p>
+                <p data-card-changed>The delta between the two verified checkpoints appears here.</p>
+              </section>
+            </div>
+
+            <section class="change-comparison" aria-labelledby="change-title">
+              <div class="comparison-header">
+                <p class="section-label" id="change-title">Verified delta</p>
+                <span>Previous → Current</span>
+              </div>
+              <div class="comparison-grid">
+                <div class="comparison-state is-before">
+                  <span>Before</span>
+                  <p data-card-before>Previous verified state</p>
+                </div>
+                <div class="comparison-arrow" aria-hidden="true">→</div>
+                <div class="comparison-state is-after">
+                  <span>Now</span>
+                  <p data-card-after>Current verified state</p>
+                </div>
+              </div>
+            </section>
+
+            <dl class="card-metrics">
+              <div><dt>Materiality</dt><dd data-card-materiality>Medium</dd></div>
+              <div><dt>Trust</dt><dd data-card-trust>Confirmed</dd></div>
+              <div><dt>Relevance</dt><dd><span data-card-score>92</span>/100</dd></div>
+              <div><dt>Evidence</dt><dd><span data-card-source-count>1</span> source</dd></div>
+            </dl>
+          </div>
+
+          <footer class="review-card-footer">
+            <details class="evidence-panel" open>
+              <summary>Provenance & claim map <span aria-hidden="true">＋</span></summary>
+              <div class="evidence-content">
+                <div class="claim-chain">
+                  <div><span>Previous claim</span><code data-previous-claim>claim:demo:001:v1</code></div>
+                  <i aria-hidden="true">superseded by</i>
+                  <div><span>Current claim</span><code data-current-claim>claim:demo:001:v2</code></div>
+                </div>
+                <div class="source-list" data-source-list></div>
+              </div>
+            </details>
+          </footer>
+        </article>
+      </section>
+
+      <aside class="decision-panel" aria-labelledby="decision-title">
+        <div class="decision-heading">
+          <p class="panel-kicker">Human gate</p>
+          <h2 id="decision-title">Review decision</h2>
+          <span class="decision-state" data-decision-state><i aria-hidden="true"></i>Awaiting decision</span>
+        </div>
+
+        <div class="publication-lock">
+          <span class="lock-icon" aria-hidden="true">×</span>
+          <div><b>Publication blocked</b><p>Approval records an internal decision only. No public card, email, push or delivery job is created.</p></div>
+        </div>
+
+        <label class="review-note-label" for="review-note">Reviewer note <span>Optional</span></label>
+        <textarea id="review-note" data-review-note maxlength="320" placeholder="What did you verify in the linked source?"></textarea>
+        <div class="note-meta"><span data-note-count>0 / 320</span><span>Stored in append-only audit trail</span></div>
+
+        <div class="decision-actions">
+          <button class="approve-action" type="button" data-approve>Approve candidate <span aria-hidden="true">✓</span></button>
+          <button class="reject-action" type="button" data-reject>Reject candidate <span aria-hidden="true">×</span></button>
+        </div>
+
+        <div class="shortcut-row">
+          <span><kbd>A</kbd> approve</span>
+          <span><kbd>R</kbd> reject</span>
+        </div>
+
+        <section class="audit-section" aria-labelledby="audit-title">
+          <div class="audit-heading"><h3 id="audit-title">Audit trail</h3><span>Append-only</span></div>
+          <ol class="audit-list" data-audit-list></ol>
+        </section>
+      </aside>
+    </section>
+
+    <section class="preview-boundary" aria-label="Preview boundary">
+      <div><span>What you are seeing</span><strong>A functional visual prototype using synthetic candidates.</strong></div>
+      <div><span>What remains closed</span><strong>Real database activation, real review queue and all public delivery.</strong></div>
+      <a href="/">Return to DLKT <span aria-hidden="true">→</span></a>
+    </section>
+  </main>
+
+  <div class="decision-toast" role="status" aria-live="polite" data-toast hidden>
+    <span data-toast-symbol>✓</span>
+    <div><b data-toast-title>Candidate approved</b><p data-toast-copy>Internal decision recorded. Publication remains blocked.</p></div>
+  </div>
+
+  <footer class="review-footer">
+    <span>DLKT · Internal Review Console</span>
+    <span>Protected staging · Synthetic preview · v0.8.8</span>
+  </footer>
+</body>
+</html>

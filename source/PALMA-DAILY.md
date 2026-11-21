@@ -1,0 +1,11 @@
+# Palma daily local briefing
+
+Candidate 0.9.14 extends the existing city briefing, selected by the canonical GeoNames city ID 2512989. Selecting Palma includes its reviewed local sources both in the city view and in the personal briefing, without selecting a specialist topic. It does not change CSS, branding, accounts, billing or background delivery.
+
+The existing MET Norway forecast remains. TIB notices explicitly naming Palma are checked for a supported same-day service window. PalmaCultura supplies up to three events scheduled later on the same Europe/Madrid calendar date, retaining venue, address, stated admission conditions and the organiser link. Up to two recent city council announcements are available as collapsed context, explicitly identified as the publisher's account, with no inferred legal effect or adoption status. Headlines remain in their original language.
+
+The transport pilot covers a subset of TIB interurban notices, not EMT, roads, trains or all transport. Unsupported notice schedules make coverage partial. Utility interruptions, official emergency warnings, currency reference rates, accommodation availability and local opportunities are explicitly not connected. A missing source or zero matching records is never presented as an all-clear. This is an extensible first city pack, not universal coverage.
+
+Each new card separates the source check and its expiry from event time and publisher date. It explains place, relevance and next step. The SHA-256 is linked to the document actually parsed; event evidence is the calendar index and the event detail link remains available separately. Browser and archive validation recheck source origin, city, date, card meaning, evidence location, same-day event start and expiry. Items that expire during collection are removed again after all sources complete. Saved comparison never treats absence as cancellation or normal service.
+
+Acquisition accepts only reviewed origins and paths, checks robots policy, rejects redirects, uses bounded reads and timeouts, coalesces requests and respects backoff. The municipal RSS path is disallowed by its robots policy and is not used. Only its permitted public news index and canonical article paths are eligible. An unavailable TLS connection remains a source failure, with no fallback to stale news as current facts.

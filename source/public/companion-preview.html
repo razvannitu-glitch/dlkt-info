@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f66061">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="Unified synthetic preview of the DLKT personal companion loop.">
+  <meta name="robots" content="noindex,nofollow">
+  <title>DLKT — Unified Companion Preview</title>
+  <link rel="shortcut icon" href="/favicon.ico?v=kate-fb7b2e60" type="image/x-icon"><link rel="icon" href="/favicon-kate-fb7b2e60.png" type="image/png" sizes="180x180">
+  <link rel="stylesheet" href="/companion.css">
+  <script src="/bridge.js" defer></script>
+  <script src="/trust-data.js" defer></script>
+  <script src="/action-data.js" defer></script>
+  <script src="/inbox-data.js" defer></script>
+  <script src="/delivery-data.js" defer></script>
+  <script src="/memory-data.js" defer></script>
+  <script src="/history-data.js" defer></script>
+  <script src="/companion-shell-data.js" defer></script>
+  <script src="/companion-shell.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#companion-main">Skip to unified companion</a>
+  <header class="companion-header">
+    <a class="companion-brand" href="/" aria-label="DLKT home"><span class="brand-signal" aria-hidden="true"><i></i><i></i><i></i></span><span>DLKT</span></a>
+    <div class="header-title"><span>Unified Companion</span><strong>One loop. No hidden logic.</strong></div>
+    <nav aria-label="Companion navigation">
+      <span class="preview-chip"><i aria-hidden="true"></i>Synthetic preview</span>
+      <a href="/live">Live official</a>
+      <a href="/delta">Delta First</a>
+      <a href="/today" data-route="today">Today</a>
+      <a href="/history" data-route="history">History</a>
+      <a href="/review" data-route="review">Review</a>
+      <a href="/">Exit</a>
+    </nav>
+  </header>
+
+  <main id="companion-main">
+    <section class="shell-hero" aria-labelledby="shell-title">
+      <div>
+        <p class="eyebrow"><span aria-hidden="true"></span>DLKT 0.8.8</p>
+        <h1 id="shell-title">Know.<br><em>Decide.</em><br>Return.</h1>
+      </div>
+      <div class="hero-explanation">
+        <p>The complete personal information loop in one place. Define what matters, inspect why a card passed, decide what happens next and control how it returns.</p>
+        <dl>
+          <div><dt data-finite-count>04</dt><dd>finite cards</dd></div>
+          <div><dt data-action-count>04</dt><dd>explicit actions</dd></div>
+          <div><dt data-attention-count>02</dt><dd>need attention</dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <nav class="journey-strip" aria-label="Companion loop" data-journey>
+      <button type="button" data-stage="briefing" aria-pressed="true"><span>01</span><b>Briefing</b><em data-step-count="briefing">04</em><small data-step-state="briefing">Ready</small></button>
+      <button type="button" data-stage="trust" aria-pressed="false"><span>02</span><b>Trust</b><em data-step-count="trust">04</em><small data-step-state="trust">Attention</small></button>
+      <button type="button" data-stage="memory" aria-pressed="false"><span>03</span><b>Memory</b><em data-step-count="memory">07</em><small data-step-state="memory">Ready</small></button>
+      <button type="button" data-stage="actions" aria-pressed="false"><span>04</span><b>Actions</b><em data-step-count="actions">04</em><small data-step-state="actions">Ready</small></button>
+      <button type="button" data-stage="inbox" aria-pressed="false"><span>05</span><b>Inbox</b><em data-step-count="inbox">01</em><small data-step-state="inbox">Attention</small></button>
+      <button type="button" data-stage="delivery" aria-pressed="false"><span>06</span><b>Delivery</b><em data-step-count="delivery">01</em><small data-step-state="delivery">Attention</small></button>
+    </nav>
+
+    <section class="companion-shell" aria-label="Unified companion workspace">
+      <aside class="briefing-rail" aria-labelledby="briefing-rail-title">
+        <header><p>Today's finite brief</p><h2 id="briefing-rail-title"><span data-card-count>04</span> changes</h2></header>
+        <div class="card-map" data-card-map role="listbox" aria-label="Briefing cards"></div>
+        <div class="rail-status">
+          <span>Configuration state</span>
+          <strong data-query-state>Default preview</strong>
+          <p data-query-copy>Every active rule is visible and encoded in the current session URL.</p>
+        </div>
+        <button class="reset-button" type="button" data-reset-shell>Reset transparent preview</button>
+      </aside>
+
+      <section class="card-workspace" aria-live="polite">
+        <div class="workspace-toolbar">
+          <div><span>Current verified change</span><strong><b data-card-position>01</b> / <i data-card-total>04</i></strong></div>
+          <div class="toolbar-actions"><button type="button" data-card-prev aria-label="Previous card">←</button><button type="button" data-card-next aria-label="Next card">→</button></div>
+        </div>
+
+        <article class="unified-card" data-unified-card tabindex="0">
+          <header>
+            <div class="card-tags"><span data-card-topic>Technology</span><span data-card-kind>Changed</span><span data-card-trust>Confirmed</span></div>
+            <div class="card-observation"><span data-card-observed>Observed 07:42</span><b data-card-entity>DEMO AI Platform</b></div>
+          </header>
+          <div class="card-copy"><p>What changed</p><h2 data-card-title>An API price moved from announced to active.</h2><strong data-card-direct>The new rate is now present in the official pricing state.</strong></div>
+          <section class="delta-strip" aria-label="Verified state change"><div><span>Before</span><p data-card-before>Announced for later.</p></div><i aria-hidden="true">→</i><div><span>Now</span><p data-card-now>Listed as active.</p></div></section>
+          <div class="meaning-grid"><section><span>Why it matters</span><p data-card-why>It changes operating cost.</p></section><section><span>What to do</span><p data-card-action>Review usage-heavy flows.</p></section></div>
+          <footer><div><span>Rank</span><strong data-card-rank>#1</strong></div><div><span>Visible memory</span><strong data-card-memory-score>+32</strong></div><div><span>Trust gate</span><strong data-card-trust-state>Passed</strong></div></footer>
+        </article>
+
+        <section class="empty-state" data-empty-state hidden><span>0</span><h2>Nothing crossed your threshold.</h2><p>DLKT does not invent content to fill the screen. Change the visible rules or return when the state changes.</p></section>
+      </section>
+
+      <aside class="decision-rail" aria-labelledby="decision-title">
+        <header><p>Current card logic</p><h2 id="decision-title">Why. What. When.</h2></header>
+        <section class="logic-card memory-logic"><div><span>Why this reached you</span><a href="/memory" data-route="memory">Full memory ↗</a></div><strong data-memory-summary>3 visible signals</strong><ul data-memory-reasons></ul></section>
+        <section class="logic-card trust-logic"><div><span>Evidence policy</span><a href="/trust" data-route="trust">Full trust ↗</a></div><strong data-trust-summary>Passed balanced policy</strong><p data-trust-reason>Confirmed by official and primary evidence.</p></section>
+        <section class="logic-card action-logic"><div><span>Explicit action</span><a href="/actions" data-route="actions">Action room ↗</a></div><strong data-action-summary>Watch active</strong><div class="quick-actions"><button type="button" data-quick-action="watch-change">Watch</button><button type="button" data-quick-action="remind-next-briefing">Remind</button><button type="button" data-quick-action="compare-next">Compare</button></div></section>
+        <section class="logic-card delivery-logic"><div><span>Return path</span><a href="/delivery" data-route="delivery">Delivery room ↗</a></div><strong data-delivery-summary>Eligible now</strong><p data-delivery-reason>A trusted material change passes the web alert policy.</p></section>
+      </aside>
+    </section>
+
+    <section class="stage-workspace" aria-labelledby="stage-title">
+      <header class="stage-heading"><div><p data-stage-kicker>01 · Briefing definition</p><h2 id="stage-title" data-stage-title>Control the finite brief.</h2></div><p data-stage-explanation>Choose the topics, threshold, time and maximum number of cards. The briefing always ends.</p></header>
+
+      <div class="stage-panel is-active" data-stage-panel="briefing">
+        <section class="control-group topic-control"><span>Topics</span><div data-topic-controls><button type="button" data-topic="technology" aria-pressed="true">Technology</button><button type="button" data-topic="business" aria-pressed="true">Business</button><button type="button" data-topic="regulation" aria-pressed="true">Regulation</button><button type="button" data-topic="opportunities" aria-pressed="true">Opportunities</button><button type="button" data-topic="supply" aria-pressed="true">Supply</button></div></section>
+        <section class="control-group entity-control"><span>Tracked entities</span><div class="tracked-entity-list" data-tracked-entities><b>Broad topics only</b></div><a href="/start">Edit activation rules <span aria-hidden="true">→</span></a></section>
+        <label class="control-group"><span>Delivery time</span><select data-briefing-time><option>07:00</option><option selected>08:00</option><option>12:00</option><option>17:30</option><option>20:00</option></select></label>
+        <label class="control-group"><span>Attention budget</span><input data-max-cards type="number" inputmode="numeric" min="1" step="1" value="6"></label>
+        <label class="control-group switch-control"><input type="checkbox" data-actionable-only><span>Actionable changes only</span></label>
+      </div>
+
+      <div class="stage-panel" data-stage-panel="trust" hidden>
+        <section class="preset-control"><button type="button" data-trust-preset="strict"><span>Strict</span><small>Confirmed · Official · 24h</small></button><button type="button" data-trust-preset="balanced"><span>Balanced</span><small>Corroborated · Primary · 72h</small></button><button type="button" data-trust-preset="explore"><span>Explore</span><small>Single source · Warning · 168h</small></button></section>
+        <div class="policy-ledger" data-trust-ledger></div>
+      </div>
+
+      <div class="stage-panel" data-stage-panel="memory" hidden>
+        <div class="memory-stage-copy"><span>Visible influence only</span><h3>No hidden profile.</h3><p>Every ranking effect applied to the current card is listed with its source, target and bounded weight.</p><a href="/memory" data-route="memory">Open full Memory Control Room →</a></div>
+        <div class="memory-ledger" data-memory-ledger></div>
+      </div>
+
+      <div class="stage-panel" data-stage-panel="actions" hidden>
+        <div class="action-stage-grid" data-action-controls><button type="button" data-action-type="watch-change"><span>Watch next change</span><small>Continuous · Material delta only</small></button><button type="button" data-action-type="remind-next-briefing"><span>Bring back once</span><small>Next finite briefing</small></button><button type="button" data-action-type="compare-next"><span>Compare next state</span><small>Current versus next verified state</small></button><button type="button" data-action-type="mark-resolved"><span>Resolve attention</span><small>Facts remain unchanged</small></button><button type="button" data-action-type="ignore-pattern"><span>Ignore this pattern</span><small>Visible and reversible suppression</small></button></div>
+        <div class="action-ledger-mini"><span>Current action ledger</span><div data-action-ledger></div></div>
+      </div>
+
+      <div class="stage-panel" data-stage-panel="inbox" hidden>
+        <div class="inbox-summary"><div><strong data-inbox-due>01</strong><span>due now</span></div><div><strong data-inbox-waiting>02</strong><span>waiting for delta</span></div><div><strong data-inbox-muted>00</strong><span>muted visibly</span></div></div>
+        <div class="inbox-list-mini" data-inbox-list></div>
+        <a class="room-link" href="/inbox" data-route="inbox">Open full Action Inbox →</a>
+      </div>
+
+      <div class="stage-panel" data-stage-panel="delivery" hidden>
+        <div class="delivery-controls">
+          <label><span>Watch changes</span><select data-delivery-mode="watch-change"><option value="alert">Alert</option><option value="briefing">Briefing</option><option value="off">Off</option></select></label>
+          <label><span>One-time reminders</span><select data-delivery-mode="remind-next-briefing"><option value="alert">Alert</option><option value="briefing">Briefing</option><option value="off">Off</option></select></label>
+          <label><span>Comparisons</span><select data-delivery-mode="compare-next"><option value="alert">Alert</option><option value="briefing">Briefing</option><option value="off">Off</option></select></label>
+          <label><span>Daily interruption cap</span><select data-daily-cap><option>1</option><option>2</option><option selected>3</option><option>5</option><option>8</option></select></label>
+          <label class="switch-control"><input type="checkbox" data-quiet-hours checked><span>Quiet hours 22:00–07:00</span></label>
+        </div>
+        <div class="delivery-ledger" data-delivery-ledger></div>
+      </div>
+    </section>
+
+    <section class="loop-principle" aria-label="DLKT operating loop"><div><span>01</span><strong>Define</strong><p>You choose what matters and how much attention it may consume.</p></div><div><span>02</span><strong>Verify</strong><p>Claims, provenance and contradictions decide what qualifies.</p></div><div><span>03</span><strong>Decide</strong><p>You choose the next action. The system never acts in secret.</p></div><div><span>04</span><strong>Return</strong><p>The card returns only under the delivery policy you can inspect.</p></div></section>
+  </main>
+
+  <div class="shell-toast" data-toast hidden role="status" aria-live="polite"><strong data-toast-title>Updated</strong><span data-toast-copy>The unified session state changed.</span></div>
+  <footer><span>DLKT · Unified Companion Shell</span><strong>Finite · Explainable · Reversible · Session only</strong></footer>
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f66061">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="Synthetic preview of DLKT Delivery and Notification Control.">
+  <meta name="robots" content="noindex,nofollow">
+  <title>DLKT — Delivery Control</title>
+  <link rel="shortcut icon" href="/favicon.ico?v=kate-fb7b2e60" type="image/x-icon"><link rel="icon" href="/favicon-kate-fb7b2e60.png" type="image/png" sizes="180x180">
+  <link rel="stylesheet" href="/delivery.css">
+  <script src="/action-data.js" defer></script>
+  <script src="/inbox-data.js" defer></script>
+  <script src="/delivery-data.js" defer></script>
+  <script src="/delivery.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#delivery-main">Skip to Delivery Control</a>
+  <header class="delivery-header">
+    <a class="delivery-brand" href="/" aria-label="DLKT home"><span class="brand-signal" aria-hidden="true"><i></i><i></i><i></i></span><span>DLKT</span></a>
+    <div class="header-title"><span>Delivery Control</span><strong>Every interruption must earn its place</strong></div>
+    <nav aria-label="Delivery navigation">
+      <span class="preview-chip"><i aria-hidden="true"></i>Session preview</span>
+      <a href="/today" data-open-today>Today <span aria-hidden="true">→</span></a>
+      <a href="/inbox" data-open-inbox>Inbox <span aria-hidden="true">↗</span></a>
+      <a href="/actions" data-open-actions>Actions <span aria-hidden="true">↗</span></a>
+      <a href="/trust">Trust <span aria-hidden="true">↗</span></a>
+      <a href="/">Exit <span aria-hidden="true">×</span></a>
+    </nav>
+  </header>
+
+  <main id="delivery-main">
+    <section class="delivery-hero" aria-labelledby="delivery-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span aria-hidden="true"></span>Precision, not interruption</p>
+        <h1 id="delivery-title">Choose what reaches you.<br><em>And what stays quiet.</em></h1>
+        <p>Every notification is projected against trust, materiality, quiet hours, duplicate suppression and explicit action rules before it can interrupt.</p>
+      </div>
+      <dl class="hero-metrics">
+        <div><dt data-notify-count>00</dt><dd>notify now</dd></div>
+        <div><dt data-deferred-count>00</dt><dd>deferred</dd></div>
+        <div><dt data-briefing-count>00</dt><dd>next briefing</dd></div>
+        <div><dt data-held-count>00</dt><dd>held quiet</dd></div>
+      </dl>
+    </section>
+
+    <section class="delivery-console" aria-label="Delivery policy and projection">
+      <aside class="policy-panel" aria-labelledby="policy-title">
+        <header><p>Delivery policy</p><h2 id="policy-title">No hidden interruption.</h2><span data-query-state>Default safe policy</span></header>
+
+        <section class="policy-section">
+          <h3>Action behavior</h3>
+          <div class="mode-grid">
+            <label><span>Watch change</span><select data-action-mode="watch-change"><option value="alert">Exceptional alert</option><option value="briefing">Next briefing</option><option value="off">Off</option></select></label>
+            <label><span>Remind once</span><select data-action-mode="remind-next-briefing"><option value="briefing">Next briefing</option><option value="alert">Exceptional alert</option><option value="off">Off</option></select></label>
+            <label><span>Compare next</span><select data-action-mode="compare-next"><option value="briefing">Next briefing</option><option value="alert">Exceptional alert</option><option value="off">Off</option></select></label>
+            <label><span>Resolved attention</span><select data-action-mode="mark-resolved"><option value="off">Off</option><option value="briefing">Next briefing</option><option value="alert">Exceptional alert</option></select></label>
+            <label><span>Ignored pattern</span><select data-action-mode="ignore-pattern"><option value="off">Off</option><option value="briefing">Next briefing</option><option value="alert">Exceptional alert</option></select></label>
+          </div>
+        </section>
+
+        <section class="policy-section quiet-section">
+          <div class="section-heading"><h3>Quiet hours</h3><label class="switch"><input type="checkbox" data-quiet-enabled><span aria-hidden="true"></span><b>Enabled</b></label></div>
+          <div class="time-grid"><label><span>From</span><input type="time" data-quiet-start></label><label><span>Until</span><input type="time" data-quiet-end></label></div>
+          <label class="select-row"><span>Bypass</span><select data-bypass><option value="never">Never interrupt</option><option value="confirmed-official-high">Confirmed official high impact</option></select></label>
+        </section>
+
+        <section class="policy-section">
+          <h3>Anti-spam limits</h3>
+          <label class="select-row"><span>Daily exceptional cap</span><select data-daily-cap><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="6">6</option></select></label>
+          <label class="select-row"><span>Minimum alert gap</span><select data-minimum-gap><option value="30">30 minutes</option><option value="60">60 minutes</option><option value="90">90 minutes</option><option value="180">3 hours</option><option value="360">6 hours</option></select></label>
+        </section>
+
+        <section class="policy-section">
+          <h3>Evidence threshold</h3>
+          <label class="select-row"><span>Minimum trust</span><select data-trust-floor><option value="confirmed">Confirmed</option><option value="corroborated">Corroborated</option></select></label>
+          <label class="select-row"><span>Minimum materiality</span><select data-materiality-floor><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option></select></label>
+          <label class="select-row"><span>Unresolved conflicts</span><select data-conflict-mode><option value="briefing">Briefing only</option><option value="off">Hold completely</option></select></label>
+          <p class="locked-rule"><b>Locked safety rule</b> High-impact alerts require official evidence.</p>
+        </section>
+
+        <section class="policy-section channels-section">
+          <h3>Delivery channel</h3>
+          <button type="button" class="channel-card is-active" aria-pressed="true" data-channel="web"><span>Web</span><b>Available in product</b></button>
+          <button type="button" class="channel-card" disabled><span>Email</span><b>Requires verified endpoint</b></button>
+          <button type="button" class="channel-card" disabled><span>Push</span><b>Requires verified endpoint</b></button>
+        </section>
+      </aside>
+
+      <section class="projection-panel" aria-labelledby="projection-title">
+        <header><div><p>Decision projection</p><h2 id="projection-title">What would happen now.</h2></div><strong data-generated-time>15:30 local</strong></header>
+        <div class="simulation-controls">
+          <button type="button" aria-pressed="false" data-simulate-quiet>Simulate quiet hours</button>
+          <button type="button" aria-pressed="false" data-simulate-recent>Simulate recent alert</button>
+        </div>
+        <div class="decision-list" data-decision-list role="listbox" aria-label="Delivery decisions"></div>
+      </section>
+
+      <aside class="decision-inspector" aria-labelledby="decision-title">
+        <header><span data-decision-topic>Technology</span><strong data-decision-status>NOTIFY NOW</strong></header>
+        <h2 id="decision-title" data-decision-title>API pricing</h2>
+        <p class="decision-entity" data-decision-entity>DEMO AI Platform</p>
+        <p class="decision-reason" data-decision-reason>A material, trusted and eligible change can interrupt now.</p>
+        <dl class="decision-facts">
+          <div><dt>Action</dt><dd data-decision-action>Watch</dd></div>
+          <div><dt>Trust</dt><dd data-decision-trust>Confirmed</dd></div>
+          <div><dt>Materiality</dt><dd data-decision-materiality>High</dd></div>
+          <div><dt>Channel</dt><dd data-decision-channel>Web</dd></div>
+        </dl>
+        <section class="why-panel"><span>Why this decision</span><div data-decision-explanation></div></section>
+        <section class="schedule-panel"><span>When</span><strong data-decision-when>Now</strong><p data-decision-source>Official pricing page</p></section>
+        <div class="inspector-links"><a href="/inbox" data-open-inbox>Open Action Inbox <span aria-hidden="true">→</span></a><a href="/trust">Inspect trust rules <span aria-hidden="true">↗</span></a></div>
+      </aside>
+    </section>
+
+    <section class="delivery-ledger" aria-labelledby="ledger-title">
+      <header><div><p>Visible delivery ledger</p><h2 id="ledger-title">Every interruption has a reason.</h2></div><span data-next-scheduled>Nothing scheduled</span></header>
+      <div class="ledger-grid" data-ledger-grid></div>
+    </section>
+
+    <section class="delivery-boundary" aria-label="Delivery boundary">
+      <span>Execution boundary</span><strong>Projection is not delivery.</strong><p>No email, push, reminder or alert is sent in this protected staging preview. Policy changes remain session-only and never mutate facts.</p>
+      <div class="boundary-actions"><button type="button" data-undo disabled>Undo last change</button><button type="button" data-reset>Reset safe policy</button></div>
+    </section>
+  </main>
+
+  <div class="delivery-toast" data-toast hidden role="status" aria-live="polite"><strong data-toast-title>Policy updated</strong><span data-toast-copy>Delivery projection recalculated.</span></div>
+  <footer><span>DLKT · Delivery & Notification Control</span><strong>Session only · No real delivery · No factual mutation</strong></footer>
+</body>
+</html>

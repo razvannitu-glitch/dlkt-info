@@ -1,0 +1,12 @@
+import {readFileSync, writeFileSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
+import {createSourcePin, verifySource} from '../lib/source-integrity.mjs';
+const root = fileURLToPath(new URL('../', import.meta.url));
+const source = `${root}source`;
+const pin = createSourcePin(source);
+verifySource(source, pin);
+writeFileSync(`${root}SOURCE-PIN.json`, JSON.stringify(pin, null, 2) + '\n');
+const config = JSON.parse(readFileSync(`${source}/vercel.public.json`, 'utf8'));
+config.installCommand = 'npm ci --ignore-scripts --no-audit --no-fund';
+writeFileSync(`${root}vercel.json`, JSON.stringify(config, null, 2) + '\n');
+console.log(`DLKT_SOURCE_PINNED ${Object.keys(pin.files).length} ${pin.sourceSha256}`);

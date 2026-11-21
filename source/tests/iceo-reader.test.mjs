@@ -1,0 +1,35 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { classifyNotice, readingCard, selectReadingCards, isConsolidated } from '../.build/src/iceo/reader.js';
+const now=Date.parse('2026-11-14T12:00:00Z');
+const base={id:'1'.repeat(24),identity:'notice:1',title:'Contract Notice: Example',topic:'opportunities',kind:'procurement-notice',sourceUrl:'https://www.ecb.europa.eu/test.html',publisher:'European Central Bank',sourceIds:['ecb-procurement'],date:'2026-11-13T00:00:00Z',dateLabel:'Published',observedAt:'2026-11-14T12:00:00Z',contentHash:'a'.repeat(64),boundary:'Check source',deadline:'2026-11-20',version:null,attribution:'ECB',sourceState:'verified'};
+const settings={topics:['technology','business','regulation','opportunities'],query:'',budget:6,mode:'briefing'};
+const release=(id,source,version,date='2026-11-13T12:00:00Z')=>({...base,id:id.repeat(24),identity:`${source}:${version}`,title:`${source} release ${version}`,topic:'technology',kind:'software-release',sourceIds:[source],publisher:source,date,version,deadline:null});
+test('award classification takes precedence over a future closing date',()=>{const c={...base,title:'Contract Award Notice: Software',deadline:'2026-12-01'};assert.equal(classifyNotice(c,now),'awarded');assert.equal(selectReadingCards([c],settings,now).cards.length,0);});
+test('expired and unconfirmed notices never fill default briefing',()=>{const a={...base,deadline:'2026-11-13'},b={...base,id:'2'.repeat(24),deadline:null};const r=selectReadingCards([a,b],settings,now);assert.equal(r.excludedNotices,2);assert.equal(r.cards.length,0);});
+test('future deadline is labelled unconfirmed, never declared open',()=>{const r=readingCard(base,now);assert.equal(r.noticeState,'deadline-ahead');assert.match(r.label,/confirm status/);assert.doesNotMatch(r.label,/open/i);});
+test('publisher local day handles the UTC midnight boundary',()=>{assert.equal(classifyNotice({...base,deadline:'2026-11-14'},Date.parse('2026-11-14T23:30:00Z')),'expired');});
+test('due-today notices request exact deadline time',()=>{const r=readingCard({...base,deadline:'2026-11-14'},now);assert.equal(r.noticeState,'deadline-today');assert.match(r.context,/exact time/);});
+test('cancellation is not promoted by a future deadline',()=>{assert.equal(classifyNotice({...base,title:'Cancellation notice: Software'},now),'cancelled');});
+test('invalid and absent deadlines remain unknown',()=>{for(const deadline of [null,'2026-02-30','n/a'])assert.equal(classifyNotice({...base,deadline},now),'unconfirmed');});
+test('stale future notices do not establish a live application',()=>{assert.equal(classifyNotice({...base,sourceState:'stale'},now),'unconfirmed');});
+test('exploration retains excluded notices and explicit statuses',()=>{const c={...base,title:'Contract Award Notice: Software'};const r=selectReadingCards([c],{...settings,mode:'records'},now);assert.equal(r.cards.length,1);assert.equal(r.cards[0].noticeState,'awarded');});
+test('software releases group by product without deleting source records',()=>{const records=[release('1','nodejs','v26.1.0'),release('2','nodejs','v24.2.0'),release('3','nextjs','v17.1.0')];const copy=JSON.stringify(records);const r=selectReadingCards(records,settings,now);assert.equal(r.cards.length,2);assert.equal(r.groupedVersions,1);assert.equal(r.cards[0].related.length,1);assert.equal(JSON.stringify(records),copy);});
+test('query is applied before grouping so older requested versions remain findable',()=>{const r=selectReadingCards([release('1','nodejs','v26.1.0'),release('2','nodejs','v24.2.0')],{...settings,query:'v24'},now);assert.equal(r.cards[0].card.version,'v24.2.0');});
+test('all-records mode exposes every individual software release',()=>{const r=selectReadingCards([release('1','nodejs','v26.1.0'),release('2','nodejs','v24.2.0')],{...settings,mode:'records'},now);assert.equal(r.cards.length,2);assert.equal(r.groupedVersions,0);});
+test('consolidated CELEX documents are distinct from adopted legislation',()=>{const c={...base,kind:'legal-document',identity:'celex:02022O0912-20261114',date:'2026-11-14',topic:'regulation',deadline:null};assert.equal(isConsolidated(c),true);const r=readingCard(c,now);assert.equal(r.dateLabel,'Consolidation date');assert.match(r.context,/does not mean a new law/);assert.equal(isConsolidated({...c,identity:'celex:32026R1234'}),false);});
+test('long titles are explicitly shortened but source title remains intact',()=>{const c={...base,title:'A long exact official title '.repeat(20),kind:'publication',topic:'business'};const r=readingCard(c,now);assert.ok(r.heading.length<=160);assert.equal(r.shortened,true);assert.equal(r.card.title,c.title);});
+test('software heading uses official version without unsupported summary',()=>{const r=readingCard(release('1','nodejs','v24.2.0'),now);assert.equal(r.heading,'Node.js v24.2.0');assert.match(r.context,/compatibility/);});
+test('empty interests or nonmatching searches give no filler cards',()=>{assert.equal(selectReadingCards([base],{...settings,topics:[]},now).cards.length,0);assert.equal(selectReadingCards([base],{...settings,query:'not-present'},now).cards.length,0);});
+test('attention budget remains user-defined above twelve',()=>{const records=Array.from({length:30},(_,i)=>({...base,id:i.toString(16).padStart(24,'0'),kind:'publication',topic:'business',title:`Publication ${i}`}));assert.equal(selectReadingCards(records,{...settings,budget:25},now).cards.length,25);});
+test('invalid budgets are rejected instead of silently truncated',()=>{for(const budget of [0,-1,1.5,Infinity,NaN,Number.MAX_SAFE_INTEGER+1])assert.throws(()=>selectReadingCards([base],{...settings,budget},now),/SETTINGS_INVALID/);});
+test('dated stale evidence remains available only in exploration',()=>{const c={...base,kind:'publication',topic:'business',sourceState:'stale'};assert.equal(selectReadingCards([c],settings,now).excludedStale,1);assert.equal(selectReadingCards([c],{...settings,mode:'records'},now).cards.length,1);});
+test('mismatching consolidated metadata date is not relabelled as the consolidation date',()=>{
+ const c={...base,kind:'legal-document',identity:'celex:02022O0912-20261114',date:'2026-11-13',topic:'regulation'};
+ assert.equal(readingCard(c,now).dateLabel,'Document date');
+});
+test('cancellation under the contract notice prefix stays out of default reading',()=>{
+ const c={...base,title:'Contract Notice: Cancellation of the procedure'};
+ assert.equal(classifyNotice(c,now),'cancelled');
+ assert.equal(selectReadingCards([c],settings,now).cards.length,0);
+});

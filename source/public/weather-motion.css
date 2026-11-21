@@ -1,0 +1,33 @@
+/* Original DLKT vectors; source condition drives the scene. No remote assets. */
+.weather-motion{display:flex;align-items:center;gap:16px;max-width:100%;min-width:0;margin:12px 0 16px;color:var(--black,#000000);text-align:left}
+.weather-graphic{display:block;flex:0 0 112px;width:112px;height:80px;overflow:visible;fill:none;stroke-linecap:round;stroke-linejoin:round;stroke-width:2.3}
+.weather-outline{stroke:currentColor;fill:none}
+.weather-accent{color:var(--coral,#f66061)}
+.weather-sun,.weather-bolt{fill:currentColor;stroke:none}
+.weather-cloud-shape,.weather-moon{fill:var(--white,#fff)}
+.weather-muted{opacity:.45}
+.weather-motion-copy{display:flex;flex-direction:column;gap:3px;min-width:0}
+.weather-motion-copy small{font-size:10px;line-height:1.5;color:var(--muted,#666);font-weight:400}
+.weather-motion-copy strong{font-size:14px;line-height:1.45;font-weight:600;overflow-wrap:anywhere}
+.weather-motion-compact{gap:12px;margin:0}
+.weather-motion-compact .weather-graphic{flex-basis:84px;width:84px;height:60px}
+.weather-motion-compact .weather-motion-copy strong{font-size:13px}
+.weather-loop{animation-play-state:paused}
+.weather-motion[data-active=true] .weather-loop{animation-play-state:running}
+.weather-cloud{animation:dlkt-weather-cloud 5s ease-in-out infinite}
+.weather-rays{transform-origin:75px 25px;animation:dlkt-weather-rays 24s linear infinite}
+.weather-motion[data-condition=clear] .weather-rays{transform-origin:56px 37px}
+.weather-rain{animation:dlkt-weather-rain 1.8s linear infinite}
+.weather-snow{animation:dlkt-weather-snow 4.6s ease-in-out infinite}
+.weather-haze{animation:dlkt-weather-haze 6s ease-in-out infinite}
+.weather-stars{animation:dlkt-weather-stars 5s ease-in-out infinite}
+/* Thunder is a static accent, never a flash. Pause is explicit on hidden/covered cards. */
+.weather-motion[data-active=false] .weather-loop{animation-play-state:paused}
+@keyframes dlkt-weather-cloud{0%,100%{transform:translateX(-2px)}50%{transform:translateX(3px)}}
+@keyframes dlkt-weather-rays{to{transform:rotate(360deg)}}
+@keyframes dlkt-weather-rain{0%{transform:translate(1px,-3px);opacity:.35}35%{opacity:1}100%{transform:translate(-3px,5px);opacity:.35}}
+@keyframes dlkt-weather-snow{0%,100%{transform:translate(-2px,-1px)}50%{transform:translate(3px,4px)}}
+@keyframes dlkt-weather-haze{0%,100%{transform:translateX(-3px)}50%{transform:translateX(3px)}}
+@keyframes dlkt-weather-stars{0%,100%{opacity:.55}50%{opacity:1}}
+@media(prefers-reduced-motion:reduce){.weather-motion .weather-loop{animation:none!important;transform:none!important;opacity:1}}
+@media(max-width:400px){.weather-motion{gap:12px}.weather-graphic{flex-basis:96px;width:96px;height:69px}.weather-motion-compact .weather-graphic{flex-basis:76px;width:76px;height:55px}}

@@ -1,0 +1,142 @@
+import { PUBLIC_EDITORIAL_CATEGORIES, EDITORIAL_CATEGORY_LABELS, EDITORIAL_CATEGORY_TOPICS } from './editorial-categories.js';
+/** Discovery is a title/link index, not a licence to republish publisher articles or images. */
+export const NEWS_INDEX_URL = 'https://data.gdeltproject.org/gdeltv3/gal/feed.rss';
+const publisher = (id, label, ...hosts) => Object.freeze({ id, label, origins: Object.freeze(hosts.map(host => `https://${host}`)) });
+/** Exact reviewed origins only. No suffix matching, wildcard subdomains or user-supplied hosts. */
+export const NEWS_PUBLISHERS = Object.freeze([
+    publisher('reuters', 'Reuters', 'www.reuters.com', 'reuters.com'),
+    publisher('ap', 'Associated Press', 'apnews.com', 'www.apnews.com'),
+    publisher('bbc', 'BBC', 'www.bbc.com', 'bbc.com', 'www.bbc.co.uk', 'bbc.co.uk'),
+    publisher('guardian', 'The Guardian', 'www.theguardian.com', 'theguardian.com'),
+    publisher('ft', 'Financial Times', 'www.ft.com', 'ft.com'),
+    publisher('cnbc', 'CNBC', 'www.cnbc.com', 'cnbc.com'),
+    publisher('france24', 'France 24', 'www.france24.com', 'france24.com'),
+    publisher('dw', 'DW', 'www.dw.com', 'dw.com', 'amp.dw.com'),
+    publisher('aljazeera', 'Al Jazeera', 'www.aljazeera.com', 'aljazeera.com'),
+    publisher('npr', 'NPR', 'www.npr.org', 'npr.org'),
+    publisher('rte', 'RTE', 'www.rte.ie', 'rte.ie'),
+    publisher('cnn', 'CNN', 'www.cnn.com', 'cnn.com', 'edition.cnn.com'),
+    publisher('abc-au', 'ABC Australia', 'www.abc.net.au', 'abc.net.au'),
+    publisher('cbc', 'CBC', 'www.cbc.ca', 'cbc.ca'),
+    publisher('euronews', 'Euronews', 'www.euronews.com', 'euronews.com'),
+    publisher('politico', 'POLITICO', 'www.politico.com', 'politico.com', 'www.politico.eu', 'politico.eu'),
+    publisher('bloomberg', 'Bloomberg', 'www.bloomberg.com', 'bloomberg.com'),
+    publisher('business-insider', 'Business Insider', 'www.businessinsider.com', 'businessinsider.com'),
+    publisher('fortune', 'Fortune', 'fortune.com', 'www.fortune.com'),
+    publisher('techcrunch', 'TechCrunch', 'techcrunch.com', 'www.techcrunch.com'),
+    publisher('the-verge', 'The Verge', 'www.theverge.com', 'theverge.com'),
+    publisher('ars-technica', 'Ars Technica', 'arstechnica.com', 'www.arstechnica.com'),
+    publisher('wired', 'WIRED', 'www.wired.com', 'wired.com'),
+    publisher('engadget', 'Engadget', 'www.engadget.com', 'engadget.com'),
+    publisher('nvidia', 'NVIDIA', 'blogs.nvidia.com', 'nvidianews.nvidia.com'),
+    publisher('anthropic', 'Anthropic', 'www.anthropic.com', 'anthropic.com'),
+    publisher('rockstar', 'Rockstar Games', 'www.rockstargames.com', 'rockstargames.com'),
+    publisher('playstation', 'PlayStation', 'blog.playstation.com'),
+    publisher('ign', 'IGN', 'www.ign.com', 'ign.com'),
+    publisher('pcgamer', 'PC Gamer', 'www.pcgamer.com', 'pcgamer.com'),
+    publisher('eurogamer', 'Eurogamer', 'www.eurogamer.net', 'eurogamer.net'),
+    publisher('gamespot', 'GameSpot', 'www.gamespot.com', 'gamespot.com'),
+    publisher('variety', 'Variety', 'variety.com', 'www.variety.com'),
+    publisher('billboard', 'Billboard', 'www.billboard.com', 'billboard.com'),
+    publisher('hollywood-reporter', 'The Hollywood Reporter', 'www.hollywoodreporter.com', 'hollywoodreporter.com'),
+    publisher('deadline', 'Deadline', 'deadline.com', 'www.deadline.com'),
+    publisher('espn', 'ESPN', 'www.espn.com', 'espn.com', 'global.espn.com', 'africa.espn.com'),
+    publisher('sky-sports', 'Sky Sports', 'www.skysports.com', 'skysports.com'),
+    publisher('olympics', 'Olympics', 'www.olympics.com', 'olympics.com'),
+    publisher('parents', 'Parents', 'www.parents.com', 'parents.com'),
+    publisher('edweek', 'Education Week', 'www.edweek.org', 'edweek.org'),
+    publisher('nature', 'Nature', 'www.nature.com', 'nature.com'),
+    publisher('science', 'Science', 'www.science.org', 'science.org'),
+    publisher('live-science', 'Live Science', 'www.livescience.com', 'livescience.com'),
+    publisher('scientific-american', 'Scientific American', 'www.scientificamerican.com', 'scientificamerican.com'),
+    publisher('space', 'Space.com', 'www.space.com', 'space.com'),
+    publisher('national-geographic', 'National Geographic', 'www.nationalgeographic.com', 'nationalgeographic.com'),
+    publisher('new-scientist', 'New Scientist', 'www.newscientist.com', 'newscientist.com'),
+    publisher('travel-leisure', 'Travel + Leisure', 'www.travelandleisure.com', 'travelandleisure.com'),
+    publisher('skift', 'Skift', 'skift.com', 'www.skift.com'),
+    publisher('lonely-planet', 'Lonely Planet', 'www.lonelyplanet.com', 'lonelyplanet.com'),
+    publisher('conde-nast-traveler', 'Conde Nast Traveler', 'www.cntraveler.com', 'cntraveler.com'),
+    publisher('good-housekeeping', 'Good Housekeeping', 'www.goodhousekeeping.com', 'goodhousekeeping.com'),
+    publisher('consumer-reports', 'Consumer Reports', 'www.consumerreports.org', 'consumerreports.org'),
+    publisher('which', 'Which?', 'www.which.co.uk', 'which.co.uk'),
+    publisher('food-wine', 'Food & Wine', 'www.foodandwine.com', 'foodandwine.com'),
+    publisher('food-safety-news', 'Food Safety News', 'www.foodsafetynews.com', 'foodsafetynews.com'),
+    publisher('architectural-digest', 'Architectural Digest', 'www.architecturaldigest.com', 'architecturaldigest.com'),
+    publisher('dezeen', 'Dezeen', 'www.dezeen.com', 'dezeen.com'),
+    publisher('weather-channel', 'The Weather Channel', 'weather.com', 'www.weather.com'),
+    publisher('accuweather', 'AccuWeather', 'www.accuweather.com', 'accuweather.com'),
+    publisher('carbon-brief', 'Carbon Brief', 'www.carbonbrief.org', 'carbonbrief.org'),
+    publisher('global-voices', 'Global Voices', 'globalvoices.org', 'www.globalvoices.org'),
+    publisher('360info', '360info', '360info.org', 'www.360info.org'),
+    publisher('scmp', 'South China Morning Post', 'www.scmp.com', 'scmp.com'),
+    publisher('the-hindu', 'The Hindu', 'www.thehindu.com', 'thehindu.com'),
+    publisher('japan-times', 'The Japan Times', 'www.japantimes.co.jp', 'japantimes.co.jp'),
+    publisher('cna', 'CNA', 'www.channelnewsasia.com', 'channelnewsasia.com'),
+    publisher('straits-times', 'The Straits Times', 'www.straitstimes.com', 'straitstimes.com'),
+    publisher('nytimes', 'The New York Times', 'www.nytimes.com', 'nytimes.com'),
+]);
+const byOrigin = new Map(NEWS_PUBLISHERS.flatMap(value => value.origins.map(origin => [origin, value])));
+export function publisherForNewsUrl(value) {
+    if (value.length > 3000 || /[\u0000-\u0020\u007f<>\\]/u.test(value))
+        return null;
+    try {
+        const url = new URL(value);
+        return url.protocol === 'https:' && !url.username && !url.password && !url.port ? byOrigin.get(url.origin) ?? null : null;
+    }
+    catch {
+        return null;
+    }
+}
+/** Strip only known tracking fields; preserve URL parameters that identify the article. */
+export function canonicalNewsUrl(value) {
+    if (!publisherForNewsUrl(value))
+        return null;
+    const url = new URL(value);
+    url.hash = '';
+    // Encoded values are valid; encoded parameter names are intentionally rejected,
+    // matching the public archive SQL instead of guessing their decoded meaning.
+    if (url.search.slice(1).split('&').some(parameter => parameter.split('=')[0]?.includes('%')))
+        return null;
+    for (const key of [...url.searchParams.keys()]) {
+        const normalized = key.toLowerCase();
+        if (normalized.startsWith('utm_') || ['fbclid', 'gclid', 'mc_cid', 'mc_eid'].includes(normalized))
+            url.searchParams.delete(key);
+    }
+    if (url.pathname === '/' || /\/(?:login|signin|sign-in|account|subscribe|search|api)(?:\/|$)/iu.test(url.pathname))
+        return null;
+    return url.href;
+}
+export const NEWS_DISCOVERY_INDEXES = Object.freeze([
+    { id: 'guardian-news', publisherId: 'guardian', url: 'https://www.theguardian.com/sitemaps/news.xml' },
+    { id: 'ap-news', publisherId: 'ap', url: 'https://apnews.com/news-sitemap-content.xml' },
+    { id: 'bbc-news', publisherId: 'bbc', url: 'https://www.bbc.com/sitemaps/https-sitemap-com-news-1.xml' },
+    { id: 'verge-news', publisherId: 'the-verge', url: 'https://www.theverge.com/sitemaps/google_news' },
+    { id: 'pcgamer-news', publisherId: 'pcgamer', url: 'https://www.pcgamer.com/sitemap-news.xml' },
+    { id: 'live-science-news', publisherId: 'live-science', url: 'https://www.livescience.com/sitemap-news.xml' },
+    { id: 'parents-news', publisherId: 'parents', url: 'https://www.parents.com/google-news-sitemap.xml' },
+    { id: 'travel-leisure-news', publisherId: 'travel-leisure', url: 'https://www.travelandleisure.com/google-news-sitemap.xml' },
+    { id: 'food-wine-news', publisherId: 'food-wine', url: 'https://www.foodandwine.com/google-news-sitemap.xml' },
+    { id: 'good-housekeeping-news', publisherId: 'good-housekeeping', url: 'https://www.goodhousekeeping.com/sitemap_google_news.xml' },
+    { id: 'education-week-news', publisherId: 'edweek', url: 'https://www.edweek.org/news-sitemap-content.xml' },
+    { id: 'weather-channel-news', publisherId: 'weather-channel', url: 'https://weather.com/api/payload/v1/sitemaps/en-US/news.xml' },
+    { id: 'the-hindu-news', publisherId: 'the-hindu', url: 'https://www.thehindu.com/sitemap/googlenews/all/all.xml' },
+].map(index => Object.freeze(index)));
+const newsSource = (id, label, topic) => Object.freeze({
+    id, label, publisher: 'Reviewed news discovery', topic,
+    adapter: 'news-index', endpoint: NEWS_INDEX_URL, homepage: 'https://www.gdeltproject.org/', termsUrl: 'https://www.gdeltproject.org/about.html',
+    attribution: 'News discovery: GDELT and reviewed public publisher indexes. Headline, publication date and original publisher link only; publisher articles and images are not republished.',
+    scope: 'GDELT and reviewed publisher news indexes, with retained candidates from the last 24 hours. Publication date checked in original publisher metadata. Partial discovery coverage; no independent fact corroboration.',
+    rightsCheckedAt: '2026-11-20', rightsReviewBy: '2027-02-20',
+});
+export const NEWS_CATEGORY_SOURCES = Object.freeze(PUBLIC_EDITORIAL_CATEGORIES.map(category => newsSource(`news-${category}`, EDITORIAL_CATEGORY_LABELS[category], EDITORIAL_CATEGORY_TOPICS[category])));
+/** An unknown label is retained without assigning a fabricated subject. */
+export const NEWS_UNCLASSIFIED_SOURCE = newsSource('news-unclassified', 'Other source-checked topics', 'other');
+/** An observed homepage link is a bounded publisher-selection signal, never a global importance rank. */
+export const NEWS_FEATURED_SOURCE = Object.freeze({
+    id: 'editorial-frontpage', label: 'Publisher homepage selection', publisher: 'Publisher homepage selection', topic: 'world', adapter: 'news-index',
+    endpoint: 'https://apnews.com/', homepage: 'https://apnews.com/', termsUrl: 'https://apnews.com/termsofservice',
+    attribution: 'Original publisher homepage links observed by DLKT. No article body, images or audience measurements are republished.',
+    scope: 'At most10 matching candidate links inside main content on each of4 reviewed publisher homepages: AP, The Guardian, PC Gamer and BBC. Bounded HTML prefix inspection may be partial. This is publisher placement, not a worldwide popularity or importance ranking.',
+    rightsCheckedAt: '2026-11-20', rightsReviewBy: '2027-02-20',
+});
+export const NEWS_SOURCES = Object.freeze([...NEWS_CATEGORY_SOURCES, NEWS_UNCLASSIFIED_SOURCE, NEWS_FEATURED_SOURCE]);

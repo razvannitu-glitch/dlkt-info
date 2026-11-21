@@ -1,0 +1,17 @@
+{
+  "name": "DLKT INFO",
+  "short_name": "DLKT INFO",
+  "description": "Daily Life. Key Things.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#f66061",
+  "icons": [
+    {
+      "src": "/kate-head.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

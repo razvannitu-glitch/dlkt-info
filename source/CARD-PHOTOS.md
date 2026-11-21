@@ -1,0 +1,9 @@
+# Selective reviewed card photographs
+
+Finite first catalog: three source images, World and Science. Culture/other photos without reusable individual permission are excluded. Each entry binds exact card id,identity,URL,topic,publisher,source id,title,date and content hash to reviewed media. Content changes withhold the photograph until review. Core EvidenceCard hashes,comparison checkpoints,saved/imported/exported data and source ordering remain unchanged. Media rights checks are separate from publisher-text licensing.
+
+Local raster assets are immutable hash-named originals of linked publisher renditions,40,508/92,505/128,650bytes,total261,663bytes. No remote image requests,provider keys or image endpoint. Assets pass file integrity,type,dimension and license validation. Captions show credits,original image source and rights link. The courthouse is an archive photo from2018; the Mars rock photo dates29October2026; the drill-hole image is a source photo collage. Collages and Mars scenes use contain in the16:9frame.
+
+Topic,saved,personal topic and public recipient cards use the same reviewed lookup. Browser renderers create safe DOM nodes; recipient HTML escapes metadata. Images use width/height,lazy loading,async decode,alt text and local paths. Early and late image failures remove the figure and preserve text/actions. Review deadlines are checked at rendering; no new background monitor. Color succession and6pxrectangular controls are preserved. Existing branded social PNG does not embed these photographs.
+
+Required acceptance is independent raw-source review,meaningful negative tests,exact-head Node22 release gate,real-source live image/credit/share flow and narrow responsive viewport; file-failure recovery may use a clearly labeled local fixture. Neither physical-phone QA nor conversion/retention gains are inferred from a desktop viewport.

@@ -155,3 +155,17 @@ vite.config.ts.timestamp-*
 .nx/cache
 .nx/workspace-data
 .nx/migrate-runs
+
+# DLKT INFO: generated packaging output and private environment files
+**/.build/
+**/.vercel/
+**/.env
+**/.env.*
+.dlkt-build-*/
+.dlkt-local-build/
+/public-launch/
+/src/
+/public/
+/tsconfig.json
+/tsconfig.build.json
+

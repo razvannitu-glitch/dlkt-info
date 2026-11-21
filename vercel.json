@@ -1,0 +1,216 @@
+{
+  "framework": null,
+  "regions": [
+    "fra1"
+  ],
+  "functions": {
+    "api/iceo.ts": {
+      "maxDuration": 45
+    },
+    "api/insight.ts": {
+      "maxDuration": 60
+    },
+    "api/edition.ts": {
+      "maxDuration": 60
+    },
+    "api/account.ts": {
+      "maxDuration": 30
+    },
+    "api/account-session.ts": {
+      "maxDuration": 30
+    },
+    "api/local.ts": {
+      "maxDuration": 25
+    },
+    "api/places.ts": {
+      "maxDuration": 15
+    },
+    "api/card.ts": {
+      "maxDuration": 60
+    },
+    "api/glance.ts": {
+      "maxDuration": 20
+    },
+    "api/card-image.ts": {
+      "maxDuration": 60,
+      "includeFiles": "{public/kate-head.png,src/share/assets/**,node_modules/**}",
+      "excludeFiles": "{node_modules/@electric-sql/**,node_modules/typescript/**,node_modules/@types/**}"
+    },
+    "api/wallet.ts": {
+      "maxDuration": 30
+    },
+    "api/connections.ts": {
+      "maxDuration": 60
+    },
+    "api/iceo-refresh.ts": {
+      "maxDuration": 60
+    },
+    "api/share-archive.ts": {
+      "maxDuration": 60
+    }
+  },
+  "buildCommand": "node bootstrap.mjs",
+  "installCommand": "npm ci --ignore-scripts --no-audit --no-fund",
+  "outputDirectory": "public-launch",
+  "rewrites": [
+    {
+      "source": "/card/:id",
+      "destination": "/api/card?id=:id"
+    },
+    {
+      "source": "/organizations",
+      "destination": "/organizations.html"
+    },
+    {
+      "source": "/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/companion",
+      "destination": "/companion.html"
+    },
+    {
+      "source": "/start",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/briefing",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/account",
+      "destination": "/account.html"
+    },
+    {
+      "source": "/wallet",
+      "destination": "/wallet.html"
+    },
+    {
+      "source": "/about",
+      "destination": "/about.html"
+    },
+    {
+      "source": "/terms",
+      "destination": "/terms.html"
+    },
+    {
+      "source": "/privacy",
+      "destination": "/privacy.html"
+    },
+    {
+      "source": "/cookies",
+      "destination": "/cookies.html"
+    },
+    {
+      "source": "/disclaimer",
+      "destination": "/disclaimer.html"
+    },
+    {
+      "source": "/sources",
+      "destination": "/sources.html"
+    },
+    {
+      "source": "/accessibility",
+      "destination": "/accessibility.html"
+    },
+    {
+      "source": "/company",
+      "destination": "/company.html"
+    },
+    {
+      "source": "/contact",
+      "destination": "/contact.html"
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/mat/:path*",
+      "destination": "https://world.dlkt.ee/mat/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/droof/:path*",
+      "destination": "https://world.dlkt.ee/droof/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/origins/:path*",
+      "destination": "https://world.dlkt.ee/origins/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/foundation/:path*",
+      "destination": "https://world.dlkt.ee/foundation/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/partners/:path*",
+      "destination": "https://world.dlkt.ee/partners/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/investors/:path*",
+      "destination": "https://world.dlkt.ee/investors/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/preview/dlkt-world-master",
+      "destination": "https://world.dlkt.ee/",
+      "permanent": true
+    },
+    {
+      "source": "/preview/mat-master",
+      "destination": "https://world.dlkt.ee/mat",
+      "permanent": true
+    },
+    {
+      "source": "/preview/droof-master",
+      "destination": "https://world.dlkt.ee/droof",
+      "permanent": true
+    },
+    {
+      "source": "/preview/origins-master",
+      "destination": "https://world.dlkt.ee/origins",
+      "permanent": true
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "no-referrer"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=(self)"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'none'; manifest-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; font-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'"
+        },
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    }
+  ],
+  "schedules": {
+    "iceo-daily-top": {
+      "schedule": "*/2 * * * *",
+      "path": "/api/iceo-refresh",
+      "requestMethod": "GET",
+      "jitter": 1
+    }
+  }
+}

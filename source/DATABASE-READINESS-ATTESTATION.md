@@ -1,0 +1,19 @@
+# DLKT Info 0.9.45 — Database Readiness Attestation
+
+DLKT Info does not activate Auth, Persistence or any later runtime capability from environment flags alone. After the database-specific identity is verified, the runtime also requires a complete database readiness attestation from `dlkt_info_read_database_readiness`.
+
+Migration `20261119142617_dlkt_info_public_acl_attestation` extends the original readiness migration without changing the existing nine migration files. It verifies the expected inventory of 27 relations, 45 product functions, 15 RLS-enabled tables, 27 policies and 32 critical triggers. It checks the declared permission matrices, private-table isolation, SECURITY DEFINER state, the presence of an explicit search_path setting and the absence of unexpected DLKT Info objects. Function definitions use fixed search paths; this attestation checks that the setting exists, not that every value or function body matches the source.
+
+The readiness protocol is `dlkt-info-database-readiness-2`, with manifest `dlkt-info-schema-manifest-3`. Its fingerprint is `a57f050de7d0516ce8f7b45db43098a8086688a06c1fc27efcdd4e0352e21420`, computed as SHA-256 of the UTF-8 bytes of `JSON.stringify({version: SCHEMA_MANIFEST_VERSION, manifest: EXPECTED_SCHEMA_MANIFEST})`, without a trailing newline. A healthy database returns an activation receipt derived from the database instance UUID, this fingerprint and the new migration revision. The runtime independently recomputes that receipt before enabling any user operation. Old version-1 responses and responses missing the new required `publicDataPermissions` check are rejected.
+
+The new migration normalizes permissions on the ten public product tables and the briefing event sequence. It removes inherited-default grants and explicit column grants held by PUBLIC, anon or authenticated, then restores only the existing intended authenticated operations. Readiness checks effective table, column and sequence privileges and grant options, including TRUNCATE, REFERENCES, TRIGGER and MAINTAIN where the PostgreSQL version supports it. Required service_role operations remain available; its additional administrative privileges are preserved.
+
+Any missing table, RPC, RLS setting, policy, trigger or required permission covered by these checks fails closed. Any unexpected DLKT Info table or RPC also fails closed. The expected database instance UUID binds the runtime to the configured dedicated database.
+
+The fingerprint binds the declared manifest. It is not a hash of every SQL function body or policy expression and is not a security certification. Migration source hashes, engine-level ownership tests and live deployment checks remain separate evidence. The isolated PGlite tests do not establish the configuration or behavior of a hosted Supabase project.
+
+The ordered migration set revokes default PUBLIC execution from every private function, keeps private tables inaccessible to `anon` and `authenticated`, grants authenticated users only the six side-effect-free validators required by public constraints, and grants the private execution surface explicitly to `service_role`. The private function grants and default privilege changes remain in the unchanged ninth migration; the tenth migration extends the readiness check and repairs the public data privileges.
+
+The attestation response is bounded and non-secret. It exposes only the instance UUID, schema revision, schema fingerprint, activation receipt, exact object counts and boolean checks. It never exposes a Supabase URL, publishable key, secret key, token, user data or factual claim.
+
+WANTADAAA and VECINIADA remain ineligible. DLKT Info still requires its own Supabase project in `eu-central-1`. Automatic execution, live acquisition, delivery workers and public cards remain disabled until their separate gates are opened.

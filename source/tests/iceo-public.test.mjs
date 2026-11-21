@@ -1,0 +1,50 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import{cpSync,readFileSync,mkdtempSync,mkdirSync,writeFileSync,copyFileSync,readdirSync,rmSync}from'node:fs';
+import{tmpdir}from'node:os';import{join}from'node:path';
+import{preparePublicRelease}from'../scripts/prepare-public-release.mjs';
+const read=p=>readFileSync(p,'utf8');
+test('ICEO public UI has exact palette, safe DOM and no personal network payload',()=>{
+ const css=read('public/iceo.css'),js=read('public/iceo.js'),html=read('public/iceo.html');
+ assert.deepEqual([...new Set(css.match(/#[0-9a-f]{3,8}/gu))].sort(),['#000000','#f66061','#ffffff']);
+ assert.doesNotMatch(js,/innerHTML|outerHTML|insertAdjacentHTML|localStorage|sessionStorage|document\.cookie|eval\s*\(/u);
+ assert.match(js,/fetch\('\/api\/iceo'/u);assert.match(html,/Account and connection availability is shown in Info Wallet/u);assert.match(html,/External accounts require your authorization/u);assert.match(html,/Background personal delivery is not activated/u);
+ assert.match(html,/https:\/\/world\.dlkt\.ee\//u);assert.match(js,/deltaAvailable/u);
+});
+test('ICEO public configuration ships exactly one daily public refresh and no private scheduled delivery',()=>{
+ const c=JSON.parse(read('vercel.public.json'));assert.deepEqual(Object.keys(c.functions),['api/iceo.ts','api/insight.ts','api/edition.ts','api/account.ts','api/account-session.ts','api/local.ts','api/places.ts','api/card.ts','api/glance.ts','api/card-image.ts','api/wallet.ts','api/connections.ts','api/iceo-refresh.ts','api/share-archive.ts']);assert.equal(c.functions['api/share-archive.ts'].maxDuration,60);assert.equal(c.crons,undefined);assert.deepEqual(c.schedules,{'iceo-daily-top':{schedule:'*/2 * * * *',path:'/api/iceo-refresh',requestMethod:'GET',jitter:1}});assert.equal(c.outputDirectory,'public-launch');assert.ok(c.redirects.some(r=>r.source==='/mat/:path*'&&r.destination==='https://world.dlkt.ee/mat/:path*'));
+});
+test('ICEO build curation removes unpublished demos and worker routes only in authorized build copy',()=>{
+ const root=mkdtempSync(join(tmpdir(),'iceo-public-'));try{
+ mkdirSync(join(root,'api'));mkdirSync(join(root,'public'));writeFileSync(join(root,'package.json'),JSON.stringify({name:'@dlkt/info-core',version:'0.9.46'}));
+ for(const f of ['organizations.html','organizations.css','organization-setup.js','organization-browser.js','iceo.html','iceo.css','header.css','topics.js','editorial-categories.js','news-sources.js','editorial-ranking.js','editorial-relevance.js','live-edition.js','glance-weather-motion.js','weather-motion.css','personal-inbox.css','wallet-personal-inbox.js','context-photos.js','editorial-topics.js','source-relevance.js','context.js','contextual.js','contextual-today.js','home-local.js','home-edition.js','source-links.js','credits.js','card-guide.js','iceo.js','reader.js','insight-browser.js','insight-contracts.js','device-memory.js','comparison.js','return-brief.js','saved-updates.js','card-photo-catalog.js','card-photo-browser.js','reviewed-photos.js','card-validation.js','account.html','account-contracts.js','account-browser.js','wallet.html','wallet.css','connections-browser.js','connections-types.js','wallet-events.js','wallet-contracts.js','data-guards.js','wallet-providers.js','wallet-browser.js','wallet-home-browser.js','edition-browser.js','edition-artifact.js','edition-render.js','local-browser.js','local-news-policy.js','local-startup.js','local-contracts.js','local-memory.js','local-presentation.js','local-card-node.js','local-event-calendar.js','local-places.js','local-reference-places.js','local-discovery.js','entry-browser.js','entry-state.js','entry-header.js','daily-browser.js','daily-contracts.js','daily-selection.js','daily-reading.js','daily-interests.js','glance-browser.js','glance-contracts.js','glance-presentation.js','glance-preferences.js','glance-ticker.js','shared-card-link.js','shared-card-actions.js','shared-card-browser.js','favicon.svg','favicon-kate-fb7b2e60.png','favicon.ico','apple-touch-icon.png','kate-head.png','manifest.webmanifest','about.html','terms.html','privacy.html','cookies.html','disclaimer.html','sources.html','accessibility.html','company.html','contact.html'])copyFileSync('public/'+f,join(root,'public',f));copyFileSync('vercel.public.json',join(root,'vercel.public.json'));
+ cpSync('public/card-media',join(root,'public','card-media'),{recursive:true});
+ writeFileSync(join(root,'api','iceo.ts'),'public');writeFileSync(join(root,'api','iceo-refresh.ts'),'authorized public refresh');writeFileSync(join(root,'api','share-archive.ts'),'validated public archive');writeFileSync(join(root,'api','internal-review.ts'),'private');
+ assert.throws(()=>preparePublicRelease(root,{projectId:'wrong',build:true}),/IDENTITY/);
+ const output=preparePublicRelease(root,{projectId:'prj_3JKAWw8EvzWKNPqFNFxk4iDL2l7P',build:true});assert.equal(output.automaticJobs,1);assert.deepEqual(readdirSync(join(root,'api')),['iceo-refresh.ts','iceo.ts','share-archive.ts']);assert.ok(output.api.includes('/api/iceo-refresh'));assert.ok(output.api.includes('/api/share-archive'));assert.ok(output.publicFiles.includes('saved-updates.js'));assert.ok(output.publicFiles.includes('local-event-calendar.js'));assert.equal(output.publicFiles.includes('share-content.js'),false);assert.equal(output.publicFiles.includes('content.js'),false);assert.equal(output.publicFiles.includes('review.html'),false);assert.ok(output.publicFiles.includes('header.css'));assert.ok(output.publicFiles.includes('local-news-policy.js'));assert.ok(output.publicFiles.includes('local-startup.js'));assert.ok(output.publicFiles.includes('home-edition.js'));assert.ok(output.publicFiles.includes('live-edition.js'));assert.ok(output.publicFiles.includes('editorial-relevance.js'));assert.ok(output.publicFiles.includes('wallet.html'));assert.ok(output.publicFiles.includes('wallet-browser.js'));for(const asset of ['wallet.css','connections-browser.js','connections-types.js','wallet-events.js'])assert.ok(output.publicFiles.includes(asset));assert.equal(output.publicFiles.includes('wallet-gmail.js'),false);assert.equal(output.publicFiles.includes('wallet-store.js'),false);
+ }finally{rmSync(root,{recursive:true,force:true});}
+});
+test('ICEO public controller and selection module match the compiled TypeScript exactly',()=>{
+ for(const [name,target] of [['live-edition','live-edition'],['editorial-relevance','editorial-relevance'],['news-sources','news-sources'],['editorial-categories','editorial-categories'],['editorial-ranking','editorial-ranking'],['source-relevance','source-relevance'],['editorial-topics','editorial-topics'],['context','context'],['contextual','contextual'],['contextual-today','contextual-today'],['home-local','home-local'],['home-edition','home-edition'],['card-guide','card-guide'],['source-links','source-links'],['credits','credits'],['topics','topics'],['browser','iceo'],['reader','reader'],['insight-browser','insight-browser'],['insight-contracts','insight-contracts'],['device-memory','device-memory'],['comparison','comparison'],['return-brief','return-brief'],['saved-updates','saved-updates'],['card-validation','card-validation']]){
+  const compiled=read(`.build/src/iceo/${name}.js`).replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'');
+  assert.equal(read(`public/${target}.js`),(name==='device-memory'||name==='saved-updates')?compiled.replaceAll("'../daily/contracts.js'","'./daily-contracts.js'"):name==='home-local'?compiled.replaceAll("'../local/contracts.js'","'./local-contracts.js'").replaceAll("'../local/news-policy.js'","'./local-news-policy.js'"):name==='browser'?compiled.replaceAll("'../local/contracts.js'","'./local-contracts.js'").replaceAll("'../local/card-node.js'","'./local-card-node.js'").replaceAll("'../local/presentation.js'","'./local-presentation.js'").replaceAll("'../media/browser.js'","'./card-photo-browser.js'").replaceAll("'../share/link.js'","'./shared-card-link.js'").replaceAll("'../edition/browser.js'","'./edition-browser.js'").replaceAll("'../share/actions.js'","'./shared-card-actions.js'").replaceAll("'../organizations/setup.js'","'./organization-setup.js'"):compiled);
+ }
+});
+test('reader keeps evidence details, exploration and SVG controls without fake account activation',()=>{
+ const html=read('public/iceo.html');
+ for(const id of ['personalise','cards','explore-records','reader-announcement'])assert.ok(html.includes(`id="${id}"`));
+ assert.match(html,/type="module"/);
+ assert.doesNotMatch(html,/source-backed records|Inside ICEO|↗/u);
+ assert.match(read('public/iceo.js'),/navigator\.share/u);
+});
+test('calendar assets preserve exact compiled code and resolve only curated browser modules',()=>{
+ for(const name of ['event-calendar','card-node']){
+  const compiled=read(`.build/src/local/${name}.js`).replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'').replaceAll("'./contracts.js'","'./local-contracts.js'").replaceAll("'./presentation.js'","'./local-presentation.js'").replaceAll("'./event-calendar.js'","'./local-event-calendar.js'").replaceAll("'../glance/weather-motion.js'","'./glance-weather-motion.js'").replaceAll("'../media/browser.js'","'./card-photo-browser.js'");
+  assert.equal(read(`public/local-${name}.js`),compiled);
+ }
+ for(const file of ['saved-updates.js','local-event-calendar.js','local-card-node.js']){
+  const script=read('public/'+file);
+  assert.doesNotMatch(script,/from\s*['"](?:node:|\.\.\/)|from\s*['"][^'"]*(?:share-content|\/content)\.js['"]/u);
+  for(const match of script.matchAll(/(?:from\s*|import\s*\()(['"])(\.\/[^'"]+\.js)\1/gu))assert.ok(read('public/'+match[2].slice(2)).length>0,`${file}: ${match[2]}`);
+ }
+});

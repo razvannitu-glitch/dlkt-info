@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f66061">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="DLKT turns verified changes into a finite personal briefing, delivered when you choose.">
+  <meta name="robots" content="noindex,nofollow">
+  <title>DLKT — Information that matters</title>
+  <link rel="shortcut icon" href="/favicon.ico?v=kate-fb7b2e60" type="image/x-icon"><link rel="icon" href="/favicon-kate-fb7b2e60.png" type="image/png" sizes="180x180">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/bridge.js" defer></script>
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header" data-header>
+    <a class="brand" href="#top" aria-label="DLKT home">
+      <span class="brand-signal" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="brand-dlkt">DLKT</span>
+    </a>
+    <nav class="desktop-nav" aria-label="Primary navigation">
+      <a href="/companion">Open companion</a>
+      <a href="/live">Live official</a>
+      <a href="/delta">Delta First</a>
+      <a href="/start">Build briefing</a>
+      <a href="#briefing">Briefing</a>
+      <a href="#system">System</a>
+      <a href="#principles">Principles</a>
+      <a href="#status">Status</a>
+      <a href="/today">Today preview</a>
+      <a href="/history">History preview</a>
+      <a href="/memory">Memory preview</a>
+      <a href="/trust">Trust preview</a>
+      <a href="/actions">Actions preview</a>
+      <a href="/inbox">Inbox preview</a>
+      <a href="/delivery">Delivery preview</a>
+      <a href="/review">Review preview</a>
+    </nav>
+    <div class="header-actions">
+      <button class="account-toggle" type="button" aria-expanded="false" aria-controls="account-panel" data-account-toggle>
+        <span class="account-state-dot" aria-hidden="true"></span><span data-account-label>Account</span>
+      </button>
+      <span class="preview-badge">Protected staging</span>
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="mobile-nav" data-menu-toggle>
+        <span>Menu</span><i aria-hidden="true"></i>
+      </button>
+    </div>
+    <nav class="mobile-nav" id="mobile-nav" aria-label="Mobile navigation" data-mobile-nav hidden>
+      <a href="/companion">Open companion</a>
+      <a href="/live">Live official</a>
+      <a href="/start">Build briefing</a>
+      <a href="#briefing">Briefing</a>
+      <a href="#system">System</a>
+      <a href="#principles">Principles</a>
+      <a href="#status">Status</a>
+      <a href="/today">Today preview</a>
+      <a href="/history">History preview</a>
+      <a href="/memory">Memory preview</a>
+      <a href="/trust">Trust preview</a>
+      <a href="/actions">Actions preview</a>
+      <a href="/inbox">Inbox preview</a>
+      <a href="/delivery">Delivery preview</a>
+      <a href="/review">Review preview</a>
+    </nav>
+  </header>
+
+  <div class="account-backdrop" data-account-backdrop hidden></div>
+  <aside class="account-panel" id="account-panel" role="dialog" aria-modal="true" aria-labelledby="account-title" data-account-panel hidden>
+    <header class="account-panel-header">
+      <span>DLKT ACCOUNT</span>
+      <button type="button" aria-label="Close account panel" data-account-close>×</button>
+    </header>
+    <div class="account-panel-body">
+      <p class="eyebrow"><span></span>Cross-device companion</p>
+      <h2 id="account-title">Your rules.<br>Your briefing.<br><em>Everywhere.</em></h2>
+      <p class="account-intro">Sign in with a one-time email code. Session credentials remain in secure HttpOnly cookies and are never exposed to page scripts.</p>
+
+      <section class="account-unavailable" data-account-unavailable hidden>
+        <strong>Account infrastructure is not active yet.</strong>
+        <p>The dedicated DLKT database is required before identity or cross-device storage can open. The anonymous companion preview remains fully available.</p>
+      </section>
+
+      <form class="account-form" data-account-email-form hidden novalidate>
+        <label for="account-email">Email</label>
+        <input id="account-email" name="email" type="email" autocomplete="email" inputmode="email" maxlength="254" required>
+        <button type="submit"><span>Send one-time code</span><b aria-hidden="true">→</b></button>
+      </form>
+
+      <form class="account-form" data-account-code-form hidden novalidate>
+        <label for="account-code">One-time code</label>
+        <input id="account-code" name="code" type="text" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9 -]{6,14}" maxlength="14" required>
+        <button type="submit"><span>Verify and sign in</span><b aria-hidden="true">→</b></button>
+        <button class="account-secondary" type="button" data-account-change-email>Use another email</button>
+      </form>
+
+      <section class="account-signed-in" data-account-signed-in hidden>
+        <span>Signed in securely</span>
+        <strong data-account-email></strong>
+        <p>Your companion settings can now be saved and restored across devices.</p>
+        <button type="button" data-account-sign-out>Sign out</button>
+      </section>
+
+      <p class="account-status" data-account-status role="status" aria-live="polite">Checking account availability…</p>
+    </div>
+    <footer class="account-panel-footer">
+      <span>HttpOnly</span><span>Secure</span><span>SameSite</span><span>No browser token storage</span>
+    </footer>
+  </aside>
+
+  <main id="main">
+    <section class="hero" id="top" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span></span>Your personal briefing engine</p>
+        <h1 id="hero-title">
+          <span>Information</span>
+          <span>that matters.</span>
+          <span class="accent">Delivered</span>
+          <span>when you want.</span>
+        </h1>
+        <p class="hero-summary">You choose the topics, entities, regions and time. DLKT gives you only the material changes — clear, finite and traceable.</p>
+        <div class="hero-actions">
+          <a class="primary-action" href="/start"><span>Build my companion</span><b aria-hidden="true">→</b></a>
+          <a class="text-action" href="#system">See how it works <span aria-hidden="true">→</span></a>
+        </div>
+        <div class="hero-proof" aria-label="Core product properties">
+          <div><b>Delta First</b><span>Only what changed</span></div>
+          <div><b>Verified</b><span>Sources and provenance</span></div>
+          <div><b>Personal</b><span>Your rules, not a generic feed</span></div>
+          <div><b>Scheduled</b><span>A finite briefing at your time</span></div>
+        </div>
+      </div>
+
+      <div class="hero-visual" aria-label="DLKT briefing preview">
+        <div class="glyph-field" aria-hidden="true">
+          <span class="red-slab red-slab-a"></span>
+          <span class="red-slab red-slab-b"></span>
+          <div class="glyph-d"><i></i></div>
+          <div class="signal-orbit"><i></i><i></i><i></i></div>
+        </div>
+        <div class="hero-card-stack" id="hero-card-stack" aria-live="polite">
+          <article class="hero-card hero-card-loading">
+            <p>LOADING BRIEFING</p>
+            <h2>Building the finite signal set…</h2>
+            <span>DLKT InphoCore Engine Orchestra</span>
+          </article>
+        </div>
+        <div class="visual-caption"><span>01</span><p>One finite briefing.<br>Not another endless feed.</p></div>
+      </div>
+    </section>
+
+    <section class="engine-strip" id="system" aria-label="DLKT engine flow">
+      <div class="strip-brand"><strong>DLKT </strong><span>InphoCore Engine Orchestra</span></div>
+      <ol>
+        <li><span>01</span><div><b>Collects</b><small>From authorized sources</small></div></li>
+        <li><span>02</span><div><b>Reconciles</b><small>Claims, conflicts and freshness</small></div></li>
+        <li><span>03</span><div><b>Ranks</b><small>By materiality and your rules</small></div></li>
+        <li><span>04</span><div><b>Delivers</b><small>The essential in one flow</small></div></li>
+      </ol>
+    </section>
+
+    <section class="companion-setup" id="companion" aria-labelledby="companion-title">
+      <header class="companion-heading">
+        <p class="eyebrow"><span></span>Personal Companion Loop</p>
+        <div>
+          <h2 id="companion-title">Tell it what matters.</h2>
+          <p>Choose the signal categories, delivery time and attention budget. Build instantly in-session, then save cross-device only through a secure DLKT account.</p>
+        </div>
+      </header>
+
+      <div class="companion-layout">
+        <form class="companion-form" id="companion-form" novalidate>
+          <fieldset class="companion-field companion-topics">
+            <legend><span>01</span> What matters</legend>
+            <div class="companion-topic-grid">
+              <label><input type="checkbox" name="topics" value="technology" checked><span>Technology</span></label>
+              <label><input type="checkbox" name="topics" value="business" checked><span>Business</span></label>
+              <label><input type="checkbox" name="topics" value="regulation" checked><span>Regulation</span></label>
+              <label><input type="checkbox" name="topics" value="opportunities" checked><span>Opportunities</span></label>
+              <label><input type="checkbox" name="topics" value="supply" checked><span>Supply</span></label>
+            </div>
+          </fieldset>
+
+          <div class="companion-field-grid">
+            <label class="companion-field">
+              <span class="field-label"><b>02</b> Timezone</span>
+              <select id="companion-timezone" name="timezone">
+                <option value="Europe/Bucharest" selected>Europe / Bucharest</option>
+                <option value="Europe/London">Europe / London</option>
+                <option value="America/New_York">America / New York</option>
+                <option value="America/Los_Angeles">America / Los Angeles</option>
+                <option value="Asia/Dubai">Asia / Dubai</option>
+                <option value="Asia/Tokyo">Asia / Tokyo</option>
+                <option value="Australia/Sydney">Australia / Sydney</option>
+              </select>
+            </label>
+
+            <label class="companion-field">
+              <span class="field-label"><b>03</b> Delivery time</span>
+              <input id="companion-time" name="deliveryLocalTime" type="time" value="08:00" required>
+            </label>
+
+            <label class="companion-field">
+              <span class="field-label"><b>04</b> Card limit</span>
+              <input id="companion-limit" name="maxCards" type="number" inputmode="numeric" min="1" step="1" value="5" required>
+            </label>
+
+            <label class="companion-field">
+              <span class="field-label"><b>05</b> Minimum impact</span>
+              <select id="companion-materiality" name="minMateriality">
+                <option value="low" selected>Low and above</option>
+                <option value="medium">Medium and above</option>
+                <option value="high">High and critical</option>
+                <option value="critical">Critical only</option>
+              </select>
+            </label>
+          </div>
+
+          <label class="companion-toggle">
+            <input id="companion-actionable" name="onlyActionable" type="checkbox">
+            <span><b>Only actionable changes</b><small>Hide signals that do not support a concrete decision.</small></span>
+          </label>
+
+          <div class="companion-submit-row">
+            <div class="companion-actions">
+              <button class="companion-submit" type="submit"><span>Build and open my briefing</span><b aria-hidden="true">→</b></button>
+              <button class="companion-save" type="button" data-save-companion disabled><span>Save across devices</span><b aria-hidden="true">↗</b></button>
+            </div>
+            <p id="companion-status" role="status" aria-live="polite">The real Companion opens immediately. Secure cross-device saving activates after account sign-in.</p>
+          </div>
+        </form>
+
+        <aside class="companion-summary" aria-label="Current companion configuration">
+          <span>YOUR COMPANION</span>
+          <h3 id="companion-summary-title">Five topics. Five cards. 08:00.</h3>
+          <p id="companion-summary-copy">A finite verified Companion that returns only official changes matching your explicit configuration.</p>
+          <div class="companion-summary-rule"><b data-companion-memory-title>Session preview</b><span data-companion-memory-copy>Nothing is persisted until a secure DLKT account is active.</span></div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="briefing-section" id="briefing" aria-labelledby="briefing-title">
+      <header class="section-heading">
+        <p class="eyebrow"><span></span>Synthetic product preview</p>
+        <div>
+          <h2 id="briefing-title">Your day.<br><em>Compressed.</em></h2>
+          <p>The scroll ends because the product makes a decision: what changed, what matters, and what can wait.</p>
+        </div>
+      </header>
+
+      <div class="briefing-layout">
+        <aside class="briefing-controls" aria-label="Briefing configuration preview">
+          <div class="control-block delivery-block">
+            <span class="control-index">01</span>
+            <p>Delivery</p>
+            <strong id="delivery-local">08:00</strong>
+            <small>Europe / Bucharest</small>
+            <div class="next-delivery"><span>Next</span><time id="next-delivery">Calculating…</time></div>
+          </div>
+          <div class="control-block">
+            <span class="control-index">02</span>
+            <p>Topics</p>
+            <div class="topic-filter" role="group" aria-label="Filter synthetic briefing cards">
+              <button type="button" class="is-active" data-topic="all" aria-pressed="true">All</button>
+              <button type="button" data-topic="technology" aria-pressed="false">Technology</button>
+              <button type="button" data-topic="business" aria-pressed="false">Business</button>
+              <button type="button" data-topic="regulation" aria-pressed="false">Regulation</button>
+              <button type="button" data-topic="opportunities" aria-pressed="false">Opportunities</button>
+              <button type="button" data-topic="supply" aria-pressed="false">Supply</button>
+            </div>
+          </div>
+          <div class="control-block compact-control">
+            <span class="control-index">03</span>
+            <p>Daily limit</p>
+            <strong><span id="card-limit">5</span> cards</strong>
+            <small>Finite by design</small>
+          </div>
+          <p class="synthetic-note">This preview uses synthetic data only. No real-world assertion is made.</p>
+        </aside>
+
+        <div class="briefing-experience">
+          <div class="briefing-topline">
+            <div><span class="live-dot"></span><b>Morning briefing</b></div>
+            <p><span id="visible-count">0</span> material signals</p>
+          </div>
+          <div class="card-stage" id="card-stage" tabindex="0" aria-label="Synthetic InfoCard scroll" aria-live="polite">
+            <div class="stage-loading"><span></span><p>Orchestrating the briefing…</p></div>
+          </div>
+          <div class="card-navigation">
+            <button type="button" data-card-prev aria-label="Previous InfoCard">←</button>
+            <div class="card-dots" id="card-dots" aria-label="InfoCard position"></div>
+            <button type="button" data-card-next aria-label="Next InfoCard">→</button>
+          </div>
+          <div class="briefing-stats">
+            <div><strong id="stat-changes">0</strong><span>changes</span></div>
+            <div><strong id="stat-conflicts">0</strong><span>open conflicts</span></div>
+            <div><strong id="stat-sources">0</strong><span>traceable sources</span></div>
+            <div><strong id="stat-time">3 min</strong><span>designed reading time</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="principles" id="principles" aria-labelledby="principles-title">
+      <div class="principles-title">
+        <p>THE PRODUCT RULE</p>
+        <h2 id="principles-title">More signal.<br>Less noise.</h2>
+      </div>
+      <div class="principles-grid">
+        <article><span>01</span><h3>AI does not decide truth.</h3><p>It structures evidence, detects deltas and explains. Claims remain tied to sources, time and validity.</p></article>
+        <article><span>02</span><h3>Conflicts stay visible.</h3><p>When sources disagree, DLKT blocks dependent conclusions instead of inventing certainty.</p></article>
+        <article><span>03</span><h3>Nothing repeats without reason.</h3><p>Delta First removes yesterday’s unchanged information from today’s finite briefing.</p></article>
+        <article><span>04</span><h3>Your attention has a budget.</h3><p>A hard card limit forces ranking by materiality, relevance, authority and actionability.</p></article>
+      </div>
+    </section>
+
+    <section class="manifesto" aria-label="DLKT manifesto">
+      <div class="manifesto-number" aria-hidden="true">12</div>
+      <div class="manifesto-copy">
+        <p>NOT 1,200 LINKS.</p>
+        <h2>Up to twelve things worth knowing.</h2>
+        <p class="manifesto-detail">A personal briefing should end. The end is a feature — proof that the system filtered reality instead of transferring the burden to you.</p>
+      </div>
+      <div class="manifesto-side"><span>Complexity ↑</span><span>Noise ↓</span><strong>Clarity stays.</strong></div>
+    </section>
+
+    <section class="status-section" id="status" aria-labelledby="status-title">
+      <div>
+        <p class="eyebrow light"><span></span>Foundation status</p>
+        <h2 id="status-title">The engine and data model are real.<br>Live data is still disabled.</h2>
+      </div>
+      <div class="status-copy">
+        <p>The independent DLKT engine already supports atomic claims, source rights, contradictions, Delta First, finite ranking and timezone-aware delivery.</p>
+        <p>Identity, HttpOnly sessions and authenticated persistence are engineered fail-closed. Activation still requires the dedicated DLKT database; real source connectors, delivery workers and commerce remain disabled.</p>
+        <a href="/api/health">Inspect engine health <span aria-hidden="true">↗</span></a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <a class="brand footer-brand" href="#top" aria-label="DLKT home">
+      <span class="brand-signal" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="brand-dlkt">DLKT</span>
+    </a>
+    <p>Information that matters. Delivered when you want.</p>
+    <div><span>Independent foundation v0.8.8</span><span>© 2026 DLKT Group OÜ</span></div>
+  </footer>
+</body>
+</html>

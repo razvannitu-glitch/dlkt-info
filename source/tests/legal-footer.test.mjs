@@ -1,0 +1,77 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {parseDocument} from 'htmlparser2';
+import {LEGAL_DOCUMENTS,COMPANY,footerHtml,renderLegalDocument} from '../.build/src/legal/documents.js';
+import {renderSharedError} from '../.build/src/share/render.js';
+function elements(html){const nodes=[];function walk(n){if(n.type==='tag')nodes.push(n);for(const c of n.children??[])walk(c);}walk(parseDocument(html));return nodes;}
+test('all legal documents ship the exact shared renderer with a unique reading structure',()=>{
+ assert.equal(LEGAL_DOCUMENTS.length,9);assert.equal(new Set(LEGAL_DOCUMENTS.map(d=>d.slug)).size,9);
+ for(const doc of LEGAL_DOCUMENTS){const html=readFileSync(`public/${doc.slug}.html`,'utf8');assert.equal(html,renderLegalDocument(doc));const nodes=elements(html);assert.equal(nodes.filter(n=>n.name==='h1').length,1,doc.slug);const ids=nodes.map(n=>n.attribs.id).filter(Boolean);assert.equal(new Set(ids).size,ids.length,doc.slug);assert.ok(html.includes(footerHtml()));assert.ok(html.includes('Updated '+(['sources','about','privacy','accessibility','disclaimer'].includes(doc.slug)?'21 November 2026':doc.slug==='cookies'?'20 November 2026':'16 November 2026')),doc.slug);}
+});
+test('footer and document links resolve to shipped pages and actual section anchors',()=>{
+ const pages=new Map(LEGAL_DOCUMENTS.map(d=>['/'+d.slug,renderLegalDocument(d)]));pages.set('/',readFileSync('public/iceo.html','utf8'));pages.set('/organizations',readFileSync('public/organizations.html','utf8'));pages.set('/wallet',readFileSync('public/wallet.html','utf8'));pages.set('/account',readFileSync('public/account.html','utf8'));
+ const routes=JSON.parse(readFileSync('vercel.public.json','utf8')).rewrites;for(const name of ['organizations','wallet','account'])assert.equal(routes.find(r=>r.source==='/'+name)?.destination,'/'+name+'.html');
+ for(const [path,html] of pages){for(const a of elements(html).filter(n=>n.name==='a')){const href=a.attribs.href??'';if(!href.startsWith('/')&&!href.startsWith('#'))continue;const url=new URL(href,'https://www.dlkt.ee'+path);assert.ok(pages.has(url.pathname),`${path}: ${href}`);if(url.hash)assert.ok(elements(pages.get(url.pathname)).some(n=>n.attribs.id===decodeURIComponent(url.hash.slice(1))),`${path}: ${href}`);}}
+});
+test('legal clean URLs are explicitly routed and shared across homepage, account and card errors',()=>{
+ const config=JSON.parse(readFileSync('vercel.public.json','utf8'));for(const d of LEGAL_DOCUMENTS)assert.equal(config.rewrites.find(r=>r.source==='/'+d.slug)?.destination,'/'+d.slug+'.html');
+ for(const path of ['public/iceo.html','public/account.html','public/organizations.html','public/wallet.html']){const html=readFileSync(path,'utf8');assert.ok(html.includes(footerHtml()),path);assert.equal(elements(html).filter(n=>n.name==='footer'&&n.attribs.class==='site-footer').length,1);assert.ok(elements(html).some(n=>n.attribs.id==='top'));}
+ const source=readFileSync('src/share/render.ts','utf8');assert.match(source,/footerHtml\(\)/u);assert.ok(renderSharedError('unavailable').includes(footerHtml()));
+});
+test('published company identifiers omit unrelated private registry fields and invented inboxes',()=>{
+ assert.equal(COMPANY.registry,'17335744');assert.equal(COMPANY.email,'office@dlkt.ee');for(const d of LEGAL_DOCUMENTS){const html=renderLegalDocument(d);assert.doesNotMatch(html,/(?<!\d)[3-6]\d{10}(?!\d)|privacy@dlkt\.ee|legal@dlkt\.ee|GDPR certified|WCAG certified|fully GDPR compliant/iu);}
+});
+
+test('account notices separate conditional sign-in, private storage and separately authorized connections',()=>{
+ const document=slug=>LEGAL_DOCUMENTS.find(d=>d.slug===slug);
+ const section=(slug,id)=>document(slug).sections.find(s=>s.id===id).paragraphs.join(' ');
+ for(const slug of ['about','privacy','cookies']){
+  const html=renderLegalDocument(document(slug));
+  assert.match(html,/When account sign-in is available/u,slug);
+  assert.doesNotMatch(html,/no activated account sign-in|Accounts, cross-device memory and timed delivery are not activated yet|screen does not collect a profile/u,slug);
+ }
+ const account=section('privacy','account'),wallet=section('privacy','wallet'),providers=section('privacy','recipients'),retention=section('privacy','retention');
+ assert.match(account,/Supabase Auth.*linked base profile/u);
+ assert.match(account,/Requesting a code also sends your browser timezone.*UTC as a fallback.*initial language setting, English/u);
+ assert.match(account,/Import from this browser.*Restore in this browser/u);
+ assert.match(account,/not automatic background sync or a merge/u);
+ assert.match(account,/Delete account reader copy.*without deleting your sign-in account, Wallet preferences or existing browser copy/u);
+ assert.match(wallet,/Save profile.*optional Wallet preferences/u);
+ assert.match(wallet,/Delete Wallet preferences.*does not delete the sign-in account/u);
+ assert.match(wallet,/Connection availability is shown in Wallet/u);
+ assert.match(wallet,/Signing in or saving a profile does not grant access to an external account/u);
+ assert.match(wallet,/separate OAuth authorization/u);
+ assert.match(providers,/Resend delivers transactional authentication emails/u);
+ assert.match(providers,/recipient address, message content and delivery information/u);
+ assert.match(retention,/Signing out or clearing browser data does not delete server-side account records/u);
+ const cookies=section('cookies','session-cookies');
+ assert.match(cookies,/__Host-dlkt_info_at.*up to 1 hour.*60 and 3600 seconds/u);
+ assert.match(cookies,/__Host-dlkt_info_rt.*30 days/u);
+ assert.match(cookies,/Secure, HttpOnly and SameSite=Lax.*Path=\/ and no Domain attribute/u);
+ assert.match(cookies,/not a guarantee that the server will accept the session/u);
+ assert.match(cookies,/does not sign out every other device or delete saved account data/u);
+ assert.match(footerHtml(),/Account and connection availability is shown in Info Wallet/u);
+ assert.match(footerHtml(),/External accounts require your authorization/u);
+ assert.match(footerHtml(),/Background personal delivery is not activated/u);
+ const connections=section('privacy','connections');
+ assert.match(connections,/encrypted server-side before storage in Supabase/u);
+ assert.match(connections,/not returned to page JavaScript or saved in browser storage/u);
+ assert.match(connections,/Check updates performs a bounded read/u);
+ assert.match(connections,/does not request message bodies or attachments/u);
+ assert.match(connections,/homepage can also recheck about every sixty seconds while visible and focused/u);
+ assert.match(connections,/at most five recent metadata updates/u);
+ assert.match(connections,/does not collect personal activity while the page is closed/u);
+ assert.match(connections,/Instagram’s comment permission also permits moderation.*only to read comments/u);
+ assert.match(connections,/does not save the returned email metadata or comment content to the account database or browser storage/u);
+ assert.match(connections,/last-check timestamp is stored separately/u);
+ assert.match(connections,/Disconnect removes the saved connection record and its encrypted credentials/u);
+ assert.match(connections,/where this cannot be confirmed.*remove DLKT access in the provider/u);
+ assert.match(connections,/does not delete the original emails or comments.*provider logs and backups/u);
+ const authorizationCookies=section('cookies','connection-cookies');
+ for(const suffix of ['gmail','outlook','instagram','facebook_pages']) assert.ok(authorizationCookies.includes('__Host-dlkt_connection_'+suffix));
+ assert.match(authorizationCookies,/Max-Age=600.*10 minutes.*Secure, HttpOnly and SameSite=Lax.*Path=\/ and no Domain attribute/u);
+ assert.match(authorizationCookies,/does not contain the provider access token/u);
+ assert.match(authorizationCookies,/does not delete an existing server-side connection/u);
+ for(const slug of ['about','privacy','cookies']) assert.doesNotMatch(renderLegalDocument(document(slug)),/External email and social connections are not activated|Each future connection|Future external account connections/u);
+});

@@ -1,0 +1,70 @@
+[
+  {
+    "identity": "https://globalvoices.org/2026/11/17/in-win-against-impunity-indonesian-court-orders-the-reform-of-military-justice-law/",
+    "title": "In win against impunity, Indonesian court orders the reform of Military Justice Law",
+    "sourceUrl": "https://globalvoices.org/2026/11/17/in-win-against-impunity-indonesian-court-orders-the-reform-of-military-justice-law/",
+    "date": "2026-11-17T06:55:29.000Z",
+    "dateLabel": "Published",
+    "kind": "publication",
+    "deadline": null,
+    "version": null,
+    "boundary": "Global Voices publisher excerpt or listing. This is community reporting and editorial perspective, not independent corroboration. Published is the English feed date; an original-language article may be older.",
+    "summary": "\"Justice for civilian victims of military abuses shouldn’t be blocked by an unfair military court system.\"",
+    "byline": "Written by Mong Palatino",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "id": "0fd635ccc5e937da8c9f0f42",
+    "topic": "world",
+    "publisher": "Global Voices",
+    "sourceIds": [
+      "gv-world"
+    ],
+    "observedAt": "2026-11-17T16:11:05.800Z",
+    "contentHash": "47188a0a93b76d2f3807074221ec0de61d10e505f235cc29aa0998756ff35f50",
+    "attribution": "Source: Global Voices, CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/). A publisher-feed excerpt where available; original and translation credits are retained. Images and other third-party media are not republished. No endorsement is implied.",
+    "sourceState": "verified"
+  },
+  {
+    "identity": "https://science.nasa.gov/blog/perseverance-update-the-ghostly-rocks-of-idubi-bright-remnants-of-aqueous-systems-from-long-ago/",
+    "title": "Perseverance Update: The Ghostly Rocks of ‘Idubi’ — Bright Remnants of Aqueous Systems from Long Ago",
+    "sourceUrl": "https://science.nasa.gov/blog/perseverance-update-the-ghostly-rocks-of-idubi-bright-remnants-of-aqueous-systems-from-long-ago/",
+    "date": "2026-11-16T23:12:45.000Z",
+    "dateLabel": "Published",
+    "kind": "publication",
+    "deadline": null,
+    "version": null,
+    "boundary": "NASA publisher excerpt, which may already be shortened in the feed. This is not independent corroboration, a full-article summary or a live mission status check.",
+    "summary": "Written by Candice Bedford, Research Scientist at Purdue University Date: Nov. 16, 2026 During the Perseverance rover’s investigation of “Idubi” — an area of ancient Martian crust exposed in the “Lac de Charmes” region, outside of Jezero crater — the Perseverance rover team has been captivated by a cluster of eerily bright, light-toned rocks in […]",
+    "id": "0752bfaa9b79b00d68be45b9",
+    "topic": "science",
+    "publisher": "NASA",
+    "sourceIds": [
+      "nasa-news"
+    ],
+    "observedAt": "2026-11-17T16:11:05.792Z",
+    "contentHash": "cc95914601397484c75bf9b3547516517e62d620770c48ea0d5a8fa8b6f51ffa",
+    "attribution": "Source: NASA. Publisher feed text only; no images, logos or implied NASA endorsement. Read the original for the full context.",
+    "sourceState": "verified"
+  },
+  {
+    "identity": "https://science.nasa.gov/photojournal/a-collage-showing-49-drill-holes-made-by-nasas-curiosity-mars-rover/",
+    "title": "A Collage Showing 49 Drill Holes Made by NASA’s Curiosity Mars Rover",
+    "sourceUrl": "https://science.nasa.gov/photojournal/a-collage-showing-49-drill-holes-made-by-nasas-curiosity-mars-rover/",
+    "date": "2026-11-16T22:05:23.000Z",
+    "dateLabel": "Published",
+    "kind": "publication",
+    "deadline": null,
+    "version": null,
+    "boundary": "NASA publisher excerpt, which may already be shortened in the feed. This is not independent corroboration, a full-article summary or a live mission status check.",
+    "summary": "Description This collage shows 49 drill holes captured by NASA’s Curiosity Mars rover as of November 2026. Each hole represents a sample collected from rocks on the Martian surface; Curiosity’s drill, located on the end of its robotic arm, drops pulverized rock samples into instruments in its belly that analyze their composition. These images were […]",
+    "id": "9ebaa2c06b710ab2daf2f1e7",
+    "topic": "science",
+    "publisher": "NASA",
+    "sourceIds": [
+      "nasa-news"
+    ],
+    "observedAt": "2026-11-17T16:11:05.792Z",
+    "contentHash": "24ee42b0865ab4b58d4054ac7014b447d62ea41382bb8890c7f307190cb9f537",
+    "attribution": "Source: NASA. Publisher feed text only; no images, logos or implied NASA endorsement. Read the original for the full context.",
+    "sourceState": "verified"
+  }
+]

@@ -1,0 +1,38 @@
+{
+  "name": "@dlkt/info-core",
+  "version": "0.9.46",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "rm -rf .build && tsc -p tsconfig.build.json",
+    "test": "npm run build && node --test tests/*.test.mjs tests/database/*.test.mjs",
+    "verify": "npm run typecheck && npm test && npm audit --audit-level=high",
+    "verify:release": "node verify-release.mjs",
+    "test:database": "node --test tests/database/*.test.mjs",
+    "verify:eu-live": "npm run build && node scripts/verify-eu-official-live.mjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.16",
+    "@types/node": "22.15.30",
+    "@types/react": "19.3.0",
+    "@types/ws": "8.18.2",
+    "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "@resvg/resvg-wasm": "2.4.0",
+    "@vercel/blob": "2.9.0",
+    "@vercel/functions": "3.11.3",
+    "fast-xml-parser": "5.12.0",
+    "htmlparser2": "12.0.0",
+    "react": "19.3.1",
+    "satori": "0.33.5"
+  },
+  "overrides": {
+    "zod": "4.6.7",
+    "fflate": "0.7.5"
+  }
+}

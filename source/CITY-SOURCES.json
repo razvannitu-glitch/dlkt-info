@@ -1,0 +1,13 @@
+{
+  "generatedAt": "2026-11-14T20:17:33.562261+00:00",
+  "count": 34215,
+  "rejected": 0,
+  "license": "https://creativecommons.org/licenses/by/4.0/",
+  "scope": "GeoNames cities15000: larger cities and capitals, not every village or address. City-centre coordinates.",
+  "inputs": {
+    "geocities.zip": "f274b5e5f2cff6211cb10cc5b348254a6e00dde9449244d18c0f542beb7581e5",
+    "admins.txt": "2e4867f5397acb056ea26377601b57af37cb4c81399770225018e9e439e91ad3",
+    "countries.txt": "79f8f59ea01cbb40438bf1856dd6c2ff201f03f8fc72d0530b2646aaf603ef04"
+  },
+  "outputSha256": "c710fa7749d2f4697cc11c34b4697da4e1cd2ef16177eb395ff48b3e582525b6"
+}

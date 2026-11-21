@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f66061">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="A live, read-only DLKT snapshot built from official EUR-Lex listings.">
+  <meta name="robots" content="noindex,nofollow">
+  <title>DLKT — Live official snapshot</title>
+  <link rel="shortcut icon" href="/favicon.ico?v=kate-fb7b2e60" type="image/x-icon"><link rel="icon" href="/favicon-kate-fb7b2e60.png" type="image/png" sizes="180x180">
+  <link rel="stylesheet" href="/live.css">
+  <script src="/live.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#live-main">Skip to live snapshot</a>
+  <header class="live-header">
+    <a class="live-brand" href="/" aria-label="DLKT home"><span class="brand-signal" aria-hidden="true"><i></i><i></i><i></i></span><span>DLKT</span></a>
+    <div class="header-title"><span>Live Official Snapshot</span><strong>Real source. Read-only state.</strong></div>
+    <nav aria-label="Live snapshot navigation"><a href="/delta">Delta First</a><a href="/start">Build briefing</a><a href="/companion">Companion</a></nav>
+  </header>
+
+  <main id="live-main">
+    <section class="live-hero" aria-labelledby="live-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span aria-hidden="true"></span>DLKT 0.8.8 · Official data pilot</p>
+        <h1 id="live-title">Official signals.<br><em>Live now.</em></h1>
+        <p>This screen reads current EUR-Lex listings directly from two registered official feeds. It does not invent a delta, infer legal effect or write anything to a database.</p>
+      </div>
+      <div class="hero-state" aria-label="Snapshot state">
+        <span>LIVE</span>
+        <strong data-live-total>—</strong>
+        <small>official listings available</small>
+      </div>
+      <dl class="hero-metrics">
+        <div><dt data-live-feeds>—</dt><dd>feeds available</dd></div>
+        <div><dt data-live-returned>—</dt><dd>cards returned</dd></div>
+        <div><dt>00</dt><dd>database writes</dd></div>
+        <div><dt>00</dt><dd>AI interpretations</dd></div>
+      </dl>
+    </section>
+
+    <section class="live-controls" aria-label="Live snapshot controls">
+      <div class="feed-control" role="group" aria-label="Official feed filter">
+        <button type="button" class="is-active" data-feed="all" aria-pressed="true">All official</button>
+        <button type="button" data-feed="commission-proposals" aria-pressed="false">Proposals</button>
+        <button type="button" data-feed="parliament-council-legislation" aria-pressed="false">Legislation</button>
+      </div>
+      <label class="budget-control" for="live-budget"><span>Finite card budget</span><input id="live-budget" type="number" inputmode="numeric" min="1" step="1" value="6" data-budget><small>User-defined. Never an infinite feed.</small></label>
+      <button class="reload-control" type="button" data-reload><span>Reload snapshot</span><b aria-hidden="true">↻</b></button>
+    </section>
+
+    <section class="live-status" aria-live="polite">
+      <span class="status-dot" aria-hidden="true"></span>
+      <strong data-status-title>Connecting to official sources…</strong>
+      <p data-status-copy>No account, database or background worker is involved.</p>
+    </section>
+
+    <section class="live-shell" data-live-shell hidden>
+      <aside class="live-queue" aria-label="Finite official card queue">
+        <header><span>Finite queue</span><strong data-queue-count>0 cards</strong></header>
+        <div class="queue-list" data-queue-list></div>
+        <div class="queue-end" data-queue-end><b>End of snapshot.</b><span>No infinite scroll.</span></div>
+      </aside>
+
+      <article class="official-card" aria-live="polite">
+        <header class="card-header">
+          <div><span data-card-state>Official listing</span><strong data-card-celex>—</strong></div>
+          <div class="card-position"><b data-card-position>0 / 0</b><small>finite position</small></div>
+        </header>
+        <div class="card-body">
+          <p class="card-feed" data-card-feed>EUR-Lex</p>
+          <h2 data-card-title>Waiting for the official source.</h2>
+          <p class="card-creator" data-card-creator></p>
+          <dl class="card-facts">
+            <div><dt>Official publication state</dt><dd data-card-state-copy></dd></div>
+            <div><dt>Published</dt><dd data-card-published></dd></div>
+            <div><dt>Observed by DLKT</dt><dd data-card-observed></dd></div>
+            <div><dt>Delta status</dt><dd>Not available without a persisted baseline.</dd></div>
+          </dl>
+          <div class="legal-caveat"><span>Legal boundary</span><p data-card-caveat></p></div>
+        </div>
+        <footer class="card-navigation">
+          <button type="button" data-previous aria-label="Previous official card">← Previous</button>
+          <div class="progress-track" aria-hidden="true"><b data-progress></b></div>
+          <button type="button" data-next aria-label="Next official card">Next →</button>
+        </footer>
+      </article>
+
+      <aside class="source-proof" aria-label="Source and provenance">
+        <header><span>Source proof</span><strong>Official · attributed</strong></header>
+        <dl>
+          <div><dt>Registry source</dt><dd data-source-name>—</dd></div>
+          <div><dt>Authority</dt><dd data-source-authority>Official</dd></div>
+          <div><dt>Rights review valid until</dt><dd data-source-expiry>—</dd></div>
+          <div><dt>Feed status</dt><dd data-source-feed-status>—</dd></div>
+        </dl>
+        <a class="source-link" data-source-link href="/" target="_blank" rel="noopener noreferrer">Open official EUR-Lex record <span aria-hidden="true">↗</span></a>
+        <a class="terms-link" data-terms-link href="/" target="_blank" rel="noopener noreferrer">EUR-Lex reuse terms <span aria-hidden="true">↗</span></a>
+        <div class="proof-boundary"><b>What this proves</b><p>The source listing exists now and passed the registered provenance rules.</p><b>What this does not prove</b><p>That the item is new to you, adopted, applicable or legally binding in your case.</p></div>
+      </aside>
+    </section>
+
+    <section class="feed-diagnostics" aria-labelledby="diagnostics-title">
+      <div><p class="eyebrow"><span aria-hidden="true"></span>Source diagnostics</p><h2 id="diagnostics-title">Every feed reports its own state.</h2></div>
+      <div class="diagnostic-grid" data-diagnostics></div>
+    </section>
+
+    <section class="live-boundaries" aria-labelledby="boundaries-title">
+      <span>Operational boundary</span>
+      <h2 id="boundaries-title">Real data. Zero hidden execution.</h2>
+      <div data-boundaries></div>
+    </section>
+
+    <section class="live-error" data-error hidden role="alert">
+      <span>Official snapshot unavailable</span>
+      <h2>No claim was fabricated.</h2>
+      <p>The live source could not be validated. DLKT returned no cards and changed no state.</p>
+      <button type="button" data-error-retry>Retry official sources</button>
+    </section>
+  </main>
+
+  <footer class="live-footer"><span>DLKT · Live Official Snapshot</span><strong>Read-only · Official · Finite · v0.8.8</strong></footer>
+</body>
+</html>

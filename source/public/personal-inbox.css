@@ -1,0 +1,8 @@
+.personal-inbox-updates{list-style:none;margin:16px 0 0;padding:0;display:grid;gap:0}
+.personal-inbox-updates:empty{display:none}
+.personal-inbox-updates li{padding:14px 0;border-top:1px solid #d9d9d9;overflow-wrap:anywhere}
+.personal-inbox-updates a{display:inline-block;color:inherit;text-decoration:underline;text-underline-offset:3px;font-weight:700;line-height:1.45;padding:4px 0}
+.personal-inbox-updates p,.personal-inbox-updates .wallet-home-update-meta{display:block;margin:4px 0 0;font-size:12px;line-height:1.6}
+.personal-inbox-updates a:focus-visible{outline:2px solid var(--coral,#f66061);outline-offset:4px}
+#wallet-home-refresh[hidden]{display:none}
+@media(max-width:600px){.personal-inbox-updates a{min-height:44px;display:flex;align-items:center}}

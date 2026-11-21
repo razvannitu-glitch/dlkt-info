@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f66061">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="Synthetic preview of the finite DLKT Action Inbox and follow-up loop.">
+  <meta name="robots" content="noindex,nofollow">
+  <title>DLKT — Action Inbox</title>
+  <link rel="shortcut icon" href="/favicon.ico?v=kate-fb7b2e60" type="image/x-icon"><link rel="icon" href="/favicon-kate-fb7b2e60.png" type="image/png" sizes="180x180">
+  <link rel="stylesheet" href="/inbox.css">
+  <script src="/action-data.js" defer></script>
+  <script src="/inbox-data.js" defer></script>
+  <script src="/inbox.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#inbox-main">Skip to Action Inbox</a>
+  <header class="inbox-header">
+    <a class="inbox-brand" href="/" aria-label="DLKT home"><span class="brand-signal" aria-hidden="true"><i></i><i></i><i></i></span><span>DLKT</span></a>
+    <div class="header-title"><span>Action Inbox</span><strong>Only what needs your decision</strong></div>
+    <nav aria-label="Action Inbox navigation">
+      <span class="preview-chip"><i aria-hidden="true"></i>Session preview</span>
+      <a href="/today" data-open-today>Today <span aria-hidden="true">→</span></a>
+      <a href="/actions" data-open-actions>Action Control <span aria-hidden="true">↗</span></a>
+      <a href="/delivery" data-open-delivery>Delivery <span aria-hidden="true">↗</span></a>
+      <a href="/history">History <span aria-hidden="true">↗</span></a>
+      <a href="/trust">Trust <span aria-hidden="true">↗</span></a>
+      <a href="/">Exit <span aria-hidden="true">×</span></a>
+    </nav>
+  </header>
+
+  <main id="inbox-main">
+    <section class="inbox-hero" aria-labelledby="inbox-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span aria-hidden="true"></span>Follow-up without noise</p>
+        <h1 id="inbox-title">The briefing ends.<br><em>Your attention stays precise.</em></h1>
+        <p>DLKT separates what is due now, what is waiting for verified change and what you explicitly muted. No generic to-do list. No silent execution.</p>
+      </div>
+      <div class="hero-art" aria-hidden="true"><span class="orbit orbit-a"></span><span class="orbit orbit-b"></span><span class="pulse"></span><strong data-hero-due>03</strong><small>due now</small></div>
+      <dl class="hero-metrics" aria-label="Action Inbox summary">
+        <div><dt data-due-count>03</dt><dd>due now</dd></div>
+        <div><dt data-waiting-count>02</dt><dd>waiting</dd></div>
+        <div><dt data-scheduled-count>01</dt><dd>scheduled</dd></div>
+        <div><dt data-quiet-count>01</dt><dd>quieted</dd></div>
+      </dl>
+    </section>
+
+    <section class="inbox-console" aria-labelledby="console-title">
+      <aside class="filter-panel">
+        <header><p>Finite action state</p><h2 id="console-title">Decide, then move on.</h2><span data-query-state>Canonical synthetic preview</span></header>
+        <div class="filter-list" role="group" aria-label="Filter Action Inbox">
+          <button type="button" data-filter="all" aria-pressed="true"><span>All</span><b data-filter-all>07</b></button>
+          <button type="button" data-filter="due" aria-pressed="false"><span>Due now</span><b data-filter-due>03</b></button>
+          <button type="button" data-filter="waiting" aria-pressed="false"><span>Waiting</span><b data-filter-waiting>03</b></button>
+          <button type="button" data-filter="quiet" aria-pressed="false"><span>Quiet</span><b data-filter-quiet>01</b></button>
+        </div>
+        <section class="inbox-boundary"><span>Fact boundary</span><strong>Follow-up changes attention, never truth.</strong><p>Acknowledging, cancelling or unmuting an action cannot edit claims, sources, trust or contradiction state.</p></section>
+        <div class="shortcuts"><span><kbd>J</kbd><kbd>K</kbd> navigate</span><span><kbd>H</kbd> handle</span><span><kbd>Z</kbd> undo</span></div>
+      </aside>
+
+      <section class="inbox-list-panel" aria-labelledby="list-title">
+        <header><div><p>Action ledger</p><h2 id="list-title">What needs attention.</h2></div><span data-list-summary>7 active actions</span></header>
+        <div class="inbox-list" data-inbox-list role="listbox" aria-label="Follow-up actions"></div>
+        <div class="inbox-empty" data-inbox-empty hidden><strong>Nothing in this view.</strong><p>Your selected filter has no active follow-up items.</p></div>
+      </section>
+
+      <aside class="inbox-inspector" aria-labelledby="item-title">
+        <header><div><span data-item-topic>Technology</span><h2 id="item-title" data-item-label>API pricing</h2></div><strong data-item-state>DUE NOW</strong></header>
+        <div class="item-copy"><p data-item-entity>DEMO AI Platform</p><h3 data-item-title>Watch the next change</h3><p data-item-current>A new material verified delta is available.</p></div>
+        <dl class="item-facts">
+          <div><dt>Action</dt><dd data-item-action>Watch</dd></div>
+          <div><dt>Trust</dt><dd data-item-trust>Confirmed</dd></div>
+          <div><dt>Materiality</dt><dd data-item-materiality>High</dd></div>
+          <div><dt>Timing</dt><dd data-item-due>Observed 09:12</dd></div>
+        </dl>
+        <section class="why-now"><span>Why now</span><p data-item-reason>A new material verified delta triggered this watch.</p></section>
+        <section class="next-trigger"><span>Next verified trigger</span><p data-item-next>Enterprise pricing, migration credits or another verified rate change.</p></section>
+        <section class="conflict-note" data-conflict-note hidden><span>Contradiction preserved</span><p>This action does not resolve or hide the active evidence conflict.</p></section>
+        <div class="inspector-actions">
+          <button type="button" data-handle-action>Handle this action</button>
+          <a href="/actions" data-open-actions>Edit in Action Control <span aria-hidden="true">→</span></a>
+        </div>
+        <p class="execution-note">No action executes automatically in this preview.</p>
+      </aside>
+    </section>
+
+    <section class="activity-ledger" aria-labelledby="activity-title">
+      <header><div><p>Visible session activity</p><h2 id="activity-title">Every decision leaves a trace.</h2></div><div><button type="button" data-undo disabled>Undo last decision</button><button type="button" data-reset>Reset preview</button></div></header>
+      <div data-activity-list><p class="activity-empty">No follow-up decision has been made in this session.</p></div>
+    </section>
+  </main>
+
+  <div class="toast" data-toast hidden role="status" aria-live="polite"><strong data-toast-title>Action updated</strong><span data-toast-copy>The session preview was recalculated.</span></div>
+</body>
+</html>

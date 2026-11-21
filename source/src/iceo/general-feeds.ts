@@ -1,0 +1,19 @@
+import type {SourceDefinition} from './contracts.js';
+const rights={rightsCheckedAt:'2026-11-16',rightsReviewBy:'2026-12-16'} as const;
+const gv={...rights,publisher:'Global Voices',adapter:'reviewed-feed',homepage:'https://globalvoices.org/feeds/',termsUrl:'https://globalvoices.org/about/global-voices-attribution-policy/',
+ attribution:'Source: Global Voices, CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/). A publisher-feed excerpt where available; original and translation credits are retained. Any displayed photograph has its own credit and usage terms, separate from this text license. No endorsement is implied.'} as const;
+export const GENERAL_FEEDS:readonly SourceDefinition[]=Object.freeze([
+ {...gv,id:'gv-world',label:'Global Voices world perspectives',topic:'world',endpoint:'https://globalvoices.org/feed/',
+  scope:'English Global Voices community reporting and perspectives from its available feed, last 30 days. Culture-tagged entries are handled by the separate culture feed. Not comprehensive or independently corroborated world news.',
+  feed:{format:'rss',title:'Global Voices',homeOrigin:'https://globalvoices.org',articleOrigins:['https://globalvoices.org'],articlePaths:['/20'],dateField:'pubDate',dateLabel:'Published',summary:'description',refreshSeconds:1800,windowDays:30,credits:'globalvoices',licenseUrl:'https://creativecommons.org/licenses/by/3.0/',excludeCategories:['Arts & Culture'],
+   boundary:'Global Voices publisher excerpt or listing. This is community reporting and editorial perspective, not independent corroboration. Published is the English feed date; an original-language article may be older.'}},
+ {...gv,id:'gv-culture',label:'Global Voices arts and culture',topic:'culture',endpoint:'https://globalvoices.org/-/topics/arts-culture/feed/',
+  scope:'English arts and culture entries in the Global Voices category feed, last 30 days. Limited publisher coverage; this is not a complete culture or events calendar.',
+  feed:{format:'rss',title:'Arts & Culture – Global Voices',homeOrigin:'https://globalvoices.org',articleOrigins:['https://globalvoices.org'],articlePaths:['/20'],dateField:'pubDate',dateLabel:'Published',summary:'description',refreshSeconds:3600,windowDays:30,credits:'globalvoices',licenseUrl:'https://creativecommons.org/licenses/by/3.0/',
+   boundary:'Global Voices arts and culture publisher excerpt or listing. Original-language and translation credits are retained. This is not a ticket, booking or confirmation of current availability.'}},
+ {...rights,id:'eff-digital',label:'EFF digital life and rights',publisher:'Electronic Frontier Foundation',topic:'digital-life',adapter:'reviewed-feed',endpoint:'https://www.eff.org/rss/updates.xml',homepage:'https://www.eff.org/deeplinks',termsUrl:'https://www.eff.org/copyright',
+  attribution:'Source: Electronic Frontier Foundation, CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Original publisher listing or bounded feed excerpt; no third-party images, logos or endorsement.',
+  scope:'EFF Deeplinks digital-rights, privacy and technology advocacy, last 30 days of the available feed. Legal references may concern the United States; not comprehensive technology or product coverage.',
+  feed:{format:'rss',title:'Deeplinks',homeOrigin:'https://www.eff.org',homePath:'/rss/updates.xml',articleOrigins:['https://www.eff.org'],articlePaths:['/deeplinks/'],dateField:'pubDate',dateLabel:'Published',summary:'description',refreshSeconds:1800,windowDays:30,credits:'creator',licenseUrl:'https://creativecommons.org/licenses/by/4.0/',
+   boundary:'EFF publisher listing or excerpt. EFF is a digital-rights advocacy organization; its analysis is attributed to EFF, not independent corroboration or personal legal advice. Long feed descriptions are linked rather than shortened.'}},
+]);

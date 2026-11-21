@@ -1,0 +1,28 @@
+{
+  "objective": "Selecting Palma produces a finite daily briefing across weather, relevant transport notices, same-day cultural events and recent municipal announcements, each attributable and time-bounded.",
+  "source": {
+    "commit": "8a7059bda9b8e9312f35cac59b2b69323e8d4cae",
+    "branch": "feat/dlkt-info-direct-card",
+    "deployment": "dpl_5v2hBTRbUXLoKT2e5HNExH52HCPg",
+    "candidate": "feat/dlkt-info-palma-daily"
+  },
+  "acceptance": {
+    "K1": "Fixed reviewed source URLs and explicit city identity; other cities retain their existing coverage.",
+    "T1": "Reject wrong sources, unsupported source formats, forbidden robots paths, redirections, oversized data and unsupported dates. Source outages and unconnected domains remain distinct from zero matching records.",
+    "T2": "Use the Europe/Madrid day and explicit event times; past event starts and expired transport intervals never appear as currently actionable. Municipal publication is not an effective date or independent confirmation.",
+    "A1": "City selection alone includes local coverage, including in personal briefing with no topic selection. Relevant source links and concrete next steps appear in cards.",
+    "A2": "Essential, discovery and administrative context remain finite; unchanged old topic flow, browser-only consent and saved comparison validation are preserved.",
+    "V1": "Strict TypeScript, existing full suite, new failure and temporal tests, live-source acquisition, browser flow at mobile/desktop widths, independent diff review.",
+    "R1": "No payment/account activation, new paid data source, background jobs, CSS or branding changes."
+  },
+  "bounds": {
+    "sandboxSessions": 1,
+    "sourceDomains": 3,
+    "detailRequestsPerDomain": 3,
+    "maxCardsPerDomain": 3,
+    "perRequestTimeoutMs": 6000,
+    "maxSourceBytes": 1048576,
+    "maxRefreshAgeMs": 300000,
+    "release": "only same verified candidate; no forced deployment"
+  }
+}
