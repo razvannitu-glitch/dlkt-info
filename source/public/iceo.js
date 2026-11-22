@@ -1,5 +1,5 @@
 import { getLocale, translate as tr, translatedCategory, countryLabel, languageLabel, setupLanguage, applyInterfaceLanguage } from './i18n-browser.js';
-import { sourceLanguage } from './news-sources.js';
+import { sourceLanguage, selectNewsLanguage, newsLanguageCoverage } from './news-sources.js';
 import { photoNode, integratePhotoHeadline } from './card-photo-browser.js';
 import { setupExplore } from './explore-browser.js';
 import { contextForCard } from './context.js';
@@ -7,7 +7,7 @@ import { nextDailyEditionDelay, selectContextualToday } from './contextual-today
 import { LiveEdition, editionCardSignature, editionStorySignature, editionUpdateLabel, PUBLIC_EDITION_POLL_MS, publicEditionPollDelay } from './live-edition.js';
 import { appendPublicEdition, appendPublicContinuation, dailyEditionSummary, publicEditionState } from './home-edition.js';
 import { DiscoveryLoading, renderDiscoveryLoading, bindDiscoveryLoadingActions } from './loading.js';
-import { selectHomeLocal } from './home-local.js';
+import { selectHomeLanguage } from './home-local.js';
 import { localCardNode } from './local-card-node.js';
 import { localCoverageReading } from './local-presentation.js';
 import { validCity, currentLocalSnapshot } from './local-contracts.js';
@@ -68,6 +68,7 @@ const PUBLIC_REFRESH_MS = PUBLIC_EDITION_POLL_MS;
 let publicRefreshFailures = 0, publicEtag = null, automaticPublicLoad = false, applyPublicUpdate = false;
 const liveEdition = new LiveEdition();
 let continuationCount = 0, continuationContext = '';
+let lastLocalLanguageRefresh = 0;
 const currentCardByNode = new WeakMap();
 function schedulePublicRefresh() {
     clearTimeout(publicRefreshTimer);
@@ -911,7 +912,7 @@ function render() {
         feedback.textContent = 'Enter a positive whole number for the card budget.';
         return;
     }
-    const selection = selectReadingCards(snapshot.cards, s, Date.now());
+    const selection = selectReadingCards(selectNewsLanguage(snapshot.cards, getLocale()), s, Date.now());
     cards.replaceChildren(...selection.cards.map((card, i) => cardNode(card, i, selection.cards.length)));
     pruneInsights();
     heading.replaceChildren(document.createTextNode(mode === 'briefing' ? 'Topic results' : 'Explore records'), make('span', 'title-dot', '.'));
@@ -1088,22 +1089,35 @@ function renderDiscovery() {
     }
     const anchors = applyPublicUpdate ? [] : [...target.querySelectorAll('article')].flatMap(node => { const rect = node.getBoundingClientRect(); return rect.top < innerHeight && rect.bottom > 0 ? [{ node, top: rect.top }] : []; });
     const now = Date.now();
+    const localNeedsCheck = contextualLocalState === 'unavailable' || contextualLocal !== null && now - Date.parse(contextualLocal.checkedAt) >= 300_000;
+    if (contextualCity && contextualLocalState !== 'loading' && localNeedsCheck && document.visibilityState === 'visible' && now - lastLocalLanguageRefresh >= 120_000) {
+        lastLocalLanguageRefresh = now;
+        contextualLocalState = 'loading';
+        required('#refresh-local').click();
+    }
     const city = contextualCity && contextualLocation !== 'estimated' ? { id: contextualCity.id, name: contextualCity.name, countryCode: contextualCity.countryCode, confirmed: true } : undefined;
     const interests = visitInterests ?? savedInterests;
     const context = { countryCode: contextualCity?.countryCode ?? null, preferredTopics: interests, ...(city ? { city } : {}) };
-    const candidate = snapshot ? selectContextualToday(snapshot.cards, context, now) : { first: [], more: [] };
-    const contextKey = JSON.stringify([context.countryCode, city?.id ?? null, [...interests].sort()]);
+    const language = getLocale();
+    const local = selectHomeLanguage(contextualLocal, contextualCity, now, language);
+    const awaitingLocal = contextualLocationPending || contextualCity !== null && contextualLocalState === 'loading';
+    const candidate = snapshot ? selectContextualToday(selectNewsLanguage(snapshot.cards, language), context, now) : { first: [], more: [] };
+    const contextKey = JSON.stringify([language, context.countryCode, city?.id ?? null, [...interests].sort()]);
     if (continuationContext !== contextKey) {
         continuationContext = contextKey;
         continuationCount = 0;
     }
     const live = liveEdition.present(candidate, contextKey, now, applyPublicUpdate);
     applyPublicUpdate = false;
-    const today = live.selection;
+    const today = live.selection, topCount = today.first.length + local.topNews.length;
+    if (topCount === 0)
+        continuationCount = Math.max(continuationCount, 20);
+    target.dataset.newsLanguage = language;
     button.textContent = live.changes.total ? (getLocale() === 'en' ? 'Show updates' : tr('refresh') + ' · ' + new Intl.NumberFormat(getLocale()).format(live.changes.total)) : tr('refresh');
     button.setAttribute('aria-label', getLocale() === 'en' ? (live.changes.total ? `Show updates: ${editionUpdateLabel(live.changes)}` : 'Refresh daily top') : button.textContent);
-    const editionState = publicEditionState(today, { snapshotState: snapshot?.state ?? null, loading: loading || !initialCheckStarted, failed: lastLoadFailed });
-    const loadingPhase = discoveryLoading.phase({ pending: editionState === 'pending', unavailable: editionState === 'unavailable', firstCount: today.first.length, moreCount: today.more.length });
+    const globalEditionState = publicEditionState(today, { snapshotState: snapshot?.state ?? null, loading: loading || !initialCheckStarted, failed: lastLoadFailed });
+    const editionState = topCount > 0 ? 'ready' : awaitingLocal ? 'pending' : globalEditionState;
+    const loadingPhase = discoveryLoading.phase({ pending: editionState === 'pending', unavailable: editionState === 'unavailable', firstCount: topCount, moreCount: today.more.length });
     section.dataset.loading = loadingPhase;
     renderDiscoveryLoading(discoveryLoadingElements, loadingPhase);
     discoveryLoadingElements.hint.textContent = tr('originalContentNote');
@@ -1114,9 +1128,7 @@ function renderDiscovery() {
         discoveryLoadingElements.copy.textContent = tr(editionState === 'unavailable' ? 'refreshHint' : 'homeContext');
         discoveryLoadingElements.status.textContent = tr(editionState === 'unavailable' ? 'storiesUnavailable' : 'checkingSources');
     }
-    const local = selectHomeLocal(contextualLocal, contextualCity, now);
-    const suppressLocalPending = (loadingPhase === 'initial' || loadingPhase === 'slow') && !local.cards.length;
-    const awaitingLocal = contextualLocationPending || contextualCity !== null && contextualLocalState === 'loading';
+    const suppressLocalPending = (loadingPhase === 'initial' || loadingPhase === 'slow') && !local.supporting.length;
     required('#today-heading').textContent = tr('todayTop');
     required('#home-location').textContent = contextualCity
         ? `${contextualCity.name} · ${countryLabel(contextualCity.countryCode, contextualCity.country)}${contextualLocation === 'estimated' ? ' · approximate' : ''}`
@@ -1127,12 +1139,61 @@ function renderDiscovery() {
     if (delays.length && document.visibilityState === 'visible')
         discoveryExpiry = setTimeout(renderDiscovery, Math.min(...delays));
     host.replaceChildren();
-    // Publication reading does not wait for city lookup. The existing selector owns eligibility.
-    appendPublicEdition(host, today, (view, index, total) => {
-        const node = cardNode(view, index, total, undefined, false);
-        node.dataset.liveSignature = JSON.stringify([getLocale(), editionCardSignature(view.card), editionStorySignature(view)]);
-        return node;
-    }, editionState);
+    const languageNote = make('div', 'discovery-section-label');
+    languageNote.id = 'home-news-language';
+    languageNote.append(make('p', 'privacy-note', tr('sourceLanguage', { language: languageLabel(language) }) + ' · ' + tr('matchingStories', { count: topCount + today.more.length })));
+    if (language !== 'en') {
+        const english = make('button', 'text-button', 'English');
+        english.type = 'button';
+        english.lang = 'en';
+        english.addEventListener('click', () => { const picker = required('#reader-language'); picker.value = 'en'; picker.dispatchEvent(new Event('change', { bubbles: true })); });
+        languageNote.append(english);
+    }
+    host.append(languageNote);
+    // These are the existing checked city records, never synthetic global EvidenceCards.
+    for (const item of local.topNews) {
+        if (!contextualCity)
+            break;
+        const node = localCardNode(item, contextualCity, now);
+        node.dataset.homeLocalId = item.id;
+        node.dataset.cityId = contextualCity.id;
+        node.dataset.editionPart = 'first';
+        const title = node.querySelector('h3');
+        if (title) {
+            title.lang = language;
+            title.dir = 'auto';
+            title.setAttribute('translate', 'no');
+        }
+        const category = node.dataset.editorialCategory;
+        if (category && PUBLIC_EDITORIAL_CATEGORIES.includes(category)) {
+            const label = node.querySelector('.card-topic');
+            if (label)
+                label.textContent = translatedCategory(category);
+        }
+        const link = node.querySelector('.card-content > .source-link');
+        if (link)
+            link.textContent = tr('openSource');
+        const details = node.querySelector('.evidence > summary');
+        if (details)
+            details.textContent = tr('sourceDetails');
+        host.append(node);
+    }
+    // Publication reading uses the language projection, with unchanged evidence eligibility.
+    if (today.first.length || !local.topNews.length)
+        appendPublicEdition(host, today, (view, index, total) => {
+            const node = cardNode(view, index + local.topNews.length, total + local.topNews.length, undefined, false);
+            node.dataset.liveSignature = JSON.stringify([language, editionCardSignature(view.card), editionStorySignature(view)]);
+            return node;
+        }, editionState);
+    else {
+        host.dataset.editionState = editionState;
+        host.dataset.dailyCoverage = 'partial-categories';
+    }
+    const firstNodes = [...host.querySelectorAll('article[data-edition-part="first"]')];
+    for (const node of firstNodes)
+        node.classList.remove('today-last');
+    if (firstNodes.length % 2 === 1)
+        firstNodes.at(-1)?.classList.add('today-last');
     if (loadingPhase !== 'hidden')
         host.querySelector('#home-edition-pending, #home-edition-unavailable')?.remove();
     // Local source records stay contiguous and distinct from the global daily top.
@@ -1142,7 +1203,7 @@ function renderDiscovery() {
         label.append(make('h2', '', contextualCity ? tr('todayLocalTitle', { city: contextualCity.name }) : tr('navMyCity')));
         host.append(label);
     }
-    for (const item of local.cards) {
+    for (const item of local.supporting) {
         if (!contextualCity)
             break;
         const node = localCardNode(item, contextualCity, now);
@@ -1150,12 +1211,12 @@ function renderDiscovery() {
         node.dataset.cityId = contextualCity.id;
         host.append(node);
     }
-    if (!suppressLocalPending && !local.cards.length && (contextualCity || contextualLocationPending)) {
+    if (!suppressLocalPending && !local.supporting.length && !local.topNews.length && (contextualCity || contextualLocationPending)) {
         const state = make('div', 'discovery-section-label');
         state.id = 'home-local-state';
         state.setAttribute('role', 'status');
-        const expired = contextualLocalState === 'loaded' && contextualLocal !== null;
-        state.append(make('p', 'privacy-note', awaitingLocal ? 'Checking local updates…' : expired ? 'The local check has expired. Refresh to see current local information.' : contextualLocalState === 'unavailable' ? 'Local information could not be checked. Refresh to try again.' : 'No current local cards were verified. Check local sources or choose another city.'));
+        const expired = contextualLocalState === 'loaded' && contextualLocal !== null && now - Date.parse(contextualLocal.checkedAt) >= 300_000;
+        state.append(make('p', 'privacy-note', awaitingLocal ? 'Checking local updates…' : expired ? 'The local check has expired. Refresh to see current local information.' : contextualLocalState === 'unavailable' ? 'Local information could not be checked. Refresh to try again.' : 'No current local cards match this reading language. Check connected sources or choose another language.'));
         host.append(state);
     }
     if (contextualCity) {
@@ -1185,16 +1246,16 @@ function renderDiscovery() {
         continuation.textContent = tr('showMore', { count: Math.min(20, Math.max(0, today.more.length - continuationCount)), remaining: Math.max(0, today.more.length - continuationCount) });
     reconcileDiscovery(target, host);
     pruneInsights();
-    const publicationState = editionState === 'unavailable' ? 'Publications could not be checked. Refresh to try again.' : today.first.length + today.more.length ? dailyEditionSummary(today) : editionState === 'pending' ? 'Checking connected publications…' : 'No current publications meet this selection.';
+    const publicationState = local.topNews.length ? `${topCount} current reports in the selected language, including ${local.topNews.length} local reports. Original sources and dates are retained. ` + (today.first.length + today.more.length ? dailyEditionSummary(today) : 'No other current publications match this reading language.') : editionState === 'unavailable' ? 'Publications could not be checked. Refresh to try again.' : today.first.length + today.more.length ? dailyEditionSummary(today) : editionState === 'pending' ? 'Checking connected publications…' : 'No current publications meet this selection.';
     const sourceState = loading && !automaticPublicLoad ? ' Checking for updates…' : lastLoadFailed && snapshot ? ' Refresh unavailable; retained source checks are not newly verified.' : snapshot?.state === 'partial' ? ' Some source coverage is incomplete.' : '';
-    const localState = awaitingLocal ? ' Local information is still being checked below.' : local.cards.length ? ` ${local.cards.length} local cards are available separately below.` : contextualCity ? ' Local coverage is shown below.' : '';
+    const localState = (local.topNews.length ? ` ${local.topNews.length} current local reports are included above.` : '') + (awaitingLocal ? ' Local information is being checked.' : local.supporting.length ? ` ${local.supporting.length} supporting local records are available below.` : contextualCity ? ' Local coverage is shown below.' : '');
     const updates = live.changes.total ? ` ${editionUpdateLabel(live.changes)}. Select Show updates when you are ready; your reading position stays stable.` : '';
     const noteText = (snapshot ? `${formatted(snapshot.generatedAt, true)} · Source check ${formatted(snapshot.generatedAt)}. ` : '') + publicationState + sourceState + localState + updates;
     if (loadingPhase === 'hidden') {
         const checkedTime = snapshot ? new Intl.DateTimeFormat(getLocale(), { hour: '2-digit', minute: '2-digit' }).format(new Date(snapshot.generatedAt)) : null;
-        const compact = getLocale() === 'en' ? compactEditionStatus({ state: editionState, count: today.first.length, continuation: today.more.length, checkedTime, refreshing: loading && !automaticPublicLoad, refreshFailed: lastLoadFailed && snapshot !== null, partial: snapshot?.state === 'partial' || today.daily?.completeCoverage === false, updates: live.changes.total })
-            : editionState === 'unavailable' ? tr('storiesUnavailable') : editionState === 'pending' && !today.first.length && !today.more.length ? tr('loadingStories')
-                : [tr('matchingStories', { count: today.first.length }), checkedTime ? tr('checkedAt', { time: checkedTime }) : '', lastLoadFailed && snapshot ? tr('refreshUnavailable') : loading && !automaticPublicLoad ? tr('checkingUpdates') : '', snapshot?.state === 'partial' || today.daily?.completeCoverage === false ? tr('partialCoverage') : ''].filter(Boolean).join(' · ');
+        const compact = getLocale() === 'en' ? compactEditionStatus({ state: editionState, count: topCount, continuation: today.more.length, checkedTime, refreshing: loading && !automaticPublicLoad, refreshFailed: lastLoadFailed && snapshot !== null, partial: true, updates: live.changes.total })
+            : editionState === 'unavailable' ? tr('storiesUnavailable') : editionState === 'pending' && !topCount && !today.more.length ? tr('loadingStories')
+                : [tr('matchingStories', { count: topCount }), checkedTime ? tr('checkedAt', { time: checkedTime }) : '', lastLoadFailed && snapshot ? tr('refreshUnavailable') : loading && !automaticPublicLoad ? tr('checkingUpdates') : '', tr('partialCoverage')].filter(Boolean).join(' · ');
         if (note.textContent !== compact)
             note.textContent = compact;
     }
@@ -1204,6 +1265,21 @@ function renderDiscovery() {
     const locationDetail = contextualCity ? ` City: ${contextualCity.name}, ${contextualCity.country}. ${contextualLocation === 'estimated' ? 'Approximate city from your connection; no precise location is known.' : contextualLocation === 'saved' ? 'Using your saved city.' : 'Chosen for this visit.'}` : '';
     if (detailCopy.textContent !== noteText + locationDetail)
         detailCopy.textContent = noteText + locationDetail;
+    let languages = editionDetails.querySelector('#edition-language-coverage');
+    if (!languages) {
+        languages = make('div', '');
+        languages.id = 'edition-language-coverage';
+        editionDetails.append(languages);
+    }
+    const eligible = snapshot ? selectContextualToday(snapshot.cards, context, now) : { first: [], more: [] };
+    const supply = newsLanguageCoverage([...eligible.first, ...eligible.more].flatMap(view => [view.card, ...view.related]));
+    languages.replaceChildren(make('p', 'privacy-note', tr('navSources') + ' · ' + new Intl.NumberFormat(language).format(supply.publishers) + ' · ' + tr('partialCoverage')));
+    for (const item of supply.languages)
+        languages.append(make('p', 'privacy-note', languageLabel(item.language) + ' · ' + tr('matchingStories', { count: item.count })));
+    if (supply.unknownLanguage)
+        languages.append(make('p', 'privacy-note', tr('sourceLanguage', { language: '—' }) + ' · ' + tr('matchingStories', { count: supply.unknownLanguage })));
+    if (local.topNews.length)
+        languages.append(make('p', 'privacy-note', tr('todayLocalTitle', { city: contextualCity?.name ?? '' }) + ' · ' + tr('matchingStories', { count: local.topNews.length })));
     const anchor = anchors.find(item => item.node.isConnected);
     if (anchor) {
         const offset = anchor.node.getBoundingClientRect().top - anchor.top;
@@ -1240,6 +1316,7 @@ document.addEventListener('dlkt:city-selected', event => {
     contextualLocation = event.detail.estimated === true ? 'estimated' : event.detail.restored === true ? 'saved' : 'selected';
     contextualLocal = null;
     contextualLocalState = 'loading';
+    lastLocalLanguageRefresh = Date.now();
     renderDiscovery();
 });
 document.addEventListener('dlkt:local-snapshot', event => {
@@ -1247,6 +1324,7 @@ document.addEventListener('dlkt:local-snapshot', event => {
         return;
     contextualLocal = currentLocalSnapshot(event.detail.snapshot, contextualCity, Date.now()) ? event.detail.snapshot : null;
     contextualLocalState = contextualLocal ? 'loaded' : 'unavailable';
+    lastLocalLanguageRefresh = Date.now();
     renderDiscovery();
 });
 document.addEventListener('dlkt:location-settled', () => { contextualLocationPending = false; renderDiscovery(); });

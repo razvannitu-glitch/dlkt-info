@@ -1,5 +1,6 @@
-import { validLocalNewsArticle, NEWS_WINDOW_MS } from './local-news-policy.js';
+import { CITY_NEWS_FEEDS, validLocalNewsArticle, NEWS_WINDOW_MS } from './local-news-policy.js';
 import { currentLocalSnapshot, validCity, object, stamp, localEventEligible } from './local-contracts.js';
+import { newsLanguageMatches } from './news-sources.js';
 const kindOrder = { 'utility-notice': 0, 'transport-notice': 1, transport: 2, forecast: 3, event: 4, 'municipal-news': 5, 'local-news': 6 };
 const folded = (value) => value.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 function titleKey(card) { return folded(card.title).replace(/^(?:video|foto|breaking)\s*[|:—-]?\s*/u, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim(); }
@@ -116,4 +117,20 @@ export function selectHomeLocal(snapshot, city, now) {
         return { cards: [], expiresAt: null };
     const expiries = [checked + 300000, ...cards.flatMap(card => [Date.parse(card.validTo), ...(card.news ? [Date.parse(card.news.publishedAt) + NEWS_WINDOW_MS + 1] : []), ...(card.context?.startsAt ? [Date.parse(card.context.endsAt ?? card.context.startsAt)] : [])])].filter(time => time > now);
     return { cards, expiresAt: Math.min(...expiries) };
+}
+/** Reuse checked city records. A publication aged24–72h stays local, outside the24h top. */
+export function selectHomeLanguage(snapshot, city, now, language) {
+    const selected = selectHomeLocal(snapshot, city, now);
+    const cards = selected.cards.filter(card => {
+        if (card.kind !== 'local-news')
+            return true;
+        const feed = CITY_NEWS_FEEDS.find(value => value.id === card.news?.sourceId);
+        return feed !== undefined && newsLanguageMatches(feed.language, language);
+    });
+    const topNews = cards.filter(card => card.kind === 'local-news' && card.news !== undefined
+        && Date.parse(card.news.publishedAt) <= now && Date.parse(card.news.publishedAt) > now - 86_400_000);
+    const promoted = new Set(topNews.map(card => card.id));
+    const supporting = cards.filter(card => !promoted.has(card.id));
+    const boundaries = [...(selected.expiresAt === null ? [] : [selected.expiresAt]), ...topNews.map(card => Date.parse(card.news.publishedAt) + 86_400_000 + 1)].filter(time => time > now);
+    return Object.freeze({ cards: Object.freeze(cards), topNews: Object.freeze(topNews), supporting: Object.freeze(supporting), expiresAt: boundaries.length ? Math.min(...boundaries) : null });
 }

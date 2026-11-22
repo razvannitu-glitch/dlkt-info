@@ -2,11 +2,11 @@ export const NEWS_WINDOW_MS = 72 * 60 * 60 * 1000;
 export const NEWS_CHECK_MS = 5 * 60 * 1000;
 /** Operator-reviewed city capabilities. An article still needs its own place reference. */
 export const CITY_NEWS_FEEDS = Object.freeze([
-    Object.freeze({ id: 'bucharest-b365', publisher: 'B365', cityId: '683506', countryCode: 'RO', timezone: 'Europe/Bucharest',
+    Object.freeze({ id: 'bucharest-b365', publisher: 'B365', language: 'ro', cityId: '683506', countryCode: 'RO', timezone: 'Europe/Bucharest',
         endpoint: 'https://b365.ro/feed/', home: 'https://b365.ro/', title: 'B365', articlePattern: /^\/[a-z0-9-]+-\d{4,}\/$/u,
         termsUrl: 'https://b365.ro/despre-noi/', rightsCheckedAt: '2026-11-18', rightsReviewBy: '2026-12-18', quoteLimit: 250,
         attribution: 'Source: B365. Publisher headline and optional short excerpt. Read the original article for its full context.' }),
-    Object.freeze({ id: 'bucharest-buletin', publisher: 'Buletin de București', cityId: '683506', countryCode: 'RO', timezone: 'Europe/Bucharest',
+    Object.freeze({ id: 'bucharest-buletin', publisher: 'Buletin de București', language: 'ro', cityId: '683506', countryCode: 'RO', timezone: 'Europe/Bucharest',
         endpoint: 'https://buletin.de/bucuresti/feed/', home: 'https://buletin.de/bucuresti/', title: 'Buletin de București', articlePattern: /^\/bucuresti\/[a-z0-9]+(?:-[a-z0-9]+)+\/$/u,
         termsUrl: 'https://buletin.de/bucuresti/termeni-si-conditii/', rightsCheckedAt: '2026-11-18', rightsReviewBy: '2026-12-18', quoteLimit: 500,
         licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
