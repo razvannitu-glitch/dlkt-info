@@ -36,15 +36,17 @@ test('server pages retain a corpus larger than the compatibility snapshot and pr
 test('category pages are exact projections of the same native-language city-specific order',async()=>{
  const records=Array.from({length:54},(_,i)=>article(i+1,{language:'ro',category:Object.keys(CATEGORIES)[i%18]}));
  const localEntry=local(25),edition=epoch([...records,article(100,{language:'en'})],[localEntry]),service=new NewsPageService(new CorpusMemoryStore([edition]),KEY,()=>NOW+1000);
- const all=[];let cursor=null;do{const page=await service.read(request('ro','683506','all',cursor));all.push(...page.items);cursor=page.nextCursor;}while(cursor);
+ const all=[],pages=[];let cursor=null;do{const page=await service.read(request('ro','683506','all',cursor));pages.push(page);all.push(...page.items);cursor=page.nextCursor;}while(cursor);
  assert.equal(all.length,79);assert.equal(all.filter(item=>item.kind==='local').length,25);cycles(all);
  const category=all.find(item=>item.kind==='local').category,filtered=[];cursor=null;
  do{const page=await service.read(request('ro','683506',category??'other',cursor));filtered.push(...page.items);cursor=page.nextCursor;}while(cursor);
  assert.deepEqual(filtered,all.filter(item=>item.category===category));
  const english=await service.read(request('en','683506'));assert.equal(english.total,1);assert.equal(english.items[0].kind,'global');
+ assert.equal(validNewsPage(english,NOW+1000),true,'a global-only page does not require local city metadata');
  const otherCity=await service.read(request('ro','2643743'));assert.equal(otherCity.total,54);assert.ok(otherCity.items.every(item=>item.kind==='global'));
- const first=await service.read(request('ro','683506'));assert.equal(validNewsPage(first,NOW+1000),false);
- assert.equal(validNewsPage(first,NOW+1000,localEntry.city),true);assert.equal(validNewsPage(first,NOW+1000,findCity('2643743')),false);
+ const withLocal=pages.find(page=>page.items.some(item=>item.kind==='local'));assert.ok(withLocal,'the city-validation fixture must contain a local article');
+ assert.equal(validNewsPage(withLocal,NOW+1000),false);
+ assert.equal(validNewsPage(withLocal,NOW+1000,localEntry.city),true);assert.equal(validNewsPage(withLocal,NOW+1000,findCity('2643743')),false);
 });
 test('cursor pins the epoch when newer data arrives and cannot be tampered with or reused for a different context',async()=>{
  const first=epoch(Array.from({length:45},(_,i)=>article(i+1))),store=new CorpusMemoryStore([first]);let now=NOW+1000;

@@ -57,7 +57,7 @@ test('forward upgrade preserves existing candidates, immutable shared revisions 
  assert.deepEqual((await db.query('select * from public.dlkt_info_news_candidates')).rows,beforeRows);
  assert.deepEqual((await db.query('select * from public.dlkt_info_shared_cards')).rows,beforeShares);
  assert.equal(await valid(oldCard()),true);const readiness=await ready();assert.equal(readiness.ready,true);assert.equal(readiness.schemaFingerprint,EXPECTED_SCHEMA_FINGERPRINT);
- assert.equal(readiness.counts.relationsExpected,32);assert.equal(readiness.counts.functionsExpected,58);
+ assert.equal(readiness.counts.relationsExpected,33);assert.equal(readiness.counts.functionsExpected,67);
 });
 
 test('explicit JSON null category is accepted and round-trips through the existing authenticated-writer RPC',async()=>{

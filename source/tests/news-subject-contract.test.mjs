@@ -9,7 +9,7 @@ const url='https://www.theguardian.com/world/2026/nov/22/reported-story';
 const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const subject=(sections=['Economy'],keywords=[])=>({basis:'publisher-jsonld',articleUrl:url,sections,keywords});
 const evidence=(metadata=subject())=>{
- const base={identity:url,title:'Nvidia unveils a new graphics processor',sourceUrl:url,date:'2026-11-22T12:00:00.000Z',dateLabel:'Published',publisher:'The Guardian',deadline:null,version:null,...(metadata?{articleSubject:metadata}:{})};
+ const base={identity:url,title:'Nvidia unveils new artificial intelligence software',sourceUrl:url,date:'2026-11-22T12:00:00.000Z',dateLabel:'Published',publisher:'The Guardian',deadline:null,version:null,...(metadata?{articleSubject:metadata}:{})};
  return {...base,id:digest(url).slice(0,24),topic:'other',kind:'publication',sourceIds:['news-unclassified'],observedAt:'2026-11-22T12:01:00.000Z',contentHash:digest(cardContent(base)),boundary:'Attributed original headline.',attribution:'Source: The Guardian.',sourceState:'verified'};
 };
 test('publisher metadata participates in the canonical material revision and copy',()=>{
@@ -36,6 +36,7 @@ test('an unambiguous canonical publisher section maps to the standard vocabulary
  assert.deepEqual(classifyEvidenceCard(evidence(subject(['economy, business and finance']))),{category:'04000000',basis:'publisher-metadata'});
 });
 test('ambiguous or unrelated metadata retains the existing headline fallback',()=>{
+ assert.deepEqual(classifyEvidenceCard(evidence(null)),{category:'13000000',basis:'headline'});
  for(const metadata of [subject(['Economy','Science']),subject([],['Economy','Sport']),subject(['Nvidia']),{...subject(),articleUrl:url+'/other'}]){
   const result=classifyEvidenceCard(evidence(metadata));assert.equal(result?.category,'13000000');assert.notEqual(result?.basis,'publisher-metadata');
  }

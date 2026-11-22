@@ -147,16 +147,17 @@ test('changing the category restores keyboard focus on the replacement select wi
  const document={activeElement:null};let handler,select,renders=0;
  class Select {constructor(value){this.id='home-news-category';this.value=value;this.focusCount=0;}focus(options){this.focusCount++;this.options=options;document.activeElement=this;}}
  const host={addEventListener(type,callback){assert.equal(type,'change');handler=callback;}};
- const context={document,HTMLSelectElement:Select,NEWS_PAGE_SIZE,isNewsCategoryId:value=>NEWS_CATEGORIES.some(category=>category.id===value),
+ const context={document,HTMLSelectElement:Select,isNewsCategoryId:value=>NEWS_CATEGORIES.some(category=>category.id===value),
   required:selector=>selector==='#discovery'?host:selector==='#home-news-category'?select:null,
   renderDiscovery:()=>{renders++;select=new Select(context.newsFilter);if(document.activeElement instanceof Select)document.activeElement=null;}};
- runInNewContext("var newsFilter='all',continuationCount=999;\n"+registration,context);
+ runInNewContext("var newsFilter='all';\n"+registration,context);
  const original=new Select(NEWS_CATEGORIES[0].id);document.activeElement=original;handler({target:original});
- assert.equal(renders,1);assert.equal(context.newsFilter,original.value);assert.equal(context.continuationCount,NEWS_PAGE_SIZE);
+ assert.equal(renders,1);assert.equal(context.newsFilter,original.value);assert.equal(select.value,original.value,'the replacement picker reflects the selected server category');
  assert.equal(document.activeElement,select);assert.equal(select.focusCount,1);assert.equal(select.options.preventScroll,true);
  const programmatic=new Select('other'),unrelated={id:'source-action'};document.activeElement=unrelated;handler({target:programmatic});
- assert.equal(renders,2);assert.equal(select.focusCount,0,'a programmatic change must not focus the picker');assert.equal(document.activeElement,unrelated);
- const before=renders;handler({target:new Select('unknown-category')});assert.equal(renders,before);
+ assert.equal(renders,2);assert.equal(context.newsFilter,'other');assert.equal(select.value,'other');assert.equal(select.focusCount,0,'a programmatic change must not focus the picker');assert.equal(document.activeElement,unrelated);
+ const before=renders,previous=select;handler({target:new Select('unknown-category')});assert.equal(renders,before);
+ assert.equal(context.newsFilter,'other');assert.strictEqual(select,previous);assert.strictEqual(document.activeElement,unrelated);
 });
 
 test('editorial queue relevance and exact deduplication survive without a highlighted prefix',()=>{

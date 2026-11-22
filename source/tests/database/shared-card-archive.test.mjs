@@ -164,7 +164,7 @@ test('homepage provenance requires a matching news category and a reviewed homep
 test('extended readiness is exact and rejects new RPCs, archive ACL drift, policy changes and missing TRUNCATE protection',async()=>{
   const read=async()=>asRole('anon',async()=>(await db.query('select public.dlkt_info_read_database_readiness() as value')).rows[0].value);
   const healthy=await read();assert.equal(healthy.ready,true);assert.equal(healthy.schemaFingerprint,EXPECTED_SCHEMA_FINGERPRINT);
-  assert.deepEqual([healthy.counts.relationsTotal,healthy.counts.functionsTotal,healthy.counts.rlsTotal,healthy.counts.policiesTotal,healthy.counts.triggersTotal],[32,58,20,29,34]);
+  assert.deepEqual([healthy.counts.relationsTotal,healthy.counts.functionsTotal,healthy.counts.rlsTotal,healthy.counts.policiesTotal,healthy.counts.triggersTotal],[33,67,21,29,34]);
   const cases=[
     ["create function public.dlkt_info_arbitrary_archive_rpc() returns integer language sql as $$select 1$$",'noUnexpectedObjects'],
     ['grant insert on public.dlkt_info_shared_cards to anon','publicDataPermissions'],
