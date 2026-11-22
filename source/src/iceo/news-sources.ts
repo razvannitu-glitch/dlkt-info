@@ -110,7 +110,8 @@ export const NEWS_PUBLICATION_SCOPES:readonly PublicationScope[]=Object.freeze([
   // Romanian primary editions: exact publisher RSS channel identities verified 2026-11-22.
   publication('digi24','RO','Romania','Romania and global reporting',['/stiri/','ro']),
   publication('hotnews','RO','Romania','Romania and global reporting',['/','ro']),
-  publication('repubblica','IT','Italy','Italy and global reporting',['/','it']),
+  // The Italian RSS also links the publisher's explicit English edition; the article path takes precedence.
+  publication('repubblica','IT','Italy','Italy and global reporting',['/en/','en'],['/','it']),
   publication('ap','US','United States','Global reporting',['/article/','en']),
   publication('bbc','GB','United Kingdom','Global reporting',['/news/','en'],['/sport/','en'],['/japanese/','ja']),
   // Existing direct news indexes and their primary English editions checked 2026-11-22:

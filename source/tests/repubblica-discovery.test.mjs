@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {NEWS_DISCOVERY_INDEXES,NEWS_PUBLISHERS,publisherForNewsUrl,sourceLanguage,sourceEditionCountryCode} from '../.build/src/iceo/news-sources.js';
-import {readPublisherNewsCandidates,readNewsArticleMetadata,matchingNewsHeadline,discoverNewsWithDiagnostics} from '../.build/src/iceo/news-discovery.js';
+import {NEWS_DISCOVERY_INDEXES,NEWS_PUBLISHERS,publisherForNewsUrl,sourceLanguage,sourceEditionCountryCode,sourcePublicationContext} from '../.build/src/iceo/news-sources.js';
+import {readPublisherNewsCandidates,readNewsArticleMetadata,matchingNewsHeadline,discoverNewsWithDiagnostics,mergeNewsCandidates,newsAcquisitionOrder} from '../.build/src/iceo/news-discovery.js';
 import {validNewsDiagnostics} from '../.build/src/iceo/news-diagnostics.js';
 import {cardContent,validCard} from '../.build/src/iceo/card-validation.js';
 import {newsCategory} from '../.build/src/iceo/news-taxonomy.js';
@@ -103,4 +103,60 @@ test('the existing bounded collector verifies Italian originals and emits valid 
  assert.equal(newsCategory(cards.find(card=>card.sourceUrl===rows[1].url)),'11000000');
  assert.ok(validNewsDiagnostics(result.diagnostics,now));assert.ok(result.diagnostics.indexes.some(row=>row.indexId==='repubblica-it-news'&&row.state==='verified'&&row.language==='it'));
  assert.equal(result.diagnostics.totals.verifiedNow,2);assert.ok(result.diagnostics.totals.requestAttempts<=2);
+});
+
+const englishEdition={
+ url:'https://www.repubblica.it/en/europe/culture/2026/11/22/news/san_gennaro_s_treasures_cross_the_atlantic_for_the_first_time-425738300/',
+ indexed:"San Gennaro's treasures cross the Atlantic for the first time",
+ title:"San Gennaro's treasures cross the Atlantic for the first time",
+ rssDate:'Sun, 22 Nov 2026 20:30:00 +0000',date:'2026-11-22T20:30:00Z',section:'Culture',
+};
+// Canonical English path observed in production QA. The metadata/date below are controlled test inputs.
+const englishDocument=(patch={})=>'<html lang="en"><head><link rel="canonical" href="'+englishEdition.url+'"><script type="application/ld+json">'+JSON.stringify({
+ '@type':'NewsArticle',mainEntityOfPage:{'@id':englishEdition.url},headline:englishEdition.title,datePublished:englishEdition.date,articleSection:englishEdition.section,...patch,
+})+'</script></head></html>';
+
+test('an English article in the Italian RSS keeps its explicit English edition and original metadata',async()=>{
+ const mixed=[...rows,englishEdition],found=readPublisherNewsCandidates(feed(mixed),index,now);
+ assert.equal(found.length,3);assert.equal(index.language,'it','channel identity does not assign every article the channel language');
+ const english=found.find(row=>row.sourceUrl===englishEdition.url);assert.ok(english);
+ assert.equal(sourceLanguage(english.sourceUrl),'en');assert.equal(sourceEditionCountryCode(english.sourceUrl),'IT');
+ assert.equal(sourcePublicationContext(english.sourceUrl).publisherCountryCode,'IT');
+ assert.equal(sourcePublicationContext(english.sourceUrl).city,undefined);
+ assert.equal(sourceLanguage('https://www.repubblica.it/energy/2026/11/22/news/controlled-article/'),'it','only the exact /en/ edition prefix overrides the Italian edition');
+ assert.equal(sourceLanguage('https://repubblica.it/en/europe/culture/controlled-article/'),null,'the bare host remains unreviewed for articles');
+ const metadata=readNewsArticleMetadata(englishDocument(),english,englishEdition.url,now);
+ assert.ok(metadata);assert.equal(metadata.title,englishEdition.title);assert.equal(metadata.sourceUrl,englishEdition.url);
+ assert.equal(metadata.date,new Date(englishEdition.date).toISOString());
+ assert.equal(readNewsArticleMetadata(englishDocument({headline:englishEdition.title.replace('cross','do not cross')}),english,englishEdition.url,now),null);
+ assert.equal(readNewsArticleMetadata(englishDocument({mainEntityOfPage:{'@id':rows[0].url}}),english,englishEdition.url,now),null);
+ const result=await discoverNewsWithDiagnostics(async input=>{
+  const url=String(input);if(url===index.url)return new Response(feed(mixed),{headers:{'content-type':'application/xml'}});
+  if(url===englishEdition.url)return new Response(englishDocument(),{headers:{'content-type':'text/html'}});
+  const row=rows.find(value=>value.url===url);return row?new Response(document(row),{headers:{'content-type':'text/html'}}):new Response('Unavailable fixture index',{status:404});
+ },now,[],undefined,{frontpageHighlights:false,maxArticleRequests:3});
+ const cards=result.sources.flatMap(source=>source.cards);assert.equal(cards.length,3);
+ const englishCard=cards.find(card=>card.sourceUrl===englishEdition.url);assert.ok(validCard(englishCard));assert.equal(sourceLanguage(englishCard),'en');
+ assert.equal(englishCard.title,englishEdition.title);assert.equal(englishCard.contentHash,createHash('sha256').update(JSON.stringify(cardContent(englishCard))).digest('hex'));
+ assert.equal(cards.filter(card=>sourceLanguage(card)==='it').length,2);
+ const groups=result.diagnostics.groups.filter(group=>group.publisherId==='repubblica');
+ assert.equal(groups.find(group=>group.language==='en').counts.verifiedNow,1);
+ assert.equal(groups.find(group=>group.language==='it').counts.verifiedNow,2);
+ assert.ok(validNewsDiagnostics(result.diagnostics,now));
+ assert.equal(result.diagnostics.indexes.find(row=>row.indexId===index.id).language,'it');
+});
+
+test('mixed RSS candidates preserve a genuine Italian acquisition anchor within the unchanged80 request budget',()=>{
+ const found=readPublisherNewsCandidates(feed([...rows,englishEdition]),index,now),english=found.find(row=>row.sourceUrl===englishEdition.url);
+ const pool=mergeNewsCandidates([
+  ...Array.from({length:120},(_,i)=>({...english,sourceUrl:'https://www.repubblica.it/en/europe/culture/2026/11/22/news/controlled-anchor-'+i+'/'})),
+  ...found.filter(row=>sourceLanguage(row.sourceUrl)==='it'),
+ ],now);
+ assert.equal(pool.length,122);
+ for(let slot=0;slot<4;slot++){
+  const selected=newsAcquisitionOrder(pool,80,now+slot*120000);
+  assert.equal(selected.length,80);assert.equal(new Set(selected.map(row=>row.sourceUrl)).size,80);
+  assert.ok(selected.some(row=>sourceLanguage(row.sourceUrl)==='it'),'a true Italian original keeps its opportunity in every rotation slot');
+  assert.ok(selected.some(row=>sourceLanguage(row.sourceUrl)==='en'));
+ }
 });

@@ -105,7 +105,7 @@ test('the signed cursor binds national context and old cursor versions expire wi
  const london=city('London','GB'),turin=city('Torino','IT'),edition=epoch(Array.from({length:45},(_,i)=>article(i+1)));
  const service=new NewsPageService(new CorpusMemoryStore([edition]),KEY,()=>NOW+1000),page=await service.read(request('en',london.id));
  const [encoded]=page.nextCursor.split('.'),payload=JSON.parse(Buffer.from(encoded,'base64url').toString('utf8'));
- assert.equal(payload.version,'news-cursor-2');assert.equal(payload.countryCode,'GB');
+ assert.equal(payload.version,'news-cursor-3');assert.equal(payload.countryCode,'GB');
  const sign=value=>{const body=Buffer.from(JSON.stringify(value)).toString('base64url'),key=createHmac('sha256',KEY).update('dlkt-info/news-page/cursor-key/v1').digest();
   return body+'.'+createHmac('sha256',key).update('dlkt-info/news-page/cursor/v1:'+body).digest('base64url');};
  const changed=sign({...payload,countryCode:'IT'});
@@ -113,6 +113,7 @@ test('the signed cursor binds national context and old cursor versions expire wi
  await assert.rejects(service.read(request('en',turin.id,'all',page.nextCursor)),/NEWS_CONTEXT_MISMATCH/);
  const {countryCode,...old}=payload;
  await assert.rejects(service.read(request('en',london.id,'all',sign({...old,version:'news-cursor-1',orderVersion:edition.corpus.orderVersion}))),/NEWS_EDITION_EXPIRED/);
+ await assert.rejects(service.read(request('en',london.id,'all',sign({...payload,version:'news-cursor-2'}))),/NEWS_EDITION_EXPIRED/,'a pre-fix cursor cannot reuse its offset after language provenance changes');
  const next=await service.read(request('en',london.id,'all',page.nextCursor));
  assert.deepEqual(next.coverage,page.coverage);assert.equal(next.countryCode,page.countryCode);
  assert.equal(new Set([...page.items,...next.items].map(item=>item.key)).size,40);
@@ -124,4 +125,22 @@ test('a first page retries planning once if a marginal source expires before the
  assert.equal(page.startedAt,iso(NOW+2000));assert.equal(page.generatedAt,iso(NOW));assert.equal(page.total,44);
  assert.equal(page.items.some(item=>item.card.id===cards[0].id),false);assert.equal(page.expiresAt,iso(NOW+3600000));
  assert.ok(validNewsPage(page,NOW+2000));assert.ok(ticks<=5,'one bounded replan, no polling loop');
+});
+
+test('existing corpus originals follow their article edition language without rewriting records or hashes',async()=>{
+ const turin=city('Torino','IT');
+ const english=publication(1,'la Repubblica','https://www.repubblica.it/en/europe/culture/2026/11/22/news/san_gennaro_s_treasures_cross_the_atlantic_for_the_first_time-425738300/',"San Gennaro's treasures cross the Atlantic for the first time");
+ const italian=publication(2,'la Repubblica','https://www.repubblica.it/esteri/2026/11/22/news/trump_kim_i_tentativi_del_presidente_usa_di_incontrare_il_leader_nordcoreano-425742784/','Telefonate respinte e una lettera cestinata. Tutti i rifiuti di Kim-Jong a Trump');
+ // Dates are controlled fixture times. These canonical URLs reproduce the production language boundary.
+ const stored=epoch([english,italian]),before=JSON.stringify(stored);
+ const service=new NewsPageService(new CorpusMemoryStore([stored]),KEY,()=>NOW+1000);
+ const it=await service.read(request('it',turin.id)),en=await service.read(request('en',turin.id));
+ assert.equal(it.epoch,stored.epoch);assert.equal(en.epoch,stored.epoch);
+ assert.equal(it.total,1);assert.equal(it.items[0].card,italian);assert.equal(sourceLanguage(it.items[0].card),'it');
+ assert.equal(en.total,1);assert.equal(en.items[0].card,english);assert.equal(sourceLanguage(en.items[0].card),'en');
+ assert.deepEqual(it.coverage,{national:1,local:0,international:0});assert.deepEqual(en.coverage,{national:1,local:0,international:0});
+ assert.ok(validNewsPage(it,NOW+1000,turin));assert.ok(validNewsPage(en,NOW+1000,turin));
+ for(const card of [english,italian])assert.equal(card.contentHash,hash(cardContent(card)));
+ assert.equal(JSON.stringify(stored),before,'reading reclassifies provenance without restamping or replacing the persisted corpus');
+ assert.equal(validNewsPage({...it,items:en.items},NOW+1000,turin),false,'an English original cannot pass the Italian page contract');
 });
