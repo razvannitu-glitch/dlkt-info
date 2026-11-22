@@ -86,7 +86,7 @@ test('local and daily boundaries reject modified source identity, publisher, geo
  for(const [name,mutate] of mutations){const changed=structuredClone(snapshot);mutate(changed);assert.equal(currentLocalSnapshot(changed,city,now),false,name);assert.equal(parseDaily(stateFor(changed)),null,name+' must also fail on browser persistence');}
 });
 
-test('home selection leads with diverse current city news, bounds repetition and total size, and leaves raw evidence unchanged',()=>{
+test('home selection retains every current city article while diversifying order and separating bounded support',()=>{
  const titles=(offset)=>Array.from({length:8},(_,index)=>[
   `Bucuresti: Metrorex publica programul liniei ${offset+index}`,
   `Bucuresti: Scoala ${offset+index} publica inscrierile pentru elevi`,
@@ -95,17 +95,17 @@ test('home selection leads with diverse current city news, bounds repetition and
  ][index%4]);
  const articles=[...parsed(b365,titles(100)),...parsed(buletin,titles(200))],snapshot=freeze(local(articles,[...heating(),forecast(),...Array.from({length:8},(_,index)=>event(index+1))]));
  assert.equal(currentLocalSnapshot(snapshot,city,now),true);const before=JSON.stringify(snapshot),selected=selectHomeLocal(snapshot,city,now),news=selected.cards.filter(card=>card.kind==='local-news');
- assert.equal(news.length,8);assert.equal(selected.cards.length,12);assert.deepEqual(selected.cards.slice(0,news.length),news);assert.equal(new Set(news.map(card=>card.publisher)).size,2);assert.ok(new Set(news.map(card=>card.news.topic)).size>=3);
- for(const publisher of new Set(news.map(card=>card.publisher)))assert.ok(news.filter(card=>card.publisher===publisher).length<=4);
- for(const topic of new Set(news.map(card=>card.news.topic)))assert.ok(news.filter(card=>card.news.topic===topic).length<=3);
+ assert.equal(news.length,16);assert.equal(selected.cards.length,20);assert.deepEqual(selected.cards.slice(0,news.length),news);assert.equal(new Set(news.map(card=>card.publisher)).size,2);assert.ok(new Set(news.map(card=>card.news.topic)).size>=3);
+ assert.deepEqual(new Set(news.map(card=>card.id)),new Set(articles.map(article=>article.id)));
+ assert.ok(news.filter(card=>card.publisher===b365.publisher).length>4);assert.ok(news.some(card=>news.filter(other=>other.news.topic===card.news.topic).length>3));
  assert.equal(selected.cards.filter(card=>card.kind==='event').length,2);assert.equal(selected.cards.filter(card=>card.kind==='utility-notice').length,1);assert.equal(new Set(selected.cards.map(card=>card.id)).size,selected.cards.length);
  assert.equal(selected.expiresAt,now+300000);assert.equal(JSON.stringify(snapshot),before);assert.equal(selectHomeLocal(snapshot,city,now+300000).cards.length,0);
 });
 
-test('identical normalized publisher headlines are grouped while route numbers remain distinct',()=>{
+test('distinct publisher articles with matching headlines and different routes remain individually available',()=>{
  const same='Bucuresti: Metrorex modifica programul magistralei 6';
  const duplicates=local([...parsed(b365,[same]),...parsed(buletin,['VIDEO: '+same])]);
- assert.equal(currentLocalSnapshot(duplicates,city,now),true);assert.equal(selectHomeLocal(duplicates,city,now).cards.length,1);
+ assert.equal(currentLocalSnapshot(duplicates,city,now),true);assert.equal(selectHomeLocal(duplicates,city,now).cards.length,2);
  const routes=local(parsed(b365,['Bucuresti: tramvai 41 circula pe traseul modificat astazi','Bucuresti: tramvai 42 circula pe traseul modificat astazi']));
  assert.equal(selectHomeLocal(routes,city,now).cards.length,2,'different numbered services are separate reports');
 });
@@ -164,9 +164,10 @@ test('Romanian local publications under24h join Top as the same checked records 
  const snapshot=freeze(local(articles,[forecast(),event(41)])),before=JSON.stringify(snapshot);
  assert.equal(currentLocalSnapshot(snapshot,city,now),true);
  const selection=selectHomeLanguage(snapshot,city,now,'ro');
- assert.equal(selection.topNews.length,2);assert.equal(selection.supporting.filter(card=>card.kind==='local-news').length,1);
- assert.deepEqual(new Set([...selection.topNews,...selection.supporting].map(card=>card.id)),new Set(selection.cards.map(card=>card.id)));
- assert.equal(new Set([...selection.topNews,...selection.supporting].map(card=>card.id)).size,selection.cards.length);
+ assert.equal(selection.topNews.length,2);assert.equal(selection.supporting.filter(card=>card.kind==='local-news').length,0);
+ const allNews=selection.cards.filter(card=>card.kind==='local-news');assert.equal(allNews.length,3);
+ assert.deepEqual(new Set([...allNews,...selection.supporting].map(card=>card.id)),new Set(selection.cards.map(card=>card.id)));
+ assert.equal(new Set([...allNews,...selection.supporting].map(card=>card.id)).size,selection.cards.length);
  const promoted=new Set(selection.topNews.map(card=>card.id));assert.ok(selection.supporting.every(card=>!promoted.has(card.id)));
  for(const card of selection.cards){
   const original=snapshot.cards.find(record=>record.id===card.id);assert.strictEqual(card,original);
@@ -188,12 +189,12 @@ test('English excludes Romanian news while retaining the exact current forecast 
  assert.equal(JSON.stringify(snapshot),before);assert.equal(romanian.topNews[0].checkedAt,checkedAt);
 });
 
-test('promoted duplicate reports appear only once and never again among the supporting local cards',()=>{
+test('distinct reports on the same headline remain news and never become operational support',()=>{
  const title='Bucuresti: Metrorex modifica programul magistralei 6';
  const snapshot=freeze(local([...parsed(b365,[title],70),...parsed(buletin,['VIDEO: '+title],70)],[forecast()]));
  assert.equal(currentLocalSnapshot(snapshot,city,now),true);
  const selected=selectHomeLanguage(snapshot,city,now,'ro');
- assert.equal(selected.topNews.length,1);assert.equal(selected.cards.filter(card=>card.kind==='local-news').length,1);
+ assert.equal(selected.topNews.length,2);assert.equal(selected.cards.filter(card=>card.kind==='local-news').length,2);
  assert.ok(selected.supporting.every(card=>card.id!==selected.topNews[0].id));
  const ids=[...selected.topNews,...selected.supporting].map(card=>card.id);
  assert.equal(new Set(ids).size,ids.length);assert.equal(snapshot.cards.filter(card=>card.kind==='local-news').length,2);
@@ -220,8 +221,8 @@ test('a publication leaving the24h Top remains an unchanged local report within 
  const before=JSON.stringify(snapshot),initial=selectHomeLanguage(snapshot,city,now,'ro');
  assert.equal(initial.topNews.length,1);
  const boundary=selectHomeLanguage(snapshot,city,now+1000,'ro');
- assert.equal(boundary.topNews.length,0);assert.equal(boundary.supporting.filter(card=>card.kind==='local-news').length,1);
- const retained=boundary.supporting.find(card=>card.kind==='local-news');assert.strictEqual(retained,initial.topNews[0]);
+ assert.equal(boundary.topNews.length,0);assert.equal(boundary.supporting.filter(card=>card.kind==='local-news').length,0);
+ const retained=boundary.cards.find(card=>card.kind==='local-news');assert.strictEqual(retained,initial.topNews[0]);
  assert.equal(retained.checkedAt,checkedAt);assert.equal(retained.news.publishedAt,snapshot.cards.find(card=>card.kind==='local-news').news.publishedAt);
  assert.equal(boundary.expiresAt,now+300000);assert.equal(JSON.stringify(snapshot),before);
 });

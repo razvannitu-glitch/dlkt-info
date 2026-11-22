@@ -10,11 +10,9 @@ export interface HomeLocalSelection {
 
 const kindOrder:Readonly<Record<LocalCard['kind'],number>>={'utility-notice':0,'transport-notice':1,transport:2,forecast:3,event:4,'municipal-news':5,'local-news':6};
 
-const folded=(value:string):string=>value.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase();
-function titleKey(card:LocalCard):string{return folded(card.title).replace(/^(?:video|foto|breaking)\s*[|:—-]?\s*/u,'').replace(/[^\p{L}\p{N}]+/gu,' ').trim();}
-/** Only identical normalized headlines or article URLs are grouped; similar wording may describe conflicting reports. */
+/** Distinct source articles remain distinct even when their headlines match. */
 function sameStory(a:LocalCard,b:LocalCard):boolean {
- return a.sourceUrl===b.sourceUrl||titleKey(a)===titleKey(b);
+ return a.sourceUrl===b.sourceUrl||a.id===b.id;
 }
 function newsOrder(card:LocalCard,now:number):number {
  if(!card.news)return Number.POSITIVE_INFINITY;
@@ -26,12 +24,12 @@ function newsOrder(card:LocalCard,now:number):number {
 function selectNews(cards:readonly LocalCard[],now:number):LocalCard[]{
  const pool=[...cards].sort((a,b)=>newsOrder(a,now)-newsOrder(b,now)||Date.parse(b.news?.publishedAt??'')-Date.parse(a.news?.publishedAt??'')||a.id.localeCompare(b.id));
  const selected:LocalCard[]=[],publishers=new Map<string,number>(),topics=new Map<string,number>();
- while(selected.length<8){
-  const available=pool.filter(card=>card.news&&!selected.includes(card)&&!selected.some(previous=>sameStory(previous,card))&&(publishers.get(card.publisher)??0)<4&&(topics.get(card.news.topic)??0)<3);
+ while(selected.length<pool.length){
+  const available=pool.filter(card=>card.news&&!selected.includes(card)&&!selected.some(previous=>sameStory(previous,card)));
   if(!available.length)break;
   available.sort((a,b)=>Math.floor(newsOrder(a,now)/10)-Math.floor(newsOrder(b,now)/10)
-   ||Number(publishers.has(a.publisher))-Number(publishers.has(b.publisher))
-   ||Number(topics.has(a.news?.topic??''))-Number(topics.has(b.news?.topic??''))
+   ||(publishers.get(a.publisher)??0)-(publishers.get(b.publisher)??0)
+   ||(topics.get(a.news?.topic??'')??0)-(topics.get(b.news?.topic??'')??0)
    ||newsOrder(a,now)-newsOrder(b,now)||Date.parse(b.news?.publishedAt??'')-Date.parse(a.news?.publishedAt??'')||a.id.localeCompare(b.id));
   const next=available[0];if(!next?.news)break;selected.push(next);publishers.set(next.publisher,(publishers.get(next.publisher)??0)+1);topics.set(next.news.topic,(topics.get(next.news.topic)??0)+1);
  }
@@ -80,21 +78,22 @@ export function selectHomeLocal(snapshot:unknown,city:City|null,now:number):Home
     }
     return left.index-right.index;
   });
-  const kinds=new Set<LocalCard['kind']>(),cards:LocalCard[]=[...news];
+  const kinds=new Set<LocalCard['kind']>(),cards:LocalCard[]=[];
   for(const {card} of ordered){
     if(kinds.has(card.kind))continue;
     cards.push(card);kinds.add(card.kind);
     if(cards.length===12)break;
   }
   // A first pass gives different kinds visibility; the remaining local information is retained.
-  while(cards.length<Math.min(12,ordered.length+news.length)){
+  while(cards.length<Math.min(12,ordered.length)){
     const before=cards.length;
     for(const kind of kinds){if(news.length&&cards.filter(card=>card.kind===kind).length>=2)continue;const next=ordered.find(item=>item.card.kind===kind&&!cards.includes(item.card));if(next)cards.push(next.card);if(cards.length===12)break;}
     if(cards.length===before)break;
   }
-  if(!cards.length)return{cards:[],expiresAt:null};
-  const expiries=[checked+300000,...cards.flatMap(card=>[Date.parse(card.validTo),...(card.news?[Date.parse(card.news.publishedAt)+NEWS_WINDOW_MS+1]:[]),...(card.context?.startsAt?[Date.parse(card.context.endsAt??card.context.startsAt)]:[])])].filter(time=>time>now);
-  return{cards,expiresAt:Math.min(...expiries)};
+  const all=[...news,...cards];
+  if(!all.length)return{cards:[],expiresAt:null};
+  const expiries=[checked+300000,...all.flatMap(card=>[Date.parse(card.validTo),...(card.news?[Date.parse(card.news.publishedAt)+NEWS_WINDOW_MS+1]:[]),...(card.context?.startsAt?[Date.parse(card.context.endsAt??card.context.startsAt)]:[])])].filter(time=>time>now);
+  return{cards:all,expiresAt:Math.min(...expiries)};
 }
 
 export interface HomeLanguageSelection extends HomeLocalSelection {
@@ -111,8 +110,7 @@ export function selectHomeLanguage(snapshot:unknown,city:City|null,now:number,la
   });
   const topNews=cards.filter(card=>card.kind==='local-news'&&card.news!==undefined
     &&Date.parse(card.news.publishedAt)<=now&&Date.parse(card.news.publishedAt)>now-86_400_000);
-  const promoted=new Set(topNews.map(card=>card.id));
-  const supporting=cards.filter(card=>!promoted.has(card.id));
+  const supporting=cards.filter(card=>card.kind!=='local-news');
   const boundaries=[...(selected.expiresAt===null?[]:[selected.expiresAt]),...topNews.map(card=>Date.parse(card.news!.publishedAt)+86_400_000+1)].filter(time=>time>now);
   return Object.freeze({cards:Object.freeze(cards),topNews:Object.freeze(topNews),supporting:Object.freeze(supporting),expiresAt:boundaries.length?Math.min(...boundaries):null});
 }
