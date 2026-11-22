@@ -10,6 +10,8 @@ The user's requirement is the original photograph selected for each article, wit
 
 The server reads the publisher's canonical article metadata. Canonical and OG identities must agree with the resolved article. Article JSON-LD must explicitly identify that page and match the original headline; an ImageObject is usable only through the matching article's image field. Unrelated site images, recommendations and brand placeholders are excluded. For Guardian's signed variants of one image, a publisher-provided variant without a social overlay is preferred; signatures and query parameters are preserved verbatim.
 
+Buletin's canonical Article JSON-LD may append a complete second sentence to an unchanged feed headline. This narrow allowance requires the full normalized feed headline to have at least80characters, remain at least two thirds of the page headline, and be followed by sentence punctuation; at most160characters may be added. Canonical identity, publication-date and image-host checks still apply. It is not used for OG-only metadata, short/generic titles or other publishers. The observed Elie Radu article is the regression case.
+
 The response is a bounded JPEG, PNG or WebP on the DLKT origin. HTTP type, raster signature and dimensions must agree. Article HTML is bounded to1MiB, image bytes to1.5MiB, decoded dimensions to24megapixels. Requests use no cookies or credentials, explicit origins/paths, manual redirect validation, robots checks, a12second deadline, eight pending photo jobs at most and a24MiB bounded image cache. Failures are cached briefly; successful image checks do not change the evidence card's text, content hash, publication date or source-check timestamp.
 
 ## Attribution and limits

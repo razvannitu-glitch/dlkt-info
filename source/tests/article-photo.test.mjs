@@ -177,3 +177,27 @@ test('local photo resolution requires the registered city, exact feed revision a
  assert.equal(await resolvePhotoArticle({...ref,cityId:'0000000'},deps),null);
  assert.equal(await resolvePhotoArticle(ref,{...deps,clock:()=>now+300001}),null);
 });
+
+test('Buletin canonical Article accepts an unchanged long feed headline with a second sentence',()=>{
+ const local={...article,sourceUrl:'https://buletin.de/bucuresti/elevii-de-la-liceul-tehnologic-elie-radu-ar-putea-face-practica-la-doua-service-uri-auto-si-la-un-magazin-angro-proiectul-pe-masa-consilierilor-locali/',
+  publisher:'Buletin de București',title:'Elevii de la Liceul Tehnologic Elie Radu ar putea face practică la două service-uri auto și la un magazin angro'};
+ const original='https://buletin.de/bucuresti/wp-content/uploads/2026/11/article-original.jpg';
+ const node={'@type':'NewsArticle','@id':local.sourceUrl+'#article',headline:local.title+'. Proiectul, pe masa consilierilor locali',datePublished:local.publishedAt,image:original};
+ const document=value=>'<link rel="canonical" href="'+local.sourceUrl+'"><script type="application/ld+json">'+JSON.stringify(value)+'</script>';
+ assert.equal(readArticlePhoto(document(node),local)?.imageUrl,original);
+ for(const other of [
+  {...node,'@id':local.sourceUrl+'another/'},
+  {...node,headline:local.title+' pentru alta scoala'},
+  {...node,headline:local.title.replace('Elie Radu','Alta Scoala')+'. Proiectul, pe masa consilierilor locali'},
+  {...node,headline:local.title+'. '+ 'A different sentence '.repeat(20)},
+  {...node,datePublished:'2025-11-22T12:00:00.000Z'}
+ ])assert.equal(readArticlePhoto(document(other),local),null);
+ assert.equal(readArticlePhoto(document({...node,headline:'Scoala. O alta stire'}),{...local,title:'Scoala'}),null);
+ const onlyOg=html('',{url:local.sourceUrl,title:node.headline,image:original});
+ assert.equal(readArticlePhoto(onlyOg,local),null,'A prefix in OG alone does not relax identity validation');
+});
+test('extended-headline allowance is confined to explicitly bound Buletin Articles',()=>{
+ const other={...article,title:'A sufficiently long complete headline about a specific verified article which exceeds the eighty character threshold'};
+ const document='<script type="application/ld+json">'+JSON.stringify({'@type':'NewsArticle',url:other.sourceUrl,headline:other.title+'. A second sentence.',datePublished:other.publishedAt,image})+'</script>';
+ assert.equal(readArticlePhoto(document,other),null);
+});

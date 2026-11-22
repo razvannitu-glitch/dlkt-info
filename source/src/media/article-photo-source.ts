@@ -60,6 +60,16 @@ const matchesTitle=(value:unknown,article:PhotoArticle):boolean=>{
  const suffix=new RegExp('\\s+[–—|:-]\\s+'+article.publisher.replace(/[.*+?^{}$()|[\]\\]/gu,'\\$&')+'\\s*$','iu');
  return normalize(headline.replace(suffix,''))===normalize(article.title.replace(suffix,''));
 };
+/** Buletin may append a full second sentence to its canonical page's feed headline. */
+const matchesBoundArticleTitle=(value:unknown,article:PhotoArticle):boolean=>{
+ if(matchesTitle(value,article))return true;
+ if(photoPublisher(article.sourceUrl)!=='bucharest-buletin')return false;
+ const headline=clean(value,600);if(headline===null)return false;
+ const expected=normalize(article.title).replace(/[.!?]+$/u,''),actual=normalize(headline);
+ return expected.length>=80&&actual.length>expected.length&&actual.length<=expected.length+160
+  &&expected.length*3>=actual.length*2&&actual.startsWith(expected)
+  &&/^[.!?] [\p{L}\p{N}]/u.test(actual.slice(expected.length));
+};
 const articleTypes=new Set(['NewsArticle','Article','ReportageNewsArticle','AnalysisNewsArticle','BlogPosting','TechArticle','ScholarlyArticle','LiveBlogPosting']);
 /** Read only explicitly article-bound metadata; recommendations and site logos are not candidates. */
 export function readArticlePhoto(html:string,article:PhotoArticle,finalUrl=article.sourceUrl):ArticlePhotoMetadata|null {
@@ -105,7 +115,7 @@ export function readArticlePhoto(html:string,article:PhotoArticle,finalUrl=artic
    const entity=value.mainEntityOfPage;
    const declared=[value.url,value['@id'],typeof entity==='string'?entity:undefined,object(entity)?entity['@id']:undefined,object(entity)?entity.url:undefined].filter(item=>item!==undefined);
    if(declared.length>0&&declared.every(item=>samePage(item,article.sourceUrl))
-    &&(matchesTitle(value.headline??value.name,article)||matchesTitle(value.alternativeHeadline,article))){
+    &&(matchesBoundArticleTitle(value.headline??value.name,article)||matchesTitle(value.alternativeHeadline,article))){
     const published=typeof value.datePublished==='string'?Date.parse(value.datePublished):NaN;
     const expected=Date.parse(article.publishedAt);
     if(Number.isFinite(published)&&Number.isFinite(expected)&&Math.abs(published-expected)>86400000)return;
