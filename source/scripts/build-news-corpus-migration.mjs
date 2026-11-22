@@ -98,9 +98,10 @@ function buildNewsCorpusMigration(files,sha256){
  const result={};
  result['supabase/migrations/'+revision+'.sql']=migration;
  result['src/provisioning/readiness-manifest.ts']="export const DATABASE_READINESS_VERSION = 'dlkt-info-database-readiness-2' as const;\nexport const SCHEMA_MANIFEST_VERSION = '"+version+"' as const;\nexport const DATABASE_READINESS_RPC = 'dlkt_info_read_database_readiness' as const;\nexport const DATABASE_READINESS_MIGRATION = '"+revision+"' as const;\n// SHA-256 of UTF-8 serializeSchemaManifest(); object/array order is part of this versioned contract.\nexport const EXPECTED_SCHEMA_FINGERPRINT = '"+hash+"' as const;\nexport const EXPECTED_SCHEMA_COUNTS = Object.freeze("+JSON.stringify(counts,null,2)+" as const);\nexport const EXPECTED_SCHEMA_MANIFEST = Object.freeze("+JSON.stringify(m,null,2)+" as const);\nexport function serializeSchemaManifest():string{return JSON.stringify({version:SCHEMA_MANIFEST_VERSION,manifest:EXPECTED_SCHEMA_MANIFEST});}\n";
- for(const p of ['tests/database/database-readiness-attestation.test.mjs','tests/experience.test.mjs','tests/provisioning-control.test.mjs','tests/identity.test.mjs','tests/persistence.test.mjs']){
+ for(const p of ['tests/database/database-readiness-attestation.test.mjs','tests/experience.test.mjs','tests/provisioning-control.test.mjs','tests/identity.test.mjs','tests/persistence.test.mjs','verify-release.mjs']){
   let f=files[p].replaceAll(priorRevision,revision).replaceAll(priorHash,hash).replaceAll(oldHash,hash).replaceAll(priorVersion,version);
   for(const [k,before]of [['relations',32],['functions',58],['rls',20]])f=f.replaceAll(k+'Expected: '+before+', '+k+'Present: '+before+', '+k+'Total: '+before,k+'Expected: '+counts[k]+', '+k+'Present: '+counts[k]+', '+k+'Total: '+counts[k]);
+  if(p==='verify-release.mjs')for(const [key,before]of [['relations',32],['functions',58],['rls',20]])f=f.replaceAll('"'+key+'": '+before,'"'+key+'": '+counts[key]);
   result[p]=f;
  }
  return {files:result,evidence:{revision,version,hash,counts,migrationSha256:sha256(migration)}};
@@ -116,7 +117,8 @@ const required=[
   "tests/experience.test.mjs",
   "tests/provisioning-control.test.mjs",
   "tests/identity.test.mjs",
-  "tests/persistence.test.mjs"
+  "tests/persistence.test.mjs",
+  "verify-release.mjs"
 ];
 const inputs=Object.fromEntries(required.map(path=>[path,readFileSync(path,'utf8')]));
 const output=buildNewsCorpusMigration(inputs,value=>createHash('sha256').update(value).digest('hex'));

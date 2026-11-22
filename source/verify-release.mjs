@@ -57,10 +57,10 @@ if (manifest.product !== 'dlkt-info'
   || manifest.provisioningControlVersion !== 'dlkt-info-provisioning-control-2'
   || manifest.systemIdentityVersion !== 'dlkt-info-system-identity-1'
   || manifest.databaseReadinessVersion !== 'dlkt-info-database-readiness-2'
-  || manifest.schemaManifestVersion !== 'dlkt-info-schema-manifest-7'
+  || manifest.schemaManifestVersion !== 'dlkt-info-schema-manifest-8'
   || manifest.provisioningIdentityMigration !== '20261113115256_dlkt_info_provisioning_identity_guard'
-  || manifest.databaseReadinessMigration !== '20261122174603_dlkt_info_news_coverage'
-  || manifest.expectedSchemaFingerprint !== '453dbf1779705cff24a46781bbdae8871db5d24af5c3b16a1c85d65af4fc19db'
+  || manifest.databaseReadinessMigration !== '20261122200813_dlkt_info_news_corpus'
+  || manifest.expectedSchemaFingerprint !== 'ef03f90d229d089f8871c64b996994c79c65d0e1e3a0f8e2b0bb08dc2d6f6dec'
   || manifest.revision !== 'iceo-primary-mesh-1'
   || manifest.iceoVersion !== 'iceo-primary-mesh-1'
   || manifest.publicSourceCount !== 51
@@ -915,9 +915,9 @@ for (const fragment of [
 ]) if (!databaseReadinessMigration.includes(fragment)) throw new Error(`RELEASE_DATABASE_READINESS_MIGRATION:${fragment}`);
 for (const fragment of [
   "DATABASE_READINESS_VERSION = 'dlkt-info-database-readiness-2'",
-  "SCHEMA_MANIFEST_VERSION = 'dlkt-info-schema-manifest-7'",
-  "EXPECTED_SCHEMA_FINGERPRINT = '453dbf1779705cff24a46781bbdae8871db5d24af5c3b16a1c85d65af4fc19db'",
-  '"relations": 32', '"functions": 58', '"rls": 20', '"policies": 29', '"triggers": 34',
+  "SCHEMA_MANIFEST_VERSION = 'dlkt-info-schema-manifest-8'",
+  "EXPECTED_SCHEMA_FINGERPRINT = 'ef03f90d229d089f8871c64b996994c79c65d0e1e3a0f8e2b0bb08dc2d6f6dec'",
+  '"relations": 33', '"functions": 67', '"rls": 21', '"policies": 29', '"triggers": 34',
 ]) if (!provisioningReadinessManifest.includes(fragment)) throw new Error(`RELEASE_SCHEMA_MANIFEST:${fragment}`);
 for (const fragment of [
   'create table public.dlkt_info_shared_cards',
