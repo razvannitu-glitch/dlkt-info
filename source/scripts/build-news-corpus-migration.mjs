@@ -41,9 +41,9 @@ function buildNewsCorpusMigration(files,sha256){
  const old=files['supabase/migrations/'+priorRevision+'.sql'];
  if(!old.includes(priorHash)||!old.includes(priorRevision))throw Error('PRIOR_READINESS_DRIFT');
  const refresh=files['scripts/continuous-refresh-store.sql'];
- const start=refresh.indexOf('create function public.dlkt_info_publish_public_snapshot('),end=refresh.indexOf('\nend $;',start);
+ const start=refresh.indexOf('create function public.dlkt_info_publish_public_snapshot('),end=refresh.indexOf('\nend $$;',start);
  if(start<0||end<start)throw Error('PUBLISH_FUNCTION_MISSING');
- let publish=refresh.slice(start,end+'\nend $;'.length).replace(/^create function/u,'create or replace function');
+ let publish=refresh.slice(start,end+'\nend $$;'.length).replace(/^create function/u,'create or replace function');
  const marker='  update dlkt_info_private.public_refresh_state set snapshot=p_snapshot';
  if(publish.split(marker).length!==2)throw Error('PUBLISH_HOOK_DRIFT');
  publish=publish.replace(marker,'  -- Publish the staged corpus and its private diagnostics under this same lease and revision.\n  perform dlkt_info_private.publish_news_corpus(p_fence,s.revision+1,g);\n'+marker);

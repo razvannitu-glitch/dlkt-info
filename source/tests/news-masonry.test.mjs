@@ -106,17 +106,48 @@ test('News has one compact accessible toolbar and separate continuation/supporti
  assert.equal(readFileSync('public/news-masonry.js','utf8'),compiled);
 });
 
-test('manual continuation focuses a visible new title after final placement while automatic continuation preserves focus',()=>{
- const source=readFileSync('.build/src/iceo/browser.js','utf8'),start=source.indexOf('function showNewsPage(focus)'),end=source.indexOf("required('#discovery').addEventListener('click'",start);
+test('manual continuation awaits its page and focuses after final placement while automatic continuation preserves focus',async()=>{
+ const source=readFileSync('.build/src/iceo/browser.js','utf8'),start=source.indexOf('async function showNewsPage(focus)'),end=source.indexOf("required('#discovery').addEventListener('click'",start);
  assert.ok(start>=0&&end>start);const body=source.slice(start,end);
- let laidOut=false,focuses=0,scrolls=0;const old={dataset:{newsStreamKey:'old'}},heading={tabIndex:0,focus(options){assert.equal(laidOut,true);assert.equal(options.preventScroll,true);focuses++;},getBoundingClientRect(){assert.equal(laidOut,true);return {top:-140,bottom:-100};},scrollIntoView(options){assert.equal(options.block,'nearest');scrolls++;}};
- const added={dataset:{newsStreamKey:'new'},querySelector(){return heading;}};let nodes=[old];
- const context={document:{visibilityState:'visible',body:{dataset:{entryView:'start'}}},innerHeight:700,NEWS_PAGE_SIZE:20,newsAvailable:60,
-  required:()=>({querySelectorAll:()=>nodes}),renderDiscovery:()=>{laidOut=true;nodes=[old,added];},announcement:{textContent:''},getLocale:()=> 'en'};
- runInNewContext('var continuationCount=20;'+body+';showNewsPage(true);',context);
- assert.equal(context.continuationCount,40);assert.equal(focuses,1);assert.equal(scrolls,1);assert.equal(heading.tabIndex,-1);
- runInNewContext('showNewsPage(false);',context);assert.equal(context.continuationCount,60);assert.equal(focuses,1);assert.equal(scrolls,1);
- const render=source.slice(source.indexOf('function renderDiscovery()'),source.indexOf('function showNewsPage(focus)'));
+ let laidOut=false,focuses=0,scrolls=0,requests=0,renders=0,finishNext;
+ const old={dataset:{newsStreamKey:'old'},height:300};
+ const heading={tabIndex:0,focus(options){assert.equal(laidOut,true);assert.equal(options.preventScroll,true);focuses++;},
+  getBoundingClientRect(){assert.equal(laidOut,true);return {top:-140,bottom:-100};},
+  scrollIntoView(options){assert.equal(options.block,'nearest');assert.equal(options.behavior,'auto');scrolls++;}};
+ const added={dataset:{newsStreamKey:'new-manual'},height:160,querySelector(selector){assert.equal(selector,'h3');return heading;}};
+ const automatic={dataset:{newsStreamKey:'new-auto'},height:200,querySelector(){throw Error('automatic continuation must not move focus');}};
+ let nodes=[old],state={loading:false,error:null,page:{nextCursor:'next'},items:[old]};
+ let placements=newsMasonryPositions(nodes.map(node=>node.height),2),language='en';
+ const announcement={textContent:''};
+ const context={document:{visibilityState:'visible',body:{dataset:{entryView:'start'}}},innerHeight:700,newsFilter:'all',contextualCity:{id:'683506'},
+  newsContinuation:{view:()=>state,next(){
+   requests++;state={...state,loading:true};return new Promise(resolve=>{finishNext=items=>{state={...state,loading:false,items};resolve();};});
+  }},
+  required:selector=>{assert.equal(selector,'#discovery-cards');return {querySelectorAll:()=>nodes};},
+  renderDiscovery:()=>{
+   assert.deepEqual(state.items.slice(0,nodes.length),nodes,'existing DOM articles retain their prefix');
+   const next=newsMasonryPositions(state.items.map(node=>node.height),2);
+   assert.deepEqual(next.slice(0,placements.length),placements,'existing geometry survives append');
+   placements=next;nodes=[...state.items];laidOut=true;renders++;
+  },
+  announcement,getLocale:()=>language};
+ runInNewContext(body+'\nthis.manual = showNewsPage(true);',context);
+ assert.equal(requests,1);assert.equal(renders,0);assert.equal(focuses,0);assert.equal(scrolls,0);assert.deepEqual(nodes,[old]);
+ finishNext([old,added]);await context.manual;
+ assert.equal(renders,1);assert.equal(focuses,1);assert.equal(scrolls,1);assert.equal(heading.tabIndex,-1);
+ assert.deepEqual(nodes,[old,added]);assert.equal(announcement.textContent,'More current reports are available below.');
+ const manualAnnouncement=announcement.textContent;laidOut=false;
+ runInNewContext('this.automatic = showNewsPage(false);',context);
+ assert.equal(requests,2);assert.equal(renders,1);assert.equal(focuses,1);assert.deepEqual(nodes,[old,added]);
+ finishNext([old,added,automatic]);await context.automatic;
+ assert.equal(renders,2);assert.equal(focuses,1);assert.equal(scrolls,1);assert.equal(announcement.textContent,manualAnnouncement);
+ assert.deepEqual(nodes,[old,added,automatic]);
+ // A late page for a different language must not rerender or focus the previous context.
+ laidOut=false;runInNewContext('this.changedContext = showNewsPage(true);',context);language='ro';
+ finishNext([...nodes,{dataset:{newsStreamKey:'late'},height:100}]);await context.changedContext;
+ assert.equal(renders,2);assert.equal(focuses,1);assert.equal(scrolls,1);assert.equal(nodes.length,3);
+ const render=source.slice(source.indexOf('function renderDiscovery()'),source.indexOf('async function showNewsPage(focus)'));
+ assert.ok(render.indexOf('newsMasonry.update()')>=0);assert.ok(render.indexOf('observeNewsStream(sentinel')>=0);assert.ok(render.indexOf('const anchor = anchors.find')>=0);
  assert.ok(render.indexOf('newsMasonry.update()')<render.indexOf('observeNewsStream(sentinel'));
  assert.ok(render.indexOf('newsMasonry.update()')<render.indexOf('const anchor = anchors.find'));
 });

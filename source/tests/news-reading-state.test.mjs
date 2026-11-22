@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 import {NewsReadingState,newsEditionSeed} from '../.build/src/iceo/news-reading-state.js';
 import {selectNewsStream,newsStreamPage} from '../.build/src/iceo/news-stream.js';
+import {continuationItems} from '../.build/src/iceo/news-continuation.js';
 import {readingCard} from '../.build/src/iceo/reader.js';
 import {LiveEdition} from '../.build/src/iceo/live-edition.js';
 import {selectHomeLanguage} from '../.build/src/iceo/home-local.js';
@@ -69,7 +70,7 @@ test('empty first acquisition can populate, language/context choices adopt a new
  assert.equal(new NewsReadingState().present(empty,invalid,'ro','ro',now).local.length,0);
  assert.equal(new NewsReadingState().present(empty,local,'ro','ro',now+300000).local.length,0);
 });
-test('seed material is the visible original edition, excludes check times and remains bounded',()=>{
+test('source-edition seed stays bounded while the homepage preserves the server page sequence',()=>{
  const a=global(301),b=global(302),today={first:[view(a)],more:[view(b)]};
  const first=newsEditionSeed(today,[],'en');
  assert.equal(first,newsEditionSeed({first:[view({...b,observedAt:new Date(now+30000).toISOString()})],more:[view(a)]},[],'en'));
@@ -77,7 +78,16 @@ test('seed material is the visible original edition, excludes check times and re
  assert.notEqual(first,newsEditionSeed(today,[],'ro'));assert.ok(first.length<1024);
  const source=readFileSync('src/iceo/browser.ts','utf8');
  assert.match(source,/newsReading.present\(today,local.cards,contextKey,language,now,applyPublicUpdate\)/u);
- assert.match(source,/selectNewsStream\(today,reading.local,now,newsFilter,reading.seed\)/u);
+ assert.match(source,/visible=continuationItems\(server.items,now\)/u);
+ assert.doesNotMatch(source,/\bselectNewsStream\(/u,'the homepage must not reshuffle the server edition');
+ const serverItems=[{kind:'global',key:'article:'+b.id,category:'13000000',card:b},{kind:'global',key:'article:'+a.id,category:'13000000',card:a}];
+ const original=JSON.stringify(serverItems),initial=continuationItems(serverItems,now);
+ assert.deepEqual(initial.map(item=>item.key),serverItems.map(item=>item.key),'the server sequence survives the presentation adapter');
+ initial.forEach((item,index)=>{assert.strictEqual(item.view.card,serverItems[index].card);assert.equal(item.category,serverItems[index].category);});
+ const c=global(303),extended=continuationItems([...serverItems,{kind:'global',key:'article:'+c.id,category:'13000000',card:c}],now+1000);
+ assert.deepEqual(extended.slice(0,initial.length).map(item=>item.key),initial.map(item=>item.key),'append cannot alter the visible prefix');
+ extended.slice(0,initial.length).forEach((item,index)=>assert.strictEqual(item.view.card,initial[index].view.card));
+ assert.equal(JSON.stringify(serverItems),original,'original records and hashes remain unchanged');
  const compiled=readFileSync('.build/src/iceo/news-reading-state.js','utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'').replaceAll("'../local/news-policy.js'","'./local-news-policy.js'");
  assert.equal(readFileSync('public/news-reading-state.js','utf8'),compiled);
 });
