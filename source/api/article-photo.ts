@@ -2,6 +2,9 @@ import type {IncomingMessage,ServerResponse} from 'node:http';
 import {publicIceoSnapshot} from '../src/iceo/daily-cache.js';
 import type {IceoSnapshot} from '../src/iceo/contracts.js';
 import {validCard} from '../src/iceo/card-validation.js';
+import {validArchiveCard} from '../src/share/archive.js';
+import {validNewsGlobalCard} from '../src/iceo/news-page-contracts.js';
+import {createNewsCorpusStore,type NewsCorpusStore} from '../src/iceo/news-corpus-store.js';
 import {findCity} from '../src/local/cities.js';
 import type {City} from '../src/local/contracts.js';
 import {localNewsService} from '../src/local/news-service.js';
@@ -15,10 +18,28 @@ export interface ArticlePhotoDependencies {
  readonly local:(city:City)=>Promise<CityNewsSnapshot>;
  readonly photos:{read(article:PhotoArticle):Promise<ArticlePhotoResult|null>};
  readonly clock:()=>number;
+ readonly corpus?:Pick<NewsCorpusStore,'lookup'>;
 }
-const dependencies:ArticlePhotoDependencies={global:publicIceoSnapshot,local:city=>localNewsService.snapshot(city),photos:articlePhotoService,clock:Date.now};
+const corpusStore=createNewsCorpusStore(process.env);
+const dependencies:ArticlePhotoDependencies={...(corpusStore?{corpus:corpusStore}:{}),global:publicIceoSnapshot,local:city=>localNewsService.snapshot(city),photos:articlePhotoService,clock:Date.now};
 /** Resolve server-side from a current, validated listing. No remote URL is accepted by this endpoint. */
 export async function resolvePhotoArticle(reference:ArticlePhotoReference,services:ArticlePhotoDependencies):Promise<PhotoArticle|null>{
+ if(services.corpus){
+  try{
+   const item=await services.corpus.lookup(reference),now=services.clock();
+   if(item?.kind==='global'&&reference.cityId===undefined&&item.card.id===reference.id&&item.card.contentHash===reference.revision
+    &&validArchiveCard(item.card)&&validNewsGlobalCard(item.card,now)&&photoPublisher(item.card.sourceUrl)){
+    const article=item.card;
+    return {id:article.id,revision:article.contentHash,sourceUrl:article.sourceUrl,title:article.title,publisher:article.publisher,publishedAt:article.date,
+     validUntil:Math.min(now+300000,Date.parse(article.observedAt)+3600000,Date.parse(article.date)+86400000)};
+   }
+   if(item?.kind==='local'&&reference.cityId!==undefined){
+    const city=findCity(reference.cityId),article=item.card.news;
+    if(city&&article&&article.id===reference.id&&article.documentHash===reference.revision&&validLocalNewsArticle(article,city,now)&&photoPublisher(article.url))
+     return {id:article.id,revision:article.documentHash,sourceUrl:article.url,title:article.title,publisher:article.publisher,publishedAt:article.publishedAt,validUntil:Date.parse(article.validUntil)};
+   }
+  }catch{/* Existing current snapshot resolution remains available. */}
+ }
  if(reference.cityId!==undefined){
   const city=findCity(reference.cityId);if(!city)return null;
   const snapshot=await services.local(city),completed=services.clock();

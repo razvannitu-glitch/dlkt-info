@@ -2,10 +2,12 @@ import type {IncomingMessage, ServerResponse} from 'node:http';
 import {bodyJson, noQuery, sameOrigin} from '../src/account/http.js';
 import type {IceoSnapshot} from '../src/iceo/contracts.js';
 import {publicIceoSnapshot} from '../src/iceo/daily-cache.js';
-import {currentCard, PublicCardError} from '../src/share/current-card.js';
+import {PublicCardError} from '../src/share/current-card.js';
 import {validArchiveReference, type ArchiveStore} from '../src/share/archive.js';
 import {createArchiveStore} from '../src/share/archive-rest.js';
 import {cardPath} from '../src/share/link.js';
+import {resolveCurrentCard} from '../src/share/corpus-card.js';
+import {createNewsCorpusStore,type NewsCorpusStore} from '../src/iceo/news-corpus-store.js';
 
 const pending = new Map<string, Promise<string>>();
 
@@ -16,6 +18,7 @@ export async function handleShareArchive(
   load: () => Promise<IceoSnapshot> = publicIceoSnapshot,
   archive: ArchiveStore | null = createArchiveStore(process.env),
   clock: () => number = Date.now,
+  corpus: Pick<NewsCorpusStore,'lookup'> | null = createNewsCorpusStore(process.env),
 ): Promise<void> {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Cache-Control', 'private, no-store');
@@ -44,7 +47,7 @@ export async function handleShareArchive(
       const existing = await archive.read(ref.id, ref.revision);
       if (existing) return cardPath(existing.card);
       if (!archive.writable) throw Error('SHARE_ARCHIVE_UNAVAILABLE');
-      const current = currentCard(await load(), ref, clock(), true);
+      const current = await resolveCurrentCard(load, ref, clock, true, corpus);
       const stored = await archive.capture(current, clock());
       return cardPath(stored.card);
     })().finally(() => pending.delete(key));

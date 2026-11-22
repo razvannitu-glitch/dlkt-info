@@ -43,7 +43,7 @@ export class NewsContinuation {
  view():NewsContinuationView{return Object.freeze({page:this.page,items:this.items,loading:this.loading,error:this.error??(this.page&&Date.parse(this.page.expiresAt)<=this.clock()?'expired':null),initialized:this.context!==null});}
  start(context:NewsContinuationContext,restart=false):Promise<void>{
   const key=contextKey(context);
-  if(this.key===key&&this.context!==null&&(!restart||this.loading))return this.pending??Promise.resolve();
+  if(this.key===key&&this.context!==null&&!restart)return this.pending??Promise.resolve();
   this.controller?.abort();this.generation++;this.context=Object.freeze({...context});this.key=key;
   this.page=null;this.items=Object.freeze([]);this.loading=false;this.error=null;this.pending=null;
   return this.next();

@@ -1,7 +1,8 @@
 import type {IceoSnapshot} from '../iceo/contracts.js';
 import type {ArchiveStore, ArchivedCard} from './archive.js';
 import type {CardReference} from './link.js';
-import {currentCard, type CurrentCard, PublicCardError} from './current-card.js';
+import {type CurrentCard, PublicCardError} from './current-card.js';
+import {resolveCurrentCard} from './corpus-card.js';
 
 export interface SharedResolution {
   readonly current: CurrentCard;
@@ -32,7 +33,7 @@ export async function resolveShare(
     if (record) return fromArchive(record, 'shared-edition');
   }
   try {
-    return {current: currentCard(await load(), ref, clock(), exactRevision), archived: null, reason: null};
+    return {current: await resolveCurrentCard(load, ref, clock, exactRevision), archived: null, reason: null};
   } catch (error) {
     if (ref.revision === null) {
       const record = await historical(null);

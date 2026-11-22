@@ -3,7 +3,8 @@ import { getCache } from '@vercel/functions';
 import { validCard } from './card-validation.js';
 import { DAILY_EDITION_POLICY, selectContextualToday } from './contextual-today.js';
 import type { EvidenceCard, IceoSnapshot, SourceHealth, Topic } from './contracts.js';
-import { publicEditorialSnapshot } from './editorial-engine.js';
+import {publicEditorialCollection,type EditorialCollection} from './editorial-engine.js';
+import {createNewsCorpusStore,type NewsCorpusStore} from './news-corpus-store.js';
 import {PUBLIC_EDITORIAL_CATEGORIES,EDITORIAL_CATEGORIES_VERSION,type PublicEditorialCategory} from './editorial-categories.js';
 import {NEWS_DISCOVERY_INDEXES} from './news-sources.js';
 import { ICEO_SOURCES } from './registry.js';
@@ -245,9 +246,9 @@ interface ContinuousReadEntry {readonly version:'iceo-continuous-read-1';readonl
 export class ContinuousSnapshotService {
   private pendingRead: Promise<PublicIceoRead>|undefined;
   private memory: {readonly at:number;readonly result:PublicIceoRead}|undefined;
-  constructor(private readonly ledger:RefreshLedger,private readonly collect:(signal:AbortSignal,previousSnapshot?:IceoSnapshot)=>Promise<IceoSnapshot>,
+  constructor(private readonly ledger:RefreshLedger,private readonly collect:(signal:AbortSignal,previousSnapshot?:IceoSnapshot)=>Promise<IceoSnapshot|EditorialCollection>,
     private readonly cache:DailyCacheStore|null=null,private readonly clock:()=>number=Date.now,
-    private readonly deadlineMs:number=CONTINUOUS_REFRESH_DEADLINE_MS){}
+    private readonly deadlineMs:number=CONTINUOUS_REFRESH_DEADLINE_MS,private readonly corpusStore:NewsCorpusStore|null=null){}
 
   async snapshot():Promise<IceoSnapshot>{return (await this.read()).snapshot;}
   async read():Promise<PublicIceoRead>{
@@ -294,23 +295,30 @@ export class ContinuousSnapshotService {
     try{
       if(!Number.isFinite(expires)||expires<=started)throw new Error('CONTINUOUS_LEASE_EXPIRED');
       const timeout=new Promise<never>((_resolve,reject)=>{timer=setTimeout(()=>{failure='timeout';const error=new Error('CONTINUOUS_REFRESH_TIMEOUT');reject(error);controller.abort(error);},Math.max(1,Math.min(this.deadlineMs,expires-started-3_000)));});
-      const acquire=async():Promise<IceoSnapshot>=>{
+      const acquire=async():Promise<IceoSnapshot|EditorialCollection>=>{
         let previous:IceoSnapshot|undefined;
         try{const prior=await this.ledger.read();if(validSharedEnvelope(prior)&&validDailySnapshot(prior.snapshot,this.clock())&&publicSnapshotDigest(prior.snapshot)===prior.digest)previous=prior.snapshot;}
         catch{/* An unavailable prior catalog must not block fresh source collection. */}
         controller.signal.throwIfAborted();return this.collect(controller.signal,previous);
       };
-      const snapshot=await Promise.race([acquire(),timeout]);clearTimeout(timer);controller.abort();
+      const collected=await Promise.race([acquire(),timeout]);clearTimeout(timer);controller.abort();
+      const collection='snapshot' in collected?collected:null,snapshot=collection?collection.snapshot:collected as IceoSnapshot;
       failure='invalid-snapshot';
       if(!validDailySnapshot(snapshot,this.clock())||snapshot.state==='unavailable'
         ||Date.parse(snapshot.generatedAt)<started-5_000||Date.parse(snapshot.generatedAt)>this.clock()+5_000
         ||!snapshot.sources.some(source=>(source.state==='verified'||source.state==='partial')&&source.verifiedAt!==null&&Date.parse(source.verifiedAt)>=started-5_000))throw new Error('CONTINUOUS_SNAPSHOT_INVALID');
       const snapshotDigest=publicSnapshotDigest(snapshot);failure='publish-unavailable';
+      if(collection&&!this.corpusStore)throw new Error('CONTINUOUS_CORPUS_NOT_CONFIGURED');
+      const staged=collection?await this.corpusStore!.stage(claim,collection.corpus,collection.diagnostics):null;
       const published=await this.ledger.publish(claim,snapshot,snapshotDigest);
       const confirmed=await this.ledger.read();
       this.publicView(published);const result=this.publicView(confirmed);
       if(published.digest!==snapshotDigest||confirmed.revision<published.revision
         ||confirmed.revision===published.revision&&confirmed.digest!==snapshotDigest)throw new Error('CONTINUOUS_READBACK_FAILED');
+      if(staged){
+        const corpus=await this.corpusStore!.read(staged.epoch);
+        if(!corpus||corpus.epoch!==staged.epoch||corpus.digest!==staged.digest||corpus.revision!==published.revision||corpus.generatedAt!==snapshot.generatedAt)throw new Error('CONTINUOUS_CORPUS_READBACK_FAILED');
+      }
       this.memory=undefined;this.remember(result);
       // SQL owns the snapshot and receipt. Runtime cache writes never decide scheduler success.
       return this.receipt('published',trigger,claim.slot,published,true,published.retryAt);
@@ -339,7 +347,8 @@ let shared:ContinuousSnapshotService|undefined;
 function service():ContinuousSnapshotService{
   if(shared)return shared;
   const ledger=createRefreshLedger(process.env);if(!ledger)throw new Error('CONTINUOUS_STORE_NOT_CONFIGURED');
-  shared=new ContinuousSnapshotService(ledger,publicEditorialSnapshot,new VercelDailyCacheStore());return shared;
+  const corpusStore=createNewsCorpusStore(process.env);if(!corpusStore)throw new Error('CONTINUOUS_CORPUS_NOT_CONFIGURED');
+  shared=new ContinuousSnapshotService(ledger,publicEditorialCollection,new VercelDailyCacheStore(),Date.now,CONTINUOUS_REFRESH_DEADLINE_MS,corpusStore);return shared;
 }
 export const publicIceoRead=():Promise<PublicIceoRead>=>service().read();
 export const publicIceoSnapshot=():Promise<IceoSnapshot>=>service().snapshot();

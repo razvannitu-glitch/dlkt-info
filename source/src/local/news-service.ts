@@ -47,7 +47,7 @@ function boundedExcerpt(summary:string|undefined,remaining:number):string|undefi
   }
   return output||undefined;
 }
-export function parseLocalNews(body:string,sourceId:string,city:City,checkedAt:string,now:number):LocalNewsExtraction{
+export function parseLocalNews(body:string,sourceId:string,city:City,checkedAt:string,now:number,options:{readonly full?:boolean}={}):LocalNewsExtraction{
   const source=newsFeed(sourceId);
   if(!source||!newsFeedsFor(city).some(s=>s.id===source.id)||!Number.isFinite(now))throw Error('NEWS_SOURCE_IDENTITY');
   if(new Date(now).toISOString().slice(0,10)>source.rightsReviewBy)throw Error('NEWS_RIGHTS_EXPIRED');
@@ -70,7 +70,8 @@ export function parseLocalNews(body:string,sourceId:string,city:City,checkedAt:s
       topic:newsTopic(title,summary),cityId:city.id,geographyBasis:'article-place-reference',geoAnchors,documentHash,documentUrl:source.endpoint,attribution:source.attribution,
       ...(card.byline?{byline:card.byline}:{}),...(source.licenseUrl?{licenseUrl:source.licenseUrl}:{})};
     if(!validLocalNewsArticle(article,city,now)){rejected++;continue;}
-    articles.push(article);if(articles.length===20)break;
+    articles.push(article);if(!options.full&&articles.length===20)break;
+    if(articles.length>5000)throw Error('NEWS_CORPUS_CAPACITY');
   }
   return{articles,rejected};
 }
@@ -102,26 +103,28 @@ export class LocalNewsService{
     this.pending.set(url,job);
     try{return await job;}catch(error){this.backoff.set(origin,Math.max(this.backoff.get(origin)??0,this.clock()+60000));throw error;}finally{this.pending.delete(url);}
   }
-  private async source(source:NewsFeedDefinition,city:City):Promise<{readonly articles:readonly LocalNewsArticle[];readonly health:NewsSourceHealth}>{
+  private async source(source:NewsFeedDefinition,city:City,full=false):Promise<{readonly articles:readonly LocalNewsArticle[];readonly health:NewsSourceHealth}>{
     const common={sourceId:source.id,publisher:source.publisher,feedUrl:source.endpoint,termsUrl:source.termsUrl};
     try{
       const now=this.clock();if(new Date(now).toISOString().slice(0,10)>source.rightsReviewBy)throw Error('NEWS_RIGHTS_EXPIRED');
       const robots=await this.acquire(new URL(source.endpoint).origin+'/robots.txt',true);
       if(!robotsAllowed(robots.body,source.endpoint))throw Error('NEWS_ROBOTS_DENIED');
       const document=await this.acquire(source.endpoint,false);
-      const parsed=parseLocalNews(document.body,source.id,city,document.checkedAt,this.clock());
+      const parsed=parseLocalNews(document.body,source.id,city,document.checkedAt,this.clock(),{full});
       return{articles:parsed.articles,health:{...common,state:parsed.rejected?'partial':'ready',checkedAt:document.checkedAt,count:parsed.articles.length,rejected:parsed.rejected,error:null}};
     }catch(error){
       const message=error instanceof Error&&/^[A-Z][A-Z0-9_]{1,80}$/u.test(error.message)?error.message:'NEWS_UNAVAILABLE';
       return{articles:[],health:{...common,state:'unavailable',checkedAt:null,count:0,rejected:0,error:message}};
     }
   }
-  async snapshot(city:City):Promise<CityNewsSnapshot>{
-    const results=await Promise.all(newsFeedsFor(city).map(source=>this.source(source,city)));
+  async snapshot(city:City,options:{readonly full?:boolean}={}):Promise<CityNewsSnapshot>{
+    const results=await Promise.all(newsFeedsFor(city).map(source=>this.source(source,city,options.full===true)));
     const now=this.clock();
     // Each source check is retained; neither a cache hit nor a later snapshot restamps publication/check time.
     const articles=results.flatMap(result=>result.articles).filter(article=>validLocalNewsArticle(article,city,now)
-      &&Date.parse(article.publishedAt)>=now-NEWS_WINDOW_MS).sort((a,b)=>Date.parse(b.publishedAt)-Date.parse(a.publishedAt)||a.id.localeCompare(b.id)).slice(0,40);
+      &&Date.parse(article.publishedAt)>=now-NEWS_WINDOW_MS).sort((a,b)=>Date.parse(b.publishedAt)-Date.parse(a.publishedAt)||a.id.localeCompare(b.id));
+    if(!options.full)articles.splice(40);
+    if(articles.length>5000)throw Error('NEWS_CORPUS_CAPACITY');
     const sources=results.map(result=>({...result.health,count:articles.filter(article=>article.sourceId===result.health.sourceId).length}));
     return{articles,sources};
   }
