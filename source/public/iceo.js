@@ -612,8 +612,8 @@ function valid(value) {
         && Array.isArray(value.cards) && value.cards.length <= 5000 && value.cards.every(validCard)
         && Array.isArray(value.sources) && value.sources.length <= 100 && value.sources.every(validHealth);
 }
-function formatted(value, dayOnly = false, utc = false) {
-    const options = dayOnly ? { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }
+function formatted(value, dayOnly = false, utc = false, publicationTimeZone = 'UTC') {
+    const options = dayOnly ? { year: 'numeric', month: 'short', day: 'numeric', timeZone: publicationTimeZone }
         : { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short', ...(utc ? { timeZone: 'UTC' } : {}) };
     return new Intl.DateTimeFormat(getLocale(), options).format(new Date(value));
 }
@@ -697,7 +697,7 @@ async function shareSource(card, button, fallback) {
         announcement.textContent = 'Copy the original source link from the selected field.';
     }
 }
-function cardNode(view, index, total, saved, automaticInsights = true, followPresentation = 'category') {
+function cardNode(view, index, total, saved, automaticInsights = true, followPresentation = 'category', publicationTimeZone = 'UTC') {
     const fragment = template.content.cloneNode(true);
     const node = fragment.querySelector('article');
     if (!node)
@@ -749,7 +749,7 @@ function cardNode(view, index, total, saved, automaticInsights = true, followPre
         node.querySelector('.card-meta')?.after(credit);
     put('.card-context', presentation.visibleContext ?? '');
     put('.card-publisher', card.publisher);
-    put('.card-date', `${view.dateLabel === 'Published' ? '' : view.dateLabel + ': '}${formatted(card.date, true)}`);
+    put('.card-date', `${view.dateLabel === 'Published' ? '' : view.dateLabel + ': '}${formatted(card.date, true, false, card.dateLabel === 'Published' ? publicationTimeZone : 'UTC')}`);
     const readingContext = node.querySelector('.card-context'), guide = cardGuideNode(card);
     if (readingContext instanceof HTMLElement) {
         readingContext.hidden = presentation.visibleContext === null;
@@ -1236,7 +1236,7 @@ function renderDiscovery() {
         const item = entry.item, index = newsIndex++;
         let node;
         if (item.kind === 'global') {
-            node = cardNode(item.view, index, topCount, undefined, false, 'related');
+            node = cardNode(item.view, index, topCount, undefined, false, 'related', server.page?.day?.timeZone ?? contextualCity?.timezone ?? 'UTC');
             node.dataset.liveSignature = JSON.stringify([language, editionCardSignature(item.view.card), editionStorySignature(item.view)]);
         }
         else {
