@@ -1,6 +1,7 @@
 import { initializeCurrentCity } from './local-startup.js';
 import { localCardNode } from './local-card-node.js';
 import { localDiscovery, cardInterest } from './local-discovery.js';
+import { contextPhotoNode } from './card-photo-browser.js';
 import { object, validCity, validLocalSnapshot, currentLocalSnapshot, localCoverageNotes } from './local-contracts.js';
 import { localCoverageReading, localDiscoveryLabel } from './local-presentation.js';
 import { readLocalMemory, writeLocalMemory, compareLocal } from './local-memory.js';
@@ -10,6 +11,62 @@ function get(id) { const n = document.getElementById(id); if (!n)
 async function json(url, init = {}) { const response = await fetch(url, { credentials: 'omit', ...init, headers: { Accept: 'application/json', ...init.headers }, signal: init.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(20000)]) : AbortSignal.timeout(20000) }); if (!response.ok)
     throw Error('LOCAL_REQUEST_FAILED'); const text = await response.text(); if (text.length > 150000)
     throw Error('LOCAL_RESPONSE_TOO_LARGE'); return JSON.parse(text); }
+const format = (time, zone) => new Intl.DateTimeFormat('en-GB', { timeZone: zone, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' }).format(new Date(time));
+/** Directory references retain their own source; a generic photo never claims to show the venue. */
+export function renderLocalPlace(place, c, placeCheck = null, now = Date.now()) {
+    const article = node('article', '', 'info-card local-card local-place');
+    article.dataset.placeId = place.id;
+    const category = place.category === 'outdoors' ? 'environment' : place.category;
+    article.dataset.editorialCategory = category;
+    const head = node('header');
+    head.append(node('span', place.category === 'food' ? 'Food & drink' : place.category === 'culture' ? 'Arts & museums' : 'Outdoors', 'card-topic'), node('span', 'Place reference', 'card-index'));
+    const body = node('div', '', 'card-content');
+    body.append(node('h3', place.name), node('p', `${place.type.charAt(0).toUpperCase() + place.type.slice(1)}${place.address ? ' · ' + place.address : ''}`, 'card-context'), node('p', `${place.source === 'wikidata' ? 'Reference place in ' + c.name : 'Mapped near ' + c.name + ' city centre'}. Check opening hours, access and bookings with the venue.`, 'card-context'));
+    const link = node('a', 'Explore this place ↗', 'source-link');
+    link.href = place.sourceUrl;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    body.append(link, node('p', place.source === 'wikidata' ? 'Wikidata structured data · CC0. Reference reviewed 17 November 2026. Confirm current venue details at the source.' : '© OpenStreetMap contributors · ODbL. A map entry, not an open-now check, recommendation or scheduled event.', 'card-boundary'));
+    if (placeCheck?.checkedAt)
+        body.append(node('p', `Map fetched ${format(placeCheck.checkedAt, c.timezone)}. Data as of ${placeCheck.dataAsOf ? format(placeCheck.dataAsOf, c.timezone) : 'unknown'}.`, 'card-date'));
+    const sharing = node('details', '', 'evidence');
+    sharing.append(node('summary', 'Share this place'));
+    const native = node('button', 'Share place', 'text-button');
+    native.type = 'button';
+    const feedback = node('p', '', 'privacy-note');
+    feedback.setAttribute('role', 'status');
+    native.addEventListener('click', () => { void (async () => { try {
+        if (navigator.share) {
+            await navigator.share({ title: place.name, text: `${place.name} · discovered with DLKT. Check details at the source.`, url: place.sourceUrl });
+            feedback.textContent = 'Share sheet opened.';
+        }
+        else {
+            await navigator.clipboard.writeText(place.sourceUrl);
+            feedback.textContent = 'Place link copied.';
+        }
+    }
+    catch (error) {
+        feedback.textContent = error instanceof DOMException && error.name === 'AbortError' ? 'Sharing cancelled.' : 'Sharing is unavailable here. Use a network link or open the source.';
+    } })(); });
+    sharing.append(native);
+    for (const [name, href] of [['Facebook', 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(place.sourceUrl)], ['X', 'https://twitter.com/intent/tweet?url=' + encodeURIComponent(place.sourceUrl) + '&text=' + encodeURIComponent(place.name + ' · DLKT')], ['Threads', 'https://www.threads.net/intent/post?text=' + encodeURIComponent(place.name + ' · DLKT ' + place.sourceUrl)]]) {
+        if (!name || !href)
+            continue;
+        const link = node('a', name, 'text-button');
+        link.href = href;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        sharing.append(link);
+    }
+    sharing.append(feedback);
+    article.append(head);
+    // Venue names can contain people, sports or place words without supplying image evidence.
+    const photograph = contextPhotoNode({ title: '', sourceUrl: place.sourceUrl, editorialCategory: category }, now);
+    if (photograph)
+        article.append(photograph);
+    article.append(body, sharing);
+    return article;
+}
 export function setupLocal() {
     const chooser = get('place-dialog'), input = get('place-query'), results = get('place-results'), message = get('place-message'), location = get('choose-place'), section = get('local-briefing'), cards = get('local-cards'), status = get('local-status'), follow = get('follow-place'), forget = get('forget-place'), refresh = get('refresh-local'), difference = get('local-changes');
     let expiryTimer, manualSelection = false, autoSuppressed = document.body.dataset.entryView !== 'start';
@@ -20,7 +77,6 @@ export function setupLocal() {
     document.addEventListener('dlkt:entry-view', event => { if (event instanceof CustomEvent && object(event.detail) && event.detail.view !== 'start')
         autoSuppressed = true; });
     const feedback = (text) => { get('local-feedback').textContent = text; };
-    const format = (time, zone) => new Intl.DateTimeFormat('en-GB', { timeZone: zone, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' }).format(new Date(time));
     const interests = get('local-interests');
     interests.addEventListener('click', event => { const target = event.target; if (!(target instanceof Element))
         return; const button = target.closest('[data-local-interest]'); if (!button)
@@ -79,53 +135,6 @@ export function setupLocal() {
         message.textContent = 'Nearby cities could not be checked. Search manually; your selection is unchanged.';
     } })(); }, error => { if (ticket !== searchSequence)
         return; message.textContent = error.code === 1 ? 'Location permission was declined. Search for your city instead.' : error.code === 3 ? 'Location request timed out. Search for your city instead.' : 'Location is unavailable. Search for your city instead.'; }, { maximumAge: 0, timeout: 10000, enableHighAccuracy: false }); });
-    function renderPlace(place, c) {
-        const article = node('article', '', 'info-card local-card local-place');
-        article.dataset.placeId = place.id;
-        const head = node('header');
-        head.append(node('span', place.category === 'food' ? 'Food & drink' : place.category === 'culture' ? 'Arts & museums' : 'Outdoors', 'card-topic'), node('span', 'Place reference', 'card-index'));
-        const body = node('div', '', 'card-content');
-        body.append(node('h3', place.name), node('p', `${place.type.charAt(0).toUpperCase() + place.type.slice(1)}${place.address ? ' · ' + place.address : ''}`, 'card-context'), node('p', `${place.source === 'wikidata' ? 'Reference place in ' + c.name : 'Mapped near ' + c.name + ' city centre'}. Check opening hours, access and bookings with the venue.`, 'card-context'));
-        const link = node('a', 'Explore this place ↗', 'source-link');
-        link.href = place.sourceUrl;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        body.append(link, node('p', place.source === 'wikidata' ? 'Wikidata structured data · CC0. Reference reviewed 17 November 2026. Confirm current venue details at the source.' : '© OpenStreetMap contributors · ODbL. A map entry, not an open-now check, recommendation or scheduled event.', 'card-boundary'));
-        if (snapshot?.places?.checkedAt)
-            body.append(node('p', `Map fetched ${format(snapshot.places.checkedAt, c.timezone)}. Data as of ${snapshot.places.dataAsOf ? format(snapshot.places.dataAsOf, c.timezone) : 'unknown'}.`, 'card-date'));
-        const sharing = node('details', '', 'evidence');
-        sharing.append(node('summary', 'Share this place'));
-        const native = node('button', 'Share place', 'text-button');
-        native.type = 'button';
-        const feedback = node('p', '', 'privacy-note');
-        feedback.setAttribute('role', 'status');
-        native.addEventListener('click', () => { void (async () => { try {
-            if (navigator.share) {
-                await navigator.share({ title: place.name, text: `${place.name} · discovered with DLKT. Check details at the source.`, url: place.sourceUrl });
-                feedback.textContent = 'Share sheet opened.';
-            }
-            else {
-                await navigator.clipboard.writeText(place.sourceUrl);
-                feedback.textContent = 'Place link copied.';
-            }
-        }
-        catch (error) {
-            feedback.textContent = error instanceof DOMException && error.name === 'AbortError' ? 'Sharing cancelled.' : 'Sharing is unavailable here. Use a network link or open the source.';
-        } })(); });
-        sharing.append(native);
-        for (const [name, href] of [['Facebook', 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(place.sourceUrl)], ['X', 'https://twitter.com/intent/tweet?url=' + encodeURIComponent(place.sourceUrl) + '&text=' + encodeURIComponent(place.name + ' · DLKT')], ['Threads', 'https://www.threads.net/intent/post?text=' + encodeURIComponent(place.name + ' · DLKT ' + place.sourceUrl)]]) {
-            if (!name || !href)
-                continue;
-            const link = node('a', name, 'text-button');
-            link.href = href;
-            link.target = '_blank';
-            link.rel = 'noopener noreferrer';
-            sharing.append(link);
-        }
-        sharing.append(feedback);
-        article.append(head, body, sharing);
-        return article;
-    }
     function renderExplore(c) {
         const explore = get('local-explore');
         explore.replaceChildren();
@@ -159,7 +168,7 @@ export function setupLocal() {
     } if (snapshot.places?.state === 'reference' || snapshot.places?.state === 'ready' && snapshot.places.validTo && Date.parse(snapshot.places.validTo) > now) {
         const places = snapshot.places.items.filter(p => interest === 'all' || interest === p.category);
         if (places.length) {
-            cards.append(node('h3', 'Places to explore'), ...places.map(p => renderPlace(p, city)));
+            cards.append(node('h3', 'Places to explore'), ...places.map(p => renderLocalPlace(p, city, snapshot?.places ?? null, now)));
         }
     } if (!cards.children.length)
         cards.append(node('p', 'No current connected cards for this category. Explore the local sources below.', 'privacy-note')); const notes = localCoverageReading(snapshot, now); if (notes.length) {
@@ -261,4 +270,5 @@ export function setupLocal() {
     }).then(result => { if (result === 'unavailable' && !city)
         feedback('Your current city could not be identified. Choose a city to see its local edition. Saved comparisons have not changed.'); }).finally(() => { document.dispatchEvent(new CustomEvent('dlkt:location-settled')); });
 }
-setupLocal();
+if (typeof document !== 'undefined')
+    setupLocal();
