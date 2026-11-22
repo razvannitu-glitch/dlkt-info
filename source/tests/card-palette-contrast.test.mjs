@@ -43,7 +43,7 @@ for(const theme of ['prism','night'])test(`${theme}: every category surface keep
   const surface=vars[token],tone=token.slice('--reader-card-'.length,-'-surface'.length);
   for(const role of ['ink','muted','link'])check(`${tone} ${role}`,vars[`--reader-${role}`],surface,4.5);
   for(const role of ['edge','action','focus','selected-edge'])check(`${tone} ${role}`,vars[`--reader-${role}`],surface,3);
-  // A label's gold background is independent of the dark category border/dot.
+  // A label's background is independent of the category border/dot.
   const badge=vars[`--reader-card-${tone}-badge`]??vars[`--reader-card-${tone}-accent`];
   const badgeInk=vars[`--reader-card-${tone}-badge-ink`]??vars['--reader-card-badge-ink'];
   check(`${tone} photo topic badge`,badgeInk,badge,4.5);
@@ -79,7 +79,7 @@ function resolve(value,vars,seen=[]){
   return resolve(vars[key],vars,[...seen,key]);
  });
 }
-const approvedSurfaces={paper:'#F1E9E2',ivory:'#FFFDF8',coral:'#FFBCA8',berry:'#B42A4C',wine:'#84203D',gold:'#FFD357'};
+const approvedSurfaces={paper:'#F0EDE5',ivory:'#D8D6CD',coral:'#F66061',berry:'#142D44',wine:'#7D969B',gold:'#B7C4C3'};
 const rootVariables=Object.assign(variables('prism'),customDeclarations(themeScope));
 function cardVariables(name,inherited){
  // Custom properties are computed on the parent before inheritance, including

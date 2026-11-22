@@ -1,13 +1,13 @@
 /* Approved reader palettes. Load after the existing reader styles.
    Legacy ink/surface tokens remain semantic; photographs get their own literal pair. */
 html[data-reader-theme=prism]{
- --reader-page:#F1E9E2;--reader-surface:#FFFDF8;--reader-panel:#FFBCA8;
- --reader-ink:#351D24;--reader-muted:#62333E;--reader-rule:#9A615D;--reader-edge:#9A615D;
- --reader-action:#B42A4C;--reader-action-ink:#FFFFFF;--reader-action-hover:#84203D;--reader-action-hover-ink:#FFFFFF;
- --reader-selected:#B42A4C;--reader-selected-ink:#FFFFFF;--reader-selected-edge:#B42A4C;
- --reader-secondary-hover:#FFBCA8;--reader-secondary-hover-ink:#351D24;
- --reader-link:#351D24;--reader-focus:#1B4DB3;
- --reader-photo-dark:#351D24;--reader-photo-light:#FFFDF8;--reader-photo-link:#351D24;--reader-photo-focus:#1B4DB3;
+ --reader-page:#F0EDE5;--reader-surface:#F0EDE5;--reader-panel:#D8D6CD;
+ --reader-ink:#121416;--reader-muted:#142D44;--reader-rule:#142D44;--reader-edge:#142D44;
+ --reader-action:#142D44;--reader-action-ink:#F0EDE5;--reader-action-hover:#121416;--reader-action-hover-ink:#F0EDE5;
+ --reader-selected:#142D44;--reader-selected-ink:#F0EDE5;--reader-selected-edge:#142D44;
+ --reader-secondary-hover:#D8D6CD;--reader-secondary-hover-ink:#121416;
+ --reader-link:#121416;--reader-focus:#142D44;
+ --reader-photo-dark:#142D44;--reader-photo-light:#F0EDE5;--reader-photo-link:#121416;--reader-photo-focus:#142D44;
  color-scheme:light;
 }
 html[data-reader-theme=night]{
@@ -191,17 +191,17 @@ html[data-reader-theme=night] #reader-theme-toggle [data-theme-icon=sun]{display
  html:is([data-reader-theme=prism],[data-reader-theme=night]) .reader-language{gap:8px;max-width:calc(100% - 52px)}
 }
 
-/* Topic color is stable across views and ordering; it is decoration, not a status signal.
+/* North Ledger category fallbacks apply before the six-surface shuffle binds.
    Opaque reading surfaces keep normal and hovered text independent of the photograph. */
 html[data-reader-theme=prism]{
- --reader-card-violet-surface:#FFFDF8;--reader-card-violet-accent:#173D4B;--reader-card-violet-badge:#173D4B;--reader-card-violet-badge-ink:#FFFFFF;
- --reader-card-mint-surface:#FFFDF8;--reader-card-mint-accent:#173D4B;--reader-card-mint-badge:#173D4B;--reader-card-mint-badge-ink:#FFFFFF;
- --reader-card-sky-surface:#FFBCA8;--reader-card-sky-accent:#9A615D;--reader-card-sky-badge:#FFD357;--reader-card-sky-badge-ink:#432D04;
- --reader-card-peach-surface:#FFBCA8;--reader-card-peach-accent:#9A615D;--reader-card-peach-badge:#FFD357;--reader-card-peach-badge-ink:#432D04;
- --reader-card-rose-surface:#FFBCA8;--reader-card-rose-accent:#9A615D;--reader-card-rose-badge:#FFD357;--reader-card-rose-badge-ink:#432D04;
- --reader-card-sage-surface:#FFFDF8;--reader-card-sage-accent:#173D4B;--reader-card-sage-badge:#173D4B;--reader-card-sage-badge-ink:#FFFFFF;
- --reader-card-badge-ink:#FFFFFF;
- --reader-card-shadow:#351D2414;--reader-card-hover-shadow:#351D242E;
+ --reader-card-violet-surface:#F0EDE5;--reader-card-violet-accent:#142D44;--reader-card-violet-badge:#142D44;--reader-card-violet-badge-ink:#F0EDE5;
+ --reader-card-mint-surface:#B7C4C3;--reader-card-mint-accent:#142D44;--reader-card-mint-badge:#142D44;--reader-card-mint-badge-ink:#F0EDE5;
+ --reader-card-sky-surface:#7D969B;--reader-card-sky-accent:#142D44;--reader-card-sky-badge:#142D44;--reader-card-sky-badge-ink:#F0EDE5;
+ --reader-card-peach-surface:#D8D6CD;--reader-card-peach-accent:#142D44;--reader-card-peach-badge:#142D44;--reader-card-peach-badge-ink:#F0EDE5;
+ --reader-card-rose-surface:#F66061;--reader-card-rose-accent:#142D44;--reader-card-rose-badge:#142D44;--reader-card-rose-badge-ink:#F0EDE5;
+ --reader-card-sage-surface:#F0EDE5;--reader-card-sage-accent:#142D44;--reader-card-sage-badge:#142D44;--reader-card-sage-badge-ink:#F0EDE5;
+ --reader-card-badge-ink:#F0EDE5;
+ --reader-card-shadow:#142D4414;--reader-card-hover-shadow:#142D442E;
 }
 html[data-reader-theme=night]{
  --reader-card-violet-surface:#2A263B;--reader-card-violet-accent:#C9BAFF;
@@ -273,8 +273,8 @@ html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-card
  html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card{transition:none;transform:none}
 }
 
-/* Base Coral / Ink fallback. Position-assigned surfaces below supersede these category colors.
-   The gold badge is a label; its border/dot accent remains dark enough on salmon. */
+/* North Ledger fallback. Position-assigned surfaces below supersede these category colors.
+   Navy badges keep their own readable text pair on every light surface. */
 html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card{
  --card-tone-badge:var(--reader-card-violet-badge);--card-tone-badge-ink:var(--reader-card-violet-badge-ink);
  border-color:var(--reader-edge);border-block-start-color:var(--card-tone-accent);
@@ -321,34 +321,34 @@ html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-ca
  }
 }
 
-/* Six swatches are assigned to stable reading positions by reader-theme.js.
+/* Six North Ledger swatches are assigned to stable reading positions by reader-theme.js.
+   The surface IDs remain stable internal keys, independent of the displayed colors.
    Reset semantic roles for nested cards before the dark overrides, then rebind
    aliases already computed on html or an enclosing Daily context card. */
 html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface]{
  --reader-page:var(--card-tone-surface);--reader-surface:var(--card-tone-surface);--reader-panel:var(--card-tone-surface);
- --reader-ink:#351D24;--reader-muted:#62333E;--reader-rule:#9A615D;--reader-edge:#9A615D;
- --reader-action:#B42A4C;--reader-action-ink:#FFFFFF;--reader-action-hover:#84203D;--reader-action-hover-ink:#FFFFFF;
- --reader-selected:#B42A4C;--reader-selected-ink:#FFFFFF;--reader-selected-edge:#B42A4C;
- --reader-secondary-hover:#FFBCA8;--reader-secondary-hover-ink:#351D24;
- --reader-link:#351D24;--reader-focus:#1B4DB3;
- --reader-photo-dark:#351D24;--reader-photo-light:#FFFDF8;--reader-photo-link:#351D24;--reader-photo-focus:#1B4DB3;
+ --reader-ink:#121416;--reader-muted:#142D44;--reader-rule:#142D44;--reader-edge:#142D44;
+ --reader-action:#142D44;--reader-action-ink:#F0EDE5;--reader-action-hover:#121416;--reader-action-hover-ink:#F0EDE5;
+ --reader-selected:#142D44;--reader-selected-ink:#F0EDE5;--reader-selected-edge:#142D44;
+ --reader-secondary-hover:#D8D6CD;--reader-secondary-hover-ink:#121416;
+ --reader-link:#121416;--reader-focus:#142D44;
+ --reader-photo-dark:#142D44;--reader-photo-light:#F0EDE5;--reader-photo-link:#121416;--reader-photo-focus:#142D44;
  --black:var(--reader-ink);--white:var(--reader-surface);--muted:var(--reader-muted);
  --line:var(--reader-rule);--soft:var(--reader-panel);
- --card-tone-accent:var(--reader-edge);--card-tone-badge:#173D4B;--card-tone-badge-ink:#FFFFFF;
+ --card-tone-accent:var(--reader-edge);--card-tone-badge:#142D44;--card-tone-badge-ink:#F0EDE5;
 }
-html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface=paper]{--card-tone-surface:#F1E9E2}
-html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface=ivory]{--card-tone-surface:#FFFDF8}
-html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface=coral]{--card-tone-surface:#FFBCA8}
-html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface=berry]{--card-tone-surface:#B42A4C}
-html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface=wine]{--card-tone-surface:#84203D}
-html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface=gold]{--card-tone-surface:#FFD357}
-html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface=berry],
-html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface=wine]{
- --reader-ink:#FFFFFF;--reader-muted:#FFFDF8;--reader-rule:#F1E9E2;--reader-edge:#F1E9E2;
- --reader-action:#FFFDF8;--reader-action-ink:#84203D;--reader-action-hover:#FFD357;--reader-action-hover-ink:#351D24;
- --reader-selected:#FFD357;--reader-selected-ink:#351D24;--reader-selected-edge:#FFD357;
- --reader-secondary-hover:#FFD357;--reader-secondary-hover-ink:#351D24;
- --reader-link:#FFFFFF;--reader-focus:#FFD357;
- --reader-photo-dark:#351D24;--reader-photo-light:#FFFDF8;--reader-photo-link:#FFFFFF;--reader-photo-focus:#FFD357;
- --card-tone-accent:#FFD357;--card-tone-badge:#FFD357;--card-tone-badge-ink:#432D04;
+html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface=paper]{--card-tone-surface:#F0EDE5}
+html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface=ivory]{--card-tone-surface:#D8D6CD}
+html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface=coral]{--card-tone-surface:#F66061}
+html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface=berry]{--card-tone-surface:#142D44}
+html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface=wine]{--card-tone-surface:#7D969B}
+html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface=gold]{--card-tone-surface:#B7C4C3}
+html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface=berry]{
+ --reader-ink:#F0EDE5;--reader-muted:#D8D6CD;--reader-rule:#B7C4C3;--reader-edge:#B7C4C3;
+ --reader-action:#F66061;--reader-action-ink:#121416;--reader-action-hover:#F0EDE5;--reader-action-hover-ink:#142D44;
+ --reader-selected:#F66061;--reader-selected-ink:#121416;--reader-selected-edge:#F66061;
+ --reader-secondary-hover:#D8D6CD;--reader-secondary-hover-ink:#121416;
+ --reader-link:#F0EDE5;--reader-focus:#F66061;
+ --reader-photo-dark:#142D44;--reader-photo-light:#F0EDE5;--reader-photo-link:#F0EDE5;--reader-photo-focus:#F66061;
+ --card-tone-accent:#B7C4C3;--card-tone-badge:#F66061;--card-tone-badge-ink:#121416;
 }
