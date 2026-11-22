@@ -1,7 +1,8 @@
 import {XMLParser,XMLValidator} from 'fast-xml-parser';
+import {parseDocument,DomUtils} from 'htmlparser2';
 import {readNewsArticleMetadata,validateNewsCandidate} from '../source/.build/src/iceo/news-discovery.js';
 import {classifyNewsHeadline} from '../source/.build/src/iceo/editorial-categories.js';
-const urls=['https://www.france24.com/en/rss','https://www.dw.com/ro/news-sitemap.xml','https://www.dw.com/de/news-sitemap.xml','https://www.dw.com/fr/news-sitemap.xml','https://www.dw.com/es/news-sitemap.xml','https://www.dw.com/ar/news-sitemap.xml'];
+const urls=['https://www.dw.com/ro/news-sitemap.xml','https://www.dw.com/de/news-sitemap.xml'];
 const blocked=new Set(),now=Date.now();
 async function read(url){
  const origin=new URL(url).origin;if(blocked.has(origin))return {status:'not_run_origin_denied'};
@@ -12,6 +13,14 @@ async function read(url){
  const reader=response.body.getReader();let bytes=0,text='';const decoder=new TextDecoder();
  try{for(;;){const part=await reader.read();if(part.done)break;bytes+=part.value.byteLength;if(bytes>1048576)throw Error('TOO_LARGE');text+=decoder.decode(part.value,{stream:true});}text+=decoder.decode();}finally{await reader.cancel();}
  return {status:response.status,text};
+}
+function metadata(html){
+ const doc=parseDocument(html,{decodeEntities:true});
+ const meta=DomUtils.getElementsByTagName('meta',doc,true).filter(n=>['og:title','article:published_time','article:modified_time'].includes(n.attribs.property??n.attribs.name)).slice(0,8).map(n=>({name:n.attribs.property??n.attribs.name,content:n.attribs.content}));
+ const links=DomUtils.getElementsByTagName('link',doc,true).filter(n=>n.attribs.rel==='canonical').slice(0,2).map(n=>n.attribs.href);
+ const articles=[];function inspect(v,depth=0){if(depth>5||articles.length>5)return;if(Array.isArray(v)){v.slice(0,20).forEach(x=>inspect(x,depth+1));return;}if(!v||typeof v!=='object')return;if(JSON.stringify(v['@type']??'').includes('Article'))articles.push(Object.fromEntries(['@type','url','@id','mainEntityOfPage','headline','alternativeHeadline','datePublished','dateModified'].filter(k=>v[k]!==undefined).map(k=>[k,v[k]])));if(v['@graph'])inspect(v['@graph'],depth+1);if(v.mainEntity)inspect(v.mainEntity,depth+1);}
+ for(const n of DomUtils.getElementsByTagName('script',doc,true).filter(n=>n.attribs.type==='application/ld+json').slice(0,10)){try{inspect(JSON.parse(DomUtils.textContent(n)));}catch{}}
+ return {meta,canonical:links,articles};
 }
 const output=[];
 for(const url of urls){
@@ -24,7 +33,7 @@ for(const url of urls){
   const current=records.filter(item=>Number.isFinite(Date.parse(item.date))&&Date.parse(item.date)>now-86400000&&Date.parse(item.date)<=now+300000);
   const sample=current.find(item=>new URL(item.sourceUrl).origin===new URL(url).origin);
   let article=null;
-  if(sample){const publisher=new URL(url).hostname==='www.dw.com'?'DW':'France 24',candidate=validateNewsCandidate({sourceUrl:sample.sourceUrl,title:sample.title,publisher,indexedAt:new Date(now).toISOString(),category:classifyNewsHeadline(sample.title,sample.sourceUrl)},now);if(candidate){const response=await read(candidate.sourceUrl);article={url:candidate.sourceUrl,status:response.status,verified:response.text?readNewsArticleMetadata(response.text,candidate,candidate.sourceUrl,now)!==null:false};}}
+  if(sample){const publisher=new URL(url).hostname==='www.dw.com'?'DW':'France 24',candidate=validateNewsCandidate({sourceUrl:sample.sourceUrl,title:sample.title,publisher,indexedAt:new Date(now).toISOString(),category:classifyNewsHeadline(sample.title,sample.sourceUrl)},now);if(candidate){const response=await read(candidate.sourceUrl);article={url:candidate.sourceUrl,status:response.status,verified:response.text?readNewsArticleMetadata(response.text,candidate,candidate.sourceUrl,now)!==null:false,metadata:response.text?metadata(response.text):null};}}
   output.push({url,status:response.status,xml:true,feedTitle:channel?.title??null,feedHome:channel?.link??null,feedLanguage:channel?.language??null,records:records.length,current:current.length,languages:[...new Set(records.map(r=>r.language))],sample:sample??null,article});
  }catch(error){output.push({url,error:error instanceof Error?error.message:'UNKNOWN'});}
 }
