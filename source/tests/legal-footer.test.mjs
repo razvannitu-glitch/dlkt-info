@@ -4,10 +4,12 @@ import {readFileSync} from 'node:fs';
 import {parseDocument} from 'htmlparser2';
 import {LEGAL_DOCUMENTS,COMPANY,footerHtml,renderLegalDocument} from '../.build/src/legal/documents.js';
 import {renderSharedError} from '../.build/src/share/render.js';
+import {NEWS_CATEGORIES} from '../.build/src/iceo/news-taxonomy.js';
+import {NEWS_PUBLISHERS} from '../.build/src/iceo/news-sources.js';
 function elements(html){const nodes=[];function walk(n){if(n.type==='tag')nodes.push(n);for(const c of n.children??[])walk(c);}walk(parseDocument(html));return nodes;}
 test('all legal documents ship the exact shared renderer with a unique reading structure',()=>{
  assert.equal(LEGAL_DOCUMENTS.length,9);assert.equal(new Set(LEGAL_DOCUMENTS.map(d=>d.slug)).size,9);
- for(const doc of LEGAL_DOCUMENTS){const html=readFileSync(`public/${doc.slug}.html`,'utf8');assert.equal(html,renderLegalDocument(doc));const nodes=elements(html);assert.equal(nodes.filter(n=>n.name==='h1').length,1,doc.slug);const ids=nodes.map(n=>n.attribs.id).filter(Boolean);assert.equal(new Set(ids).size,ids.length,doc.slug);assert.ok(html.includes(footerHtml()));assert.ok(html.includes('Updated '+(['sources','about','accessibility','disclaimer'].includes(doc.slug)?'21 November 2026':['cookies','privacy'].includes(doc.slug)?'22 November 2026':'16 November 2026')),doc.slug);}
+ for(const doc of LEGAL_DOCUMENTS){const html=readFileSync(`public/${doc.slug}.html`,'utf8');assert.equal(html,renderLegalDocument(doc));const nodes=elements(html);assert.equal(nodes.filter(n=>n.name==='h1').length,1,doc.slug);const ids=nodes.map(n=>n.attribs.id).filter(Boolean);assert.equal(new Set(ids).size,ids.length,doc.slug);assert.ok(html.includes(footerHtml()));assert.ok(html.includes('Updated '+(['about','accessibility','disclaimer'].includes(doc.slug)?'21 November 2026':['sources','cookies','privacy'].includes(doc.slug)?'22 November 2026':'16 November 2026')),doc.slug);}
 });
 test('footer and document links resolve to shipped pages and actual section anchors',()=>{
  const pages=new Map(LEGAL_DOCUMENTS.map(d=>['/'+d.slug,renderLegalDocument(d)]));pages.set('/',readFileSync('public/iceo.html','utf8'));pages.set('/organizations',readFileSync('public/organizations.html','utf8'));pages.set('/wallet',readFileSync('public/wallet.html','utf8'));pages.set('/account',readFileSync('public/account.html','utf8'));
@@ -74,4 +76,25 @@ test('account notices separate conditional sign-in, private storage and separate
  assert.match(authorizationCookies,/does not contain the provider access token/u);
  assert.match(authorizationCookies,/does not delete an existing server-side connection/u);
  for(const slug of ['about','privacy','cookies']) assert.doesNotMatch(renderLegalDocument(document(slug)),/External email and social connections are not activated|Each future connection|Future external account connections/u);
+});
+
+test('Sources describes the complete language-filtered stream and exact-article photo previews',()=>{
+ const doc=LEGAL_DOCUMENTS.find(value=>value.slug==='sources');assert.ok(doc);
+ const section=id=>doc.sections.find(value=>value.id===id).paragraphs.join(' ');
+ const top=section('daily-top'),local=section('local-reporting'),photos=section('photographs'),publishers=section('news-publishers');
+ assert.equal(doc.updated,'22 November 2026');assert.equal(NEWS_CATEGORIES.length,17);
+ for(const category of NEWS_CATEGORIES)assert.ok(top.includes(category.iptcLabel),category.id);
+ assert.match(top,/editorial inference, not an IPTC certification/u);
+ assert.match(top,/up to six eligible primary reports/u);assert.match(top,/does not use your city, country context or saved interests/u);
+ assert.match(top,/English remains an explicit option/u);assert.match(top,/does not translate other-language articles/u);
+ assert.match(top,/every other eligible, unique article/u);assert.match(top,/next group of up to twenty automatically/u);assert.match(top,/button remains available for manual loading/u);
+ assert.match(top,/Other topics/u);assert.match(top,/original observation timestamps and content hashes/u);
+ assert.match(local,/distinct original articles remain available even when their headlines match/iu);
+ assert.match(photos,/exact article/u);assert.match(photos,/original publisher metadata/u);
+ assert.match(photos,/does not substitute a category image, stock photograph, contextual picture or unrelated portrait/u);
+ assert.match(photos,/does not invent an author or infer a photo licence/u);assert.match(photos,/title and source actions remain visible/u);
+ assert.ok(publishers.includes(NEWS_PUBLISHERS.length+' publisher families'));
+ assert.match(publishers,/does not mean every publisher was available in the latest check/u);
+ const visible=doc.sections.flatMap(value=>value.paragraphs).join(' ');
+ assert.doesNotMatch(visible,/monitors twenty editorial categories|standard target of thirty|maximum of forty|At most eight press reports|Other cards use a separately reviewed contextual photograph|does not republish article bodies or photographs/u);
 });
