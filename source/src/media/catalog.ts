@@ -238,7 +238,7 @@ export function editorialPhotoFor(card:ContextPhotoInput,now=Date.now(),photos:r
  }
  return selected;
 }
-/** Exact source photograph, strict subject context, then clearly marked neutral editorial imagery. */
-export function displayPhotoFor(card:EvidenceCard,now=Date.now()):ReviewedPhoto|ContextPhoto|EditorialPhoto|null {
- return photoFor(card,now)??contextPhotoFor(card,now)??editorialPhotoFor(card,now);
+/** Only the exact reviewed article photograph; contextual and editorial catalogs are never fallbacks. */
+export function displayPhotoFor(card:EvidenceCard,now=Date.now()):ReviewedPhoto|null {
+ return photoFor(card,now);
 }

@@ -1,14 +1,16 @@
-import {displayPhotoFor,contextPhotoFor,editorialPhotoFor,type ReviewedPhoto,type ContextPhotoInput} from './catalog.js';
+import {displayPhotoFor,type ReviewedPhoto,type ContextPhotoInput} from './catalog.js';
+import {articlePhotoPath,type ArticlePhotoReference} from './article-photo-reference.js';
+import {safeLink} from '../iceo/card-validation.js';
 import type {ContextPhoto} from './context-photos.js';
 import type {EditorialPhoto} from './editorial-photos.js';
 import type {EvidenceCard} from '../iceo/contracts.js';
-import {translate as tr} from '../i18n/browser.js';
+import {translate as tr,getLocale} from '../i18n/browser.js';
 import type {MessageKey} from '../i18n/locale.js';
 
 const watched=new WeakSet<HTMLImageElement>();
 /** Cover parser-time errors as well as failures after lazy loading; retain all text/actions. */
 export function watchCardPhotos(root:ParentNode):void {
- for(const image of root.querySelectorAll<HTMLImageElement>('img[data-reviewed-photo]')){
+ for(const image of [...root.querySelectorAll<HTMLImageElement>('img[data-reviewed-photo]'),...root.querySelectorAll<HTMLImageElement>('img[data-article-photo]')]){
   if(watched.has(image))continue;watched.add(image);
   const remove=():void=>{
    const figure=image.closest<HTMLElement>('.card-photo');if(!figure)return;
@@ -19,8 +21,15 @@ export function watchCardPhotos(root:ParentNode):void {
    // Legacy/shared figures contain only photographic material, never the article title.
    figure.hidden=true;figure.remove();
   };
+  const loaded=():void=>{
+   if(image.dataset.articlePhoto===undefined)return;
+   const figure=image.closest<HTMLElement>('.card-photo');if(!figure||figure.dataset.photoFailed==='true')return;
+   const badge=figure.querySelector<HTMLElement>('.card-photo-label');if(badge)badge.hidden=false;
+   const caption=figure.querySelector<HTMLElement>('.card-photo-caption');if(caption)caption.hidden=false;
+  };
   image.addEventListener('error',remove,{once:true});
-  queueMicrotask(()=>{if(image.complete&&image.naturalWidth===0)remove();});
+  image.addEventListener('load',loaded,{once:true});
+  queueMicrotask(()=>{if(image.complete){if(image.naturalWidth===0)remove();else loaded();}});
  }
 }
 
@@ -46,12 +55,25 @@ export function integratePhotoHeadline(figure:HTMLElement,heading:HTMLElement,he
 }
 
 export function photoNode(card:EvidenceCard,now=Date.now()):HTMLElement|null {
- const p=displayPhotoFor(card,now);if(!p)return null;
- return renderPhotoNode(p);
+ if(!Number.isFinite(now))return null;
+ const p=displayPhotoFor(card,now);if(p)return renderPhotoNode(p);
+ return card.kind==='publication'?renderArticlePhotoNode(card,{id:card.id,revision:card.contentHash}):null;
 }
-/** Local information has presentation metadata, never a fabricated EvidenceCard. */
-export function contextPhotoNode(card:ContextPhotoInput,now=Date.now()):HTMLElement|null {
- const p=contextPhotoFor(card,now)??editorialPhotoFor(card,now);return p?renderPhotoNode(p):null;
+/** Local article identity comes from its checked source record, never from a title/category guess. */
+export function contextPhotoNode(card:ContextPhotoInput,now=Date.now(),reference?:ArticlePhotoReference):HTMLElement|null {
+ return Number.isFinite(now)&&reference!==undefined?renderArticlePhotoNode(card,reference):null;
+}
+function renderArticlePhotoNode(card:ContextPhotoInput,reference:ArticlePhotoReference):HTMLElement|null {
+ const source=card.sourceUrl?safeLink(card.sourceUrl):null;if(!source)return null;
+ let path:string;try{path=articlePhotoPath(reference);}catch{return null;}
+ const figure=document.createElement('figure');figure.className='card-photo';figure.dataset.photoKind='source';figure.dataset.photoId='article:'+reference.id+':'+reference.revision;
+ const frame=document.createElement('div');frame.className='card-photo-frame';
+ const image=document.createElement('img');image.src=path;image.alt=tr('photoSourceLabel');image.lang=getLocale();image.width=960;image.height=540;
+ image.loading='lazy';image.decoding='async';image.referrerPolicy='no-referrer';image.dataset.articlePhoto=reference.id;frame.append(image);
+ const badge=document.createElement('span');badge.className='card-photo-label';badge.dataset.i18n='photoSourceLabel';badge.textContent=tr('photoSourceLabel');badge.hidden=true;frame.append(badge);
+ const caption=document.createElement('figcaption');caption.className='card-photo-caption';caption.hidden=true;
+ const credit=photoLink(tr('photoSourceLabel'),source);credit.dataset.i18n='photoSourceLabel';caption.append(credit);
+ figure.append(frame,caption);watchCardPhotos(figure);return figure;
 }
 function renderPhotoNode(p:ReviewedPhoto|ContextPhoto|EditorialPhoto):HTMLElement {
  const figure=document.createElement('figure');figure.className=`card-photo${p.fit==='contain'?' photo-contain':''}`;figure.dataset.photoId=p.key;

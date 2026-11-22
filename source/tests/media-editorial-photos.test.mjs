@@ -17,32 +17,31 @@ function card(category,title='A new information update',kind='publication'){
  return value;
 }
 
-test('every public category and renderable record kind has a licensed image without changing source evidence',()=>{
+test('public categories and record kinds never borrow illustrative photographs or change source evidence',()=>{
  for(const category of PUBLIC_EDITORIAL_CATEGORIES)for(const kind of ['publication','legal-document','software-release','procurement-notice']){
   const value=Object.freeze(card(category,'A new information update',kind));assert.ok(validCard(value),`${category}/${kind}`);
   const before=JSON.stringify(value),photo=displayPhotoFor(value,now);
-  assert.ok(photo,`${category}/${kind}`);assert.equal(photo.kind,'editorial');assert.ok(usableEditorialPhoto(photo,now));
+  assert.equal(photo,null,`${category}/${kind}`);
   assert.equal(JSON.stringify(value),before);assert.equal('photo' in value,false);
  }
 });
 
-test('editorial fallback never converts crime, war or ambiguous places into photographic subject evidence',()=>{
+test('crime, war, ambiguous places and multilingual headlines receive no decorative fallback',()=>{
  for(const [category,title]of [
   ['world','Military leaders consider their next move'],['public-affairs','Parents charged with fraud'],
   ['housing','Housing prices rise in London, Ontario, Canada'],['education','Scholarships for university students'],
   ['health','Nouvelle information publiée aujourd’hui'],['world','世界各地から新しい情報'],['world','معلومات جديدة اليوم'],
  ]){
   const value=card(category,title);assert.equal(contextPhotoFor(value,now),null,title);
-  const strictBefore=contextPhotoSubject(value),photo=displayPhotoFor(value,now);assert.equal(photo.kind,'editorial',title);
-  assert.match(photo.alt,/^Illustrative photograph: .*Not the reported event\.$/u);assert.match(photo.caption,/^Illustrative photograph:/u);
-  assert.equal(contextPhotoSubject(value),strictBefore);assert.equal('subject' in photo,false);assert.equal('cardId' in photo,false);
+  const strictBefore=contextPhotoSubject(value),before=JSON.stringify(value);assert.equal(displayPhotoFor(value,now),null,title);
+  assert.equal(contextPhotoSubject(value),strictBefore);assert.equal(JSON.stringify(value),before);
  }
 });
 
-test('exact source revisions and strict subject photos retain priority over neutral editorial imagery',()=>{
+test('exact article photos remain available while subject and editorial catalog photos are excluded',()=>{
  for(const value of sourceCards)assert.equal(displayPhotoFor(value,now),photoFor(value,now));
  const cricket=card('sport','England win the opening T20 match');assert.equal(contextPhotoFor(cricket,now)?.subject,'cricket');
- assert.equal(displayPhotoFor(cricket,now),contextPhotoFor(cricket,now));
+ assert.equal(displayPhotoFor(cricket,now),null);
 });
 
 test('editorial representation follows the existing public category and is deterministic without query tracking',()=>{

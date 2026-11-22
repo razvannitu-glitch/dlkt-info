@@ -19,9 +19,8 @@ test('exact article pins retain priority and changed revisions never borrow an u
  assert.equal(REVIEWED_PHOTOS.length,3);
  for(const card of pinned){assert.equal(displayPhotoFor(card,now),photoFor(card,now));
   const changed={...card,title:card.title+' Updated',contentHash:'b'.repeat(64)};
-  assert.equal(photoFor(changed,now),null);const contextual=displayPhotoFor(changed,now);
-  if(contextual){assert.equal(contextual.kind,'context');assert.equal(contextual.subject,contextPhotoSubject(changed));assert.notEqual(contextual.path,photoFor(card,now).path);}
-  else assert.equal(contextPhotoFor(changed,now),null);
+  assert.equal(photoFor(changed,now),null);assert.equal(displayPhotoFor(changed,now),null);
+  assert.equal(displayPhotoFor(card,now)?.sourceUrl,card.sourceUrl);
  }
 });
 test('specific headlines and public article paths select the matching subject rather than a broad topic',()=>{
@@ -189,9 +188,10 @@ test('all individually reviewed context files are complete JPEG photographs with
   assert.deepEqual(jpegSize(bytes),{width:photo.width,height:photo.height});assert.equal(photo.fit,'cover');
  }
 });
-test('presentation still makes no client-side article scrape or remote image request',()=>{
+test('presentation uses only a same-origin article image request and never scrapes a source in the client',()=>{
  const browser=readFileSync('src/media/browser.ts','utf8');assert.doesNotMatch(browser,/innerHTML|fetch\(|document\.cookie|localStorage/u);
- assert.match(browser,/image\.src=p\.path/u);assert.match(browser,/photoKind/u);assert.match(browser,/addEventListener\('error'/u);
+ assert.match(browser,/image\.src=p\.path/u);assert.match(browser,/articlePhotoPath\(reference\)/u);assert.match(browser,/image\.src=path/u);assert.match(browser,/photoKind/u);assert.match(browser,/addEventListener\('error'/u);
+ assert.doesNotMatch(browser,/contextPhotoFor|editorialPhotoFor/u);
 });
 test('explicit rights-holder attribution accompanies the creator when the Commons record requires it',()=>{
  const horse=CONTEXT_PHOTOS.find(p=>p.subject==='equestrian'),family=CONTEXT_PHOTOS.find(p=>p.subject==='family');

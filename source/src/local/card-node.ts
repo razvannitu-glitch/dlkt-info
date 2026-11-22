@@ -39,6 +39,6 @@ export function localCardNode(card:LocalCard,c:City,now=Date.now()):HTMLElement{
   if(card.kind==='forecast'){const license=node('a','MET Norway · CC BY 4.0');license.href='https://creativecommons.org/licenses/by/4.0/';license.target='_blank';license.rel='noopener noreferrer';details.append(license);}
   const category=localCardCategory(card);a.dataset.editorialCategory=category;
   a.append(head);
-  const photo=contextPhotoNode({title:reading.title,sourceUrl:card.sourceUrl,editorialCategory:category},now);if(photo)a.append(photo);
+  const photo=contextPhotoNode({title:reading.title,sourceUrl:card.sourceUrl,editorialCategory:category},now,card.kind==='local-news'&&card.news?{id:card.news.id,revision:card.news.documentHash,cityId:c.id}:undefined);if(photo)a.append(photo);
   a.append(body,details);return a;
  }
