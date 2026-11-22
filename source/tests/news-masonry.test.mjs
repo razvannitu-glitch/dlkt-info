@@ -97,6 +97,8 @@ test('News has one compact accessible toolbar and separate continuation/supporti
  assert.equal(byId('discovery-status').attribs['aria-live'],'polite');assert.equal(byId('home-news-progress').attribs['aria-live'],'off');
  const css=readFileSync('public/editorial-cards.css','utf8'),module=readFileSync('src/iceo/news-masonry.ts','utf8');
  assert.match(css,/#discovery-cards\[data-news-masonry=true\]\{display:block;position:relative;overflow-anchor:none\}/u);
+ assert.match(css,/\.news-category:after\{[^}]*border:solid var\(--black\)[^}]*pointer-events:none/u);
+ assert.match(css,/#home-news-category:focus-visible\{outline:2px solid var\(--reader-focus,var\(--black\)\)/u);
  assert.doesNotMatch(module,/\.sort\(|appendChild|insertBefore|gridRow|gridColumn|innerHTML/u);
  assert.match(css,/\.photo-editorial \.card-photo-frame\{aspect-ratio:16\/9;min-width:0;min-height:0/u);
  assert.match(css,/@media\(max-width:700px\)\{[\s\S]*?#discovery-cards\{--news-columns:1\}/u);
