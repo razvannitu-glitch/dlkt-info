@@ -346,7 +346,7 @@ function englishHeadlineSubject(title:string):PublicEditorialCategory|null {
 export function contradictedHeadlineHints(title:string):readonly PublicEditorialCategory[] {
   const rejected:PublicEditorialCategory[]=[];
   // Do not let an earlier discovery label restore the same geographic bank false positive.
-  if(/\bwest bank\b/u.test(title)&&!FINANCIAL_DEVELOPMENT.test(title)
+  if(/\bwest bank\b/u.test(title)&&englishHeadlineSubject(title)!=='business'
     &&!NEWS_SUBJECTS.some(([category,pattern])=>category==='business'&&matchesSubject(category,pattern,title)))rejected.push('business');
   if(hasUnsupportedWeatherDescriptor(title)
     &&!NEWS_SUBJECTS.some(([category,pattern])=>category==='weather'&&matchesSubject(category,pattern,title)))rejected.push('weather');

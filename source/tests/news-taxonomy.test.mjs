@@ -296,3 +296,11 @@ test('West Bank does not erase independent economic evidence when another headli
  assert.equal(classifyEditorialCard(original)?.category,'business');assert.equal(JSON.stringify(original),before);
  assert.equal(contradictedHeadlineHints('west bank ipo announced').includes('business'),false,'explicit financial developments remain independent evidence');
 });
+
+test('West Bank preserves existing budget-cut evidence with multiple discovery hints',()=>{
+ const title='West Bank budget cuts announced',sourceUrl='https://www.france24.com/en/live-news/controlled-report';
+ assert.equal(classifyNewsHeadline(title,sourceUrl),'business');
+ assert.equal(contradictedHeadlineHints(title.toLowerCase()).includes('business'),false);
+ const original=Object.freeze(evidence(title,{sourceUrl,sourceIds:['news-business','news-travel'],topic:'business'})),before=JSON.stringify(original);
+ assert.equal(classifyEditorialCard(original)?.category,'business');assert.equal(JSON.stringify(original),before);
+});
