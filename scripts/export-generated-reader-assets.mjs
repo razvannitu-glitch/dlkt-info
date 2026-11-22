@@ -33,6 +33,7 @@ function decodeUtf8(bytes) {
 function allowedPath(file, manifestPath) {
   return file === 'SOURCE-PIN.json' || file === 'vercel.json' ||
     file === 'source/' + manifestPath || file === 'source/public/cookies.html' ||
+    file === 'source/public/sources.html' ||
     /^source\/public\/[A-Za-z0-9][A-Za-z0-9._-]*\.js$/u.test(file);
 }
 
@@ -130,12 +131,14 @@ function frameEnvelope(envelope) {
 function selfTest() {
   const manifestPath = 'RELEASE-0.9.46.json';
   for (const file of ['SOURCE-PIN.json', 'vercel.json', 'source/' + manifestPath,
-    'source/public/i18n-locale.js', 'source/public/news-sources.js', 'source/public/cookies.html']) {
+    'source/public/i18n-locale.js', 'source/public/news-sources.js', 'source/public/cookies.html', 'source/public/sources.html']) {
     assert.equal(allowedPath(file, manifestPath), true);
   }
   for (const file of ['.env', 'source/.env', 'source/src/iceo/news-sources.ts',
     'source/public/../secrets.js', 'source/public/nested/module.js',
-    'source/public/credential.json', 'source/public/secret.js\n.env']) {
+    'source/public/credential.json', 'source/public/secret.js\n.env',
+    'source/public/account.html', 'source/public/wallet.html', 'source/public/sources.html/secret.js',
+    'source/public/sources.html\n.env']) {
     assert.equal(allowedPath(file, manifestPath), false);
   }
   assert.deepEqual(nulFields(Buffer.from('M\0source/public/reader.js\0')), ['M', 'source/public/reader.js']);
