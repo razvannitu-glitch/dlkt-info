@@ -6,6 +6,7 @@ import { safeLink } from './card-validation.js';
 import { readPreferences, savePreferences, clearPreferences } from './glance-preferences.js';
 import { NewsTicker } from './glance-ticker.js';
 import { weatherMotionNode, updateWeatherMotion } from './glance-weather-motion.js';
+import { getLocale } from './i18n-browser.js';
 const get = (id) => { const n = document.getElementById(id); if (!n)
     throw Error('GLANCE_ELEMENT_MISSING'); return n; };
 const node = (tag, text = '', className = '') => { const n = document.createElement(tag); n.textContent = text; n.className = className; return n; };
@@ -33,7 +34,7 @@ export function setupGlance() {
     function renderDetail() {
         if (!opened)
             return;
-        const now = Date.now(), cards = currentLocalCards(local, city, now), key = keyThing(snapshot?.publications ?? [], local, city, topics, now, zone());
+        const now = Date.now(), cards = currentLocalCards(local, city, now), key = keyThing(snapshot?.publications ?? [], local, city, topics, now, zone(), getLocale());
         body.replaceChildren();
         const title = get('glance-detail-title');
         if (opened === 'weather') {
@@ -113,7 +114,7 @@ export function setupGlance() {
         const fx = snapshot?.forex, q = quote();
         const n = fx && validFx(fx, now) ? fx.rates[q] : undefined;
         tile('glance-forex', n !== undefined ? `1 EUR = ${new Intl.NumberFormat('en-GB', { maximumFractionDigits: 4 }).format(n)} ${q}` : busy ? 'Checking ECB…' : 'Unavailable', n !== undefined && fx ? `ECB reference · ${date(fx.date)}` : 'Reference rates · not live quotes');
-        const key = keyThing(snapshot?.publications ?? [], local, city, topics, now, zone());
+        const key = keyThing(snapshot?.publications ?? [], local, city, topics, now, zone(), getLocale());
         tile('glance-key', key?.title ?? (busy ? 'Finding a key thing…' : 'No current item available'), key?.news ? `Local report · ${key.news.publisher} · ${date(key.news.news?.publishedAt ?? key.news.checkedAt)}` : key?.event ? `Upcoming today · ${city?.name}` : key?.publication ? `Selected publication · ${key.publication.publisher} · ${date(key.publication.date)}` : 'Only from connected sources');
         const notice = cards.find(c => c.kind === 'transport-notice'), headsup = get('glance-headsup');
         headsup.hidden = !notice;
@@ -232,6 +233,7 @@ export function setupGlance() {
         render();
     } });
     document.addEventListener('dlkt:daily-cleared', () => { preferences = { ...DEFAULT_PREFERENCES }; clearPreferences(() => localStorage); render(); });
+    document.addEventListener('dlkt:language-changed', render);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible')
         render();
     else
