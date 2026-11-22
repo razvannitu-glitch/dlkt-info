@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {runInNewContext} from 'node:vm';
 import {photoNode,contextPhotoNode,integratePhotoHeadline,watchCardPhotos} from '../.build/src/media/browser.js';
 import {REVIEWED_PHOTOS} from '../.build/src/media/reviewed-photos.js';
 import {CONTEXT_PHOTOS} from '../.build/src/media/context-photos.js';
@@ -10,6 +11,8 @@ import {findCity} from '../.build/src/local/cities.js';
 import {parseLocalNews} from '../.build/src/local/news-service.js';
 import {newsFeed} from '../.build/src/local/news-policy.js';
 import {newsCard} from '../.build/src/local/service.js';
+import {localReading,localCardCategory} from '../.build/src/local/presentation.js';
+import {localCardLabel} from '../.build/src/local/contracts.js';
 
 // This DOM fixture tests node ownership/error recovery; visual layout is checked separately.
 class TextFixture {
@@ -27,6 +30,7 @@ class ElementFixture extends EventTarget {
  prepend(...nodes){for(const node of [...nodes].reverse()){node.remove();node.parentElement=this;this.children.unshift(node);}}
  before(node){const parent=this.parentElement;if(!parent)return;node.remove();node.parentElement=parent;parent.children.splice(parent.children.indexOf(this),0,node);}
  remove(){if(this.parentElement){const siblings=this.parentElement.children;siblings.splice(siblings.indexOf(this),1);this.parentElement=null;}}
+ setAttribute(name,value){this.attributes??={};this.attributes[name]=String(value);}
  matches(selector){if(selector.startsWith('.'))return this.classList.contains(selector.slice(1));if(selector==='img[data-reviewed-photo]')return this.tagName==='IMG'&&'reviewedPhoto' in this.dataset;if(selector==='img[data-article-photo]')return this.tagName==='IMG'&&'articlePhoto' in this.dataset;return this.tagName.toLowerCase()===selector;}
  querySelectorAll(selector){const matches=[];for(const child of this.children){if(!(child instanceof ElementFixture))continue;if(child.matches(selector))matches.push(child);matches.push(...child.querySelectorAll(selector));}return matches;}
  querySelector(selector){return this.querySelectorAll(selector)[0]??null;}
@@ -115,6 +119,9 @@ test('non-article kinds and invalid article references never render a substitute
  const input={title:'A local report',sourceUrl:'https://b365.ro/restrictii-trafic-123456/'},reference={id:'local-news:683506:bucharest-b365:'+'a'.repeat(24),revision:'b'.repeat(64),cityId:'683506'};
  const figure=contextPhotoNode(input,now,reference);assert.ok(figure);assert.deepEqual(parseArticlePhotoReference(figure.querySelector('img').src),reference);
  for(const malformed of [{...reference,cityId:'2988507'},{id:reference.id,revision:reference.revision},{...reference,url:input.sourceUrl},{...reference,revision:'bad'}])assert.equal(contextPhotoNode(input,now,malformed),null);
+ for(const url of ['https://buletin.de/bucuresti/restrictii-trafic-123456/','https://b365.ro.attacker.invalid/restrictii-trafic-123456/','https://www.bbc.com/news/articles/example','javascript:alert(1)']){
+  assert.equal(contextPhotoNode({...input,sourceUrl:url},now,reference),null,url);
+ }
  assert.equal(contextPhotoNode({title:'Local news'},now,reference),null);await Promise.resolve();
 });
 test('failed article images preserve integrated headline nodes and actions without retrying a stock image',async t=>{
@@ -147,4 +154,26 @@ test('actual parsed local news cards bind their photo request to the document ha
   image.dispatchEvent(new Event('error'));await Promise.resolve();assert.equal(article.querySelector('figure'),null);assert.equal(article.querySelector('h3').textContent,title);
   assert.ok(article.querySelectorAll('a').some(link=>link.href===record.url&&link.textContent==='Read the full report'));assert.equal(JSON.stringify(card),before);
  }
+});
+
+test('Daily renders the same local article reference and preserves its source when the original image fails',async t=>{
+ dom(t);const city=findCity('683506'),checkedAt='2026-11-22T12:00:00.000Z',time=Date.parse(checkedAt),feed=newsFeed('bucharest-buletin');assert.ok(city);assert.ok(feed);
+ const title='București: restricții de trafic la Metrorex',url='https://buletin.de/bucuresti/restrictii-trafic-123456/';
+ const xml='<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/"><channel><title>'+feed.title+'</title><link>'+feed.home+'</link><item><title>'+title+'</title><link>'+url+'</link><pubDate>Sun, 22 Nov 2026 10:00:00 +0000</pubDate><description>Metrorex publică programul complet.</description><dc:creator>Autor Exemplu</dc:creator></item></channel></rss>';
+ const record=parseLocalNews(xml,feed.id,city,checkedAt,time).articles[0];assert.ok(record);
+ const card=newsCard(record,city),before=JSON.stringify(card);
+ // Execute the actual compiled renderer in isolation; no Daily startup, storage or network is invoked.
+ const compiled=readFileSync('.build/src/daily/browser.js','utf8'),definition=compiled.match(/^function renderItem\(item\) \{[\s\S]+?(?=^function render\()/mu)?.[0];assert.ok(definition);
+ const make=(tag,text='',className='')=>{const element=document.createElement(tag);element.textContent=text;element.className=className;return element;};
+ const renderItem=runInNewContext(definition+'\nrenderItem',{make,city,feedback:[],Date:{now:()=>time},date:value=>value,localReading,localCardCategory,localCardLabel,contextPhotoNode});
+ const article=renderItem({id:record.id,local:card,topic:null}),figure=article.querySelector('figure'),heading=article.querySelector('h3');
+ assert.ok(figure);assert.equal(heading.textContent,title);
+ const image=figure.querySelector('img');
+ assert.deepEqual(parseArticlePhotoReference(image.src),{id:record.id,revision:record.documentHash,cityId:record.cityId});
+ assert.equal(article.dataset.newsSourceId,record.sourceId);assert.ok(article.textContent.includes(record.attribution));assert.ok(article.textContent.includes(record.byline));
+ assert.ok(article.querySelectorAll('a').some(link=>link.href===record.licenseUrl));
+ const source=article.querySelectorAll('a').find(link=>link.textContent==='Open source');assert.equal(source.href,record.url);
+ image.dispatchEvent(new Event('error'));await Promise.resolve();
+ assert.equal(article.querySelector('figure'),null);assert.equal(article.querySelector('h3'),heading);assert.equal(source.href,record.url);assert.equal(JSON.stringify(card),before);
+ const withoutNews=renderItem({id:card.id,local:{...card,news:undefined},topic:null});assert.equal(withoutNews.querySelector('figure'),null);
 });

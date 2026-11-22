@@ -114,7 +114,7 @@ function renderItem(item:DailyItem):HTMLElement {
  if(item.topic){const later=make('button','Not today','text-button');later.type='button';later.dataset.dailyFeedback='not-today';later.addEventListener('click',()=>{void rate(item,'not-today');});const save=make('button',savedCards.some(s=>s.id===item.topic?.card.id)?'Saved here':'Save here','text-button');save.type='button';save.dataset.dailySave='true';save.addEventListener('click',()=>{void saveCard(item,save);});actions.append(later,save);}
  if(item.topic)addCardSharing(actions,item.topic.card,announce);
  if(source){const link=make('a','Open source','source-link');link.href=source;link.target='_blank';link.rel='noopener noreferrer';actions.append(link);}body.append(actions);a.append(head);
- const photograph=item.topic?photoNode(item.topic.card):item.local?contextPhotoNode({title:headline,sourceUrl:item.local.sourceUrl,...(category?{editorialCategory:category}:{})}):null;
+ const photograph=item.topic?photoNode(item.topic.card):item.local?contextPhotoNode({title:headline,sourceUrl:item.local.sourceUrl,...(category?{editorialCategory:category}:{})},Date.now(),item.local.kind==='local-news'&&item.local.news?{id:item.local.news.id,revision:item.local.news.documentHash,cityId:item.local.news.cityId}:undefined):null;
  if(photograph)a.append(photograph);a.append(body,details);if(item.topic)attachInsight(a,item.topic.card);return a;
 }
 function render():void{

@@ -1071,6 +1071,10 @@ if(!read('public/iceo.html').includes('href="/wallet"')||!read('public/wallet.ht
 for(const file of ['api/share-archive.ts','src/share/content.ts','src/iceo/saved-updates.ts','src/local/event-calendar.ts','public/saved-updates.js','public/local-event-calendar.js'])if(!expected.has(file))throw new Error(`RELEASE_USEFUL_INFORMATION_FILE:${file}`);
 for(const file of ['public/share-content.js','public/content.js'])if(existsSync(file))throw new Error(`RELEASE_SHARE_SERVER_ASSET:${file}`);
 
+
+// Exact original-photo route and its shared public reference must be part of this release.
+for(const file of ['api/article-photo.ts','src/media/article-photo-source.ts','src/media/article-photo-raster.ts','src/media/article-photo-service.ts','src/media/article-photo-reference.ts','public/article-photo-reference.js'])if(!expected.has(file))throw new Error('RELEASE_ARTICLE_PHOTO_FILE:'+file);
+
 const migrationResult = execFileSync(process.execPath, ['tests/database/migration-smoke.mjs'], { encoding: 'utf8' }).trim();
 if (!migrationResult.includes('\"tables\":32')
   || !migrationResult.includes('\"companion_functions\":2')
@@ -1125,6 +1129,3 @@ console.log('DLKT_INFO_RELEASE_OK', JSON.stringify({
   palette: manifest.palette,
   files: Object.keys(manifest.files).length,
 }));
-
-// Exact original-photo route and its shared public reference must be part of this release.
-for(const file of ['api/article-photo.ts','src/media/article-photo-source.ts','src/media/article-photo-raster.ts','src/media/article-photo-service.ts','src/media/article-photo-reference.ts','public/article-photo-reference.js'])if(!expected.has(file))throw new Error('RELEASE_ARTICLE_PHOTO_FILE:'+file);
