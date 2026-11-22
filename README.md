@@ -21,3 +21,7 @@ Vercel uses `node bootstrap.mjs`. The bootstrap verifies the pinned source, the 
 `npm run package:check` checks source and public configuration without contacting a service. `npm run package:local` compiles and emits the public surface into the ignored `.dlkt-local-build/` directory. Source files, root API wrappers and configuration stay unchanged. This local mode is refused on Vercel and does not attest production readiness.
 
 Production credentials belong in the existing Vercel project's protected environment. Keep secrets and generated output out of Git. External account providers remain subject to their explicit verification gates. A build does not apply database migrations, promote a deployment, or enable a provider.
+
+## Reading language
+
+The current-country language is the automatic starting point when there is no explicit URL or saved manual language choice. English remains available. News selection uses known source languages and preserves original publisher content; no automatic article translation service is enabled. See `source/CONTEXTUAL-EDITION.md` for coverage limits, local-news promotion and acquisition rules.

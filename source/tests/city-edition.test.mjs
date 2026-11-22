@@ -10,7 +10,7 @@ import {LocalBriefingService,newsCard} from '../.build/src/local/service.js';
 import {parseCmteb,CMTEB_SOURCE} from '../.build/src/local/cmteb.js';
 import {weatherCard} from '../.build/src/local/weather.js';
 import {copyLocal,parseDaily,profileKey} from '../.build/src/daily/contracts.js';
-import {selectHomeLocal} from '../.build/src/iceo/home-local.js';
+import {selectHomeLocal,selectHomeLanguage} from '../.build/src/iceo/home-local.js';
 import {keyThing} from '../.build/src/glance/presentation.js';
 
 const now=Date.parse('2026-11-18T20:30:00.000Z'),checkedAt=new Date(now).toISOString(),city=findCity('683506');
@@ -152,4 +152,76 @@ test('explicit personal reading honors the same news publication window and sche
  assert.equal(nextReadingBoundary(profile,null,snapshot,now),now+1001);
  const later=selectDaily(profile,null,snapshot,null,[],now+1001);
  assert.deepEqual(later.items.map(item=>item.local?.kind),['forecast']);assert.ok(later.notes.some(note=>/expired or unavailable/u.test(note)));
+});
+
+
+test('Romanian local publications under24h join Top as the same checked records and older reports remain local',()=>{
+ const articles=[
+  ...parsed(b365,['Bucuresti: Metrorex publica programul magistralei 6'],40),
+  ...parsed(buletin,['Bucuresti: Scoala 42 publica inscrierile pentru elevi'],40),
+  ...parsed(b365,['Bucuresti: Primaria anunta un nou program pentru mediu'],50,new Date(now-25*3600000).toUTCString()),
+ ];
+ const snapshot=freeze(local(articles,[forecast(),event(41)])),before=JSON.stringify(snapshot);
+ assert.equal(currentLocalSnapshot(snapshot,city,now),true);
+ const selection=selectHomeLanguage(snapshot,city,now,'ro');
+ assert.equal(selection.topNews.length,2);assert.equal(selection.supporting.filter(card=>card.kind==='local-news').length,1);
+ assert.deepEqual(new Set([...selection.topNews,...selection.supporting].map(card=>card.id)),new Set(selection.cards.map(card=>card.id)));
+ assert.equal(new Set([...selection.topNews,...selection.supporting].map(card=>card.id)).size,selection.cards.length);
+ const promoted=new Set(selection.topNews.map(card=>card.id));assert.ok(selection.supporting.every(card=>!promoted.has(card.id)));
+ for(const card of selection.cards){
+  const original=snapshot.cards.find(record=>record.id===card.id);assert.strictEqual(card,original);
+  assert.equal(card.checkedAt,checkedAt);assert.equal(card.sourceUrl,original.sourceUrl);
+  if(card.news){assert.strictEqual(card.news,original.news);assert.equal(card.context.documentHash,original.news.documentHash);assert.equal(card.title,original.news.title);}
+ }
+ assert.equal(selection.expiresAt,now+300000);assert.equal(JSON.stringify(snapshot),before);
+ assert.equal(Object.isFrozen(selection.topNews),true);assert.equal(Object.isFrozen(selection.supporting),true);
+});
+
+test('English excludes Romanian news while retaining the exact current forecast and non-news local support',()=>{
+ const snapshot=freeze(local(parsed(b365,['Bucuresti: Metrorex anunta programul magistralei 6'],60),[forecast(),event(42)]));
+ const before=JSON.stringify(snapshot),english=selectHomeLanguage(snapshot,city,now,'en');
+ assert.deepEqual(english.topNews,[]);assert.equal(english.cards.length,2);
+ assert.deepEqual(new Set(english.supporting.map(card=>card.kind)),new Set(['forecast','event']));
+ assert.ok(english.cards.every(card=>card.kind!=='local-news'));
+ for(const card of english.supporting)assert.strictEqual(card,snapshot.cards.find(record=>record.id===card.id));
+ const romanian=selectHomeLanguage(snapshot,city,now,'ro');assert.equal(romanian.topNews.length,1);
+ assert.equal(JSON.stringify(snapshot),before);assert.equal(romanian.topNews[0].checkedAt,checkedAt);
+});
+
+test('promoted duplicate reports appear only once and never again among the supporting local cards',()=>{
+ const title='Bucuresti: Metrorex modifica programul magistralei 6';
+ const snapshot=freeze(local([...parsed(b365,[title],70),...parsed(buletin,['VIDEO: '+title],70)],[forecast()]));
+ assert.equal(currentLocalSnapshot(snapshot,city,now),true);
+ const selected=selectHomeLanguage(snapshot,city,now,'ro');
+ assert.equal(selected.topNews.length,1);assert.equal(selected.cards.filter(card=>card.kind==='local-news').length,1);
+ assert.ok(selected.supporting.every(card=>card.id!==selected.topNews[0].id));
+ const ids=[...selected.topNews,...selected.supporting].map(card=>card.id);
+ assert.equal(new Set(ids).size,ids.length);assert.equal(snapshot.cards.filter(card=>card.kind==='local-news').length,2);
+});
+
+test('changing language cannot renew a local check and its Top and support both expire at five minutes',()=>{
+ const snapshot=freeze(local(parsed(buletin,['Bucuresti: Scoala 43 publica programul pentru elevi'],80),[forecast()]));
+ const before=JSON.stringify(snapshot),romanian=selectHomeLanguage(snapshot,city,now,'ro');
+ assert.equal(romanian.topNews.length,1);assert.equal(romanian.expiresAt,now+300000);
+ selectHomeLanguage(snapshot,city,now+299999,'en');
+ const last=selectHomeLanguage(snapshot,city,now+299999,'ro');
+ assert.equal(last.topNews.length,1);assert.equal(last.expiresAt,now+300000);
+ assert.equal(last.topNews[0].checkedAt,checkedAt);assert.equal(last.topNews[0].news.checkedAt,checkedAt);
+ for(const language of ['ro','en']){
+  const expired=selectHomeLanguage(snapshot,city,now+300000,language);
+  assert.deepEqual(expired.cards,[]);assert.deepEqual(expired.topNews,[]);assert.deepEqual(expired.supporting,[]);assert.equal(expired.expiresAt,null);
+ }
+ assert.equal(JSON.stringify(snapshot),before);
+});
+
+test('a publication leaving the24h Top remains an unchanged local report within its72h window',()=>{
+ const published=new Date(now-24*3600000+1000).toUTCString();
+ const snapshot=freeze(local(parsed(b365,['Bucuresti: Metrorex publica programul magistralei 8'],90,published),[forecast()]));
+ const before=JSON.stringify(snapshot),initial=selectHomeLanguage(snapshot,city,now,'ro');
+ assert.equal(initial.topNews.length,1);
+ const boundary=selectHomeLanguage(snapshot,city,now+1000,'ro');
+ assert.equal(boundary.topNews.length,0);assert.equal(boundary.supporting.filter(card=>card.kind==='local-news').length,1);
+ const retained=boundary.supporting.find(card=>card.kind==='local-news');assert.strictEqual(retained,initial.topNews[0]);
+ assert.equal(retained.checkedAt,checkedAt);assert.equal(retained.news.publishedAt,snapshot.cards.find(card=>card.kind==='local-news').news.publishedAt);
+ assert.equal(boundary.expiresAt,now+300000);assert.equal(JSON.stringify(snapshot),before);
 });

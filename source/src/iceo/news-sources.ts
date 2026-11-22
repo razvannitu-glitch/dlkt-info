@@ -1,3 +1,4 @@
+import {consistentCards} from './evidence-consistency.js';
 import type {SourceDefinition,EvidenceCard} from './contracts.js';
 import {PUBLIC_EDITORIAL_CATEGORIES,EDITORIAL_CATEGORY_LABELS,EDITORIAL_CATEGORY_TOPICS} from './editorial-categories.js';
 
@@ -219,7 +220,7 @@ export function newsLanguageMatches(language:string|null,preferred:string):boole
 
 /** A reading projection only. Original cards, hashes and persisted comparisons are unchanged. */
 export function selectNewsLanguage(records:readonly EvidenceCard[],preferred:string):readonly EvidenceCard[] {
-  return Object.freeze(records.filter(card=>card.kind!=='publication'||newsLanguageMatches(sourceLanguage(card),preferred)));
+  return Object.freeze(consistentCards(records).filter(card=>card.kind!=='publication'||newsLanguageMatches(sourceLanguage(card),preferred)));
 }
 export interface NewsLanguageCoverage {
   readonly publications:number;

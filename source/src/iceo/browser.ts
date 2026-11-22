@@ -614,10 +614,10 @@ function renderDiscovery():void {
     host.append(label);
   }
   for(const item of local.supporting){if(!contextualCity)break;const node=localCardNode(item,contextualCity,now);node.dataset.homeLocalId=item.id;node.dataset.cityId=contextualCity.id;host.append(node);}
-  if(!suppressLocalPending&&!local.supporting.length&&(contextualCity||contextualLocationPending)){
+  if(!suppressLocalPending&&!local.supporting.length&&!local.topNews.length&&(contextualCity||contextualLocationPending)){
     const state=make('div','discovery-section-label');state.id='home-local-state';state.setAttribute('role','status');
-    const expired=contextualLocalState==='loaded'&&contextualLocal!==null;
-    state.append(make('p','privacy-note',awaitingLocal?'Checking local updates…':expired?'The local check has expired. Refresh to see current local information.':contextualLocalState==='unavailable'?'Local information could not be checked. Refresh to try again.':'No current local cards were verified. Check local sources or choose another city.'));
+    const expired=contextualLocalState==='loaded'&&contextualLocal!==null&&now-Date.parse(contextualLocal.checkedAt)>=300_000;
+    state.append(make('p','privacy-note',awaitingLocal?'Checking local updates…':expired?'The local check has expired. Refresh to see current local information.':contextualLocalState==='unavailable'?'Local information could not be checked. Refresh to try again.':'No current local cards match this reading language. Check connected sources or choose another language.'));
     host.append(state);
   }
   if(contextualCity){
@@ -633,7 +633,7 @@ function renderDiscovery():void {
   const end=host.querySelector('#home-edition-end h2');if(end)end.textContent=tr('endOfTop');
   const continuation=host.querySelector<HTMLElement>('#home-more-button');if(continuation)continuation.textContent=tr('showMore',{count:Math.min(20,Math.max(0,today.more.length-continuationCount)),remaining:Math.max(0,today.more.length-continuationCount)});
   reconcileDiscovery(target,host);pruneInsights();
-  const publicationState=local.topNews.length?`${topCount} current reports in the selected language, including ${local.topNews.length} local reports. Original sources and dates are retained. `+dailyEditionSummary(today):editionState==='unavailable'?'Publications could not be checked. Refresh to try again.':today.first.length+today.more.length?dailyEditionSummary(today):editionState==='pending'?'Checking connected publications…':'No current publications meet this selection.';
+  const publicationState=local.topNews.length?`${topCount} current reports in the selected language, including ${local.topNews.length} local reports. Original sources and dates are retained. `+(today.first.length+today.more.length?dailyEditionSummary(today):'No other current publications match this reading language.'):editionState==='unavailable'?'Publications could not be checked. Refresh to try again.':today.first.length+today.more.length?dailyEditionSummary(today):editionState==='pending'?'Checking connected publications…':'No current publications meet this selection.';
   const sourceState=loading&&!automaticPublicLoad?' Checking for updates…':lastLoadFailed&&snapshot?' Refresh unavailable; retained source checks are not newly verified.':snapshot?.state==='partial'?' Some source coverage is incomplete.':'';
   const localState=(local.topNews.length?` ${local.topNews.length} current local reports are included above.`:'')+(awaitingLocal?' Local information is being checked.':local.supporting.length?` ${local.supporting.length} supporting local records are available below.`:contextualCity?' Local coverage is shown below.':'');
   const updates=live.changes.total?` ${editionUpdateLabel(live.changes)}. Select Show updates when you are ready; your reading position stays stable.`:'';

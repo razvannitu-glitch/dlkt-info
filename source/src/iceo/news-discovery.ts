@@ -225,8 +225,18 @@ export function readNewsArticleMetadata(html:string,candidate:NewsCandidate,fina
   if(canonicalLinks[0]){
     try{const declared=canonicalNewsUrl(new URL(canonicalLinks[0],finalUrl).href);if(!declared||publisherForNewsUrl(declared)?.id!==publisher.id)return null;canonical=declared;}catch{return null;}
   }
-  const titles:string[]=[],dates:string[]=[];
-  const add=(headline:unknown,date:unknown):void=>{const title=titleText(headline),stamp=publicationDate(date);if(title&&stamp&&matchingNewsHeadline(candidate.title,title,publisher.label,sourceLanguage(canonical))){titles.push(title);dates.push(stamp);}};
+  const titles:string[]=[],dates:string[]=[],boundAlternativeTitles:string[]=[];
+  const titleKey=(value:string):string=>value.normalize('NFKC').toLowerCase(),candidateTitle=titleText(candidate.title);
+  const add=(headline:unknown,date:unknown,alternativeHeadline?:unknown):void=>{
+    const title=titleText(headline),stamp=publicationDate(date),alternative=titleText(alternativeHeadline);
+    if(!title||!stamp)return;
+    // An exact alternate title is identity evidence only when the caller has
+    // bound this same Article to the candidate URL. Publish its primary headline.
+    const alternativeMatches=alternative!==null&&candidateTitle!==null&&titleKey(alternative)===titleKey(candidateTitle);
+    if(matchingNewsHeadline(candidate.title,title,publisher.label,sourceLanguage(canonical))||alternativeMatches){
+      titles.push(title);dates.push(stamp);if(alternativeMatches)boundAlternativeTitles.push(title);
+    }
+  };
   let nodes=0;
   const inspect=(value:unknown,depth=0):void=>{
     if(depth>8||++nodes>200)return;
@@ -235,10 +245,14 @@ export function readNewsArticleMetadata(html:string,candidate:NewsCandidate,fina
     const type=Array.isArray(value['@type'])?value['@type']:[value['@type']];
     if(type.some(t=>typeof t==='string'&&/^(?:NewsArticle|Article|ReportageNewsArticle|AnalysisNewsArticle|BlogPosting|TechArticle|ScholarlyArticle|MedicalScholarlyArticle|LiveBlogPosting)$/u.test(t))){
       const entity=value.mainEntityOfPage;
-      const declared=[value.url,value['@id'],typeof entity==='string'?entity:object(entity)?entity['@id']??entity.url:undefined].filter((entry):entry is string=>typeof entry==='string');
+      const bindings=[value.url,value['@id'],typeof entity==='string'?entity:undefined,object(entity)?entity['@id']:undefined,object(entity)?entity.url:undefined];
+      const declared=bindings.filter((entry):entry is string=>typeof entry==='string');
       let same=true;
       for(const binding of declared){try{if(canonicalNewsUrl(new URL(binding,finalUrl).href)!==canonical)same=false;}catch{same=false;}}
-      if(same)add(value.headline??value.name,value.datePublished);
+      const explicitBinding=declared.length>0&&(entity===undefined||typeof entity==='string'||object(entity))
+        &&bindings.every(binding=>binding===undefined||typeof binding==='string'&&binding.length>0&&!/[\u0000-\u0020\u007f<>\\]/u.test(binding));
+      if(same)add(value.headline??value.name,value.datePublished,
+        explicitBinding&&typeof value.headline==='string'&&canonicalNewsUrl(candidate.sourceUrl)===canonical?value.alternativeHeadline:undefined);
     }
     if(value['@graph']!==undefined)inspect(value['@graph'],depth+1);
     if(value.mainEntity!==undefined)inspect(value.mainEntity,depth+1);
@@ -250,10 +264,16 @@ export function readNewsArticleMetadata(html:string,candidate:NewsCandidate,fina
   }
   const fields=new Map<string,string[]>();
   for(const node of meta){const key=(node.attribs.property??node.attribs.name??'').toLowerCase(),value=node.attribs.content;if(value){const previous=fields.get(key)??[];previous.push(value);fields.set(key,previous);}}
-  const ogTitles=fields.get('og:title')??[];
-  for(const title of ogTitles)for(const date of fields.get('article:published_time')??[])add(title,date);
-  if(!titles.length||!dates.length||new Set(dates).size!==1)return null;
-  const title=titles[0],date=dates[0];if(!title||!date||Date.parse(date)<now-DAY||Date.parse(date)>now+300_000)return null;
+  const ogTitles=fields.get('og:title')??[],boundTitleKeys=new Set(boundAlternativeTitles.map(titleKey));
+  for(const headline of ogTitles)for(const date of fields.get('article:published_time')??[]){
+    const title=titleText(headline),stamp=publicationDate(date);
+    // A conflicting OG date for the admitted primary headline must still fail
+    // closed when the index carried the publisher's shorter alternate title.
+    if(title&&stamp&&boundTitleKeys.has(titleKey(title))){titles.push(title);dates.push(stamp);}
+    else add(headline,date);
+  }
+  if(!titles.length||!dates.length||new Set(dates).size!==1||boundTitleKeys.size>1)return null;
+  const title=boundAlternativeTitles[0]??titles[0],date=dates[0];if(!title||!date||Date.parse(date)<now-DAY||Date.parse(date)>now+300_000)return null;
   // The original bound headline determines presentation; an index category is not evidence of identity.
   return Object.freeze({sourceUrl:canonical,title,date,publisher:publisher.label,category:classifyNewsHeadline(title,canonical)});
 }

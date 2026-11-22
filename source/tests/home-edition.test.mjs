@@ -123,14 +123,17 @@ test('a selection between minimum and target states its target shortfall honestl
   const selection=selectContextualToday(Array.from({length:22},(_,index)=>fixture(index+1)),{countryCode:null,preferredTopics:[]},now);
   const copy=dailyEditionSummary(selection);assert.match(copy,/22 selected publications/);assert.match(copy,/Fewer than 30/);assert.doesNotMatch(copy,/Fewer than 20/);
 });
-test('homepage wires global daily presentation before local records and refreshes only while visible',()=>{
+test('homepage combines native local top and global publications before supporting records and refreshes only while visible',()=>{
   const source=readFileSync('src/iceo/browser.ts','utf8');
   const body=source.slice(source.indexOf('function renderDiscovery():void'),source.indexOf('// Automatic location and saved choices'));
   assert.match(body,/appendPublicEdition\(host,today,/);
   assert.match(body,/publicEditionState\(today,\{snapshotState:snapshot\?\.state\?\?null,loading:loading\|\|!initialCheckStarted,failed:lastLoadFailed\}\)/);
   assert.match(body,/retained source checks are not newly verified/);
   assert.doesNotMatch(body,/awaitingLocal\s*\?\s*\[\]|localEdition:true/);
-  assert.ok(body.indexOf('appendPublicEdition(')<body.indexOf('for(const item of local.cards)'));
+  assert.ok(body.indexOf('for(const item of local.topNews)')<body.indexOf('appendPublicEdition('));
+  assert.ok(body.indexOf('appendPublicEdition(')<body.indexOf('for(const item of local.supporting)'));
+  assert.match(body,/selectHomeLanguage\(contextualLocal,contextualCity,now,language\)/);
+  assert.match(body,/selectNewsLanguage\(snapshot.cards,language\)/);
   assert.match(body,/home-local-heading/);assert.match(body,/node\.dataset\.homeLocalId=item\.id/);
   assert.match(body,/aria-busy',String\(loading\)/);assert.match(body,/nextDailyEditionDelay\(today,now\)/);
   assert.match(source,/if\(document.visibilityState!=='visible'\)return/);

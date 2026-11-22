@@ -1,13 +1,37 @@
-# DLKT INFO 0.9.39 — contextual selection
+# DLKT INFO — reading language and contextual selection
 
-The common ICEO collection remains independent of personal preferences. Publisher-declared country categories and explicit publisher scope are separate from a person's city and interests. They describe coverage, never proven personal impact, eligibility, residence or nationality. Unknown geography stays unknown. No location is inferred from a headline or a publisher's headquarters.
+The official platform and production URL is https://www.dlkt.ee/. Internal project names do not define additional public platforms.
 
-The existing homepage combines a bounded country-coverage match, explicitly saved interests and different connected topics. Its five-card start and twelve-card continuation remain finite. Explicit topic/query choices constrain the personal edition; temporary city or topic exploration does not rewrite a saved profile. The personal edition retains source-change comparisons, freshness checks, clear incomplete states and explicit saving. Useful and Not today keep their existing meanings; there is no implicit behavioural learning.
+## Language selection
 
-Conservative grouping requires matching informative publisher headlines and excerpts, compatible declared geographic context and a close publication window. The source links remain available. This is matching publisher text, not semantic event verification, independent corroboration, or a reason to suppress conflicting claims. Generic titles and different excerpts remain separate. Software version grouping retains the prior rules.
+The reader uses an explicit URL language first, then an explicit language selected and saved in this browser, then the current approximate country from the existing hosting hint, then the browser language, then English. Country defaults use the platform's CLDR likely-subtag data. In countries with several supported languages, an eligible browser preference resolves the initial choice. A language not shipped by the interface uses English. A saved or temporarily explored city cannot silently replace the language choice.
 
-Cards explain selection and expose the publisher coverage and its limits. Context is optional for old browser records, validated and copied through a fixed allowlist, and changes to it are labelled as metadata changes rather than new world events. Publication time, source-check time and event time remain distinct.
+The language picker stores only a validated catalog code under `dlkt-reader-language-v1`. Automatic country detection is not stored as a personal preference. A manual choice remains effective when the storage API is unavailable, for the current URL and page. No additional location request, GPS permission, tracking, account or paid translation provider is introduced.
 
-This increment uses the admitted source collection. It does not activate all-world or multilingual coverage, model calls, tracking, accounts, scheduled delivery, new paid providers or STB acquisition. The input collection still has the geographic, topical, licensing and freshness limits stated by its publishers. Source checks happen through existing acquisition and cache rules.
+News language is a real selection constraint in Today's top, the personal topic/query edition and Explore. Original publication records require a known, matching source language; unknown language is not assumed to be English. Portuguese regional variants share Portuguese; simplified and traditional Chinese remain distinct. Non-publication factual records retain their existing source eligibility. Saved records and source-change comparisons preserve the original record.
 
-The protected 0.9.38 ticker has automatic startup and no Pause, Resume or Play control anywhere. Branding, CSS, layout and unrelated APIs are preserved. Verification records, exact source identity, controlled fixtures and any observed live-source gaps are recorded separately; this document is a scope statement, not a claim that tests have passed or retention has increased.
+There is no automatic article translation in this increment. Publisher titles, excerpts, dates, links, hashes and provenance remain original. Selecting English changes the selection to available English-language news; it does not promise a translated copy of every local story. English remains available in the main picker and directly beside the current news-language label.
+
+## Eligible coverage
+
+The common ICEO acquisition is independent of individual readers. A bounded first opportunity for each known candidate language prevents a large English batch from consuming every original-page check. Existing source, topic and publisher ordering continues after that opportunity. The 500-candidate pool, 80 original-page request limit, concurrency and collection deadlines are unchanged.
+
+Dedicated discovery adds the official DW news sitemaps for Romanian, German, French, Spanish and Arabic and the official France 24 English RSS index. All use already admitted publisher origins. Registry admission is not a claim that every request or candidate succeeds. A title, original URL, publication date and publisher metadata must still pass the original-page verification; unavailable sources and rejected candidates never become verified cards.
+
+Source terms remain bounded by their recorded review dates. An expired news-rights review stops acquisition before external article requests. No full articles or unlicensed publisher photos are copied. The interface's language catalog, reviewed publisher-origin registry and the currently eligible publication supply are distinct counts.
+
+The reader exposes the current selection count and, in About this edition, eligible publication counts by known language, distinct publishers, unknown-language records and a separate current local-news count. These describe the collected, eligible snapshot only. They do not assert comprehensive country coverage or that all worldwide publishers are connected.
+
+## Local and global selection
+
+For the connected Bucharest press feeds, Romanian items eligible under the existing local evidence rules and less than 24 hours old may appear at the beginning of Today's top. The same local records are not repeated in the supporting local block. Their source checks still expire after five minutes; an old article is not made current by a refresh. English selection excludes Romanian press items while retaining eligible non-news city information.
+
+Changing the reading language changes the live-edition context immediately. In-language reports that do not qualify for Today's top remain available in the finite continuation. If no top stories qualify, the first continuation page is visible without a blank reading area. A visible page reuses the existing local refresh path when its local source check expires; it never renews evidence timestamps in the browser.
+
+Publisher-declared country categories and explicit publisher scope remain separate from a person's city and interests. They describe coverage, never proven personal impact, eligibility, residence or nationality. Unknown article geography stays unknown; a publisher's headquarters does not establish article location.
+
+Conservative grouping retains matching publisher wording, declared geographic context and publication-window requirements. This is not independent corroboration or semantic fact verification. Source links remain available. Explicit topic/query choices constrain the personal edition; temporary city/topic exploration does not rewrite saved preferences.
+
+## Preservation and release
+
+The approved North Ledger palette, six card surfaces, uniform photo geometry, hover contrast, ticker motion, Kate identity and existing account/provider gates are unchanged. This document describes intended behavior. Exact-commit tests, generated-asset integrity, production promotion and checks on https://www.dlkt.ee/ provide release evidence; this document alone does not certify success.

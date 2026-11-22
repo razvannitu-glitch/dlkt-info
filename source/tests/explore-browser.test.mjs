@@ -53,14 +53,14 @@ function harness(t,url='https://www.dlkt.ee/?explore=1',{snapshot=null}={}){
   localStorage:{setItem:(...args)=>writes.push(['localStorage',...args]),removeItem:(...args)=>writes.push(['localStorage.remove',...args]),getItem:()=>null},
   sessionStorage:{setItem:(...args)=>writes.push(['sessionStorage',...args]),removeItem:(...args)=>writes.push(['sessionStorage.remove',...args]),getItem:()=>null},
   indexedDB:{open:(...args)=>{writes.push(['indexedDB.open',...args]);throw Error('EXPLORE_MUST_NOT_OPEN_PRIVATE_STORAGE');}}}))install(key,value);
- const renderings=[];
+ const renderings=[],renderedCards=[];
  const controller=setupExplore({snapshot:()=>snapshot,loading:()=>false,failed:()=>false,refresh:()=>{},saved:()=>{},
-  card:view=>{const article=new ElementFixture('article');article.dataset.cardId=view.card.id;const content=new ElementFixture('div');content.className='card-content';const title=new ElementFixture('h3');title.textContent=view.heading;content.append(title);const evidence=new ElementFixture('details');evidence.className='evidence';article.append(content,evidence);return article;},
+  card:view=>{renderedCards.push(view.card);const article=new ElementFixture('article');article.dataset.cardId=view.card.id;const content=new ElementFixture('div');content.className='card-content';const title=new ElementFixture('h3');title.textContent=view.heading;content.append(title);const evidence=new ElementFixture('details');evidence.className='evidence';article.append(content,evidence);return article;},
   reconcile:(target,next)=>{renderings.push(next.querySelectorAll('article').map(article=>({id:article.dataset.cardId,signature:article.dataset.liveSignature,scope:article.dataset.exploreScope,text:article.textContent})));target.replaceChildren(...next.children);}});
  t.after(()=>{ids.get('world-back').dispatchEvent(new Event('click'));restore();});
  const click=id=>(ids.get(id)??destinations.get(id)).dispatchEvent(new Event('click'));
  const pending=(key,value)=>requests.find(request=>request.url.searchParams.get(key)===value);
- return{doc,win,ids,click,pending,requests,writes,events,historyCalls,controller,renderings,
+ return{doc,win,ids,click,pending,requests,writes,events,historyCalls,controller,renderings,renderedCards,
   resolveCity:async city=>{const request=pending('id',city.id);assert.ok(request,'city lookup was requested');request.resolve({cities:[city],cityAliases:[city.name]});await tick();},
   pop:next=>{win.location=new URL(next,win.location);win.dispatchEvent(new Event('popstate'));}};
 }
@@ -98,12 +98,14 @@ test('public place/category navigation and history leave private preferences unt
 });
 
 test('same publication changes reconciliation identity when geographical evidence changes',async t=>{
- const now=new Date().toISOString();const card={id:'a'.repeat(24),identity:'explore-controller-fixture',title:'Tokyo opens a new public museum',kind:'publication',topic:'culture',publisher:'Controlled publisher',sourceUrl:'https://globalvoices.org/2026/11/21/controller-fixture/',sourceIds:['gv-world'],date:now,dateLabel:'Published',observedAt:now,contentHash:'b'.repeat(64),boundary:'Controlled fixture.',deadline:null,version:null,attribution:'Controlled publisher',sourceState:'verified'};
- const snapshot={cards:[card],generatedAt:now,state:'ready'};const h=harness(t,'https://www.dlkt.ee/?explore=1',{snapshot});await tick();
+ const now=new Date().toISOString();const card=Object.freeze({id:'a'.repeat(24),identity:'explore-controller-fixture',title:'Tokyo opens a new public museum',kind:'publication',topic:'culture',publisher:'BBC',sourceUrl:'https://www.bbc.com/news/articles/controller-geography-fixture',sourceIds:Object.freeze(['news-culture']),date:now,dateLabel:'Published',observedAt:now,contentHash:'b'.repeat(64),boundary:'Controlled fixture.',deadline:null,version:null,attribution:'BBC',sourceState:'verified'});
+ const before=JSON.stringify(card),snapshot={cards:[card],generatedAt:now,state:'ready'};
+ const h=harness(t,'https://www.dlkt.ee/?explore=1&lang=en',{snapshot});await tick();
  const world=h.renderings.at(-1)[0];assert.ok(world);assert.equal(world.scope,'world');
  h.click(cities.tokyo.id);await h.resolveCity(cities.tokyo);const local=h.renderings.at(-1)[0];
  assert.equal(local.id,world.id);assert.equal(local.scope,'city');assert.notEqual(local.signature,world.signature);assert.match(local.text,/Mentioning Tokyo/);assert.match(local.text,/not independently verified/);
  h.click('world-everywhere');const again=h.renderings.at(-1)[0];assert.equal(again.id,world.id);assert.equal(again.signature,world.signature);assert.doesNotMatch(again.text,/not independently verified/);
+ assert.ok(h.renderedCards.every(record=>record===card));assert.equal(JSON.stringify(card),before);assert.equal(card.contentHash,'b'.repeat(64));
 });
 
 test('Romanian presentation changes country/category labels without changing the selected geography',async t=>{
@@ -124,13 +126,25 @@ test('changing language cancels an in-flight search and late city results cannot
  assert.match(h.ids.get('world-place-title').textContent,/[\u0600-\u06ff]/u);assert.deepEqual(h.writes,[]);
 });
 
-test('locale changes update card presentation while retaining the exact original source record',async t=>{
- const now=new Date().toISOString();const card=Object.freeze({id:'c'.repeat(24),identity:'multilingual-source-fixture',title:'Tokyo opens a new public museum',kind:'publication',topic:'culture',publisher:'Controlled publisher',sourceUrl:'https://globalvoices.org/2026/11/21/controller-fixture/',sourceIds:Object.freeze(['gv-world']),date:now,dateLabel:'Published',observedAt:now,contentHash:'d'.repeat(64),boundary:'Controlled fixture.',deadline:null,version:null,attribution:'Controlled publisher',sourceState:'verified'});
- const before=JSON.stringify(card);const h=harness(t,'https://www.dlkt.ee/?explore=1',{snapshot:{cards:[card],generatedAt:now,state:'ready'}});await tick();
- const english=h.renderings.at(-1)[0];h.win.location.searchParams.set('lang','ja');h.doc.dispatchEvent(new CustomEvent('dlkt:language-changed',{detail:{locale:'ja'}}));
- const japanese=h.renderings.at(-1)[0];assert.equal(japanese.id,english.id);assert.notEqual(japanese.signature,english.signature);
- assert.match(japanese.text,/Tokyo opens a new public museum/);assert.equal(JSON.stringify(card),before);assert.deepEqual(h.writes,[]);
+test('locale changes select native articles and switching back restores the exact original source record',async t=>{
+ const now=new Date().toISOString();
+ const english=Object.freeze({id:'c'.repeat(24),identity:'english-source-fixture',title:'Tokyo opens a new public museum',kind:'publication',topic:'culture',publisher:'BBC',sourceUrl:'https://www.bbc.com/news/articles/controller-language-fixture',sourceIds:Object.freeze(['news-culture']),date:now,dateLabel:'Published',observedAt:now,contentHash:'d'.repeat(64),boundary:'Controlled fixture.',deadline:null,version:null,attribution:'BBC',sourceState:'verified'});
+ const japanese=Object.freeze({...english,id:'e'.repeat(24),identity:'japanese-source-fixture',title:'東京で新しい美術館が開館',sourceUrl:'https://www.bbc.com/japanese/articles/controller-language-fixture',contentHash:'f'.repeat(64)});
+ const unknown=Object.freeze({...english,id:'1'.repeat(24),identity:'unknown-language-fixture',title:'An original publication with unreviewed language',publisher:'Global Voices',sourceUrl:'https://globalvoices.org/2026/11/21/controller-language-fixture/',sourceIds:Object.freeze(['gv-world']),contentHash:'2'.repeat(64),attribution:'Global Voices'});
+ const records=Object.freeze([english,japanese,unknown]),before=JSON.stringify(records);
+ const h=harness(t,'https://www.dlkt.ee/?explore=1&lang=en',{snapshot:{cards:records,generatedAt:now,state:'ready'}});await tick();
+ assert.equal(h.renderings.at(-1).length,1);const firstEnglish=h.renderings.at(-1)[0];assert.equal(firstEnglish.id,english.id);assert.ok(firstEnglish.text.includes(english.title));
+ h.win.location.searchParams.set('lang','ja');h.doc.dispatchEvent(new CustomEvent('dlkt:language-changed',{detail:{locale:'ja'}}));
+ assert.equal(h.renderings.at(-1).length,1);const shownJapanese=h.renderings.at(-1)[0];
+ assert.equal(shownJapanese.id,japanese.id);assert.notEqual(shownJapanese.signature,firstEnglish.signature);assert.ok(shownJapanese.text.includes(japanese.title));assert.ok(!shownJapanese.text.includes(english.title));
+ h.win.location.searchParams.set('lang','en');h.doc.dispatchEvent(new CustomEvent('dlkt:language-changed',{detail:{locale:'en'}}));
+ assert.equal(h.renderings.at(-1).length,1);const returnedEnglish=h.renderings.at(-1)[0];
+ assert.equal(returnedEnglish.id,english.id);assert.equal(returnedEnglish.signature,firstEnglish.signature);
+ assert.ok(h.renderedCards.includes(english));assert.ok(h.renderedCards.includes(japanese));assert.ok(!h.renderedCards.includes(unknown));
+ assert.ok(h.renderedCards.every(record=>record===english||record===japanese));assert.equal(JSON.stringify(records),before);assert.deepEqual(h.writes,[]);
  h.pop('https://www.dlkt.ee/?explore=1&country=FR&lang=ro');await tick();assert.equal(h.ids.get('world-place-title').textContent,'Franța');
+ assert.equal(h.renderings.at(-1).length,0,'an uncovered edition does not silently keep English or Japanese headlines');
+ assert.equal(JSON.stringify(records),before);
 });
 
 test('shared Explore URLs retain the chosen language and exclude unrelated private query values',async t=>{
