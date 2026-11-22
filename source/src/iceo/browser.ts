@@ -331,8 +331,8 @@ function valid(value:unknown):value is IceoSnapshot {
     &&Array.isArray(value.cards)&&value.cards.length<=5000&&value.cards.every(validCard)
     &&Array.isArray(value.sources)&&value.sources.length<=100&&value.sources.every(validHealth);
 }
-function formatted(value:string,dayOnly=false,utc=false):string {
-  const options:Intl.DateTimeFormatOptions=dayOnly?{year:'numeric',month:'short',day:'numeric',timeZone:'UTC'}
+function formatted(value:string,dayOnly=false,utc=false,publicationTimeZone='UTC'):string {
+  const options:Intl.DateTimeFormatOptions=dayOnly?{year:'numeric',month:'short',day:'numeric',timeZone:publicationTimeZone}
     :{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',timeZoneName:'short',...(utc?{timeZone:'UTC'}:{})};
   return new Intl.DateTimeFormat(getLocale(),options).format(new Date(value));
 }
@@ -377,7 +377,7 @@ async function shareSource(card:EvidenceCard,button:HTMLButtonElement,fallback:H
     announcement.textContent='Copy the original source link from the selected field.';
   }
 }
-function cardNode(view:ReadingCard,index:number,total:number,saved?:SavedCard,automaticInsights=true,followPresentation:FollowPresentation='category'):HTMLElement{
+function cardNode(view:ReadingCard,index:number,total:number,saved?:SavedCard,automaticInsights=true,followPresentation:FollowPresentation='category',publicationTimeZone='UTC'):HTMLElement{
   const fragment=template.content.cloneNode(true) as DocumentFragment;
   const node=fragment.querySelector<HTMLElement>('article');if(!node)throw new Error('READER_TEMPLATE_INVALID');
   node.classList.add('editorial-card');
@@ -402,7 +402,7 @@ function cardNode(view:ReadingCard,index:number,total:number,saved?:SavedCard,au
   if(title&&sourceUrl){const titleLink=make('a','card-title-link',presentation.headline);titleLink.href=sourceUrl;titleLink.target='_blank';titleLink.rel='noopener noreferrer';title.replaceChildren(titleLink);}
   const credit=cardCreditsNode(card);if(credit)node.querySelector('.card-meta')?.after(credit);
   put('.card-context',presentation.visibleContext??'');put('.card-publisher',card.publisher);
-  put('.card-date',`${view.dateLabel==='Published'?'':view.dateLabel+': '}${formatted(card.date,true)}`);
+  put('.card-date',`${view.dateLabel==='Published'?'':view.dateLabel+': '}${formatted(card.date,true,false,card.dateLabel==='Published'?publicationTimeZone:'UTC')}`);
   const readingContext=node.querySelector('.card-context'),guide=cardGuideNode(card);
   if(readingContext instanceof HTMLElement){
     readingContext.hidden=presentation.visibleContext===null;
@@ -656,7 +656,7 @@ function renderDiscovery():void {
     const item=entry.item,index=newsIndex++;
     let node:HTMLElement;
     if(item.kind==='global'){
-      node=cardNode(item.view,index,topCount,undefined,false,'related');node.dataset.liveSignature=JSON.stringify([language,editionCardSignature(item.view.card),editionStorySignature(item.view)]);
+      node=cardNode(item.view,index,topCount,undefined,false,'related',server.page?.day?.timeZone??contextualCity?.timezone??'UTC');node.dataset.liveSignature=JSON.stringify([language,editionCardSignature(item.view.card),editionStorySignature(item.view)]);
     }else{
       if(!contextualCity)continue;
       node=localCardNode(item.card,contextualCity,now);node.dataset.homeLocalId=item.card.id;node.dataset.cityId=contextualCity.id;
