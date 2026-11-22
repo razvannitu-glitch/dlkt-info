@@ -23,6 +23,24 @@ function page(offset=0,total=60,overrides={}){
   nextCursor:offset+20<total?cursor(offset+20):null,...overrides};
 }
 const response=value=>new Response(JSON.stringify(value),{status:200,headers:{'content-type':'application/json'}});
+test('receiver-sensitive browser fetch is called without binding the news controller',async()=>{
+ const requests=[],receivers=[];
+ const fetcher=async function(url,init){
+  receivers.push(this);
+  if(this!==undefined&&this!==globalThis)throw new TypeError('Illegal invocation');
+  requests.push({url,init});return response(page((requests.length-1)*20,40));
+ };
+ const model=new NewsContinuation(fetcher,()=>now);
+ await model.start(context);
+ assert.equal(model.view().error,null);assert.equal(model.view().items.length,20);
+ const prefix=[...model.view().items];
+ await model.next();
+ assert.equal(model.view().error,null);assert.equal(model.view().items.length,40);
+ assert.deepEqual(model.view().items.slice(0,20),prefix);
+ assert.equal(requests.length,2);assert.deepEqual(receivers,[undefined,undefined]);
+ assert.equal(new URL(requests[1].url,'https://www.dlkt.ee').searchParams.get('cursor'),cursor(20));
+ assert.equal(requests.every(request=>request.init.method==='GET'&&request.init.credentials==='omit'&&request.init.cache==='no-store'),true);
+});
 test('three server pages preserve the exact prefix and fetch continuation only on demand',async()=>{
  const requests=[];const model=new NewsContinuation(async(url,init)=>{requests.push({url,init});return response(page((requests.length-1)*20));},()=>now);
  await model.start(context);const first=[...model.view().items];

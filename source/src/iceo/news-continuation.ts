@@ -59,7 +59,8 @@ export class NewsContinuation {
   const timeout=setTimeout(()=>controller.abort(),12_000);
   const job=(async():Promise<void>=>{
    try{
-    const response=await this.fetcher('/api/news-page?'+query.toString(),{method:'GET',credentials:'omit',cache:'no-store',
+    const fetcher=this.fetcher;
+    const response=await fetcher('/api/news-page?'+query.toString(),{method:'GET',credentials:'omit',cache:'no-store',
      headers:{Accept:'application/json'},signal:controller.signal});
     if(generation!==this.generation){await response.body?.cancel();return;}
     if(response.status===410||response.status===400&&cursor!==null){await response.body?.cancel();this.error='expired';return;}
