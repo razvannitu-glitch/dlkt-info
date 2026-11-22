@@ -1,5 +1,6 @@
 import type {ContextualToday} from './contextual-today.js';
 import type {LocalCard} from '../local/contracts.js';
+import {NEWS_WINDOW_MS,NEWS_CHECK_MS} from '../local/news-policy.js';
 
 interface ReadingEdition {readonly local:readonly LocalCard[];readonly pending:number;readonly seed:string;readonly expiresAt:number|null}
 function localSignature(card:LocalCard):string {
@@ -7,8 +8,8 @@ function localSignature(card:LocalCard):string {
 }
 function current(card:LocalCard,now:number):boolean {
   const checked=Date.parse(card.checkedAt),published=Date.parse(card.news?.publishedAt??'');
-  return card.kind==='local-news'&&card.news!==undefined&&Number.isFinite(checked)&&checked<=now+5000&&now-checked<300000
-    &&Date.parse(card.validTo)>now&&published<=now&&published>now-86400000;
+  return card.kind==='local-news'&&card.news!==undefined&&Number.isFinite(checked)&&checked<=now+5000&&now-checked<NEWS_CHECK_MS
+    &&Date.parse(card.validTo)>now&&published<=now+NEWS_CHECK_MS&&published>=now-NEWS_WINDOW_MS;
 }
 /** An ordering seed, not a security digest; only the adopted public edition determines it. */
 export function newsEditionSeed(today:ContextualToday,local:readonly LocalCard[],language:string):string {
@@ -24,6 +25,7 @@ export class NewsReadingState {
   private context='';
   private local:readonly LocalCard[]=[];
   private seed='news-stream-v1';
+  hasVisibleLocal(now:number):boolean {return this.local.some(card=>current(card,now));}
   present(today:ContextualToday,candidates:readonly LocalCard[],context:string,language:string,now:number,apply=false):ReadingEdition {
     const incoming=candidates.filter(card=>current(card,now));
     if(!this.active||this.context!==context||apply){
@@ -39,7 +41,7 @@ export class NewsReadingState {
     let pending=0;
     for(const [id,signature] of next)if(visible.get(id)!==signature)pending++;
     for(const id of visible.keys())if(!next.has(id))pending++;
-    const expiries=this.local.flatMap(card=>[Date.parse(card.checkedAt)+300000,Date.parse(card.validTo),Date.parse(card.news?.publishedAt??'')+86400000]).filter(time=>Number.isFinite(time)&&time>now);
+    const expiries=this.local.flatMap(card=>[Date.parse(card.checkedAt)+NEWS_CHECK_MS,Date.parse(card.validTo),Date.parse(card.news?.publishedAt??'')+NEWS_WINDOW_MS+1]).filter(time=>Number.isFinite(time)&&time>now);
     return Object.freeze({local:this.local,pending,seed:this.seed,expiresAt:expiries.length?Math.min(...expiries):null});
   }
 }

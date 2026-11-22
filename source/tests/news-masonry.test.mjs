@@ -118,3 +118,13 @@ test('manual continuation focuses a visible new title after final placement whil
  assert.ok(render.indexOf('newsMasonry.update()')<render.indexOf('observeNewsStream(sentinel'));
  assert.ok(render.indexOf('newsMasonry.update()')<render.indexOf('const anchor = anchors.find'));
 });
+
+test('the English shortcut leaves keyboard focus in the visible toolbar after selecting the language',()=>{
+ const source=readFileSync('.build/src/iceo/browser.js','utf8'),start=source.indexOf("required('#home-news-english').addEventListener"),end=source.indexOf('// Automatic location and saved choices',start);
+ assert.ok(start>=0&&end>start);let action,focuses=0,changes=0;
+ const picker={value:'ro',dispatchEvent(event){assert.equal(this.value,'en');assert.equal(event.type,'change');assert.equal(event.bubbles,true);changes++;}};
+ const category={focus(){focuses++;}};
+ const context={Event:class{constructor(type,options){this.type=type;this.bubbles=options.bubbles;}},
+  required:selector=>selector==='#home-news-english'?{addEventListener(type,callback){assert.equal(type,'click');action=callback;}}:selector==='#reader-language'?picker:selector==='#home-news-category'?category:null};
+ runInNewContext(source.slice(start,end),context);action();assert.equal(changes,1);assert.equal(focuses,1);
+});

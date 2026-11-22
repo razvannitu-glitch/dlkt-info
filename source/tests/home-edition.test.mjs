@@ -129,6 +129,7 @@ test('homepage merges all native articles with automatic pages and keeps operati
   assert.match(body,/selectNewsStream\(today,reading.local,now,newsFilter,reading.seed\)/u);
   assert.match(body,/newsStreamPage\(stream,continuationCount\)/u);
   assert.match(body,/newsReading.present\(today,local.cards,contextKey,language,now,applyPublicUpdate\)/u);
+  assert.match(body,/liveEdition.present\(candidate,contextKey,now,applyPublicUpdate,newsReading.hasVisibleLocal\(now\)\)/u);
   assert.match(body,/observeNewsStream\(sentinel,\(\)=>showNewsPage\(false\)\)/u);
   assert.match(body,/showNewsPage\(true\)/u);assert.match(body,/home-news-category/u);
   assert.match(body,/newsCategoryLabel\(category.id,language\)/u);assert.match(body,/stream.counts\[category.id\]/u);

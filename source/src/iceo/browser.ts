@@ -559,7 +559,7 @@ function renderDiscovery():void {
   const candidate=snapshot?selectContextualToday(selectNewsLanguage(snapshot.cards,language),globalContext,now):{first:[],more:[]};
   const contextKey=JSON.stringify([language,context.countryCode,city?.id??null,[...interests].sort()]);
   if(continuationContext!==contextKey){continuationContext=contextKey;continuationCount=NEWS_PAGE_SIZE;}
-  const live=liveEdition.present(candidate,contextKey,now,applyPublicUpdate);
+  const live=liveEdition.present(candidate,contextKey,now,applyPublicUpdate,newsReading.hasVisibleLocal(now));
   const today=live.selection,reading=newsReading.present(today,local.cards,contextKey,language,now,applyPublicUpdate);applyPublicUpdate=false;
   const stream=selectNewsStream(today,reading.local,now,newsFilter,reading.seed),visible=newsStreamPage(stream,continuationCount);
   const newsUpdates=live.changes.total+reading.pending;
@@ -712,7 +712,7 @@ required<HTMLElement>('#discovery').addEventListener('change',event=>{
   newsFilter=value;continuationCount=NEWS_PAGE_SIZE;renderDiscovery();
   if(restoreFocus)required<HTMLSelectElement>('#home-news-category').focus({preventScroll:true});
 });
-required<HTMLButtonElement>('#home-news-english').addEventListener('click',()=>{const picker=required<HTMLSelectElement>('#reader-language');picker.value='en';picker.dispatchEvent(new Event('change',{bubbles:true}));picker.focus({preventScroll:true});});
+required<HTMLButtonElement>('#home-news-english').addEventListener('click',()=>{const picker=required<HTMLSelectElement>('#reader-language');picker.value='en';picker.dispatchEvent(new Event('change',{bubbles:true}));required<HTMLSelectElement>('#home-news-category').focus();});
 // Automatic location and saved choices inform this page without choosing a view or writing memory.
 document.addEventListener('dlkt:city-selected',event=>{
   if(!(event instanceof CustomEvent)||!object(event.detail)||!validCity(event.detail.city))return;

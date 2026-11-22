@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {NewsReadingState,newsEditionSeed} from '../.build/src/iceo/news-reading-state.js';
 import {selectNewsStream,newsStreamPage} from '../.build/src/iceo/news-stream.js';
 import {readingCard} from '../.build/src/iceo/reader.js';
+import {LiveEdition} from '../.build/src/iceo/live-edition.js';
 import {selectHomeLanguage} from '../.build/src/iceo/home-local.js';
 import {parseLocalNews} from '../.build/src/local/news-service.js';
 import {newsCard} from '../.build/src/local/service.js';
@@ -15,9 +16,9 @@ const global=(id,language='en')=>Object.freeze({id:id.toString(16).padStart(24,'
  date:new Date(now-id*1000).toISOString(),dateLabel:'Published',observedAt:checkedAt,contentHash:id.toString(16).padStart(64,'0'),
  boundary:'Controlled test record, not live reporting.',deadline:null,version:null,attribution:'Controlled publisher',sourceState:'verified'});
 const view=card=>Object.freeze({...readingCard(card,now),reason:'Controlled current selection.',localMatch:false,grouping:'single'});
-function localSnapshot(count=18){
+function localSnapshot(count=18,published='Sun, 22 Nov 2026 10:00:00 +0000'){
  const source=CITY_NEWS_FEEDS.find(value=>value.id==='bucharest-b365');
- const entries=Array.from({length:count},(_,i)=>'<item><title>Bucuresti: Metrorex publica programul liniei '+(i+1)+'</title><link>https://b365.ro/control-'+(123450+i)+'/</link><pubDate>Sun, 22 Nov 2026 10:00:00 +0000</pubDate><description>Consultati articolul pentru detalii.</description></item>').join('');
+ const entries=Array.from({length:count},(_,i)=>'<item><title>Bucuresti: Metrorex publica programul liniei '+(i+1)+'</title><link>https://b365.ro/control-'+(123450+i)+'/</link><pubDate>'+published+'</pubDate><description>Consultati articolul pentru detalii.</description></item>').join('');
  const body='<rss version="2.0"><channel><title>'+source.title+'</title><link>'+source.home+'</link>'+entries+'</channel></rss>';
  const parsed=parseLocalNews(body,source.id,city,checkedAt,now);assert.equal(parsed.articles.length,count);assert.equal(parsed.rejected,0);
  const cards=parsed.articles.map(article=>newsCard(article,city));
@@ -42,7 +43,7 @@ test('rechecks, category changes and pagination retain the adopted seed and exac
  const today={first:[view(global(100,'ro'))],more:[]},original=selectHomeLanguage(localSnapshot(2),city,now,'ro').cards,state=new NewsReadingState();
  const before=JSON.stringify(original),first=state.present(today,original,'ro','ro',now);
  assert.strictEqual(first.local[0],original[0]);
- const fresh=original.map(card=>Object.freeze({...card,checkedAt:new Date(now+299000).toISOString(),news:{...card.news,checkedAt:new Date(now+299000).toISOString()}}));
+ const fresh=original.map(card=>newsCard({...card.news,checkedAt:new Date(now+299000).toISOString(),validUntil:new Date(now+599000).toISOString()},city));
  const rechecked=state.present({...today,first:today.first.map(item=>({...item,card:{...item.card,observedAt:new Date(now+299000).toISOString()}}))},fresh,'ro','ro',now+299000);
  assert.equal(rechecked.seed,first.seed);assert.equal(rechecked.pending,0);assert.strictEqual(rechecked.local[0],fresh[0]);
  const retained=state.present(today,[],'ro','ro',now+300100);assert.equal(retained.local.length,2);assert.equal(retained.seed,first.seed);
@@ -52,7 +53,7 @@ test('rechecks, category changes and pagination retain the adopted seed and exac
 test('changed originals are staged until adoption and never renew the old article check',()=>{
  const today={first:[],more:[]},original=selectHomeLanguage(localSnapshot(1),city,now,'ro').cards[0],state=new NewsReadingState();
  const first=state.present(today,[original],'ro','ro',now);
- const changed={...original,title:'Changed publisher wording',checkedAt:new Date(now+1000).toISOString(),news:{...original.news,title:'Changed publisher wording',documentHash:'f'.repeat(64),checkedAt:new Date(now+1000).toISOString()}};
+ const changed=newsCard({...original.news,title:'Bucuresti: Metrorex actualizeaza programul liniei 1',documentHash:'f'.repeat(64),checkedAt:new Date(now+1000).toISOString(),validUntil:new Date(now+301000).toISOString()},city);
  const staged=state.present(today,[changed],'ro','ro',now+1000);
  assert.strictEqual(staged.local[0],original);assert.equal(staged.pending,1);assert.equal(staged.seed,first.seed);assert.equal(staged.expiresAt,now+300000);
  const expired=state.present(today,[changed],'ro','ro',now+300000);assert.equal(expired.local.length,0);assert.equal(expired.pending,1);
@@ -76,6 +77,29 @@ test('seed material is the visible original edition, excludes check times and re
  const source=readFileSync('src/iceo/browser.ts','utf8');
  assert.match(source,/newsReading.present\(today,local.cards,contextKey,language,now,applyPublicUpdate\)/u);
  assert.match(source,/selectNewsStream\(today,reading.local,now,newsFilter,reading.seed\)/u);
- const compiled=readFileSync('.build/src/iceo/news-reading-state.js','utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'');
+ const compiled=readFileSync('.build/src/iceo/news-reading-state.js','utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'').replaceAll("'../local/news-policy.js'","'./local-news-policy.js'");
  assert.equal(readFileSync('public/news-reading-state.js','utf8'),compiled);
+});
+
+test('local reports aged48hours and exactly72hours remain eligible with the existing72hour boundary',()=>{
+ const empty={first:[],more:[]},fortyEight=selectHomeLanguage(localSnapshot(1,'Fri, 20 Nov 2026 12:00:00 +0000'),city,now,'ro').cards;
+ assert.equal(fortyEight.length,1);const recent=new NewsReadingState().present(empty,fortyEight,'ro','ro',now);
+ assert.strictEqual(recent.local[0],fortyEight[0]);assert.equal(selectNewsStream(empty,recent.local,now,'all',recent.seed).total,1);
+ const seventyTwo=selectHomeLanguage(localSnapshot(1,'Thu, 19 Nov 2026 12:00:00 +0000'),city,now,'ro').cards;
+ assert.equal(seventyTwo.length,1);const state=new NewsReadingState(),edge=state.present(empty,seventyTwo,'ro','ro',now);
+ assert.strictEqual(edge.local[0],seventyTwo[0]);assert.equal(edge.expiresAt,now+1);
+ const expired=state.present(empty,seventyTwo,'ro','ro',now+1);assert.equal(expired.local.length,0);assert.equal(expired.expiresAt,null);
+});
+test('a first global response arriving after visible local news stays staged until Show updates',()=>{
+ const local=selectHomeLanguage(localSnapshot(3),city,now,'ro').cards,empty={first:[],more:[]},live=new LiveEdition(),state=new NewsReadingState();
+ const initial=live.present(empty,'ro',now),reading=state.present(initial.selection,local,'ro','ro',now);
+ assert.equal(state.hasVisibleLocal(now),true);
+ const before=selectNewsStream(initial.selection,reading.local,now,'all',reading.seed),candidate={first:[view(global(402,'ro'))],more:[]};
+ const staged=live.present(candidate,'ro',now+1000,false,state.hasVisibleLocal(now+1000));
+ assert.equal(staged.selection.first.length,0);assert.equal(staged.changes.added,1);
+ const stable=state.present(staged.selection,local,'ro','ro',now+1000),same=selectNewsStream(staged.selection,stable.local,now+1000,'all',stable.seed);
+ assert.deepEqual(same.items.map(item=>item.key),before.items.map(item=>item.key));assert.equal(stable.seed,reading.seed);
+ const accepted=live.present(candidate,'ro',now+1000,true,state.hasVisibleLocal(now+1000));
+ const updated=state.present(accepted.selection,local,'ro','ro',now+1000,true);
+ assert.equal(selectNewsStream(accepted.selection,updated.local,now+1000,'all',updated.seed).total,4);assert.equal(accepted.changes.total,0);
 });

@@ -96,3 +96,12 @@ test('a continuation-only edition stays stable and expires its source evidence',
   const expired=live.present({first:[],more:[]},'global',now+3_600_000);
   assert.deepEqual(expired.selection.more,[]);
 });
+
+test('an already-visible local edition can defer the first global response without changing normal empty recovery',()=>{
+ const live=new LiveEdition();live.present(select([]),'global',now);
+ const candidate=select([card(1)]),staged=live.present(candidate,'global',now+1000,false,true);
+ assert.equal(staged.selection.first.length,0);assert.equal(staged.changes.added,1);
+ const applied=live.present(candidate,'global',now+1000,true,true);assert.strictEqual(applied.selection,candidate);assert.equal(applied.changes.total,0);
+ const changed=new LiveEdition();changed.present(select([]),'ro',now);
+ assert.strictEqual(changed.present(candidate,'en',now+1000,false,true).selection,candidate,'an explicit context change still adopts immediately');
+});
