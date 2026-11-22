@@ -26,6 +26,7 @@ export const MESSAGE_KEYS=[
   'chooseCity','changeCity','exploreCountry','copyViewLink','linkCopied','copyLinkFallback','lookupHint','lookupLoading','lookupChoose','lookupEmpty','lookupError','countriesError','openingPlace','placeError','homeUnchanged','chooseAgain','loadingStories','storiesUnavailable','refreshHint','checkingSources','coveragePending','matchingStories','last24Hours','checkedAt','partialCoverage',
   'checkingUpdates','refreshUnavailable','coverage','mentioning','countryContext','sourceLanguage','noMatches','noCategoryMatches','noMatchesHint','showMore','saveCard','savedCard','shareCard','openSource','sourceDetails','originalTitle','publisher','sourceChecked','published','publisherExcerpt','originalContentNote','otherTopics','endOfTop','viewCountry','clearCategory',
   'todayLocalTitle','dailyBriefTitle','loadMore','sourceEdition','readInOriginal',
+  'switchToDarkMode','switchToLightMode',
 ] as const;
 export type MessageKey=typeof MESSAGE_KEYS[number];
 export type Messages=Readonly<Record<MessageKey,string>>;
@@ -252,13 +253,46 @@ const extraRows:Readonly<Record<Locale,string>>={
   fil:"Sa {city}|Iyong pang-araw-araw na buod|Magpakita pa|Edisyon ng sanggunian|Basahin sa orihinal na wika",
 };
 
+const appearanceRows:Readonly<Record<Locale,readonly [string,string]>>={
+  en:['Switch to dark mode','Switch to light mode'],
+  ro:['Treci la modul întunecat','Treci la modul luminos'],
+  fr:['Passer au mode sombre','Passer au mode clair'],
+  es:['Cambiar al modo oscuro','Cambiar al modo claro'],
+  pt:['Mudar para o modo escuro','Mudar para o modo claro'],
+  de:['Zum dunklen Modus wechseln','Zum hellen Modus wechseln'],
+  it:['Passa alla modalità scura','Passa alla modalità chiara'],
+  nl:['Schakel over naar de donkere modus','Schakel over naar de lichte modus'],
+  pl:['Przełącz na tryb ciemny','Przełącz na tryb jasny'],
+  tr:['Koyu moda geç','Açık moda geç'],
+  ru:['Переключить на тёмную тему','Переключить на светлую тему'],
+  uk:['Увімкнути темну тему','Увімкнути світлу тему'],
+  ar:['التبديل إلى الوضع الداكن','التبديل إلى الوضع الفاتح'],
+  he:['מעבר למצב כהה','מעבר למצב בהיר'],
+  fa:['تغییر به حالت تیره','تغییر به حالت روشن'],
+  ur:['گہرے رنگوں والے موڈ پر جائیں','ہلکے رنگوں والے موڈ پر جائیں'],
+  hi:['डार्क मोड पर जाएँ','लाइट मोड पर जाएँ'],
+  bn:['ডার্ক মোডে যান','লাইট মোডে যান'],
+  'zh-Hans':['切换到深色模式','切换到浅色模式'],
+  'zh-Hant':['切換至深色模式','切換至淺色模式'],
+  ja:['ダークモードに切り替え','ライトモードに切り替え'],
+  ko:['다크 모드로 전환','라이트 모드로 전환'],
+  id:['Beralih ke mode gelap','Beralih ke mode terang'],
+  ms:['Tukar kepada mod gelap','Tukar kepada mod cerah'],
+  vi:['Chuyển sang chế độ tối','Chuyển sang chế độ sáng'],
+  th:['เปลี่ยนเป็นโหมดมืด','เปลี่ยนเป็นโหมดสว่าง'],
+  sw:['Badilisha hadi hali nyeusi','Badilisha hadi hali angavu'],
+  ta:['இருண்ட பயன்முறைக்கு மாறு','வெளிர் பயன்முறைக்கு மாறு'],
+  te:['డార్క్ మోడ్‌కు మారండి','లైట్ మోడ్‌కు మారండి'],
+  fil:['Lumipat sa madilim na mode','Lumipat sa maliwanag na mode'],
+};
+
 export function messageParameters(value:string):readonly string[] {
   return Object.freeze([...value.matchAll(/\{([a-z][a-zA-Z]*)\}/gu)].map(match=>match[1]??'').sort());
 }
 function buildMessages():Readonly<Record<Locale,Messages>> {
-  const result={} as Record<Locale,Messages>,reference=[...rows.en.split('|'),...extraRows.en.split('|')];
+  const result={} as Record<Locale,Messages>,reference=[...rows.en.split('|'),...extraRows.en.split('|'),...appearanceRows.en];
   for(const {code} of LOCALES){
-    const values=[...rows[code].split('|'),...extraRows[code].split('|')];
+    const values=[...rows[code].split('|'),...extraRows[code].split('|'),...appearanceRows[code]];
     if(values.length!==MESSAGE_KEYS.length||values.some(value=>!value.trim()))throw Error('I18N_MESSAGE_COUNT:'+code);
     for(const [index,value] of values.entries()){
       if(JSON.stringify(messageParameters(value))!==JSON.stringify(messageParameters(reference[index]??'')))throw Error('I18N_PLACEHOLDERS:'+code+':'+MESSAGE_KEYS[index]);

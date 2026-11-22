@@ -15,8 +15,17 @@ export function languageLabel(code:string):string {
   try{return new Intl.DisplayNames([getLocale()],{type:'language',fallback:'none'}).of(code)??code;}catch{return code;}
 }
 
+/** Appearance stays in its own controller; translation changes only the action label. */
+function applyAppearanceLabel():void {
+  const button=document.getElementById('reader-theme-toggle');if(!button)return;
+  const key:MessageKey=document.documentElement.dataset.readerTheme==='night'?'switchToLightMode':'switchToDarkMode';
+  const label=translate(key);button.dataset.i18nLabel=key;
+  button.setAttribute('aria-label',label);button.setAttribute('title',label);
+}
+
 /** Bind only explicitly marked interface nodes. Publisher wording is never traversed or replaced. */
 export function applyInterfaceLanguage(root:ParentNode=document):void {
+  applyAppearanceLabel();
   for(const brand of root.querySelectorAll<HTMLElement>('.brand-header,.brand-footer')){brand.lang='en';brand.dir='ltr';brand.setAttribute('translate','no');}
   for(const item of root.querySelectorAll<HTMLElement>('[data-i18n]')){
     const key=item.dataset.i18n as MessageKey|undefined;if(key)item.textContent=translate(key);
@@ -56,5 +65,6 @@ export function setupLanguage():void {
   window.addEventListener('languagechange',apply);
   // Entry controllers may update contextual labels, but never the source content.
   document.addEventListener('dlkt:entry-view',()=>applyInterfaceLanguage());
+  document.addEventListener('dlkt:theme-changed',applyAppearanceLabel);
   apply();
 }

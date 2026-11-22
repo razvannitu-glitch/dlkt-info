@@ -24,8 +24,20 @@ export function languageLabel(code) {
         return code;
     }
 }
+/** Appearance stays in its own controller; translation changes only the action label. */
+function applyAppearanceLabel() {
+    const button = document.getElementById('reader-theme-toggle');
+    if (!button)
+        return;
+    const key = document.documentElement.dataset.readerTheme === 'night' ? 'switchToLightMode' : 'switchToDarkMode';
+    const label = translate(key);
+    button.dataset.i18nLabel = key;
+    button.setAttribute('aria-label', label);
+    button.setAttribute('title', label);
+}
 /** Bind only explicitly marked interface nodes. Publisher wording is never traversed or replaced. */
 export function applyInterfaceLanguage(root = document) {
+    applyAppearanceLabel();
     for (const brand of root.querySelectorAll('.brand-header,.brand-footer')) {
         brand.lang = 'en';
         brand.dir = 'ltr';
@@ -91,5 +103,6 @@ export function setupLanguage() {
     window.addEventListener('languagechange', apply);
     // Entry controllers may update contextual labels, but never the source content.
     document.addEventListener('dlkt:entry-view', () => applyInterfaceLanguage());
+    document.addEventListener('dlkt:theme-changed', applyAppearanceLabel);
     apply();
 }

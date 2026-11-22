@@ -1,4 +1,10 @@
 import {readFileSync,writeFileSync} from 'node:fs';
+// A synchronous classic script applies an explicit appearance choice before reader CSS paints.
+// NodeNext emits only an empty module marker for this self-contained controller.
+const theme=readFileSync('.build/src/theme/browser.js','utf8')
+ .replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'').replace(/^export \{\};\r?\n?/gmu,'');
+if(/^\s*(?:import|export)\b/mu.test(theme))throw Error('READER_THEME_CLASSIC_SCRIPT_REQUIRED');
+writeFileSync('public/reader-theme.js',theme);
 /** Ship the exact compiled strict-TypeScript controller without source map disclosure. */
 for(const [name,target] of [['editorial-presentation','editorial-presentation'],['live-edition','live-edition'],['editorial-relevance','editorial-relevance'],['news-sources','news-sources'],['editorial-categories','editorial-categories'],['editorial-ranking','editorial-ranking'],['source-relevance','source-relevance'],['editorial-topics','editorial-topics'],['context','context'],['contextual','contextual'],['contextual-today','contextual-today'],['home-local','home-local'],['home-edition','home-edition'],['loading','loading'],['card-guide','card-guide'],['source-links','source-links'],['credits','credits'],['topics','topics'],['browser','iceo'],['reader','reader'],['insight-browser','insight-browser'],['insight-contracts','insight-contracts'],['device-memory','device-memory'],['comparison','comparison'],['return-brief','return-brief'],['saved-updates','saved-updates'],['card-validation','card-validation']]){
  const compiled=readFileSync(`.build/src/iceo/${name}.js`,'utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'');

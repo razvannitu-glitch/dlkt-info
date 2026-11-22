@@ -1,0 +1,192 @@
+/* Approved reader palettes. Load after the existing reader styles.
+   Legacy ink/surface tokens remain semantic; photographs get their own literal pair. */
+html[data-reader-theme=prism]{
+ --reader-page:#F4F5FA;--reader-surface:#FFFFFF;--reader-panel:#EFEDFF;
+ --reader-ink:#1D2133;--reader-muted:#555A6A;--reader-rule:#D5D8E3;--reader-edge:#727888;
+ --reader-action:#5643B6;--reader-action-ink:#FFFFFF;--reader-action-hover:#D8D1FF;--reader-action-hover-ink:#24203F;
+ --reader-selected:#BDE9DD;--reader-selected-ink:#153D34;--reader-selected-edge:#3A7463;
+ --reader-secondary-hover:#DCEFE9;--reader-secondary-hover-ink:#153D34;
+ --reader-link:#5643B6;--reader-focus:#5643B6;
+ --reader-photo-dark:#18191E;--reader-photo-light:#FFFFFF;--reader-photo-link:#5643B6;--reader-photo-focus:#5643B6;
+ color-scheme:light;
+}
+html[data-reader-theme=night]{
+ --reader-page:#14181C;--reader-surface:#20262C;--reader-panel:#26342F;
+ --reader-ink:#F4F3EF;--reader-muted:#BAC4C5;--reader-rule:#48555B;--reader-edge:#798A8B;
+ --reader-action:#F66061;--reader-action-ink:#15181C;--reader-action-hover:#FFA4A1;--reader-action-hover-ink:#15181C;
+ --reader-selected:#BEEBDD;--reader-selected-ink:#142C25;--reader-selected-edge:#BEEBDD;
+ --reader-secondary-hover:#BEEBDD;--reader-secondary-hover-ink:#142C25;
+ --reader-link:#BEEBDD;--reader-focus:#FDE6C2;
+ --reader-photo-dark:#14181C;--reader-photo-light:#F4F3EF;--reader-photo-link:#BEEBDD;--reader-photo-focus:#FDE6C2;
+ color-scheme:dark;
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]){
+ --black:var(--reader-ink);--white:var(--reader-surface);--coral:#F66061;
+ --line:var(--reader-rule);--muted:var(--reader-muted);--soft:var(--reader-panel);
+ background:var(--reader-page);color:var(--reader-ink);
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) body{
+ background:var(--reader-page);color:var(--reader-ink);
+}
+
+/* These selectors also neutralize the older nth-card black/coral color cycle. */
+html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards)>.info-card{
+ --card-bg:var(--reader-surface);--card-ink:var(--reader-ink);--card-title:var(--reader-ink);
+ --card-muted:var(--reader-muted);--card-rule:var(--reader-rule);
+ --card-action:var(--reader-action);--card-action-ink:var(--reader-action-ink);
+ --card-hover:var(--reader-secondary-hover);--card-hover-ink:var(--reader-secondary-hover-ink);
+ background:var(--reader-surface);color:var(--reader-ink);border-color:var(--reader-rule);
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(.primary,.focus-button,.entry-field>button){
+ background:var(--reader-action);color:var(--reader-action-ink);border-color:var(--reader-action);
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) .source-link,
+html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards)>.info-card .source-link,
+html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card .card-actions>.source-link{
+ background:var(--reader-action);color:var(--reader-action-ink);border-color:var(--reader-action);
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(.secondary,.save-card,.share-source,.insight-load){
+ background:var(--reader-surface);color:var(--reader-ink);border-color:var(--reader-edge);
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards)>.info-card :is(.save-card,.share-source,.secondary,.insight-load){
+ background:var(--reader-surface);color:var(--reader-ink);border-color:var(--reader-edge);
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) .save-card[aria-pressed=true],
+html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards)>.info-card .save-card[aria-pressed=true]{
+ background:var(--reader-selected);color:var(--reader-selected-ink);border-color:var(--reader-selected-edge);
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(.world-destinations,.local-interest-buttons,.daily-lengths) button[aria-pressed=true]{
+ background:var(--reader-action);color:var(--reader-action-ink);border-color:var(--reader-action);
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) .daily-lengths button[aria-pressed=true] small{
+ color:var(--reader-action-ink);
+}
+
+/* Existing page, header, disclosure and dialog surfaces use the semantic tokens above. */
+html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(input,select,textarea,dialog){
+ background-color:var(--reader-surface);color:var(--reader-ink);border-color:var(--reader-edge);
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(input,textarea)::placeholder{
+ color:var(--reader-muted);opacity:1;
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(input[type=checkbox],input[type=radio]){
+ accent-color:var(--reader-action);
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) .site-header :is(#header-menu,#personalise-button){
+ background:var(--reader-surface);color:var(--reader-ink);border-color:var(--reader-edge);
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) .site-header #header-navigation .text-button[aria-current=page],
+html:is([data-reader-theme=prism],[data-reader-theme=night]) .site-header #header-menu[aria-expanded=true]{
+ background:var(--reader-action);color:var(--reader-action-ink);border-color:var(--reader-action);
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) .personal-inbox-updates li{
+ border-color:var(--reader-rule);
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(.daily-interest[aria-pressed=true] .daily-interest-mark,.edition-loading-mini-c){
+ color:#15181C;
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) .edition-loading-mini-b{
+ background:var(--reader-action);color:var(--reader-action-ink);border-color:var(--reader-action);
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) .edition-loading-card:last-child{
+ background:var(--reader-panel);color:var(--reader-ink);border-color:var(--reader-rule);
+}
+
+/* Inverting the legacy ink/surface names must never invert a photo or its caption.
+   A failed image stops matching this rule, so its retained title uses ordinary card ink. */
+html:is([data-reader-theme=prism],[data-reader-theme=night]) .photo-editorial:not(.photo-unavailable) .card-photo-visual{
+ --black:var(--reader-photo-dark);--white:var(--reader-photo-light);
+ --reader-link:var(--reader-photo-link);--reader-focus:var(--reader-photo-focus);
+ background:var(--reader-photo-dark);color:var(--reader-photo-light);
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) .card-photo-frame{
+ background:var(--reader-photo-dark);
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) .card-photo-label{
+ background:color-mix(in srgb,var(--reader-photo-dark) 92%,transparent);color:var(--reader-photo-light);
+}
+/* Prism keeps the approved opaque lavender title panel; the image and badges stay dark. */
+html[data-reader-theme=prism] .photo-editorial:not(.photo-unavailable) .card-photo-headline{
+ background:var(--reader-panel);color:var(--reader-ink);
+}
+html[data-reader-theme=prism] .photo-editorial:not(.photo-unavailable) .card-photo-headline:before{
+ background:linear-gradient(to top,var(--reader-panel),transparent);
+}
+html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card .photo-editorial:not(.photo-unavailable) .card-photo-headline :is(h3,a){
+ color:var(--reader-ink);
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) .glance-ribbon{
+ --black:var(--reader-photo-dark);--white:var(--reader-photo-light);
+ background:var(--reader-photo-dark);color:var(--reader-photo-light);
+}
+
+/* Keep the existing outline geometry and keyboard behavior; only its color changes. */
+html:is([data-reader-theme=prism],[data-reader-theme=night]) :focus-visible,
+html:is([data-reader-theme=prism],[data-reader-theme=night]) .site-header :is(button,a):focus-visible,
+html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards)>.info-card :focus-visible,
+html:is([data-reader-theme=prism],[data-reader-theme=night]) .world-search input:focus,
+html:is([data-reader-theme=prism],[data-reader-theme=night]) .world-filter-label select:focus{
+ outline-color:var(--reader-focus);
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card .photo-editorial:not(.photo-unavailable) .card-photo-headline a:focus-visible{
+ outline-color:var(--reader-photo-focus);
+}
+
+/* Desktop hover is intentional; touch keeps the fully styled resting/selected state. */
+@media(hover:hover) and (pointer:fine){
+ html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(button,a.source-link,.more-menu a,.reader-more>summary,.footer-link,.legal-toc a):not(:disabled):not([aria-disabled=true]):hover,
+ html:is([data-reader-theme=prism],[data-reader-theme=night]) .site-header :is(#header-menu,#personalise-button,#header-navigation .text-button):not(:disabled):hover{
+  background:var(--reader-secondary-hover);color:var(--reader-secondary-hover-ink);border-color:var(--reader-selected-edge);
+ }
+ html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(.primary,.focus-button,.entry-field>button,.source-link):not(:disabled):not([aria-disabled=true]):hover,
+ html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards)>.info-card .source-link:not(:disabled):not([aria-disabled=true]):hover,
+ html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card .card-actions>.source-link:not(:disabled):not([aria-disabled=true]):hover{
+  background:var(--reader-action-hover)!important;color:var(--reader-action-hover-ink)!important;border-color:var(--reader-action)!important;
+ }
+ html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards)>.info-card .card-actions>:is(.save-card,.share-source):not(:disabled):hover{
+  background:var(--reader-secondary-hover)!important;color:var(--reader-secondary-hover-ink)!important;border-color:var(--reader-selected-edge)!important;
+ }
+ html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card .card-title-link:not(:disabled):hover{
+  background:transparent!important;color:var(--reader-link)!important;border-color:transparent!important;
+ }
+ html:is([data-reader-theme=prism],[data-reader-theme=night]) .world-city-results button:not(:disabled):hover span,
+ html:is([data-reader-theme=prism],[data-reader-theme=night]) .daily-interest:not(:disabled):hover small,
+ html:is([data-reader-theme=prism],[data-reader-theme=night]) .daily-lengths button:not(:disabled):hover small,
+ html:is([data-reader-theme=prism],[data-reader-theme=night]) .glance-tile:not(:disabled):hover :is(.glance-label,small){
+  color:inherit;
+ }
+}
+
+/* Appearance sits beside the language control without touching the brand lockup. */
+html:is([data-reader-theme=prism],[data-reader-theme=night]) .reader-language-bar{
+ align-items:center;gap:10px;flex-wrap:wrap;
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) .reader-language{
+ flex:0 1 auto;max-width:calc(100% - 54px);
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) .reader-language>span{
+ min-width:0;overflow-wrap:anywhere;
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) .reader-language select{
+ min-width:110px;flex:0 1 auto;
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) #reader-theme-toggle{
+ display:inline-flex;align-items:center;justify-content:center;flex:0 0 44px;
+ width:44px;min-width:44px;height:44px;min-height:44px;padding:10px;
+ border:1px solid var(--reader-edge);border-radius:7px;
+ background:var(--reader-surface);color:var(--reader-ink);
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) #reader-theme-toggle [data-theme-icon]{
+ display:none;width:20px;height:20px;fill:none;stroke:currentColor;
+}
+html[data-reader-theme=prism] #reader-theme-toggle [data-theme-icon=moon],
+html[data-reader-theme=night] #reader-theme-toggle [data-theme-icon=sun]{display:block}
+@media(hover:hover) and (pointer:fine){
+ html:is([data-reader-theme=prism],[data-reader-theme=night]) #reader-theme-toggle:not(:disabled):hover{
+  background:var(--reader-secondary-hover);color:var(--reader-secondary-hover-ink);border-color:var(--reader-selected-edge);
+ }
+}
+@media(max-width:600px){
+ html:is([data-reader-theme=prism],[data-reader-theme=night]) .reader-language-bar{gap:8px}
+ html:is([data-reader-theme=prism],[data-reader-theme=night]) .reader-language{gap:8px;max-width:calc(100% - 52px)}
+}

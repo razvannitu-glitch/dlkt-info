@@ -37,6 +37,8 @@ class CustomEventFixture extends Event {constructor(type,options={}){super(type,
 function harness(t,url='https://www.dlkt.ee/?explore=1&city=1850147&country=JP&category=culture&keep=a&keep=b&lang=en#reading'){
   const root=new ElementFixture('html'),body=new ElementFixture('body');root.append(body);
   const picker=new SelectFixture();picker.id='reader-language';picker.dataset.i18nLabel='language';
+  const appearance=new ElementFixture('button');appearance.id='reader-theme-toggle';appearance.dataset.i18nLabel='switchToDarkMode';
+  const icon=new ElementFixture('svg');appearance.append(icon);root.dataset.readerTheme='prism';
   const label=new ElementFixture('span');label.dataset.i18n='todayTop';label.textContent='Old UI text';
   const query=new ElementFixture('input');query.dataset.i18nPlaceholder='cityPlaceholder';query.value='東京';
   const topicLabel=new ElementFixture('label'),topic=new ElementFixture('input'),topicText=new ElementFixture('span');
@@ -44,9 +46,9 @@ function harness(t,url='https://www.dlkt.ee/?explore=1&city=1850147&country=JP&c
   const original=new ElementFixture('h3');original.lang='ja';original.dir='auto';original.setAttribute('translate','no');original.textContent='東京の美術館、2026年の展示を発表';
   const untouched=new ElementFixture('p');untouched.textContent='Publisher excerpt: original English wording.';
   const brand=new ElementFixture('a');brand.className='brand-header';brand.textContent='DLKT · Daily Life. Key Things.';
-  body.append(picker,label,query,topicLabel,original,untouched,brand);
+  body.append(picker,appearance,label,query,topicLabel,original,untouched,brand);
   const doc=new EventTarget();doc.documentElement=root;doc.body=body;doc.activeElement=picker;
-  doc.getElementById=id=>id===picker.id?picker:null;
+  doc.getElementById=id=>id===picker.id?picker:id===appearance.id?appearance:null;
   doc.querySelectorAll=selector=>root.querySelectorAll(selector);
   doc.createElement=tag=>new ElementFixture(tag);
   const win=new EventTarget();win.location=new URL(url);
@@ -63,7 +65,7 @@ function harness(t,url='https://www.dlkt.ee/?explore=1&city=1850147&country=JP&c
   t.after(()=>{for(const [name,descriptor]of previous){if(descriptor)Object.defineProperty(globalThis,name,descriptor);else delete globalThis[name];}});
   doc.addEventListener('dlkt:language-changed',event=>localeEvents.push(event.detail.locale));
   setupLanguage();
-  return{doc,win,browser,picker,label,query,topic,topicText,original,untouched,brand,historyCalls,sideEffects,localeEvents,
+  return{doc,win,browser,picker,appearance,icon,label,query,topic,topicText,original,untouched,brand,historyCalls,sideEffects,localeEvents,
     choose(locale){picker.value=locale;picker.dispatchEvent(new Event('change'));},
     pop(next){win.location=new URL(next,win.location);win.dispatchEvent(new Event('popstate'));}};
 }
@@ -84,6 +86,32 @@ test('native language selection changes RO, AR and EN without changing Explore g
     assert.equal(h.query.value,'東京');assert.equal(h.topic.value,'culture');assert.equal(h.topic.checked,true);
   }
   assert.deepEqual(h.localeEvents,['en','ro','ar','en']);assert.equal(h.historyCalls.length,3);assert.deepEqual(h.sideEffects,[]);
+});
+
+test('appearance labels follow both theme and all30 language changes without changing content or preferences',t=>{
+  const h=harness(t),original=h.original.textContent;
+  for(const locale of Object.keys(MESSAGES)){
+    h.choose(locale);
+    for(const theme of ['night','prism']){
+      const before=h.win.location.href,historyCount=h.historyCalls.length;
+      h.doc.documentElement.dataset.readerTheme=theme;
+      h.doc.dispatchEvent(new CustomEventFixture('dlkt:theme-changed',{detail:{theme}}));
+      const key=theme==='night'?'switchToLightMode':'switchToDarkMode';
+      assert.equal(h.appearance.dataset.i18nLabel,key);
+      assert.equal(h.appearance.getAttribute('aria-label'),MESSAGES[locale][key]);
+      assert.equal(h.appearance.getAttribute('title'),MESSAGES[locale][key]);
+      assert.equal(h.appearance.children[0],h.icon);
+      assert.equal(h.doc.documentElement.dataset.readerTheme,theme);
+      assert.equal(h.doc.documentElement.lang,locale);
+      assert.equal(h.doc.activeElement,h.picker);
+      assert.equal(h.win.location.href,before);assert.equal(h.historyCalls.length,historyCount);
+      assert.equal(h.original.textContent,original);assert.equal(h.query.value,'東京');
+    }
+  }
+  h.doc.documentElement.dataset.readerTheme='night';h.choose('ar');
+  assert.equal(h.appearance.getAttribute('aria-label'),MESSAGES.ar.switchToLightMode);
+  assert.equal(h.doc.documentElement.dataset.readerTheme,'night');assert.equal(h.doc.documentElement.dir,'rtl');
+  assert.deepEqual(h.sideEffects,[]);
 });
 
 test('popstate restores presentation from the historical URL without pushing another entry or touching preferences',t=>{
