@@ -48,5 +48,5 @@ test('organization form has explicit save, live reader preview and review-before
  const browser=read('src/organizations/browser.ts');assert.doesNotMatch(browser,/fetch\(|XMLHttpRequest|sendBeacon|innerHTML|outerHTML|eval\(|setInterval/u);assert.match(browser,/form.addEventListener\('input',invalidateRequest\)/);
 });
 test('organization public scripts exactly match reviewed compiled TypeScript',()=>{
- for(const file of ['setup','browser'])assert.equal(read(`public/organization-${file}.js`),read(`.build/src/organizations/${file}.js`).replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'').replaceAll("'./setup.js'","'./organization-setup.js'"));
+ for(const file of ['setup','browser'])assert.equal(read(`public/organization-${file}.js`),read(`.build/src/organizations/${file}.js`).replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'').replaceAll("'./setup.js'","'./organization-setup.js'").replaceAll("'../iceo/","'./"));
 });

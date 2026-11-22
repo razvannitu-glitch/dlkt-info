@@ -121,7 +121,7 @@ test('manual continuation awaits its page and focuses after final placement whil
  let nodes=[old],state={loading:false,error:null,page:{nextCursor:'next'},items:[old]};
  let placements=newsMasonryPositions(nodes.map(node=>node.height),2),language='en';
  const announcement={textContent:''};
- const context={document:{visibilityState:'visible',body:{dataset:{entryView:'start'}}},innerHeight:700,newsFilter:'all',newsPeriod:'today',newsInteractionRevision:0,knowledgeModeActive:()=>false,contextualCity:{id:'683506'},
+ const context={document:{visibilityState:'visible',body:{dataset:{entryView:'start'}}},innerHeight:700,newsFilter:'all',newsPeriod:'today',newsInteractionRevision:0,contextualCity:{id:'683506'},
   newsContinuation:{view:()=>state,next(){
    requests++;state={...state,loading:true};return new Promise(resolve=>{finishNext=items=>{state={...state,loading:false,items};resolve();};});
   }},
@@ -187,6 +187,8 @@ test('compiled inline rendering preserves22-plus1 cadence, append prefixes and u
    server:{page:{epoch:17,revision:9,startedAt:new Date(now).toISOString(),language:'en',cityId:'683506',countryCode:'RO',filter:'all',period:'today',day:{date:'2026-11-23'}}},
    now,language:'en',topCount:80,visible:[],host,document:{body:{dataset:{}}},
    contextualCity:{id:'683506',name:'Bucharest',countryCode:'RO'},inlineKnowledgeSeen:new Set(),inlineKnowledgeContext:'',inlineKnowledgeSelection:[],
+   pageItemByKey:new Map(originals.map(item=>[item.key,{kind:item.kind,key:item.key,category:item.category,card:originalCard(item)}])),
+   newsStorySourcesNode(){throw Error('Ungrouped originals must not create a source-group disclosure');},
    KNOWLEDGE_CARDS:catalog,selectInlineKnowledge,interleaveKnowledge,
    knowledgeCardNode:(card,scope)=>({fixtureKind:'knowledge',card,scope,dataset:{}}),
    cardNode:view=>newsNode(view.card),localCardNode:card=>newsNode(card),

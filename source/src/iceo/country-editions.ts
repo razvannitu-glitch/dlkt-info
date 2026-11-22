@@ -53,7 +53,7 @@ function validCountry(value:unknown):value is CountryEditionCountry {
  const country=value as Record<string,unknown>;
  return Object.keys(country).sort().join(',')==='code,name'&&typeof country.code==='string'
   &&/^[A-Z]{2}$/u.test(country.code)&&country.code!=='ZZ'&&typeof country.name==='string'
-  &&country.name.length>0&&country.name.length<=120&&country.name.trim()===country.name
+  &&country.name.trim().length>0&&country.name.length<=120
   &&!/[\u0000-\u001f\u007f<>\u202a-\u202e\u2066-\u2069]/u.test(country.name);
 }
 function validCoverage(value:unknown):value is CountryEditionCoverage {
@@ -81,10 +81,11 @@ function indexLanguage(index:typeof NEWS_DISCOVERY_INDEXES[number]):NewsSourceLa
  return edition?.languages.length===1?edition.languages[0]??null:null;
 }
 /** Pure presentation of a validated country and the current, matching page's aggregate counts.
+ * Trim reference-label whitespace (present in GeoNames BQ); preserve the catalog and every country option.
  * Unknown counts never become zero. This helper does not change the selected language or news order.
  */
 export function countryEditionProfile(country:CountryEditionCountry,language:Locale,coverage?:CountryEditionCoverage,navigatorLanguages:readonly string[]=[]):CountryEditionProfile {
- if(!validCountry(country)||localeFromPreference(language)!==language||!validBrowserLanguages(navigatorLanguages))throw Error('COUNTRY_EDITION_CONTEXT_INVALID');
+ if(!validCountry(country)||typeof language!=='string'||localeFromPreference(language)!==language||!validBrowserLanguages(navigatorLanguages))throw Error('COUNTRY_EDITION_CONTEXT_INVALID');
  if(coverage!==undefined&&!validCoverage(coverage))throw Error('COUNTRY_EDITION_COVERAGE_INVALID');
  const defaultLanguage=localeFromCountry(country.code,navigatorLanguages)??'en',likelyLanguage=likelyCountryLanguage(country.code);
  const defaultLanguageSupported=likelyLanguage!==null&&newsLanguageMatches(likelyLanguage,resolveLocale(likelyLanguage));
@@ -95,7 +96,7 @@ export function countryEditionProfile(country:CountryEditionCountry,language:Loc
  const state:CountryEditionState=counts&&counts.national+counts.local>0?'available'
   :configuredPublisherIds.length===0?'unconnected':counts?'currentNoArticles':'unknown';
  return Object.freeze({
-  countryCode:country.code,countryName:country.name,language,defaultLanguage,likelyLanguage,defaultLanguageSupported,
+  countryCode:country.code,countryName:country.name.trim(),language,defaultLanguage,likelyLanguage,defaultLanguageSupported,
   englishReadingOption:true,configuredPublisherIds,configuredIndexIds,
   countryEditionLanguages:uniqueSorted(countryEditions.flatMap(edition=>edition.languages)),
   state,coverage:counts,
@@ -106,6 +107,6 @@ export function countryEditionProfile(country:CountryEditionCountry,language:Loc
 export function countryEditionProfiles(countries:readonly CountryEditionCountry[],language?:Locale,navigatorLanguages:readonly string[]=[]):readonly CountryEditionProfile[] {
  if(!Array.isArray(countries)||countries.length>300||countries.some(country=>!validCountry(country))
   ||new Set(countries.map(country=>country.code)).size!==countries.length)throw Error('COUNTRY_EDITION_COUNTRIES_INVALID');
- if(language!==undefined&&localeFromPreference(language)!==language||!validBrowserLanguages(navigatorLanguages))throw Error('COUNTRY_EDITION_CONTEXT_INVALID');
+ if((language!==undefined&&(typeof language!=='string'||localeFromPreference(language)!==language))||!validBrowserLanguages(navigatorLanguages))throw Error('COUNTRY_EDITION_CONTEXT_INVALID');
  return Object.freeze(countries.map(country=>countryEditionProfile(country,language??localeFromCountry(country.code,navigatorLanguages)??'en',undefined,navigatorLanguages)));
 }

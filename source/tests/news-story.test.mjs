@@ -28,8 +28,9 @@ const response=value=>new Response(JSON.stringify(value),{status:200,headers:{'c
 function localOriginal(title,index=0,summary=''){
  const city=findCity('683506'),feed=CITY_NEWS_FEEDS[index];
  const url=feed.id==='bucharest-b365'?'https://b365.ro/stire-control-123456/':'https://buletin.de/bucuresti/stire-control-123456/';
- const body='<rss version="2.0"><channel><title>'+feed.title+'</title><link>'+feed.home+'</link><item><title>'+title+'</title><link>'+url+'</link><pubDate>'+new Date(NOW-10000).toUTCString()+'</pubDate>'+(summary?'<description>'+summary+'</description>':'')+'</item></channel></rss>';
- const parsed=parseLocalNews(body,feed.id,city,iso(NOW),NOW,{full:true});assert.equal(parsed.articles.length,1);
+ const body='<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/"><channel><title>'+feed.title+'</title><link>'+feed.home+'</link><item><title>'+title+'</title><link>'+url+'</link><pubDate>'+new Date(NOW-10000).toUTCString()+'</pubDate>'+(feed.licenseUrl?'<dc:creator>Autor Test</dc:creator>':'')+(summary?'<description>'+summary+'</description>':'')+'</item></channel></rss>';
+ const parsed=parseLocalNews(body,feed.id,city,iso(NOW),NOW,{full:true});assert.equal(parsed.articles.length,1);assert.equal(parsed.rejected,0);
+ if(feed.licenseUrl){assert.equal(parsed.articles[0].byline,'By Autor Test');assert.equal(parsed.articles[0].licenseUrl,feed.licenseUrl);}
  const card=newsCard(parsed.articles[0],city);return {kind:'local',key:'local:'+card.id,category:newsCategory(card),card};
 }
 const sign=value=>{
@@ -134,9 +135,10 @@ test('a large event exposes every original through signed bounded source pages w
  }
  assert.deepEqual(sizes,[20,20,20,1]);assert.equal(seen.length,65);assert.equal(new Set(seen.map(card=>card.sourceUrl)).size,65);
  assert.deepEqual(new Set(seen.map(card=>card.sourceUrl)),new Set(cards.map(card=>card.sourceUrl)));
- const oversized=Array.from({length:750},(_,index)=>report(1000+index,'COP31 talks discuss the draft agreement: source '+index,{summary:'Publisher report. '.repeat(50)}));
+ // Discovery originals have no excerpt: exceed the response budget through valid article volume.
+ const oversized=Array.from({length:1800},(_,index)=>report(1000+index,'COP31 talks discuss the draft agreement: source '+index));
  assert.ok(Buffer.byteLength(JSON.stringify(oversized))>NEWS_MAX_RESPONSE_BYTES);
- const bounded=await service(oversized).read(query());assert.equal(bounded.articleTotal,750);assert.equal(bounded.items[0].story.sourceTotal,750);
+ const bounded=await service(oversized).read(query());assert.equal(bounded.articleTotal,1800);assert.equal(bounded.items[0].story.sourceTotal,1800);
  assert.ok(Buffer.byteLength(JSON.stringify(bounded))<=NEWS_MAX_RESPONSE_BYTES);assert.ok(bounded.items[0].story.nextSourcesCursor);
 });
 

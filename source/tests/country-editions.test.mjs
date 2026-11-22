@@ -12,10 +12,10 @@ const configuredCountries=['AU','DE','FR','GB','HK','IE','IN','IT','JP','QA','RO
 
 test('every actual GeoNames country remains selectable regardless of configured publishers',t=>{
  const before=JSON.stringify(countries),profiles=countryEditionProfiles(countries);
- assert.ok(countries.length>200&&countries.length<=300);
+ assert.ok(countries.length>200&&countries.length<=300);assert.equal(countries.length,244);
  assert.equal(profiles.length,countries.length);assert.ok(Object.isFrozen(profiles));
  assert.deepEqual(profiles.map(profile=>profile.countryCode),countries.map(country=>country.code));
- assert.deepEqual(profiles.map(profile=>profile.countryName),countries.map(country=>country.name));
+ assert.deepEqual(profiles.map(profile=>profile.countryName),countries.map(country=>country.name.trim()));
  assert.equal(new Set(profiles.map(profile=>profile.countryCode)).size,countries.length);
  for(const profile of profiles){
   assert.equal(profile.language,localeFromCountry(profile.countryCode));assert.equal(profile.defaultLanguage,profile.language);
@@ -36,6 +36,18 @@ test('every actual GeoNames country remains selectable regardless of configured 
   unsupportedLikelyDefaults:profiles.filter(profile=>!profile.defaultLanguageSupported).map(profile=>({country:profile.countryCode,language:profile.likelyLanguage})),
   limitation:'Configured provenance is not live availability; CLDR likely language is not an official or exclusive national language.',
  }));
+});
+
+test('GeoNames BQ labels are trimmed at the profile boundary without changing or omitting countries',()=>{
+ const reference=country('BQ'),before=JSON.stringify(reference);
+ assert.equal(reference.name,'Bonaire, Saint Eustatius and Saba ');
+ const single=countryEditionProfile(reference,'en'),all=countryEditionProfiles(countries,'en');
+ assert.equal(single.countryName,'Bonaire, Saint Eustatius and Saba');
+ assert.equal(all.find(profile=>profile.countryCode==='BQ').countryName,single.countryName);
+ assert.equal(all.length,244);assert.deepEqual(all.map(profile=>profile.countryCode),countries.map(country=>country.code));
+ assert.equal(JSON.stringify(reference),before);
+ const leading=Object.freeze({code:'RO',name:' Romania '});
+ assert.equal(countryEditionProfile(leading,'ro').countryName,'Romania');assert.equal(leading.name,' Romania ');
 });
 
 test('country defaults are generic while the selected reading language and multilingual choices remain explicit',()=>{
@@ -110,7 +122,8 @@ test('country and coverage inputs are bounded, immutable and fail closed on malf
  assert.equal(JSON.stringify([reference,counts]),before);assert.notEqual(profile.coverage,counts);assert.ok(Object.isFrozen(profile.coverage));
  assert.throws(()=>profile.configuredPublisherIds.push('invented'));
  for(const invalid of [null,[],{}, {code:'ro',name:'Romania'},{code:'RO',name:''},{code:'ZZ',name:'Unknown'},
-  {code:'../RO',name:'Romania'},{code:'RO',name:'<script>'},{code:'RO',name:' Romania'},
+  {code:'../RO',name:'Romania'},{code:'RO',name:'<script>'},{code:'RO',name:'   '},
+  {code:'RO',name:'Romania\n'},{code:'RO',name:'Romania\u202e'},{code:'RO',name:'R'.repeat(121)},
   {code:'RO',name:'Romania',extra:true}]){
   assert.throws(()=>countryEditionProfile(invalid,'en'),/COUNTRY_EDITION_CONTEXT_INVALID/);
  }
@@ -119,7 +132,10 @@ test('country and coverage inputs are bounded, immutable and fail closed on malf
   {...zero,national:5001},{national:3000,local:2001,international:0}]){
   assert.throws(()=>countryEditionProfile(reference,'ro',invalid),/COUNTRY_EDITION_COVERAGE_INVALID/);
  }
- for(const language of ['it-IT','xx','constructor','',null])assert.throws(()=>countryEditionProfile(reference,language),/COUNTRY_EDITION_CONTEXT_INVALID/);
+ for(const language of ['it-IT','xx','constructor','',null,false,0,{},[]]){
+  assert.throws(()=>countryEditionProfile(reference,language),/COUNTRY_EDITION_CONTEXT_INVALID/);
+  assert.throws(()=>countryEditionProfiles(countries,language),/COUNTRY_EDITION_CONTEXT_INVALID/);
+ }
  assert.throws(()=>countryEditionProfiles([reference,reference]),/COUNTRY_EDITION_COUNTRIES_INVALID/);
  assert.throws(()=>countryEditionProfiles(Array.from({length:301},()=>reference)),/COUNTRY_EDITION_COUNTRIES_INVALID/);
  assert.throws(()=>countryEditionProfiles(countries,undefined,{}),/COUNTRY_EDITION_CONTEXT_INVALID/);

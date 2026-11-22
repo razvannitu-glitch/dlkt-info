@@ -125,7 +125,7 @@ test('period and calendar context are strict, signed and validated against the s
   assert.throws(()=>parseNewsPageRequest('/api/news-page'+query),/NEWS_PAGE_QUERY_INVALID/);
  await assert.rejects(service.read(request('recent',london.id,'en','all',page.nextCursor)),/NEWS_CONTEXT_MISMATCH/);
  const payload=JSON.parse(Buffer.from(page.nextCursor.split('.')[0],'base64url').toString('utf8'));
- assert.equal(payload.period,'today');assert.deepEqual(payload.day,page.day);assert.equal(payload.version,'news-cursor-4');
+ assert.equal(payload.period,'today');assert.deepEqual(payload.day,page.day);assert.equal(payload.version,'news-cursor-5');
  assert.equal(validNewsPage(page,NOW+1000),false,'a city-specific day needs its trusted city metadata');
  for(const mutate of [
   value=>{value.period='recent';},value=>{value.day.timeZone='Asia/Shanghai';},value=>{value.day.date='2026-11-21';},

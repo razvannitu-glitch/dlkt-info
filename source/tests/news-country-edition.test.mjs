@@ -105,7 +105,7 @@ test('the signed cursor binds national context and old cursor versions expire wi
  const london=city('London','GB'),turin=city('Torino','IT'),edition=epoch(Array.from({length:45},(_,i)=>article(i+1)));
  const service=new NewsPageService(new CorpusMemoryStore([edition]),KEY,()=>NOW+1000),page=await service.read(request('en',london.id));
  const [encoded]=page.nextCursor.split('.'),payload=JSON.parse(Buffer.from(encoded,'base64url').toString('utf8'));
- assert.equal(payload.version,'news-cursor-4');assert.equal(payload.countryCode,'GB');
+ assert.equal(payload.version,'news-cursor-5');assert.equal(payload.countryCode,'GB');assert.equal(payload.kind,'page');assert.equal(payload.storyKey,null);
  const sign=value=>{const body=Buffer.from(JSON.stringify(value)).toString('base64url'),key=createHmac('sha256',KEY).update('dlkt-info/news-page/cursor-key/v1').digest();
   return body+'.'+createHmac('sha256',key).update('dlkt-info/news-page/cursor/v1:'+body).digest('base64url');};
  const changed=sign({...payload,countryCode:'IT'});
@@ -115,6 +115,7 @@ test('the signed cursor binds national context and old cursor versions expire wi
  await assert.rejects(service.read(request('en',london.id,'all',sign({...old,version:'news-cursor-1',orderVersion:edition.corpus.orderVersion}))),/NEWS_EDITION_EXPIRED/);
  await assert.rejects(service.read(request('en',london.id,'all',sign({...payload,version:'news-cursor-2'}))),/NEWS_EDITION_EXPIRED/,'a pre-fix cursor cannot reuse its offset after language provenance changes');
  await assert.rejects(service.read(request('en',london.id,'all',sign({...payload,version:'news-cursor-3'}))),/NEWS_EDITION_EXPIRED/,'a pre-calendar cursor cannot reuse its offset under the new ordering policy');
+ await assert.rejects(service.read(request('en',london.id,'all',sign({...payload,version:'news-cursor-4'}))),/NEWS_EDITION_EXPIRED/,'an article-offset cursor cannot be reused after whole-edition story grouping');
  const next=await service.read(request('en',london.id,'all',page.nextCursor));
  assert.deepEqual(next.coverage,page.coverage);assert.equal(next.countryCode,page.countryCode);
  assert.equal(new Set([...page.items,...next.items].map(item=>item.key)).size,40);
@@ -122,10 +123,11 @@ test('the signed cursor binds national context and old cursor versions expire wi
 test('a first page retries planning once if a marginal source expires before the response',async()=>{
  const cards=Array.from({length:45},(_,index)=>article(index+1,{observed:index===0?NOW-3599000:NOW})),edition=epoch(cards);
  let ticks=0;const clock=()=>++ticks<4?NOW:NOW+2000;
- const service=new NewsPageService(new CorpusMemoryStore([edition]),KEY,clock),page=await service.read(request('en'));
+ const store=new CorpusMemoryStore([edition]),service=new NewsPageService(store,KEY,clock),page=await service.read(request('en'));
  assert.equal(page.startedAt,iso(NOW+2000));assert.equal(page.generatedAt,iso(NOW));assert.equal(page.total,44);
  assert.equal(page.items.some(item=>item.card.id===cards[0].id),false);assert.equal(page.expiresAt,iso(NOW+3600000));
- assert.ok(validNewsPage(page,NOW+2000));assert.ok(ticks<=5,'one bounded replan, no polling loop');
+ assert.ok(validNewsPage(page,NOW+2000));assert.equal(ticks,6,'one bounded replan plus the final payload freshness check');
+ assert.deepEqual(store.reads,[null],'the replan reuses the committed corpus without polling persistence');
 });
 
 test('existing corpus originals follow their article edition language without rewriting records or hashes',async()=>{
