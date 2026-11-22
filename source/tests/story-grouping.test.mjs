@@ -26,6 +26,29 @@ test('the observed Guardian and BBC COP31 headlines form one attributed thread w
  assert.equal(groupStories([evolved,second]).length,1);assert.equal(storyThreadKey(evolved),groups[0].key);
 });
 
+test('an explicitly identified summit in overtime joins its negotiation thread without absorbing employment or side-event overtime',()=>{
+ const reports=[card(1,guardian,{publisher:'The Guardian'}),card(2,bbc,{publisher:'BBC'}),card(3,'COP31 climate summit in Antalya, Turkey enters second day of overtime - follow live',{
+  publisher:'BBC',sourceUrl:'https://www.bbc.com/news/live/crly5w901n20t',date:'2026-11-22T08:39:29.014Z',
+ })];
+ const before=JSON.stringify(reports),group=groupStories(reports);assert.equal(group.length,1);assert.equal(group[0].related.length,2);
+ assert.equal(new Set(all(group[0]).map(record=>record.publisher)).size,2);assert.ok(reports.every(record=>storyThreadKey(record)===group[0].key));assert.equal(JSON.stringify(reports),before);
+ for(const pair of [['G20 summit runs into overtime','G20 leaders reach a draft agreement'],['COP32 conference enters another day of overtime','COP32 talks consider a new deal']]){
+  assert.equal(groupStories(pair.map((title,index)=>card(index+4,title))).length,1,pair.join(' / '));
+ }
+ for(const title of [
+  'COP31 summit workers enter second day of overtime',
+  'COP31 summit staff demand overtime pay',
+  'COP31 summit in Antalya staff shift enters overtime',
+  'COP31 summit dinner enters overtime',
+  'COP31 summit basketball game runs into overtime',
+  'Dinner at COP31 summit runs into overtime',
+  'Basketball game at COP31 summit in Antalya goes into overtime',
+  'COP31 summit enters overtime after a venue fire',
+  'COP32 climate summit in Antalya, Turkey enters second day of overtime',
+  'Climate summit in Antalya, Turkey enters second day of overtime',
+ ])assert.equal(groupStories([reports[0],card(9,title)]).length,2,title);
+});
+
 test('named-event identity survives reorder, source additions, date range and representative replacement',()=>{
  const first=card(1,guardian),second=card(2,bbc),earlier=card(3,'COP31 negotiations continue over the draft agreement',{date:'2026-11-17T08:00:00.000Z'});
  const identity=storyThreadKey(first);

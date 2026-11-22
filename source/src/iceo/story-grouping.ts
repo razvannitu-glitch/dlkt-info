@@ -63,9 +63,23 @@ const TICKETS=/\b(?:tickets?|ticketing|billets?|entradas|bilhetes|bilete)\b|チ�
 const OPENING=/\b(?:opening ceremony|ceremonie d'ouverture|ceremonia de apertura|cerimonia de abertura|eroffnungsfeier|ceremonia de deschidere)\b|開会式|开幕式|開幕式|개막식|حفل الافتتاح/u;
 const EXPLANATORY=/\b(?:anniversary|retrospective|documentary|documentaire|documental|documentario|biography|biographie|novel|roman|history of|anniversaire|aniversario|jahrestag|aniversare)\b|周年|回顧|纪录片|紀錄片|다큐멘터리/u;
 
-function summitSubject(title:string):string|null {
+/** The identified meeting itself overruns; employment hours or a side event do not establish this. */
+function meetingProgress(value:string):boolean {
+  const title=value.normalize('NFKC').replace(/\s+/gu,' ').trim();
+  if(/\b(?:workers?|staff|employees?|overtime pay|wages?|payroll|shifts?|working hours|hours worked)\b/iu.test(title))return false;
+  const match=/\b(?:summit|conference|meeting)(?:\s+(?:in|at)\s+([^.!?:;]{1,70}?))?\s+(?:enters?|continues?|runs?|goes?|heads?|extends?)(?:\s+(?:into|in|for|a|an|the|its|another|second|third|fourth|fifth|sixth|final|extra|day|days|hour|hours|of)){0,8}\s+(?:overtime|extra (?:day|days|hours?)|past (?:its |the )?deadline)\b/iu.exec(title);
+  if(!match)return false;
+  // "Dinner at COP31 summit runs ..." makes the summit a location, not the
+  // grammatical subject of the duration update.
+  if(/\b(?:at|during|inside|outside|near|within|around|alongside|beside|before|after|for|of)\b/iu.test(title.slice(0,match.index)))return false;
+  const location=match[1];
+  // An optional printed place clause may intervene, not a different grammatical
+  // subject such as "summit dinner" or "summit in Antalya staff shift".
+  return location===undefined||/^(?:the )?\p{Lu}[\p{L}\p{M}'’.-]*(?:[ ,]+\p{Lu}[\p{L}\p{M}'’.-]*){0,5}$/u.test(location);
+}
+function summitSubject(title:string,progress:boolean):string|null {
   // Competing activities are not a bridge between otherwise unrelated threads.
-  const subjects=[VENUE_INCIDENT.test(title)?'venue-incident':null,PROTEST.test(title)?'protests':null,NEGOTIATION.test(title)?'negotiations':null].filter((value):value is string=>value!==null);
+  const subjects=[VENUE_INCIDENT.test(title)?'venue-incident':null,PROTEST.test(title)?'protests':null,NEGOTIATION.test(title)||progress?'negotiations':null].filter((value):value is string=>value!==null);
   if(subjects.length>1)return null;
   if(subjects.length)return subjects[0]??null;
   return ATTENDANCE.test(title)?'attendance':SCHEDULE.test(title)?'schedule':null;
@@ -80,7 +94,7 @@ function numberedEventAnchor(card:EvidenceCard,title:string):ThreadAnchor|null {
   const summits=[...title.matchAll(/\b(cop|unga)\s*-?\s*(\d{1,3})\b/gu)].map(match=>`${match[1]}:${Number(match[2])}`);
   const annual=[...title.matchAll(/\b(g7|g8|g20|brics|asean|apec)\b/gu)].map(match=>`${match[1]}:${explicitYear(title,match[1]??'',year)}`);
   const meetings=[...new Set([...summits,...annual])];
-  if(meetings.length===1){const subject=summitSubject(title);if(subject)return{key:key('summit',meetings[0],subject),basis:'shared-event',strong:true};}
+  if(meetings.length===1){const subject=summitSubject(title,meetingProgress(card.title));if(subject)return{key:key('summit',meetings[0],subject),basis:'shared-event',strong:true};}
   if(meetings.length)return null;
   // Tournament edition + a unique activity, not a category-wide sports bucket.
   const tournament=/\b(?:fifa world cup|world cup|coupe du monde|copa del mundo|copa do mundo|weltmeisterschaft|campionatul mondial)\b|ワールドカップ|世界杯|世界盃|월드컵|كأس العالم/u.test(title)?'world-cup'
