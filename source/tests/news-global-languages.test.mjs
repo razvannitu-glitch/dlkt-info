@@ -13,7 +13,7 @@ const rss=(index,rows,language=index.language)=>`<rss xmlns:atom="http://www.w3.
 const html=(row,overrides={})=>`<html><head><link rel="canonical" href="${row.sourceUrl}"><script type="application/ld+json">${JSON.stringify({'@type':'NewsArticle',headline:row.title,url:row.sourceUrl,datePublished:date,...overrides})}</script></head><body>Excluded publisher body</body></html>`;
 
 test('reviewed source tags cover observed edition paths and never infer language or event place from a host alone',()=>{
-  assert.equal(NEWS_PUBLISHERS.length,72);assert.equal(NEWS_SOURCE_LANGUAGES.length,32);assert.ok(Object.isFrozen(NEWS_SOURCE_LANGUAGES));
+  assert.equal(NEWS_PUBLISHERS.length,73);assert.equal(NEWS_SOURCE_LANGUAGES.length,32);assert.ok(Object.isFrozen(NEWS_SOURCE_LANGUAGES));
   for(const [path,language] of [['de','de'],['pt-br','pt-BR'],['pt-002','pt-002'],['zh','zh-Hans'],['zh-hant','zh-Hant'],['fa-af','fa-AF'],['fa-ir','fa-IR'],['ro','ro'],['sw','sw'],['ur','ur']]){
     assert.equal(sourceLanguage(dwUrl(path)),language);
     const provenance=sourcePublicationContext(dwUrl(path));assert.equal(provenance.publisherCountryCode,'DE');assert.equal(provenance.countries,undefined);assert.equal(provenance.city,undefined);

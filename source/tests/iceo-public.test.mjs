@@ -8,8 +8,10 @@ test('ICEO public UI has exact palette, safe DOM and no personal network payload
  const css=read('public/iceo.css'),js=read('public/iceo.js'),html=read('public/iceo.html');
  assert.deepEqual([...new Set(css.match(/#[0-9a-f]{3,8}/gu))].sort(),['#000000','#f66061','#ffffff']);
  assert.doesNotMatch(js,/innerHTML|outerHTML|insertAdjacentHTML|localStorage|sessionStorage|document\.cookie|eval\s*\(/u);
- assert.match(js,/fetch\('\/api\/iceo'/u);assert.match(html,/Account and connection availability is shown in Info Wallet/u);assert.match(html,/External accounts require your authorization/u);assert.match(html,/Background personal delivery is not activated/u);
- assert.match(html,/https:\/\/world\.dlkt\.ee\//u);assert.match(js,/deltaAvailable/u);
+ assert.match(js,/fetch\('\/api\/iceo'/u);assert.match(html,/href="\/account"/u);assert.match(html,/href="\/wallet"/u);
+ assert.match(read('public/privacy.html'),/Connecting an available provider requires a separate OAuth authorization/u);
+ assert.match(read('public/terms.html'),/No paid checkout, automatic charge or scheduled account delivery is activated/u);
+ assert.doesNotMatch(html,/world\.dlkt\.ee|DLKT World/u);assert.match(js,/deltaAvailable/u);
 });
 test('ICEO public configuration ships exactly one daily public refresh and no private scheduled delivery',()=>{
  const c=JSON.parse(read('vercel.public.json'));assert.deepEqual(Object.keys(c.functions),['api/iceo.ts','api/insight.ts','api/edition.ts','api/account.ts','api/account-session.ts','api/local.ts','api/places.ts','api/card.ts','api/glance.ts','api/card-image.ts','api/wallet.ts','api/connections.ts','api/iceo-refresh.ts','api/share-archive.ts','api/article-photo.ts','api/news-page.ts']);assert.equal(c.functions['api/share-archive.ts'].maxDuration,60);assert.equal(c.functions['api/news-page.ts'].maxDuration,15);assert.equal(c.crons,undefined);assert.deepEqual(c.schedules,{'iceo-daily-top':{schedule:'*/2 * * * *',path:'/api/iceo-refresh',requestMethod:'GET',jitter:1}});assert.equal(c.outputDirectory,'public-launch');assert.ok(c.redirects.some(r=>r.source==='/mat/:path*'&&r.destination==='https://world.dlkt.ee/mat/:path*'));

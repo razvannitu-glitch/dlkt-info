@@ -161,7 +161,7 @@ test('readiness preserves exact catalog and catches refresh table, column, PUBLI
 });
 
 test('national news origins preserve every reviewed family and reject spoofed or mismatched publishers',async()=>{
-  assert.equal(NEWS_PUBLISHERS.length,72);
+  assert.equal(NEWS_PUBLISHERS.length,73);
   for(const publisher of NEWS_PUBLISHERS)for(const origin of publisher.origins){
     const value=(await db.query('select dlkt_info_private.valid_news_candidate_publisher($1,$2) allowed',[publisher.label,origin+'/news/reviewed-origin-check'])).rows[0].allowed;
     assert.equal(value,true,origin+' must remain valid');

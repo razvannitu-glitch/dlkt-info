@@ -13,8 +13,27 @@ test('all document element IDs are unique',()=>{const ids=all(n=>Boolean(n.attri
 test('personalisation is an initially closed labelled native dialog',()=>{const dialog=byId('personalise');assert.equal(dialog.name,'dialog');assert.equal(dialog.attribs.open,undefined);assert.equal(dialog.attribs['aria-labelledby'],'focus-title');assert.ok(byId('close-focus'));assert.match(js,/panel\.showModal\(\)/u);assert.match(js,/panel\.close\(\)/u);});
 test('exactly three primary modes; full source records remain accessible in More',()=>{const nav=all(n=>n.attribs?.class==='view-switch')[0];const buttons=DomUtils.findAll(n=>n.name==='button',nav.children);assert.deepEqual(buttons.map(b=>b.attribs['data-view']),['briefing','changes','saved']);const records=all(n=>n.attribs?.['data-view']==='records');assert.equal(records.length,1);assert.ok(DomUtils.textContent(byId('reader-more')).includes('Explore all records'));});
 test('personal settings controls retain labels and existing functional IDs',()=>{for(const id of['query','budget'])assert.ok(all(n=>n.name==='label'&&n.attribs.for===id).length===1);for(const id of['remember-focus','forget-focus','clear-device','confirm-clear','save-check','forget-check','download-reading-copy','download-edition'])assert.ok(byId(id));});
-test('data storage and coverage limitations stay present with conditional account availability',()=>{assert.match(html,/only in this browser/u);assert.match(html,/Account and connection availability is shown in Info Wallet/u);assert.match(html,/External accounts require your authorization/u);assert.match(html,/Background personal delivery is not activated/u);assert.match(html,/not full-document summaries/u);assert.match(html,/not the whole web/u);});
+test('data storage and coverage limitations remain explicit through the compact legal footer',()=>{
+ assert.match(html,/only in this browser/u);assert.match(html,/not full-document summaries/u);assert.match(html,/not the whole web/u);
+ const footer=all(n=>n.name==='footer'&&n.attribs?.class?.split(/\s+/u).includes('site-footer'))[0];assert.ok(footer);
+ const links=DomUtils.findAll(n=>n.name==='a',footer.children);
+ for(const route of ['/terms','/privacy','/sources'])assert.equal(links.filter(link=>link.attribs.href===route).length,1,route+' remains directly accessible in the footer');
+ const terms=readFileSync('public/terms.html','utf8'),privacy=readFileSync('public/privacy.html','utf8'),sources=readFileSync('public/sources.html','utf8');
+ assert.match(terms,/Public reading is currently free and does not start a subscription or a trial/u);
+ assert.match(terms,/No paid checkout, automatic charge or scheduled account delivery is activated/u);
+ assert.match(privacy,/My profile and Info Wallet use the same optional private preference record/u);
+ assert.match(privacy,/These actions are not automatic background sync or a merge/u);
+ assert.match(privacy,/Connecting an available provider requires a separate OAuth authorization/u);
+ assert.match(sources,/Extracted passages are selected passages, not a complete report/u);
+ assert.match(sources,/partial coverage of connected sources, not a search of every page on the web/u);
+});
 test('reduced motion and keyboard focus styling preserved',()=>{assert.match(css,/@media\(prefers-reduced-motion:reduce\)/u);assert.match(css,/:focus-visible/u);assert.match(html,/Skip to briefing/u);});
 test('source detail disclosure preserves unabridged titles and full dates behind translated labels',()=>{assert.match(js,/\[tr\('originalTitle'\),card.title\]/u);assert.match(js,/\[tr\('published'\),formatted\(card.date,card.dateLabel==='Document date'\)\]/u);assert.match(js,/originalText\(detail\)/u);assert.match(css,/-webkit-line-clamp:4/u);});
 test('form application exits alternate modes and no longer opens automatically on desktop',()=>{assert.match(js,/event.preventDefault\(\);changesView=false;savedView=false;mode='briefing'/u);assert.doesNotMatch(js,/min-width:901px/u);});
-test('reader adds no remote fonts or new API destinations',()=>{assert.doesNotMatch(html,/fonts\.google|use\.typekit|cdn\./u);assert.doesNotMatch(js,/https:\/\/api\./u);assert.match(html,/world\.dlkt\.ee/u);});
+test('reader adds no remote fonts or new API destinations and keeps real account navigation without DLKT World',()=>{
+ assert.doesNotMatch(html,/fonts\.google|use\.typekit|cdn\./u);assert.doesNotMatch(js,/https:\/\/api\./u);assert.doesNotMatch(html,/world\.dlkt\.ee|DLKT World/u);
+ for(const route of ['account','wallet']){
+  assert.ok(all(n=>n.name==='a'&&n.attribs?.href==='/'+route).length>0,'the reader links to /'+route);
+  assert.ok(readFileSync('public/'+route+'.html','utf8').length>0,'the linked '+route+' page is published');
+ }
+});
