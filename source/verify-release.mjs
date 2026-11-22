@@ -1064,7 +1064,7 @@ const walletPublic=JSON.parse(read('vercel.public.json'));
 if(!walletPublic.functions['api/wallet.ts']||!walletPublic.rewrites.some(rule=>rule.source==='/wallet'&&rule.destination==='/wallet.html'))throw new Error('RELEASE_WALLET_ROUTE');
 for(const file of ['src/wallet/contracts.ts','src/wallet/store.ts','src/wallet/providers.ts','src/wallet/events.ts','src/wallet/daily.ts','src/wallet/gmail.ts','src/wallet/browser.ts','src/wallet/home-browser.ts','api/wallet.ts','public/wallet.html','public/wallet-contracts.js','public/data-guards.js','public/wallet-providers.js','public/wallet-browser.js','public/wallet-home-browser.js'])if(!expected.has(file))throw new Error(`RELEASE_WALLET_FILE:${file}`);
 for(const file of ['public/wallet-gmail.js','public/wallet-store.js'])if(existsSync(file))throw new Error(`RELEASE_WALLET_PRIVATE_ASSET:${file}`);
-if(walletPublic.functions['api/connections.ts']?.maxDuration!==60||Object.keys(walletPublic.functions).length!==15||walletPublic.functions['api/article-photo.ts']?.maxDuration!==25||walletPublic.functions['api/share-archive.ts']?.maxDuration!==60||walletPublic.functions['api/iceo-refresh.ts']?.maxDuration!==60||JSON.stringify(walletPublic.schedules)!==JSON.stringify({'iceo-daily-top':{schedule:'*/2 * * * *',path:'/api/iceo-refresh',requestMethod:'GET',jitter:1}}))throw new Error('RELEASE_CONNECTIONS_ROUTE');
+if(walletPublic.functions['api/connections.ts']?.maxDuration!==60||Object.keys(walletPublic.functions).length!==16||walletPublic.functions['api/news-page.ts']?.maxDuration!==15||walletPublic.functions['api/article-photo.ts']?.maxDuration!==25||walletPublic.functions['api/share-archive.ts']?.maxDuration!==60||walletPublic.functions['api/iceo-refresh.ts']?.maxDuration!==60||JSON.stringify(walletPublic.schedules)!==JSON.stringify({'iceo-daily-top':{schedule:'*/2 * * * *',path:'/api/iceo-refresh',requestMethod:'GET',jitter:1}}))throw new Error('RELEASE_CONNECTIONS_ROUTE');
 for(const file of ['api/connections.ts','src/connections/types.ts','src/connections/config.ts','src/connections/crypto.ts','src/connections/store.ts','src/connections/providers.ts','src/connections/provider-http.ts','src/connections/service.ts','src/connections/browser.ts','public/connections-browser.js','public/connections-types.js','public/wallet-events.js','public/wallet.css'])if(!expected.has(file))throw new Error(`RELEASE_CONNECTIONS_FILE:${file}`);
 for(const file of ['public/connections-crypto.js','public/connections-store.js','public/connections-config.js','public/connections-service.js','public/connections-providers.js','public/connections-provider-http.js'])if(existsSync(file))throw new Error(`RELEASE_CONNECTIONS_PRIVATE_ASSET:${file}`);
 if(!read('public/iceo.html').includes('href="/wallet"')||!read('public/wallet.html').includes('/wallet-browser.js'))throw new Error('RELEASE_WALLET_ENTRY');
@@ -1076,7 +1076,7 @@ for(const file of ['public/share-content.js','public/content.js'])if(existsSync(
 for(const file of ['api/article-photo.ts','src/media/article-photo-source.ts','src/media/article-photo-raster.ts','src/media/article-photo-service.ts','src/media/article-photo-reference.ts','public/article-photo-reference.js'])if(!expected.has(file))throw new Error('RELEASE_ARTICLE_PHOTO_FILE:'+file);
 
 const migrationResult = execFileSync(process.execPath, ['tests/database/migration-smoke.mjs'], { encoding: 'utf8' }).trim();
-if (!migrationResult.includes('\"tables\":32')
+if (!migrationResult.includes('\"tables\":33')
   || !migrationResult.includes('\"companion_functions\":2')
   || !migrationResult.includes('\"acquisition_functions\":4')
   || !migrationResult.includes('\"trial_functions\":5')
@@ -1129,3 +1129,5 @@ console.log('DLKT_INFO_RELEASE_OK', JSON.stringify({
   palette: manifest.palette,
   files: Object.keys(manifest.files).length,
 }));
+
+for(const file of ['api/news-page.ts','src/iceo/news-corpus.ts','src/iceo/news-corpus-store.ts','src/iceo/news-page.ts','src/iceo/news-page-contracts.ts','src/iceo/news-continuation.ts','public/news-page-contracts.js','public/news-continuation.js','public/article-subject.js'])if(!expected.has(file))throw new Error('RELEASE_NEWS_CORPUS_FILE:'+file);

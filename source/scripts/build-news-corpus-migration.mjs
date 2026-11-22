@@ -41,9 +41,9 @@ function buildNewsCorpusMigration(files,sha256){
  const old=files['supabase/migrations/'+priorRevision+'.sql'];
  if(!old.includes(priorHash)||!old.includes(priorRevision))throw Error('PRIOR_READINESS_DRIFT');
  const refresh=files['scripts/continuous-refresh-store.sql'];
- const start=refresh.indexOf('create function public.dlkt_info_publish_public_snapshot('),end=refresh.indexOf('\nend $$;',start);
+ const start=refresh.indexOf('create function public.dlkt_info_publish_public_snapshot('),end=refresh.indexOf('\nend $;',start);
  if(start<0||end<start)throw Error('PUBLISH_FUNCTION_MISSING');
- let publish=refresh.slice(start,end+'\nend $$;'.length).replace(/^create function/u,'create or replace function');
+ let publish=refresh.slice(start,end+'\nend $;'.length).replace(/^create function/u,'create or replace function');
  const marker='  update dlkt_info_private.public_refresh_state set snapshot=p_snapshot';
  if(publish.split(marker).length!==2)throw Error('PUBLISH_HOOK_DRIFT');
  publish=publish.replace(marker,'  -- Publish the staged corpus and its private diagnostics under this same lease and revision.\n  perform dlkt_info_private.publish_news_corpus(p_fence,s.revision+1,g);\n'+marker);
@@ -102,6 +102,7 @@ function buildNewsCorpusMigration(files,sha256){
   let f=files[p].replaceAll(priorRevision,revision).replaceAll(priorHash,hash).replaceAll(oldHash,hash).replaceAll(priorVersion,version);
   for(const [k,before]of [['relations',32],['functions',58],['rls',20]])f=f.replaceAll(k+'Expected: '+before+', '+k+'Present: '+before+', '+k+'Total: '+before,k+'Expected: '+counts[k]+', '+k+'Present: '+counts[k]+', '+k+'Total: '+counts[k]);
   if(p==='verify-release.mjs')for(const [key,before]of [['relations',32],['functions',58],['rls',20]])f=f.replaceAll('"'+key+'": '+before,'"'+key+'": '+counts[key]);
+  if(p==='verify-release.mjs')f=f.replace(/(migrationResult[.]includes[^\n]+:)32/u,(_,prefix)=>prefix+'33');
   result[p]=f;
  }
  return {files:result,evidence:{revision,version,hash,counts,migrationSha256:sha256(migration)}};

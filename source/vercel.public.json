@@ -50,6 +50,9 @@
     },
     "api/article-photo.ts": {
       "maxDuration": 25
+    },
+    "api/news-page.ts": {
+      "maxDuration": 15
     }
   },
   "buildCommand": "node bootstrap.mjs",

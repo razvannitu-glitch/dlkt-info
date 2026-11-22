@@ -4,6 +4,7 @@ import path from 'node:path';
 import { ICEO_SOURCES } from '../.build/src/iceo/registry.js';
 import {NEWS_PUBLISHERS} from '../.build/src/iceo/news-sources.js';
 import {PUBLIC_EDITORIAL_CATEGORIES} from '../.build/src/iceo/editorial-categories.js';
+import {SCHEMA_MANIFEST_VERSION,DATABASE_READINESS_MIGRATION,EXPECTED_SCHEMA_FINGERPRINT} from '../.build/src/provisioning/readiness-manifest.js';
 
 const version = '0.9.46';
 const output = `RELEASE-${version}.json`;
@@ -72,7 +73,7 @@ const manifest = {
   provisioningControlVersion: 'dlkt-info-provisioning-control-2',
   systemIdentityVersion: 'dlkt-info-system-identity-1',
   databaseReadinessVersion: 'dlkt-info-database-readiness-2',
-  schemaManifestVersion: 'dlkt-info-schema-manifest-7',
+  schemaManifestVersion: SCHEMA_MANIFEST_VERSION,
   persistenceVersion: 'dlkt-info-persistence-2',
   identityVersion: 'dlkt-info-identity-1',
   serviceVersion: 'dlkt-info-service-1',
@@ -93,8 +94,8 @@ const manifest = {
   companionEntitiesMigration: '20261112221500_dlkt_info_companion_entities',
   activationHandoffMigration: '20261112233000_dlkt_info_activation_account_handoff',
   provisioningIdentityMigration: '20261113115256_dlkt_info_provisioning_identity_guard',
-  databaseReadinessMigration: '20261122174603_dlkt_info_news_coverage',
-  expectedSchemaFingerprint: '453dbf1779705cff24a46781bbdae8871db5d24af5c3b16a1c85d65af4fc19db',
+  databaseReadinessMigration: DATABASE_READINESS_MIGRATION,
+  expectedSchemaFingerprint: EXPECTED_SCHEMA_FINGERPRINT,
   reviewPublicationMode: 'human-review-private-no-auto-publication',
   revision: 'iceo-primary-mesh-1',
   createdAt: new Date().toISOString(),
