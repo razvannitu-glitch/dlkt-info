@@ -123,23 +123,26 @@ test('a selection between minimum and target states its target shortfall honestl
   const selection=selectContextualToday(Array.from({length:22},(_,index)=>fixture(index+1)),{countryCode:null,preferredTopics:[]},now);
   const copy=dailyEditionSummary(selection);assert.match(copy,/22 selected publications/);assert.match(copy,/Fewer than 30/);assert.doesNotMatch(copy,/Fewer than 20/);
 });
-test('homepage combines native local top and global publications before supporting records and refreshes only while visible',()=>{
+test('homepage merges all native articles with automatic pages and keeps operational records separate',()=>{
   const source=readFileSync('src/iceo/browser.ts','utf8');
   const body=source.slice(source.indexOf('function renderDiscovery():void'),source.indexOf('// Automatic location and saved choices'));
-  assert.match(body,/appendPublicEdition\(host,today,/);
-  assert.match(body,/publicEditionState\(today,\{snapshotState:snapshot\?\.state\?\?null,loading:loading\|\|!initialCheckStarted,failed:lastLoadFailed\}\)/);
-  assert.match(body,/retained source checks are not newly verified/);
-  assert.doesNotMatch(body,/awaitingLocal\s*\?\s*\[\]|localEdition:true/);
-  assert.ok(body.indexOf('for(const item of local.topNews)')<body.indexOf('appendPublicEdition('));
-  assert.ok(body.indexOf('appendPublicEdition(')<body.indexOf('for(const item of local.supporting)'));
-  assert.match(body,/selectHomeLanguage\(contextualLocal,contextualCity,now,language\)/);
-  assert.match(body,/selectNewsLanguage\(snapshot.cards,language\)/);
-  assert.match(body,/home-local-heading/);assert.match(body,/node\.dataset\.homeLocalId=item\.id/);
-  assert.match(body,/aria-busy',String\(loading\)/);assert.match(body,/nextDailyEditionDelay\(today,now\)/);
-  assert.match(source,/if\(document.visibilityState!=='visible'\)return/);
-  assert.match(source,/clearTimeout\(discoveryExpiry\);clearTimeout\(publicRefreshTimer\)/);
-  assert.match(source,/AbortSignal.timeout\(45000\)/);
+  assert.match(body,/selectNewsStream\(today,local.cards,now,newsFilter\)/u);
+  assert.match(body,/newsStreamPage\(stream,continuationCount\)/u);
+  assert.match(body,/observeNewsStream\(sentinel,\(\)=>showNewsPage\(false\)\)/u);
+  assert.match(body,/showNewsPage\(true\)/u);assert.match(body,/home-news-category/u);
+  assert.match(body,/newsCategoryLabel\(category.id,language\)/u);assert.match(body,/stream.counts\[category.id\]/u);
+  assert.match(body,/publicEditionState\(today,\{snapshotState:snapshot\?\.state\?\?null,loading:loading\|\|!initialCheckStarted,failed:lastLoadFailed\}\)/u);
+  assert.match(body,/retained source checks are not newly verified/u);
+  assert.ok(body.indexOf('for(const [index,item] of visible.entries())')<body.indexOf('for(const item of local.supporting)'));
+  assert.match(body,/selectHomeLanguage\(contextualLocal,contextualCity,now,language\)/u);
+  assert.match(body,/selectNewsLanguage\(snapshot.cards,language\)/u);
+  assert.match(body,/home-local-heading/u);assert.match(body,/node\.dataset\.homeLocalId=item\.card\.id/u);
+  assert.match(body,/aria-busy',String\(loading\)/u);assert.match(body,/nextDailyEditionDelay\(today,now\)/u);
+  assert.match(source,/if\(document.visibilityState!=='visible'\)return/u);
+  assert.match(source,/clearTimeout\(discoveryExpiry\);clearTimeout\(publicRefreshTimer\)/u);
+  assert.match(source,/AbortSignal.timeout\(45000\)/u);
 });
+
 test('the individual topic forms expose each of the twenty stable category IDs once',()=>{
   const html=readFileSync('public/iceo.html','utf8');
   for(const name of ['topic','daily-topic']){
