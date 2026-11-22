@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 
 const scope='html:is([data-reader-theme=prism],[data-reader-theme=night])';
-const cards=':is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card';
-const toneCards=':is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card';
+const cards=':is(#discovery-cards,#home-local-cards,#world-cards,#cards)>.info-card.editorial-card';
+const toneCards=':is(#discovery-cards,#home-local-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card';
 const normalise=value=>value.replace(/\s+/gu,' ').trim();
 
 // Read the shipped declarations; no second copy of the palette or its opacity values.
