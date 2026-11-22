@@ -95,6 +95,6 @@ for(const name of ['catalog','locale','browser','reading-messages','media-messag
  const compiled=readFileSync(`.build/src/i18n/${name}.js`,'utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'').replaceAll('../iceo/','./').replaceAll("'./reading-messages.js'","'./i18n-reading-messages.js'").replaceAll("'./media-messages.js'","'./i18n-media-messages.js'").replaceAll("'./catalog.js'","'./i18n-catalog.js'").replaceAll("'./locale.js'","'./i18n-locale.js'");
  writeFileSync(`public/i18n-${name}.js`,compiled);
 }
-for(const name of ['iceo','explore-browser','follow-browser','daily-browser']){
+for(const name of ['iceo','explore-browser','follow-browser','daily-browser','glance-browser']){
  const js=readFileSync(`public/${name}.js`,'utf8').replaceAll("'../i18n/browser.js'","'./i18n-browser.js'").replaceAll("'../i18n/locale.js'","'./i18n-locale.js'");writeFileSync(`public/${name}.js`,js);
 }
