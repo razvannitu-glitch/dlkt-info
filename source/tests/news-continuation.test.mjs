@@ -5,6 +5,7 @@ import {NewsContinuation,continuationItems} from '../.build/src/iceo/news-contin
 import {NEWS_CATEGORIES} from '../.build/src/iceo/news-taxonomy.js';
 import {cardContent} from '../.build/src/iceo/card-validation.js';
 import {findCity} from '../.build/src/local/cities.js';
+import {newsDayWindow} from '../.build/src/iceo/news-day.js';
 const now=Date.parse('2026-11-22T20:00:00.000Z'),iso=new Date(now).toISOString();
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const context={language:'en',cityId:null,filter:'all'};
@@ -19,8 +20,8 @@ function item(index){
 }
 function page(offset=0,total=60,overrides={}){
  const counts=Object.fromEntries(['other',...NEWS_CATEGORIES.map(c=>c.id)].map(id=>[id,id==='04000000'?total:0]));
- return {version:'dlkt-news-page-2',epoch:'101',revision:3,generatedAt:iso,startedAt:iso,expiresAt:new Date(now+900000).toISOString(),
-  language:'en',cityId:null,countryCode:null,coverage:{national:0,local:0,international:total},filter:'all',items:Array.from({length:Math.min(20,total-offset)},(_,i)=>item(offset+i)),total,filteredTotal:total,counts,
+ return {version:'dlkt-news-page-3',epoch:'101',revision:3,generatedAt:iso,startedAt:iso,expiresAt:new Date(now+900000).toISOString(),
+  language:'en',cityId:null,countryCode:null,period:'recent',day:null,coverage:{national:0,local:0,international:total},filter:'all',items:Array.from({length:Math.min(20,total-offset)},(_,i)=>item(offset+i)),total,filteredTotal:total,counts,
   nextCursor:offset+20<total?cursor(offset+20):null,...overrides};
 }
 const response=value=>new Response(JSON.stringify(value),{status:200,headers:{'content-type':'application/json'}});
@@ -128,4 +129,26 @@ test('country and full-edition coverage are immutable across continuation pages'
  }
  const noCity=new NewsContinuation(async()=>response(valid(0)),()=>now);
  await noCity.start({...context,cityId:london.id});assert.equal(noCity.view().error,'invalid');
+});
+
+test('Today and Recent are separate contexts; changing period cancels the old request and resets the cursor',async()=>{
+ const jobs=[];const model=new NewsContinuation((url,init)=>new Promise(resolve=>jobs.push({url,signal:init.signal,resolve})),()=>now);
+ const today={...context,period:'today'},day=newsDayWindow(now);
+ const pending=model.start(today);assert.equal(new URL(jobs[0].url,'https://www.dlkt.ee').searchParams.get('period'),'today');
+ const changed=model.start({...context,period:'recent'});assert.equal(jobs[0].signal.aborted,true);
+ assert.equal(new URL(jobs[1].url,'https://www.dlkt.ee').searchParams.has('cursor'),false);
+ jobs[1].resolve(response(page(0,40)));await changed;
+ jobs[0].resolve(response(page(0,20,{period:'today',day})));await pending;
+ assert.equal(model.view().page.period,'recent');assert.equal(model.view().items.length,20);
+ const next=model.next();assert.equal(new URL(jobs[2].url,'https://www.dlkt.ee').searchParams.get('cursor'),cursor(20));
+ jobs[2].resolve(response(page(20,40)));await next;assert.equal(model.view().items.length,40);
+ const reset=model.start(today);assert.equal(new URL(jobs[3].url,'https://www.dlkt.ee').searchParams.has('cursor'),false);
+ jobs[3].resolve(response(page(0,20,{period:'today',day})));await reset;
+ assert.equal(model.view().error,null);assert.equal(model.view().page.period,'today');assert.equal(model.view().items.length,20);
+});
+test('a mismatched period response cannot replace or append to the selected Today edition',async()=>{
+ const today={...context,period:'today'},day=newsDayWindow(now);
+ let calls=0;const model=new NewsContinuation(async()=>response(calls++===0?page(0,40,{period:'today',day}):page(20,40)),()=>now);
+ await model.start(today);const prefix=[...model.view().items];assert.equal(model.view().error,null);
+ await model.next();assert.equal(model.view().error,'invalid');assert.deepEqual(model.view().items,prefix);
 });

@@ -1,0 +1,80 @@
+import {isNewsCategoryId,type NewsCategoryId} from './news-taxonomy.js';
+
+export const KNOWLEDGE_VERSION='dlkt-knowledge-1' as const;
+export type KnowledgeLanguage='en'|'ro'|'it';
+export type KnowledgeFilter='all'|NewsCategoryId;
+export interface KnowledgeCopy {readonly title:string;readonly explanation:string;readonly connection:string}
+export interface KnowledgeCard {
+ readonly kind:'knowledge';readonly id:string;readonly revision:number;readonly category:NewsCategoryId;
+ readonly topic:Readonly<Record<KnowledgeLanguage,string>>;
+ readonly source:Readonly<{publisher:string;url:string}>;
+ readonly copy:Readonly<Record<KnowledgeLanguage,KnowledgeCopy>>;
+ readonly reviewedAt:string;readonly reviewBy:string;
+}
+export const DLKT_PLUS_PLAN=Object.freeze({
+ id:'dlkt-plus',currency:'EUR',monthlyMinor:699,trialDays:7,status:'planned',billingAvailable:false,
+} as const);
+const languages:readonly KnowledgeLanguage[]=['en','ro','it'];
+const origins=new Set([
+ 'https://science.nasa.gov','https://home.cern','https://www.kew.org',
+ 'https://oceanservice.noaa.gov','https://weather.metoffice.gov.uk','https://www.qrcode.com',
+ 'https://www.nps.gov','https://www.ecb.europa.eu','https://www.olympics.com','https://www.afb.org',
+]);
+function object(value:unknown):value is Record<string,unknown>{return typeof value==='object'&&value!==null&&!Array.isArray(value);}
+function text(value:unknown,max:number):value is string{return typeof value==='string'&&value.trim().length>0&&value.length<=max&&!/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f<>]/u.test(value);}
+function instant(value:unknown):value is string{
+ if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value))return false;
+ const ms=Date.parse(value);return Number.isFinite(ms)&&new Date(ms).toISOString()===value;
+}
+export function safeKnowledgeSource(input:unknown):input is string{
+ if(typeof input!=='string'||input.length>1000||/[\s\\]/u.test(input))return false;
+ try{const url=new URL(input);return url.protocol==='https:'&&origins.has(url.origin)&&!url.username&&!url.password&&!url.port&&!url.search&&!url.hash&&url.pathname.length>1&&url.href===input;}catch{return false;}
+}
+export function validKnowledgeCard(value:unknown):value is KnowledgeCard {
+ if(!object(value)||value.kind!=='knowledge'||typeof value.id!=='string'||!/^[a-z][a-z0-9-]{2,79}$/u.test(value.id)||
+  !Number.isSafeInteger(value.revision)||Number(value.revision)<1||!isNewsCategoryId(value.category)||
+  !object(value.source)||!text(value.source.publisher,100)||!safeKnowledgeSource(value.source.url)||
+  !instant(value.reviewedAt)||!instant(value.reviewBy)||Date.parse(value.reviewBy)<=Date.parse(value.reviewedAt)||
+  Date.parse(value.reviewBy)-Date.parse(value.reviewedAt)>366*86400000||!object(value.copy)||!object(value.topic))return false;
+ return languages.every(language=>{
+  const copy=value.copy as Record<string,unknown>,topic=value.topic as Record<string,unknown>,entry=copy[language];
+  return object(entry)&&text(entry.title,160)&&text(entry.explanation,600)&&text(entry.connection,240)&&text(topic[language],60);
+ });
+}
+export function validateKnowledgeCatalog(input:unknown):readonly KnowledgeCard[]{
+ if(!Array.isArray(input)||input.length>5000)throw Error('KNOWLEDGE_CATALOG_INVALID');
+ const ids=new Set<string>(),cards:KnowledgeCard[]=[];
+ for(const value of input){
+  if(!validKnowledgeCard(value)||ids.has(value.id))throw Error('KNOWLEDGE_CARD_INVALID');
+  ids.add(value.id);cards.push(value);
+ }
+ return cards;
+}
+export function knowledgeLanguage(locale:string):KnowledgeLanguage{
+ const root=locale.toLowerCase().split(/[-_]/u)[0];return root==='ro'||root==='it'?root:'en';
+}
+function score(value:string):number{let hash=2166136261;for(const c of value){hash=Math.imul(hash^c.charCodeAt(0),16777619);}return hash>>>0;}
+/** Stable category rounds. The finite catalogue is never recycled to imitate new facts. */
+export function selectKnowledgeCards(cards:readonly KnowledgeCard[],filter:KnowledgeFilter,now:number,seed:string):readonly KnowledgeCard[]{
+ if(filter!=='all'&&!isNewsCategoryId(filter))throw Error('KNOWLEDGE_CATEGORY_INVALID');
+ if(!Number.isFinite(now)||typeof seed!=='string'||seed.length>100)throw Error('KNOWLEDGE_CONTEXT_INVALID');
+ const valid=validateKnowledgeCatalog(cards).filter(card=>Date.parse(card.reviewedAt)<=now&&now<Date.parse(card.reviewBy)&&(filter==='all'||card.category===filter));
+ const groups=new Map<NewsCategoryId,KnowledgeCard[]>();
+ for(const card of valid){const group=groups.get(card.category)??[];group.push(card);groups.set(card.category,group);}
+ for(const group of groups.values())group.sort((a,b)=>score(seed+a.id)-score(seed+b.id)||a.id.localeCompare(b.id));
+ const result:KnowledgeCard[]=[];let round=0,last:NewsCategoryId|null=null;
+ while(groups.size){
+  const order=[...groups.keys()].sort((a,b)=>score(seed+round+a)-score(seed+round+b)||a.localeCompare(b));
+  if(order.length>1&&order[0]===last){const first=order.shift();if(first)order.push(first);}
+  for(const category of order){const group=groups.get(category),card=group?.shift();if(card){result.push(card);last=category;}if(!group?.length)groups.delete(category);}
+  round++;
+ }
+ return result;
+}
+export function knowledgeShareUrl(card:KnowledgeCard,language:KnowledgeLanguage):string {
+ if(!validKnowledgeCard(card)||!languages.includes(language))throw Error('KNOWLEDGE_SHARE_INVALID');
+ const url=new URL('https://www.dlkt.ee/');url.searchParams.set('lang',language);url.hash='know/'+card.id;return url.href;
+}
+export function knowledgeTargetFromHash(hash:string):string|null{
+ const match=/^#know\/([a-z][a-z0-9-]{2,79})$/u.exec(hash);return match?.[1]??null;
+}

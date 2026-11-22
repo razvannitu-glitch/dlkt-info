@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {setupGlance} from '../.build/src/glance/browser.js';
 import {keyThing,currentLocalCards,forecastRange} from '../.build/src/glance/presentation.js';
-import {GLANCE_VERSION,eligiblePublication,validGlance} from '../.build/src/glance/contracts.js';
+import {GLANCE_VERSION,eligiblePublication,validGlance,validFx} from '../.build/src/glance/contracts.js';
 import {sourceLanguage} from '../.build/src/iceo/news-sources.js';
 import {findCity} from '../.build/src/local/cities.js';
 import {currentLocalSnapshot} from '../.build/src/local/contracts.js';
@@ -111,10 +111,10 @@ async function harness(t){
   HTMLElement:ElementFixture,Element:ElementFixture,Node:ElementFixture,CustomEvent:CustomEventFixture,Option:OptionFixture,innerHeight:800,
   matchMedia:()=>({matches:false,addEventListener(){}}),ResizeObserver:class{observe(){}},MutationObserver:class{observe(){}},
   requestAnimationFrame:()=>0,cancelAnimationFrame:()=>{}}))install(name,value);
- const originalNow=Date.now;Date.now=()=>now;
+ const originalNow=Date.now;let clock=now;Date.now=()=>clock;
  t.after(async()=>{win.dispatchEvent(new Event('pagehide'));await tick();Date.now=originalNow;for(const [name,descriptor] of previous){if(descriptor)Object.defineProperty(globalThis,name,descriptor);else delete globalThis[name];}});
  setupGlance();await tick();
- return{doc,win,ids,requests,writes,
+ return{doc,win,ids,requests,writes,forex:fx,setTime(value){clock=value;},
   selectLocal(snapshot){doc.dispatchEvent(new CustomEventFixture('dlkt:city-selected',{detail:{city,restored:false,estimated:true}}));doc.dispatchEvent(new CustomEventFixture('dlkt:local-snapshot',{detail:{city,snapshot}}));},
   language(locale){win.location.searchParams.set('lang',locale);doc.dispatchEvent(new CustomEventFixture('dlkt:language-changed',{detail:{locale}}));}};
 }
@@ -139,6 +139,30 @@ test('the static utilities preserve weather and ECB evidence across language cha
  assert.equal(value('glance-weather-value'),weather);assert.equal(value('glance-forex-value'),currency);
  h.ids.get('glance-detail').close();assert.strictEqual(h.doc.activeElement,h.ids.get('glance-weather-quick'),'closing a static signal restores its invoking control');
  h.selectLocal(null);assert.equal(h.ids.get('glance-weather-quick').hidden,true,'failed local verification removes the main forecast command');assert.equal(h.ids.get('glance-forex-quick').hidden,false);
+ assert.strictEqual(h.doc.activeElement,h.ids.get('glance-read'),'unavailable evidence returns a focused utility to the stable details action');
  assert.equal(h.ids.get('glance-ticker-track').children.length,0);assert.equal(h.requests.length,1,'language and city evidence changes only reproject the existing currency response');
  assert.deepEqual(h.writes,[]);assert.equal(JSON.stringify(local),before);
+});
+
+test('expired utility controls transfer focus before hiding and never take it from another control',async t=>{
+ for(const choice of ['weather','forex','elsewhere'])await t.test(choice,async sub=>{
+  const h=await harness(sub),local=localFixture(),before=JSON.stringify(local);h.selectLocal(local);
+  const weather=h.ids.get('glance-weather-quick'),forex=h.ids.get('glance-forex-quick');
+  const utility=choice==='forex'?forex:weather;
+  assert.equal(utility.hidden,false);
+  const elsewhere=h.ids.get('glance-city'),target=choice==='elsewhere'?elsewhere:utility;target.focus();
+  let hidden=utility.hidden;
+  Object.defineProperty(utility,'hidden',{configurable:true,get(){return hidden;},set(value){
+   if(value&&!hidden)assert.notStrictEqual(h.doc.activeElement,utility,'focus must leave the expiring command before it becomes hidden');
+   hidden=value;
+  }});
+  const expiry=choice==='forex'?now+8*86400000:Date.parse(local.cards.find(card=>card.kind==='forecast').validTo);
+  if(choice==='forex')assert.equal(validFx(h.forex,expiry),false,'the existing currency evidence is expired');
+  h.setTime(expiry);h.win.dispatchEvent(new Event('pageshow'));
+  assert.equal(utility.hidden,true);
+  assert.strictEqual(h.doc.activeElement,choice==='elsewhere'?elsewhere:h.ids.get('glance-read'));
+  h.ids.get('glance-read').click();assert.equal(h.ids.get('glance-list').open,true,'details stay available when references expire');
+  assert.equal(h.requests.length,1,'expiry rendering does not start another acquisition');
+  assert.deepEqual(h.writes,[]);assert.equal(JSON.stringify(local),before);
+ });
 });

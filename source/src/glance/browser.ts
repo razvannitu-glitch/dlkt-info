@@ -44,8 +44,11 @@ export function setupGlance():void {
   tile('glance-forex',n!==undefined?`1 EUR = ${new Intl.NumberFormat('en-GB',{maximumFractionDigits:4}).format(n)} ${q}`:busy?'Checking ECB…':'Unavailable',n!==undefined&&fx?`ECB reference · ${date(fx.date)}`:'Reference rates · not live quotes');
   const notice=cards.find(c=>c.kind==='transport-notice'),headsup=get<HTMLButtonElement>('glance-headsup');headsup.hidden=!notice;headsup.textContent=notice?`Local heads-up · ${notice.title}`:'';
   const weatherQuick=get<HTMLButtonElement>('glance-weather-quick'),forexQuick=get<HTMLButtonElement>('glance-forex-quick');
-  weatherQuick.hidden=!preferences.weather||!forecast||!range;weatherQuick.textContent=(locale==='ro'?'Vreme':locale==='it'?'Meteo':'Weather')+' · '+(range??'');weatherQuick.title=get<HTMLElement>('glance-weather-note').textContent??'';
-  forexQuick.hidden=!preferences.forex||n===undefined;forexQuick.textContent=n!==undefined?'ECB · 1 EUR = '+new Intl.NumberFormat(locale,{maximumFractionDigits:4}).format(n)+' '+q:'';forexQuick.title=get<HTMLElement>('glance-forex-note').textContent??'';
+  const weatherHidden=!preferences.weather||!forecast||!range,forexHidden=!preferences.forex||n===undefined;
+  // Preserve keyboard position before an expired or unavailable utility leaves the toolbar.
+  if(document.activeElement===weatherQuick&&weatherHidden||document.activeElement===forexQuick&&forexHidden)read.focus({preventScroll:true});
+  weatherQuick.hidden=weatherHidden;weatherQuick.textContent=(locale==='ro'?'Vreme':locale==='it'?'Meteo':'Weather')+' · '+(range??'');weatherQuick.title=get<HTMLElement>('glance-weather-note').textContent??'';
+  forexQuick.hidden=forexHidden;forexQuick.textContent=n!==undefined?'ECB · 1 EUR = '+new Intl.NumberFormat(locale,{maximumFractionDigits:4}).format(n)+' '+q:'';forexQuick.title=get<HTMLElement>('glance-forex-note').textContent??'';
   read.textContent=locale==='ro'?'Vreme si curs':locale==='it'?'Meteo e cambi':'Weather & rates';
   get<HTMLElement>('glance-empty').hidden=preferences.weather||preferences.forex;
   refresh.disabled=busy||localBusy;if(detail.open)renderDetail();clearTimeout(timer);if(document.visibilityState==='visible')timer=setTimeout(render,nextGlanceDelay(cards,[],fx??null,now));

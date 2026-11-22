@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {parseDocument,DomUtils} from 'htmlparser2';
 import {tickerGeometry,TICKER_SPEED} from '../.build/src/glance/ticker.js';
 test('ticker groups cover narrow and wide viewports at the same slow reading speed',()=>{
  for(const [viewport,sequence] of [[320,987.25],[1280,987.25],[1920,255.5],[320,31.75]]){
@@ -20,4 +21,17 @@ test('ordinary utilities retain a static reading path and do not initialize an a
  assert.doesNotMatch(readFileSync('public/iceo.css','utf8'),/\.glance-pause/u);
  for(const id of ['glance-weather','glance-forex','glance-weather-quick','glance-forex-quick','glance-headsup','glance-list','glance-screen-summary'])assert.equal(html.split(`id="${id}"`).length-1,1);
  assert.doesNotMatch(html,/<marquee|>LIVE<|>BREAKING</iu);
+ const document=parseDocument(html),findId=(id,children=document.children)=>DomUtils.findAll(element=>element.attribs?.id===id,children);
+ const section=findId('today-glance')[0],drawer=findId('glance-list')[0];assert.ok(section);assert.ok(drawer);
+ const heading=DomUtils.findAll(element=>element.attribs?.class?.split(/\s+/u).includes('glance-heading'),section.children)[0];assert.ok(heading);
+ const utilities=DomUtils.findAll(element=>element.attribs?.class?.split(/\s+/u).includes('glance-utilities'),section.children)[0];assert.ok(utilities);
+ assert.equal(findId('glance-read',heading.children).length,1,'the stable details action stays in the main toolbar');
+ assert.equal(findId('glance-read',utilities.children).length,0,'an unavailable utility does not leave a lone second-row command');
+ assert.deepEqual(utilities.children.filter(element=>element.name==='button').map(element=>element.attribs.id),['glance-weather-quick','glance-forex-quick']);
+ for(const id of ['glance-weather-quick','glance-forex-quick'])assert.notEqual(findId(id,utilities.children)[0].attribs.hidden,undefined,'unverified values begin hidden');
+ assert.equal(findId('glance-status',section.children).length,0,'technical source status does not create a third toolbar row');
+ assert.equal(findId('glance-status',drawer.children).length,1,'source availability remains visible in the detail drawer');
+ assert.equal(findId('glance-read')[0].attribs['aria-describedby'],'glance-status');
+ assert.equal(findId('glance-locate',heading.children)[0].attribs['aria-controls'],'place-dialog');
+ for(const id of ['glance-date','glance-city','reader-language','reader-theme-toggle'])assert.equal(findId(id,heading.children).length,1);
 });
