@@ -1,0 +1,21 @@
+name: Verify Italian publisher source
+on:
+  push:
+    branches:
+      - "codex/source-check-*"
+permissions:
+  contents: read
+jobs:
+  source-receipt:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Read fixed public RSS and two canonical metadata records
+        run: node scripts/verify-italian-source.mjs
