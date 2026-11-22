@@ -4,11 +4,16 @@ import {discoverNewsWithDiagnostics,type NewsCandidate} from './news-discovery.j
 import type {NewsDiagnostics} from './news-diagnostics.js';
 import {createNewsCandidateStore} from './news-store.js';
 import {newsBackoffFetch} from './news-backoff.js';
-import {buildNewsCorpus,collectCorpusLocalNews,type NewsCorpus} from './news-corpus.js';
+import {buildNewsCorpus,collectCorpusLocalNews,type NewsCorpus,type NewsCorpusLocal} from './news-corpus.js';
 import {createNewsCorpusStore} from './news-corpus-store.js';
 
 export interface EditorialCollection {readonly snapshot:IceoSnapshot;readonly corpus:NewsCorpus;readonly diagnostics:NewsDiagnostics}
 interface EditorialData {readonly full:IceoSnapshot;readonly diagnostics:NewsDiagnostics}
+/** Completion time belongs to the union; original source observation times stay intact. */
+export function finalizeEditorialCollection(full:IceoSnapshot,local:readonly NewsCorpusLocal[],diagnostics:NewsDiagnostics,completed:number):EditorialCollection{
+ const snapshot:IceoSnapshot=Object.freeze({...full,generatedAt:new Date(completed).toISOString()});
+ return Object.freeze({snapshot:fitPublicSnapshot(snapshot),corpus:buildNewsCorpus(snapshot,local,completed),diagnostics});
+}
 /** Public news discovery and official records share one read-only catalog; no private profile enters it. */
 async function collectEditorialData(
  fetcher:typeof fetch=fetch,clock:()=>number=Date.now,officialLoad:(()=>Promise<IceoSnapshot>)|undefined=undefined,
@@ -56,8 +61,7 @@ export function publicEditorialCollection(signal:AbortSignal,previousSnapshot?:I
   const [collected,local]=await Promise.all([collectEditorialData(fetch,Date.now,undefined,process.env,signal,retained),collectCorpusLocalNews(signal)]);
   signal.throwIfAborted();
   // Generation describes this completed union. Individual source observation times are never rewritten.
-  const completed=Date.now(),full:IceoSnapshot=Object.freeze({...collected.full,generatedAt:new Date(completed).toISOString()});
-  return Object.freeze({snapshot:fitPublicSnapshot(full),corpus:buildNewsCorpus(full,local,completed),diagnostics:collected.diagnostics});
+  return finalizeEditorialCollection(collected.full,local,collected.diagnostics,Date.now());
  })().finally(()=>{pendingCollection=undefined;});
  return pendingCollection;
 }

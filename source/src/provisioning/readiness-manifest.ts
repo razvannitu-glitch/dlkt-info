@@ -1,15 +1,15 @@
 export const DATABASE_READINESS_VERSION = 'dlkt-info-database-readiness-2' as const;
-export const SCHEMA_MANIFEST_VERSION = 'dlkt-info-schema-manifest-7' as const;
+export const SCHEMA_MANIFEST_VERSION = 'dlkt-info-schema-manifest-8' as const;
 export const DATABASE_READINESS_RPC = 'dlkt_info_read_database_readiness' as const;
-export const DATABASE_READINESS_MIGRATION = '20261122174603_dlkt_info_news_coverage' as const;
+export const DATABASE_READINESS_MIGRATION = '20261122200813_dlkt_info_news_corpus' as const;
 // SHA-256 of UTF-8 serializeSchemaManifest(); object/array order is part of this versioned contract.
-export const EXPECTED_SCHEMA_FINGERPRINT = '453dbf1779705cff24a46781bbdae8871db5d24af5c3b16a1c85d65af4fc19db' as const;
+export const EXPECTED_SCHEMA_FINGERPRINT = 'ef03f90d229d089f8871c64b996994c79c65d0e1e3a0f8e2b0bb08dc2d6f6dec' as const;
 export const EXPECTED_SCHEMA_COUNTS = Object.freeze({
-  "relations": 32,
-  "functions": 58,
-  "publicFunctions": 27,
-  "privateFunctions": 31,
-  "rls": 20,
+  "relations": 33,
+  "functions": 67,
+  "publicFunctions": 30,
+  "privateFunctions": 37,
+  "rls": 21,
   "policies": 29,
   "triggers": 34
 } as const);
@@ -46,7 +46,8 @@ export const EXPECTED_SCHEMA_MANIFEST = Object.freeze({
     "public.dlkt_info_shared_cards",
     "public.dlkt_info_news_candidates",
     "dlkt_info_private.public_refresh_state",
-    "dlkt_info_private.public_refresh_runs"
+    "dlkt_info_private.public_refresh_runs",
+    "dlkt_info_private.news_corpus_epochs"
   ],
   "functions": [
     "dlkt_info_private.append_event(uuid, uuid, text, text, text, jsonb)",
@@ -106,7 +107,16 @@ export const EXPECTED_SCHEMA_MANIFEST = Object.freeze({
     "public.dlkt_info_read_public_snapshot()",
     "public.dlkt_info_claim_public_refresh(uuid, jsonb)",
     "public.dlkt_info_publish_public_snapshot(uuid, bigint, jsonb, text)",
-    "public.dlkt_info_fail_public_refresh(uuid, bigint, text)"
+    "public.dlkt_info_fail_public_refresh(uuid, bigint, text)",
+    "dlkt_info_private.valid_news_diagnostics(jsonb, timestamp with time zone)",
+    "dlkt_info_private.news_fold(text)",
+    "dlkt_info_private.news_local_anchors(text, text)",
+    "dlkt_info_private.valid_news_local_article(jsonb, jsonb, timestamp with time zone)",
+    "dlkt_info_private.valid_news_corpus(jsonb, timestamp with time zone)",
+    "dlkt_info_private.publish_news_corpus(bigint, bigint, timestamp with time zone)",
+    "public.dlkt_info_stage_news_corpus(uuid, bigint, jsonb, text, jsonb)",
+    "public.dlkt_info_read_news_corpus(bigint)",
+    "public.dlkt_info_find_news_corpus_article(text, text, text, bigint)"
   ],
   "publicFunctions": [
     "public.dlkt_info_claim_delivery_jobs(text, integer, timestamp with time zone, integer)",
@@ -135,7 +145,10 @@ export const EXPECTED_SCHEMA_MANIFEST = Object.freeze({
     "public.dlkt_info_read_public_snapshot()",
     "public.dlkt_info_claim_public_refresh(uuid, jsonb)",
     "public.dlkt_info_publish_public_snapshot(uuid, bigint, jsonb, text)",
-    "public.dlkt_info_fail_public_refresh(uuid, bigint, text)"
+    "public.dlkt_info_fail_public_refresh(uuid, bigint, text)",
+    "public.dlkt_info_stage_news_corpus(uuid, bigint, jsonb, text, jsonb)",
+    "public.dlkt_info_read_news_corpus(bigint)",
+    "public.dlkt_info_find_news_corpus_article(text, text, text, bigint)"
   ],
   "privateFunctions": [
     "dlkt_info_private.append_event(uuid, uuid, text, text, text, jsonb)",
@@ -168,7 +181,13 @@ export const EXPECTED_SCHEMA_MANIFEST = Object.freeze({
     "dlkt_info_private.valid_news_candidate_publisher(text, text)",
     "dlkt_info_private.valid_news_candidate(jsonb, timestamp with time zone)",
     "dlkt_info_private.require_public_refresh_writer()",
-    "dlkt_info_private.valid_public_refresh_snapshot(jsonb, timestamp with time zone)"
+    "dlkt_info_private.valid_public_refresh_snapshot(jsonb, timestamp with time zone)",
+    "dlkt_info_private.valid_news_diagnostics(jsonb, timestamp with time zone)",
+    "dlkt_info_private.news_fold(text)",
+    "dlkt_info_private.news_local_anchors(text, text)",
+    "dlkt_info_private.valid_news_local_article(jsonb, jsonb, timestamp with time zone)",
+    "dlkt_info_private.valid_news_corpus(jsonb, timestamp with time zone)",
+    "dlkt_info_private.publish_news_corpus(bigint, bigint, timestamp with time zone)"
   ],
   "rls": [
     "dlkt_info_private.internal_delta_jobs",
@@ -190,7 +209,8 @@ export const EXPECTED_SCHEMA_MANIFEST = Object.freeze({
     "public.dlkt_info_shared_cards",
     "public.dlkt_info_news_candidates",
     "dlkt_info_private.public_refresh_state",
-    "dlkt_info_private.public_refresh_runs"
+    "dlkt_info_private.public_refresh_runs",
+    "dlkt_info_private.news_corpus_epochs"
   ],
   "policies": [
     "public.dlkt_info_briefing_cards.dlkt_info_briefing_cards_select_own:SELECT:authenticated",
@@ -268,7 +288,10 @@ export const EXPECTED_SCHEMA_MANIFEST = Object.freeze({
       "public.dlkt_info_read_public_snapshot()",
       "public.dlkt_info_claim_public_refresh(uuid, jsonb)",
       "public.dlkt_info_publish_public_snapshot(uuid, bigint, jsonb, text)",
-      "public.dlkt_info_fail_public_refresh(uuid, bigint, text)"
+      "public.dlkt_info_fail_public_refresh(uuid, bigint, text)",
+      "public.dlkt_info_stage_news_corpus(uuid, bigint, jsonb, text, jsonb)",
+      "public.dlkt_info_read_news_corpus(bigint)",
+      "public.dlkt_info_find_news_corpus_article(text, text, text, bigint)"
     ],
     "publicAuthenticated": [
       "public.dlkt_info_next_delivery_at(text, time without time zone, smallint[], timestamp with time zone)",
@@ -281,7 +304,10 @@ export const EXPECTED_SCHEMA_MANIFEST = Object.freeze({
       "public.dlkt_info_read_public_snapshot()",
       "public.dlkt_info_claim_public_refresh(uuid, jsonb)",
       "public.dlkt_info_publish_public_snapshot(uuid, bigint, jsonb, text)",
-      "public.dlkt_info_fail_public_refresh(uuid, bigint, text)"
+      "public.dlkt_info_fail_public_refresh(uuid, bigint, text)",
+      "public.dlkt_info_stage_news_corpus(uuid, bigint, jsonb, text, jsonb)",
+      "public.dlkt_info_read_news_corpus(bigint)",
+      "public.dlkt_info_find_news_corpus_article(text, text, text, bigint)"
     ],
     "publicService": [
       "public.dlkt_info_claim_delivery_jobs(text, integer, timestamp with time zone, integer)",
@@ -310,7 +336,10 @@ export const EXPECTED_SCHEMA_MANIFEST = Object.freeze({
       "public.dlkt_info_read_public_snapshot()",
       "public.dlkt_info_claim_public_refresh(uuid, jsonb)",
       "public.dlkt_info_publish_public_snapshot(uuid, bigint, jsonb, text)",
-      "public.dlkt_info_fail_public_refresh(uuid, bigint, text)"
+      "public.dlkt_info_fail_public_refresh(uuid, bigint, text)",
+      "public.dlkt_info_stage_news_corpus(uuid, bigint, jsonb, text, jsonb)",
+      "public.dlkt_info_read_news_corpus(bigint)",
+      "public.dlkt_info_find_news_corpus_article(text, text, text, bigint)"
     ],
     "privateAnon": [],
     "privateAuthenticated": [
@@ -373,7 +402,10 @@ export const EXPECTED_SCHEMA_MANIFEST = Object.freeze({
       "public.dlkt_info_read_public_snapshot()",
       "public.dlkt_info_claim_public_refresh(uuid, jsonb)",
       "public.dlkt_info_publish_public_snapshot(uuid, bigint, jsonb, text)",
-      "public.dlkt_info_fail_public_refresh(uuid, bigint, text)"
+      "public.dlkt_info_fail_public_refresh(uuid, bigint, text)",
+      "public.dlkt_info_stage_news_corpus(uuid, bigint, jsonb, text, jsonb)",
+      "public.dlkt_info_read_news_corpus(bigint)",
+      "public.dlkt_info_find_news_corpus_article(text, text, text, bigint)"
     ],
     "publicInvoker": [
       "public.dlkt_info_next_delivery_at(text, time without time zone, smallint[], timestamp with time zone)"
@@ -411,7 +443,13 @@ export const EXPECTED_SCHEMA_MANIFEST = Object.freeze({
       "dlkt_info_private.valid_news_candidate_publisher(text, text)",
       "dlkt_info_private.valid_news_candidate(jsonb, timestamp with time zone)",
       "dlkt_info_private.require_public_refresh_writer()",
-      "dlkt_info_private.valid_public_refresh_snapshot(jsonb, timestamp with time zone)"
+      "dlkt_info_private.valid_public_refresh_snapshot(jsonb, timestamp with time zone)",
+      "dlkt_info_private.valid_news_diagnostics(jsonb, timestamp with time zone)",
+      "dlkt_info_private.news_fold(text)",
+      "dlkt_info_private.news_local_anchors(text, text)",
+      "dlkt_info_private.valid_news_local_article(jsonb, jsonb, timestamp with time zone)",
+      "dlkt_info_private.valid_news_corpus(jsonb, timestamp with time zone)",
+      "dlkt_info_private.publish_news_corpus(bigint, bigint, timestamp with time zone)"
     ]
   },
   "schemaUsage": {
@@ -1577,6 +1615,75 @@ export const EXPECTED_SCHEMA_MANIFEST = Object.freeze({
       },
       "sourceRegistryCount": 51,
       "unclassifiedShares": "Reviewed publisher URL and exact identity; headline-only; optional verified homepage signal"
+    }
+  },
+  "newsCorpusPermissions": {
+    "relations": [
+      "dlkt_info_private.news_corpus_epochs"
+    ],
+    "tableRoles": {
+      "PUBLIC": [],
+      "anon": [],
+      "authenticated": [],
+      "service_role": []
+    },
+    "policies": [],
+    "explicitColumnAcls": [],
+    "fixedFunctionSearchPath": "",
+    "writerAuthentication": "Existing purpose-bound x-dlkt-share-write header on all corpus RPCs",
+    "maximumCorpusBytes": 8388608,
+    "maximumArticles": 5000,
+    "maximumEpochs": 64,
+    "epochRetentionSeconds": 3600,
+    "immutableEpoch": true,
+    "atomicSnapshotCorpusAndDiagnostics": true,
+    "leaseAndFenceRequired": true,
+    "diagnostics": {
+      "version": "dlkt-news-diagnostics-1",
+      "maximumBytes": 65536,
+      "maximumGroups": 256,
+      "privateColumns": [
+        "public_refresh_state.news_diagnostics",
+        "public_refresh_runs.news_diagnostics",
+        "news_corpus_epochs.diagnostics"
+      ],
+      "publiclyReadable": false
+    },
+    "validity": {
+      "globalPublishedHours": 24,
+      "globalObservedSeconds": 3600,
+      "localPublishedHours": 72,
+      "localCheckedSeconds": 300,
+      "rightsReviewRequired": true
+    },
+    "page": {
+      "version": "dlkt-news-page-1",
+      "maximumItems": 20,
+      "orderVersion": "iptc17-rounds-started-20261122",
+      "signedCursor": "HMAC with separate domain derived from existing writer key",
+      "pins": [
+        "epoch",
+        "digest",
+        "startedAt",
+        "language",
+        "city",
+        "filter",
+        "orderVersion",
+        "offset",
+        "expiry"
+      ],
+      "publicRequestCollectsSources": false
+    },
+    "articleSubject": {
+      "basis": "publisher-jsonld",
+      "canonicalArticleUrlRequired": true,
+      "maximumSections": 8,
+      "maximumKeywords": 12,
+      "maximumTermCodepoints": 80,
+      "normalization": "NFC, single whitespace, no markup or control characters",
+      "uniqueArrays": true,
+      "arrayOrderHashed": true,
+      "optionalForExistingRevisions": true
     }
   }
 } as const);

@@ -2,7 +2,7 @@ import {createHmac,timingSafeEqual} from 'node:crypto';
 import {localeFromPreference,type Locale} from '../i18n/locale.js';
 import {findCity} from '../local/cities.js';
 import {newsCard} from '../local/service.js';
-import {newsFeed,NEWS_WINDOW_MS} from '../local/news-policy.js';
+import {newsFeed,NEWS_WINDOW_MS,validLocalNewsArticle} from '../local/news-policy.js';
 import {ICEO_SOURCES} from './registry.js';
 import {selectContextualToday} from './contextual-today.js';
 import {newsLanguageMatches,selectNewsLanguage} from './news-sources.js';
@@ -38,15 +38,15 @@ export function parseNewsPageRequest(input:string|URL):NewsPageRequest {
 }
 interface Cursor {
  readonly version:'news-cursor-1';readonly orderVersion:typeof NEWS_ORDER_VERSION;readonly epoch:string;readonly revision:number;readonly digest:string;
- readonly language:Locale;readonly cityId:string|null;readonly filter:NewsStreamFilter;readonly after:number;readonly expiresAt:string;
+ readonly language:Locale;readonly cityId:string|null;readonly filter:NewsStreamFilter;readonly after:number;readonly startedAt:string;readonly expiresAt:string;
 }
 function validCursor(value:unknown):value is Cursor {
- return object(value)&&exact(value,['version','orderVersion','epoch','revision','digest','language','cityId','filter','after','expiresAt'])
+ return object(value)&&exact(value,['version','orderVersion','epoch','revision','digest','language','cityId','filter','after','startedAt','expiresAt'])
   &&value.version==='news-cursor-1'&&value.orderVersion===NEWS_ORDER_VERSION&&validNewsEpochId(value.epoch)
   &&typeof value.revision==='number'&&Number.isSafeInteger(value.revision)&&value.revision>0&&typeof value.digest==='string'&&HASH.test(value.digest)
   &&localeFromPreference(value.language)!==null&&(value.cityId===null||validNewsCityId(value.cityId))&&validNewsStreamFilter(value.filter)
   &&typeof value.after==='number'&&Number.isSafeInteger(value.after)&&value.after>=NEWS_SERVER_PAGE_SIZE&&value.after<5000&&value.after%NEWS_SERVER_PAGE_SIZE===0
-  &&stamp(value.expiresAt);
+  &&stamp(value.startedAt)&&stamp(value.expiresAt)&&Date.parse(value.startedAt)<Date.parse(value.expiresAt);
 }
 interface OrderedEdition {readonly epoch:NewsCorpusEpoch;readonly items:readonly NewsPageItem[];readonly counts:Readonly<Record<string,number>>;readonly expiresAt:string}
 function itemRecord(item:NewsStreamItem):NewsPageItem {
@@ -80,19 +80,22 @@ export class NewsPageService implements NewsPageReader {
   if(actual.length!==expected.length||actual.toString('base64url')!==signature||!timingSafeEqual(actual,expected))throw new NewsPageError('NEWS_CURSOR_INVALID');
   let value:unknown;
   try{const bytes=Buffer.from(encoded,'base64url');if(bytes.toString('base64url')!==encoded)throw Error('base64');value=JSON.parse(bytes.toString('utf8')) as unknown;}catch{throw new NewsPageError('NEWS_CURSOR_INVALID');}
+  if(object(value)&&value.version==='news-cursor-1'&&value.orderVersion!==NEWS_ORDER_VERSION)throw new NewsPageError('NEWS_EDITION_EXPIRED');
   if(!validCursor(value))throw new NewsPageError('NEWS_CURSOR_INVALID');
   return value;
  }
- private ordered(epoch:NewsCorpusEpoch,query:NewsPageRequest):OrderedEdition {
-  const key=JSON.stringify([epoch.epoch,epoch.digest,epoch.corpus.orderVersion,query.language,query.cityId]),cached=this.orders.get(key);
+ private ordered(epoch:NewsCorpusEpoch,query:NewsPageRequest,startedAt:string):OrderedEdition {
+  const key=JSON.stringify([epoch.epoch,epoch.digest,epoch.corpus.orderVersion,query.language,query.cityId,startedAt]),cached=this.orders.get(key);
   if(cached)return cached;
   if(epoch.corpus.orderVersion!==NEWS_ORDER_VERSION)throw new NewsPageError('NEWS_EDITION_EXPIRED');
-  const at=Date.parse(epoch.generatedAt),today=selectContextualToday(selectNewsLanguage(epoch.corpus.cards,query.language),{countryCode:null,preferredTopics:[]},at);
+  const at=Date.parse(startedAt);
+  const current=epoch.corpus.cards.filter(card=>itemExpires({kind:'global',key:'article:'+card.id,category:null,card})>at);
+  const today=selectContextualToday(selectNewsLanguage(current,query.language),{countryCode:null,preferredTopics:[]},at);
   const local=epoch.corpus.local.filter(entry=>entry.city.id===query.cityId).flatMap(entry=>entry.snapshot.articles
-   .filter(article=>newsLanguageMatches(newsFeed(article.sourceId)?.language??null,query.language)).map(article=>newsCard(article,entry.city)));
+   .filter(article=>validLocalNewsArticle(article,entry.city,at)&&newsLanguageMatches(newsFeed(article.sourceId)?.language??null,query.language)).map(article=>newsCard(article,entry.city)));
   const selection=selectNewsStream(today,local,at,'all',JSON.stringify([NEWS_ORDER_VERSION,epoch.epoch,query.language,query.cityId]));
   const items=Object.freeze(selection.items.map(itemRecord));
-  const expires=Math.min(Date.parse(epoch.expiresAt),at+NEWS_CORPUS_MAX_AGE_MS,...items.map(itemExpires));
+  const expires=Math.min(Date.parse(epoch.expiresAt),Date.parse(epoch.generatedAt)+NEWS_CORPUS_MAX_AGE_MS,...items.map(itemExpires));
   const result={epoch,items,counts:selection.counts,expiresAt:new Date(expires).toISOString()};
   if(this.orders.size>=16)this.orders.delete(this.orders.keys().next().value??'');
   this.orders.set(key,result);return result;
@@ -106,14 +109,16 @@ export class NewsPageService implements NewsPageReader {
   try{epoch=await this.store.read(cursor?.epoch);}catch{throw new NewsPageError('NEWS_CORPUS_UNAVAILABLE');}
   if(!epoch)throw new NewsPageError(cursor?'NEWS_EDITION_EXPIRED':'NEWS_CORPUS_UNAVAILABLE');
   if(cursor&&(epoch.epoch!==cursor.epoch||epoch.revision!==cursor.revision||epoch.digest!==cursor.digest))throw new NewsPageError('NEWS_EDITION_EXPIRED');
-  const edition=this.ordered(epoch,query),completed=this.clock();
+  const startedAt=cursor?.startedAt??new Date(this.clock()).toISOString();
+  if(Date.parse(startedAt)<Date.parse(epoch.generatedAt)-5000||Date.parse(startedAt)>this.clock()+5000)throw new NewsPageError('NEWS_CURSOR_INVALID');
+  const edition=this.ordered(epoch,query,startedAt),completed=this.clock();
   if(Date.parse(edition.expiresAt)<=completed||cursor&&cursor.expiresAt!==edition.expiresAt)throw new NewsPageError('NEWS_EDITION_EXPIRED');
   const filtered=edition.items.filter(item=>query.filter==='all'||(item.category??'other')===query.filter),after=cursor?.after??0;
   if(after>filtered.length||cursor&&after===filtered.length)throw new NewsPageError('NEWS_CURSOR_INVALID');
   const items=filtered.slice(after,after+NEWS_SERVER_PAGE_SIZE),next=after+items.length;
   const nextCursor=next<filtered.length?this.sign({version:'news-cursor-1',orderVersion:NEWS_ORDER_VERSION,epoch:epoch.epoch,revision:epoch.revision,digest:epoch.digest,
-   language:query.language,cityId:query.cityId,filter:query.filter,after:next,expiresAt:edition.expiresAt}):null;
-  const page:NewsPage={version:NEWS_PAGE_VERSION,epoch:epoch.epoch,revision:epoch.revision,generatedAt:epoch.generatedAt,expiresAt:edition.expiresAt,
+   language:query.language,cityId:query.cityId,filter:query.filter,after:next,startedAt,expiresAt:edition.expiresAt}):null;
+  const page:NewsPage={version:NEWS_PAGE_VERSION,epoch:epoch.epoch,revision:epoch.revision,generatedAt:epoch.generatedAt,startedAt,expiresAt:edition.expiresAt,
    language:query.language,cityId:query.cityId,filter:query.filter,items,total:edition.items.length,filteredTotal:filtered.length,counts:edition.counts,nextCursor};
   const city=query.cityId===null?undefined:findCity(query.cityId)??undefined;
   if(!validNewsPage(page,completed,city))throw new NewsPageError('NEWS_CORPUS_UNAVAILABLE');

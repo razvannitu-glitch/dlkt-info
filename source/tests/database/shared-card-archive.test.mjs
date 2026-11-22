@@ -180,3 +180,25 @@ test('extended readiness is exact and rejects new RPCs, archive ACL drift, polic
   for(const [sql,check] of cases){await db.exec('begin');try{await db.exec(sql);const value=await read();assert.equal(value.ready,false,sql);assert.equal(value.checks[check],false,sql);assert.equal(value.activationReceipt,null);}finally{await db.exec('reset role;rollback');}}
   assert.equal((await read()).ready,true);
 });
+
+
+test('publisher subject metadata has identical JS and PostgreSQL integrity semantics',async()=>{
+ const base=card(),metadata=(sections,keywords=[])=>({basis:'publisher-jsonld',articleUrl:base.sourceUrl,sections,keywords});
+ for(const subject of [metadata(['Economy']),metadata(['Sport','Economy']),metadata(['😀'.repeat(80)]),metadata([],['Markets'])]){
+  const value=card({articleSubject:subject});
+  assert.equal(validArchiveCard(value),true);
+  const result=(await db.query('select dlkt_info_private.valid_share_archive_card($1::jsonb) valid,dlkt_info_private.share_archive_content($1::jsonb) content',[JSON.stringify(value)])).rows[0];
+  assert.equal(result.valid,true);assert.equal(result.content,JSON.stringify(cardContent(value)));
+ }
+ for(const subject of [metadata(['Economy','Economy']),metadata(['x'.repeat(81)]),metadata(['😀'.repeat(81)]),
+  metadata(['ab'+String.fromCharCode(65279)+'cd']),metadata(['ab'+String.fromCharCode(9)+'cd']),metadata(['Two  spaces']),
+  {...metadata(['Economy']),articleUrl:base.sourceUrl+'/other'},{...metadata(['Economy']),token:'private'}]){
+  const value=card({articleSubject:subject});
+  assert.equal(validArchiveCard(value),false);
+  assert.equal((await db.query('select dlkt_info_private.valid_share_archive_card($1::jsonb) valid',[JSON.stringify(value)])).rows[0].valid,false);
+ }
+ const changed=card({articleSubject:metadata(['Economy'])});changed.contentHash=base.contentHash;
+ assert.equal((await db.query('select dlkt_info_private.valid_share_archive_card($1::jsonb) valid',[JSON.stringify(changed)])).rows[0].valid,false);
+ const previous=(await db.query('select dlkt_info_private.valid_share_archive_card($1::jsonb) valid,dlkt_info_private.share_archive_content($1::jsonb) content',[JSON.stringify(base)])).rows[0];
+ assert.equal(previous.valid,true);assert.equal(previous.content,JSON.stringify(cardContent(base)));
+});

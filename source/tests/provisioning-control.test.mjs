@@ -8,8 +8,8 @@ const URL = `https://${REF}.supabase.co`;
 const KEY = `sb_publishable_${'a'.repeat(32)}`;
 const INSTANCE = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const OTHER_INSTANCE = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
-const FINGERPRINT = '453dbf1779705cff24a46781bbdae8871db5d24af5c3b16a1c85d65af4fc19db';
-const READINESS_MIGRATION = '20261122174603_dlkt_info_news_coverage';
+const FINGERPRINT = 'ef03f90d229d089f8871c64b996994c79c65d0e1e3a0f8e2b0bb08dc2d6f6dec';
+const READINESS_MIGRATION = '20261122200813_dlkt_info_news_corpus';
 const RECEIPT = createHash('sha256').update(`${INSTANCE}:${FINGERPRINT}:${READINESS_MIGRATION}`).digest('hex');
 const READY_ENV = Object.freeze({
   DLKT_INFO_SUPABASE_PROJECT_REF: REF,
@@ -36,9 +36,9 @@ const IDENTITY = Object.freeze({
   publicCardsEnabled: false,
 });
 const COUNTS = Object.freeze({
-  relationsExpected: 32, relationsPresent: 32, relationsTotal: 32,
-  functionsExpected: 58, functionsPresent: 58, functionsTotal: 58,
-  rlsExpected: 20, rlsPresent: 20, rlsTotal: 20,
+  relationsExpected: 33, relationsPresent: 33, relationsTotal: 33,
+  functionsExpected: 67, functionsPresent: 67, functionsTotal: 67,
+  rlsExpected: 21, rlsPresent: 21, rlsTotal: 21,
   policiesExpected: 29, policiesPresent: 29, policiesTotal: 29,
   triggersExpected: 34, triggersPresent: 34, triggersTotal: 34,
 });
@@ -111,7 +111,7 @@ test('manifest v6 fingerprint is reproducible from its exact versioned serializa
   } = await import('../.build/src/provisioning/readiness-manifest.js');
   assert.equal(DATABASE_READINESS_VERSION, 'dlkt-info-database-readiness-2');
   assert.equal(DATABASE_READINESS_MIGRATION, READINESS_MIGRATION);
-  assert.equal(SCHEMA_MANIFEST_VERSION, 'dlkt-info-schema-manifest-7');
+  assert.equal(SCHEMA_MANIFEST_VERSION, 'dlkt-info-schema-manifest-8');
   const bytes = JSON.stringify({ version: SCHEMA_MANIFEST_VERSION, manifest: EXPECTED_SCHEMA_MANIFEST });
   assert.equal(serializeSchemaManifest(), bytes);
   assert.equal(createHash('sha256').update(bytes, 'utf8').digest('hex'), FINGERPRINT);

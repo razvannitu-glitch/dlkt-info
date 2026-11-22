@@ -3,7 +3,7 @@ import type {City} from '../local/contracts.js';
 import type {CityNewsSnapshot} from '../local/news-policy.js';
 
 export const NEWS_CORPUS_VERSION='dlkt-news-corpus-1' as const;
-export const NEWS_ORDER_VERSION='iptc17-rounds-20261122' as const;
+export const NEWS_ORDER_VERSION='iptc17-rounds-started-20261122' as const;
 export const NEWS_CORPUS_MAX_ARTICLES=5000;
 export const NEWS_CORPUS_MAX_BYTES=8*1024*1024;
 export const NEWS_CORPUS_MAX_AGE_MS=60*60*1000;

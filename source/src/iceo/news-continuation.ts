@@ -69,7 +69,7 @@ export class NewsContinuation {
     if(!validNewsPage(value,this.clock(),context.city)||value.language!==context.language||value.cityId!==context.cityId||value.filter!==context.filter)throw Error('NEWS_PAGE_INVALID');
     if(Date.parse(value.expiresAt)<=this.clock()){this.error='expired';return;}
     const prior=this.page;
-    if(prior&&(value.epoch!==prior.epoch||value.revision!==prior.revision||value.generatedAt!==prior.generatedAt
+    if(prior&&(value.epoch!==prior.epoch||value.revision!==prior.revision||value.generatedAt!==prior.generatedAt||value.startedAt!==prior.startedAt
       ||value.expiresAt!==prior.expiresAt||value.total!==prior.total||value.filteredTotal!==prior.filteredTotal
       ||Object.keys(prior.counts).some(key=>value.counts[key]!==prior.counts[key])))throw Error('NEWS_PAGE_INVALID');
     if(value.nextCursor!==null&&(value.nextCursor===cursor||value.items.length===0))throw Error('NEWS_PAGE_INVALID');

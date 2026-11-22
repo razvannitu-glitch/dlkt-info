@@ -4,8 +4,8 @@ import { after, before, test } from 'node:test';
 import { readFile, readdir } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 
-const FINGERPRINT = '453dbf1779705cff24a46781bbdae8871db5d24af5c3b16a1c85d65af4fc19db';
-const REVISION = '20261122174603_dlkt_info_news_coverage';
+const FINGERPRINT = 'ef03f90d229d089f8871c64b996994c79c65d0e1e3a0f8e2b0bb08dc2d6f6dec';
+const REVISION = '20261122200813_dlkt_info_news_corpus';
 const REPAIR_REVISION = '20261119142617_dlkt_info_public_acl_attestation';
 let db;
 let beforeRepair;
@@ -82,9 +82,9 @@ test('healthy database returns exact attestation and activation receipt', async 
   assert.equal(value.activationReceipt, createHash('sha256').update(`${value.instanceId}:${FINGERPRINT}:${REVISION}`).digest('hex'));
   assert.equal(Object.values(value.checks).every(Boolean), true);
   assert.deepEqual(value.counts, {
-    relationsExpected: 32, relationsPresent: 32, relationsTotal: 32,
-    functionsExpected: 58, functionsPresent: 58, functionsTotal: 58,
-    rlsExpected: 20, rlsPresent: 20, rlsTotal: 20,
+    relationsExpected: 33, relationsPresent: 33, relationsTotal: 33,
+    functionsExpected: 67, functionsPresent: 67, functionsTotal: 67,
+    rlsExpected: 21, rlsPresent: 21, rlsTotal: 21,
     policiesExpected: 29, policiesPresent: 29, policiesTotal: 29,
     triggersExpected: 34, triggersPresent: 34, triggersTotal: 34,
   });

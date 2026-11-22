@@ -14,7 +14,7 @@ export type NewsPageItem=
  |{readonly kind:'local';readonly key:string;readonly category:NewsCategoryId|null;readonly card:LocalCard};
 export interface NewsPage {
  readonly version:typeof NEWS_PAGE_VERSION;readonly epoch:string;readonly revision:number;
- readonly generatedAt:string;readonly expiresAt:string;readonly language:Locale;readonly cityId:string|null;
+ readonly generatedAt:string;readonly startedAt:string;readonly expiresAt:string;readonly language:Locale;readonly cityId:string|null;
  readonly filter:NewsStreamFilter;readonly items:readonly NewsPageItem[];
  readonly total:number;readonly filteredTotal:number;readonly counts:Readonly<Record<string,number>>;
  readonly nextCursor:string|null;
@@ -66,9 +66,10 @@ export function validNewsPageItem(value:unknown,now:number,city?:City):value is 
 }
 /** Browser-safe boundary. Context continuity and cross-page duplicates are checked by the reader controller. */
 export function validNewsPage(value:unknown,now=Date.now(),city?:City):value is NewsPage {
- if(!Number.isFinite(now)||!object(value)||!exact(value,['version','epoch','revision','generatedAt','expiresAt','language','cityId','filter','items','total','filteredTotal','counts','nextCursor'])
+ if(!Number.isFinite(now)||!object(value)||!exact(value,['version','epoch','revision','generatedAt','startedAt','expiresAt','language','cityId','filter','items','total','filteredTotal','counts','nextCursor'])
   ||value.version!==NEWS_PAGE_VERSION||!validNewsEpochId(value.epoch)||!integer(value.revision,Number.MAX_SAFE_INTEGER)||value.revision===0
-  ||!timestamp(value.generatedAt)||!timestamp(value.expiresAt)||Date.parse(value.generatedAt)>now+300000||Date.parse(value.expiresAt)<=now
+  ||!timestamp(value.generatedAt)||!timestamp(value.startedAt)||!timestamp(value.expiresAt)||Date.parse(value.generatedAt)>now+5000
+  ||Date.parse(value.startedAt)>now+5000||Date.parse(value.startedAt)<Date.parse(value.generatedAt)-5000||Date.parse(value.expiresAt)<=Date.parse(value.startedAt)||Date.parse(value.expiresAt)<=now
   ||Date.parse(value.expiresAt)>Date.parse(value.generatedAt)+3600000||Date.parse(value.expiresAt)<=Date.parse(value.generatedAt)
   ||localeFromPreference(value.language)===null||(value.cityId!==null&&!validNewsCityId(value.cityId))||!validNewsStreamFilter(value.filter)
   ||!integer(value.total)||!integer(value.filteredTotal)||value.filteredTotal>value.total

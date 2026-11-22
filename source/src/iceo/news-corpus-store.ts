@@ -22,6 +22,7 @@ import {findCity} from '../local/cities.js';
 import {validLocalNewsArticle} from '../local/news-policy.js';
 import {newsCard} from '../local/service.js';
 import {newsCategory} from './news-taxonomy.js';
+import {ICEO_SOURCES} from './registry.js';
 
 const WRITER=/^[A-Za-z0-9_-]{43,128}$/u,HASH=/^[a-f0-9]{64}$/u,UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/u;
 const MAX_IO_BYTES=NEWS_CORPUS_MAX_BYTES+262144,TIMEOUT_MS=8000,LATEST_CACHE_MS=10000;
@@ -112,7 +113,8 @@ export function createNewsCorpusStore(environment:Readonly<Record<string,string|
     item={kind:'local',key:'local:'+card.id,category:newsCategory(card),card};
    }else{
     if(!object(value)||!exact(value,['kind','card'])||value.kind!=='global'||!validNewsGlobalCard(value.card,now)||!validArchiveCard(value.card)
-     ||value.card.id!==reference.id||value.card.contentHash!==reference.revision)return fail();
+     ||value.card.id!==reference.id||value.card.contentHash!==reference.revision
+     ||value.card.sourceIds.some(id=>{const source=ICEO_SOURCES.find(entry=>entry.id===id);return !source||new Date(now).toISOString().slice(0,10)>source.rightsReviewBy;}))return fail();
     item={kind:'global',key:'article:'+value.card.id,category:newsCategory(value.card),card:value.card};
    }
    if(!validNewsPageItem(item,now,city??undefined))return fail();return item;
