@@ -34,7 +34,8 @@ class ElementFixture extends EventTarget {
 class SelectFixture extends ElementFixture {constructor(){super('select');}}
 class CustomEventFixture extends Event {constructor(type,options={}){super(type,options);this.detail=options.detail;}}
 
-function harness(t,url='https://www.dlkt.ee/?explore=1&city=1850147&country=JP&category=culture&keep=a&keep=b&lang=en#reading'){
+const preferenceKey='dlkt-reader-language-v1';
+function harness(t,url='https://www.dlkt.ee/?explore=1&city=1850147&country=JP&category=culture&keep=a&keep=b&lang=en#reading',options={}){
   const root=new ElementFixture('html'),body=new ElementFixture('body');root.append(body);
   const picker=new SelectFixture();picker.id='reader-language';picker.dataset.i18nLabel='language';
   const appearance=new ElementFixture('button');appearance.id='reader-theme-toggle';appearance.dataset.i18nLabel='switchToDarkMode';
@@ -52,20 +53,30 @@ function harness(t,url='https://www.dlkt.ee/?explore=1&city=1850147&country=JP&c
   doc.querySelectorAll=selector=>root.querySelectorAll(selector);
   doc.createElement=tag=>new ElementFixture(tag);
   const win=new EventTarget();win.location=new URL(url);
-  const browser={languages:['en-GB'],language:'en-GB'},historyCalls=[],sideEffects=[],localeEvents=[];
+  const browser={languages:options.languages??['en-GB'],language:'en-GB'},historyCalls=[],sideEffects=[],localeEvents=[],storageCalls=[];
+  const stored=options.stored??new Map();
   const denied=name=>(...args)=>{sideEffects.push([name,...args]);throw Error('UNEXPECTED_I18N_SIDE_EFFECT:'+name);};
-  const storage={getItem:denied('storage.getItem'),setItem:denied('storage.setItem'),removeItem:denied('storage.removeItem'),clear:denied('storage.clear')};
+  const storage={
+    getItem(key){storageCalls.push(['get',key]);if(key!==preferenceKey)return denied('storage.getItem')(key);if(options.denyStorage)throw Error('STORAGE_DENIED');return stored.get(key)??null;},
+    setItem(key,value){storageCalls.push(['set',key,value]);if(key!==preferenceKey)return denied('storage.setItem')(key,value);if(options.denyStorage)throw Error('STORAGE_DENIED');stored.set(key,value);},
+    removeItem:denied('storage.removeItem'),clear:denied('storage.clear'),
+  };
+  Object.defineProperty(win,'localStorage',{get(){if(options.denyStorageAccess)throw Error('STORAGE_ACCESS_DENIED');return storage;}});
+  const otherStorage={getItem:denied('sessionStorage.getItem'),setItem:denied('sessionStorage.setItem')};
   Object.defineProperty(doc,'cookie',{get:denied('cookie.read'),set:denied('cookie.write')});
   const history={pushState:(_data,_title,next)=>{historyCalls.push(next);win.location=new URL(next,win.location);}};
   const previous=new Map();
   for(const [name,value]of Object.entries({document:doc,window:win,navigator:browser,history,HTMLSelectElement:SelectFixture,CustomEvent:CustomEventFixture,
-    fetch:denied('fetch'),localStorage:storage,sessionStorage:storage,indexedDB:{open:denied('indexedDB.open')}})){
+    fetch:denied('fetch'),localStorage:storage,sessionStorage:otherStorage,indexedDB:{open:denied('indexedDB.open')}})){
     previous.set(name,Object.getOwnPropertyDescriptor(globalThis,name));Object.defineProperty(globalThis,name,{configurable:true,writable:true,value});
   }
-  t.after(()=>{for(const [name,descriptor]of previous){if(descriptor)Object.defineProperty(globalThis,name,descriptor);else delete globalThis[name];}});
+  let restored=false;
+  const cleanup=()=>{if(restored)return;restored=true;for(const [name,descriptor]of previous){if(descriptor)Object.defineProperty(globalThis,name,descriptor);else delete globalThis[name];}};
+  t.after(cleanup);
   doc.addEventListener('dlkt:language-changed',event=>localeEvents.push(event.detail.locale));
   setupLanguage();
-  return{doc,win,browser,picker,appearance,icon,label,query,topic,topicText,original,untouched,brand,historyCalls,sideEffects,localeEvents,
+  return{doc,win,browser,picker,appearance,icon,label,query,topic,topicText,original,untouched,brand,historyCalls,sideEffects,localeEvents,storageCalls,stored,cleanup,
+    country(countryCode,flags={estimated:true,restored:false}){doc.dispatchEvent(new CustomEventFixture('dlkt:city-selected',{detail:{city:{countryCode},...flags}}));},
     choose(locale){picker.value=locale;picker.dispatchEvent(new Event('change'));},
     pop(next){win.location=new URL(next,win.location);win.dispatchEvent(new Event('popstate'));}};
 }
@@ -86,6 +97,7 @@ test('native language selection changes RO, AR and EN without changing Explore g
     assert.equal(h.query.value,'東京');assert.equal(h.topic.value,'culture');assert.equal(h.topic.checked,true);
   }
   assert.deepEqual(h.localeEvents,['en','ro','ar','en']);assert.equal(h.historyCalls.length,3);assert.deepEqual(h.sideEffects,[]);
+  assert.deepEqual(h.storageCalls,[['get',preferenceKey],['set',preferenceKey,'ro'],['set',preferenceKey,'ar'],['set',preferenceKey,'en']]);
 });
 
 test('appearance labels follow both theme and all30 language changes without changing content or preferences',t=>{
@@ -115,11 +127,11 @@ test('appearance labels follow both theme and all30 language changes without cha
 });
 
 test('popstate restores presentation from the historical URL without pushing another entry or touching preferences',t=>{
-  const h=harness(t);h.choose('ro');const romanian=h.win.location.href;h.choose('ar');const arabic=h.win.location.href;
+  const h=harness(t);h.choose('ro');const romanian=h.win.location.href;h.choose('ar');const arabic=h.win.location.href,storageCount=h.storageCalls.length;
   h.pop(romanian);assert.equal(h.doc.documentElement.lang,'ro');assert.equal(h.doc.documentElement.dir,'ltr');assert.equal(h.picker.value,'ro');
   h.pop(arabic);assert.equal(h.doc.documentElement.lang,'ar');assert.equal(h.doc.documentElement.dir,'rtl');assert.equal(h.picker.value,'ar');
   assert.equal(h.win.location.searchParams.get('city'),'1850147');assert.equal(h.win.location.searchParams.get('country'),'JP');assert.equal(h.win.location.searchParams.get('category'),'culture');
-  assert.equal(h.historyCalls.length,2);assert.deepEqual(h.sideEffects,[]);
+  assert.equal(h.historyCalls.length,2);assert.equal(h.storageCalls.length,storageCount);assert.equal(h.stored.get(preferenceKey),'ar');assert.deepEqual(h.sideEffects,[]);
 });
 
 test('language rebinding preserves original publisher wording and brand identity, including after an entry render',t=>{
@@ -141,4 +153,121 @@ test('browser language changes update an implicit locale but cannot replace an e
   h.choose('ro');h.browser.languages=['en-GB'];h.win.dispatchEvent(new Event('languagechange'));
   assert.equal(h.doc.documentElement.lang,'ro');assert.equal(h.doc.documentElement.dir,'ltr');assert.equal(h.historyCalls.length,1);
   assert.equal(h.win.location.searchParams.get('country'),'JP');assert.equal(h.win.location.hash,'#reading');assert.deepEqual(h.sideEffects,[]);
+});
+
+
+test('automatic current-country hints update the default and reader event without saving a preference',t=>{
+  const h=harness(t,'https://www.dlkt.ee/?country=JP#reading');
+  assert.equal(h.doc.documentElement.lang,'en');
+  h.country('RO');
+  assert.equal(h.doc.documentElement.lang,'ro');assert.equal(h.picker.value,'ro');
+  assert.equal(h.label.textContent,MESSAGES.ro.todayTop);
+  assert.deepEqual(h.localeEvents,['en','ro']);assert.equal(h.historyCalls.length,0);
+  assert.equal(h.win.location.searchParams.has('lang'),false);
+  h.country('RO');assert.deepEqual(h.localeEvents,['en','ro']);
+  assert.deepEqual(h.storageCalls,[['get',preferenceKey]]);assert.equal(h.stored.size,0);assert.deepEqual(h.sideEffects,[]);
+});
+
+test('manual English wins over late location and browser changes, including a URL without lang',t=>{
+  const h=harness(t,'https://www.dlkt.ee/');h.choose('en');
+  h.country('RO');h.browser.languages=['ar'];h.win.dispatchEvent(new Event('languagechange'));
+  h.pop('https://www.dlkt.ee/?explore=1&country=FR');h.country('FR');
+  assert.equal(h.doc.documentElement.lang,'en');assert.equal(h.picker.value,'en');
+  assert.equal(h.stored.get(preferenceKey),'en');assert.deepEqual(h.localeEvents,['en']);
+  assert.equal(h.historyCalls.length,1);assert.deepEqual(h.sideEffects,[]);
+});
+
+test('a manual preference survives a fresh controller and location detection after reload',t=>{
+  const stored=new Map([['unrelated-setting','keep-me']]);
+  const first=harness(t,'https://www.dlkt.ee/',{stored});first.choose('ro');
+  assert.equal(stored.get(preferenceKey),'ro');first.cleanup();
+  const reloaded=harness(t,'https://www.dlkt.ee/',{stored,languages:['en-GB']});
+  assert.equal(reloaded.doc.documentElement.lang,'ro');assert.equal(reloaded.picker.value,'ro');
+  reloaded.country('DE');assert.equal(reloaded.doc.documentElement.lang,'ro');
+  assert.deepEqual(reloaded.storageCalls,[['get',preferenceKey]]);
+  assert.equal(stored.get('unrelated-setting'),'keep-me');assert.equal(reloaded.historyCalls.length,0);assert.deepEqual(reloaded.sideEffects,[]);
+});
+
+test('only automatic current-location events affect defaults; explored, restored and malformed cities do not',t=>{
+  const h=harness(t,'https://www.dlkt.ee/');
+  h.country('RO',{estimated:false,restored:false});
+  h.country('RO',{estimated:true,restored:true});
+  for(const detail of [null,[],{},'RO',{city:null,estimated:true,restored:false},{city:{countryCode:'ro'},estimated:true,restored:false},{city:{countryCode:'RO'},estimated:'true',restored:false}]){
+    h.doc.dispatchEvent(new CustomEventFixture('dlkt:city-selected',{detail}));
+  }
+  assert.equal(h.doc.documentElement.lang,'en');assert.deepEqual(h.localeEvents,['en']);
+  h.country('RO');assert.equal(h.doc.documentElement.lang,'ro');
+  h.country('JP',{estimated:false,restored:false});assert.equal(h.doc.documentElement.lang,'ro');
+  assert.equal(h.stored.size,0);assert.deepEqual(h.sideEffects,[]);
+});
+
+test('multilingual countries use eligible browser choices and unsupported countries fall back to English',t=>{
+  const h=harness(t,'https://www.dlkt.ee/',{languages:['fr-CA','en-CA']});
+  h.country('CA');assert.equal(h.doc.documentElement.lang,'fr');
+  h.browser.languages=['en-CA','fr-CA'];h.win.dispatchEvent(new Event('languagechange'));
+  assert.equal(h.doc.documentElement.lang,'en');
+  h.country('RO');assert.equal(h.doc.documentElement.lang,'ro');
+  h.country('EE');assert.equal(h.doc.documentElement.lang,'en');
+  assert.deepEqual(h.storageCalls,[['get',preferenceKey]]);assert.equal(h.historyCalls.length,0);
+});
+
+test('invalid stored data is ignored, explicit URLs win, and URL choices are never persisted automatically',t=>{
+  const stored=new Map([[preferenceKey,'{"locale":"ar"}']]);
+  const h=harness(t,'https://www.dlkt.ee/?lang=fr',{stored});
+  h.country('RO');assert.equal(h.doc.documentElement.lang,'fr');
+  h.pop('https://www.dlkt.ee/?lang=ro&lang=ar');assert.equal(h.doc.documentElement.lang,'en');
+  h.pop('https://www.dlkt.ee/');assert.equal(h.doc.documentElement.lang,'ro');
+  h.choose('__proto__');assert.equal(h.doc.documentElement.lang,'ro');assert.equal(h.historyCalls.length,0);
+  assert.equal(stored.get(preferenceKey),'{"locale":"ar"}');assert.deepEqual(h.storageCalls,[['get',preferenceKey]]);
+  assert.deepEqual(h.sideEffects,[]);
+});
+
+test('denied storage methods preserve manual choice for the session without throwing',t=>{
+  const h=harness(t,'https://www.dlkt.ee/',{denyStorage:true});
+  h.choose('ro');h.country('US');h.pop('https://www.dlkt.ee/');
+  assert.equal(h.doc.documentElement.lang,'ro');assert.equal(h.picker.value,'ro');
+  assert.equal(h.stored.size,0);assert.deepEqual(h.storageCalls,[['get',preferenceKey],['set',preferenceKey,'ro']]);
+  assert.deepEqual(h.sideEffects,[]);
+});
+
+test('denied access to the storage object still allows the picker and automatic country default',t=>{
+  const h=harness(t,'https://www.dlkt.ee/',{denyStorageAccess:true});
+  h.country('RO');assert.equal(h.doc.documentElement.lang,'ro');
+  h.choose('en');h.country('DE');h.pop('https://www.dlkt.ee/');
+  assert.equal(h.doc.documentElement.lang,'en');assert.equal(h.picker.value,'en');
+  assert.equal(h.stored.size,0);assert.deepEqual(h.sideEffects,[]);
+});
+
+
+test('a country-only hint sets the local default without a matching city or another locale event for the same city',t=>{
+  const h=harness(t,'https://www.dlkt.ee/');
+  h.doc.dispatchEvent(new CustomEventFixture('dlkt:country-detected',{detail:{countryCode:'RO',estimated:true}}));
+  assert.equal(h.doc.documentElement.lang,'ro');assert.equal(h.picker.value,'ro');
+  assert.equal(h.label.textContent,MESSAGES.ro.todayTop);assert.deepEqual(h.localeEvents,['en','ro']);
+  h.country('RO');assert.deepEqual(h.localeEvents,['en','ro']);
+  assert.equal(h.historyCalls.length,0);assert.equal(h.stored.size,0);
+  assert.deepEqual(h.storageCalls,[['get',preferenceKey]]);assert.deepEqual(h.sideEffects,[]);
+});
+
+test('country-only hints require exactly the validated country and automatic-estimate fields',t=>{
+  const h=harness(t,'https://www.dlkt.ee/');
+  for(const detail of [
+    null,[],{},'RO',{countryCode:'RO'},{estimated:true},
+    {countryCode:null,estimated:true},{countryCode:'ro',estimated:true},{countryCode:'ROM',estimated:true},
+    {countryCode:'RO',estimated:false},{countryCode:'RO',estimated:'true'},
+    {countryCode:'RO',estimated:true,city:null},{countryCode:'RO',estimated:true,restored:false},
+    Object.create({countryCode:'RO',estimated:true}),
+    {countryCode:'RO',estimated:true,[Symbol('extra')]:true},
+  ])h.doc.dispatchEvent(new CustomEventFixture('dlkt:country-detected',{detail}));
+  assert.equal(h.doc.documentElement.lang,'en');assert.deepEqual(h.localeEvents,['en']);
+  assert.equal(h.historyCalls.length,0);assert.equal(h.stored.size,0);assert.deepEqual(h.sideEffects,[]);
+});
+
+test('a saved manual English preference wins over a late country-only Romanian hint',t=>{
+  const stored=new Map([[preferenceKey,'en']]);
+  const h=harness(t,'https://www.dlkt.ee/',{stored,languages:['ro-RO']});
+  h.doc.dispatchEvent(new CustomEventFixture('dlkt:country-detected',{detail:{countryCode:'RO',estimated:true}}));
+  assert.equal(h.doc.documentElement.lang,'en');assert.equal(h.picker.value,'en');
+  assert.equal(stored.get(preferenceKey),'en');assert.deepEqual(h.localeEvents,['en']);
+  assert.deepEqual(h.storageCalls,[['get',preferenceKey]]);assert.equal(h.historyCalls.length,0);assert.deepEqual(h.sideEffects,[]);
 });

@@ -4,18 +4,18 @@ export const NEWS_WINDOW_MS = 72 * 60 * 60 * 1000;
 export const NEWS_CHECK_MS = 5 * 60 * 1000;
 export type NewsTopic = 'transport' | 'education' | 'city' | 'utilities' | 'safety' | 'culture' | 'events' | 'economy' | 'environment';
 export interface NewsFeedDefinition {
-  readonly id:string; readonly publisher:string; readonly cityId:string; readonly countryCode:string; readonly timezone:string;
+  readonly id:string; readonly publisher:string; readonly language:string; readonly cityId:string; readonly countryCode:string; readonly timezone:string;
   readonly endpoint:string; readonly home:string; readonly title:string; readonly articlePattern:RegExp;
   readonly termsUrl:string; readonly rightsCheckedAt:string; readonly rightsReviewBy:string; readonly quoteLimit:number;
   readonly attribution:string; readonly licenseUrl?:string;
 }
 /** Operator-reviewed city capabilities. An article still needs its own place reference. */
 export const CITY_NEWS_FEEDS:readonly NewsFeedDefinition[] = Object.freeze([
-  Object.freeze({id:'bucharest-b365',publisher:'B365',cityId:'683506',countryCode:'RO',timezone:'Europe/Bucharest',
+  Object.freeze({id:'bucharest-b365',publisher:'B365',language:'ro',cityId:'683506',countryCode:'RO',timezone:'Europe/Bucharest',
     endpoint:'https://b365.ro/feed/',home:'https://b365.ro/',title:'B365',articlePattern:/^\/[a-z0-9-]+-\d{4,}\/$/u,
     termsUrl:'https://b365.ro/despre-noi/',rightsCheckedAt:'2026-11-18',rightsReviewBy:'2026-12-18',quoteLimit:250,
     attribution:'Source: B365. Publisher headline and optional short excerpt. Read the original article for its full context.'}),
-  Object.freeze({id:'bucharest-buletin',publisher:'Buletin de București',cityId:'683506',countryCode:'RO',timezone:'Europe/Bucharest',
+  Object.freeze({id:'bucharest-buletin',publisher:'Buletin de București',language:'ro',cityId:'683506',countryCode:'RO',timezone:'Europe/Bucharest',
     endpoint:'https://buletin.de/bucuresti/feed/',home:'https://buletin.de/bucuresti/',title:'Buletin de București',articlePattern:/^\/bucuresti\/[a-z0-9]+(?:-[a-z0-9]+)+\/$/u,
     termsUrl:'https://buletin.de/bucuresti/termeni-si-conditii/',rightsCheckedAt:'2026-11-18',rightsReviewBy:'2026-12-18',quoteLimit:500,
     licenseUrl:'https://creativecommons.org/licenses/by/4.0/',

@@ -21,7 +21,8 @@ test('reviewed source tags cover observed edition paths and never infer language
   assert.equal(sourceLanguage(url('es')),'es');assert.equal(sourceLanguage(url('ar')),'ar');
   for(const value of ['https://www.dw.com/fixture/a-12345678','https://www.dw.com/de-extra/fixture','https://www.dw.com/pt/fixture','https://www.dw.com/arbitrary/fixture','https://www.dw.com/zz/fixture','https://www.dw.com.attacker.invalid/de/story','http://www.dw.com/de/story','https://user@www.dw.com/de/story'])assert.equal(sourceLanguage(value),null,value);
   assert.equal(sourceLanguage('https://pt.globalvoices.org/2026/11/21/fixture/'),null);
-  assert.equal(NEWS_DISCOVERY_INDEXES.some(row=>row.publisherId==='dw'),false);
+  assert.equal(NEWS_DISCOVERY_INDEXES.some(row=>row.publisherId==='dw'&&row.format==='rss'),false);
+  assert.deepEqual(NEWS_DISCOVERY_INDEXES.filter(row=>row.publisherId==='dw').map(row=>row.language),['ro','de','fr','es','ar']);
 });
 
 const subjects={

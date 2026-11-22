@@ -58,7 +58,11 @@ export function setupLocal():void{
  // Storage restores comparisons only. Its speed or an old saved city cannot choose this visit's location.
  void readLocalMemory().then(value=>{memory=value;},()=>{storageFailed=true;feedback('Local storage is unavailable. City selection still works for this visit.');}).finally(()=>{storageLoaded=true;forget.hidden=!memory;if(city&&snapshot)render();});
  void initializeCurrentCity({
-  readHint:()=>json('/api/places?hint=1'),
+  readHint:async()=>{
+   const hint=await json('/api/places?hint=1');
+   if(object(hint)&&hint.estimated===true&&typeof hint.countryCode==='string'&&/^[A-Z]{2}$/u.test(hint.countryCode))document.dispatchEvent(new CustomEvent('dlkt:country-detected',{detail:{countryCode:hint.countryCode,estimated:true}}));
+   return hint;
+  },
   maySelect:()=>document.body.dataset.entryView==='start'&&!city&&!manualSelection&&!autoSuppressed&&searchSequence===0&&!input.value.trim(),
   select:current=>select(current,false,true),
  }).then(result=>{if(result==='unavailable'&&!city)feedback('Your current city could not be identified. Choose a city to see its local edition. Saved comparisons have not changed.');}).finally(()=>{document.dispatchEvent(new CustomEvent('dlkt:location-settled'));});

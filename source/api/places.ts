@@ -16,7 +16,7 @@ export async function handlePlaces(req:IncomingMessage,res:ServerResponse):Promi
   if(key==='hint'&&value==='1'){
    // These headers are only suggestions; they never authorize or select a location.
    const country=header(req,'x-vercel-ip-country');let name='';try{name=decodeURIComponent(header(req,'x-vercel-ip-city'));}catch{/* No guess on malformed data. */}
-   const city=suggestCity(name,country);send(200,{city,estimated:true});return;
+   const city=suggestCity(name,country),countryCode=listCountries().some(value=>value.code===country)?country:null;send(200,{city,countryCode,estimated:true});return;
   }
   send(400,{error:'PLACE_QUERY_INVALID'});return;
  }

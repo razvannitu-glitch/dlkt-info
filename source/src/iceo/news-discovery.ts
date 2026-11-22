@@ -5,7 +5,7 @@ import type {EvidenceCard,SourceResult} from './contracts.js';
 import {cardContent} from './card-validation.js';
 import {collectFrontpageHighlights} from './news-frontpages.js';
 import {EDITORIAL_CATEGORY_TOPICS,classifyNewsHeadline,headlineDiscoveryPriority,type PublicEditorialCategory} from './editorial-categories.js';
-import {NEWS_INDEX_URL,NEWS_PUBLISHERS,NEWS_CATEGORY_SOURCES,NEWS_UNCLASSIFIED_SOURCE,NEWS_FEATURED_SOURCE,NEWS_DISCOVERY_INDEXES,canonicalNewsUrl,publisherForNewsUrl,sourcePublicationContext,sourceLanguage,type NewsDiscoveryIndex,type NewsSourceLanguage} from './news-sources.js';
+import {NEWS_INDEX_URL,NEWS_PUBLISHERS,NEWS_CATEGORY_SOURCES,NEWS_UNCLASSIFIED_SOURCE,NEWS_FEATURED_SOURCE,NEWS_DISCOVERY_INDEXES,NEWS_SOURCES,canonicalNewsUrl,publisherForNewsUrl,sourcePublicationContext,sourceLanguage,type NewsDiscoveryIndex,type NewsSourceLanguage} from './news-sources.js';
 
 /** Untrusted discovery metadata. indexedAt is never a publisher publication date. */
 export interface NewsCandidate {readonly sourceUrl:string;readonly title:string;readonly publisher:string;readonly indexedAt:string;readonly category:PublicEditorialCategory|null}
@@ -43,6 +43,16 @@ function candidatePriority(value:NewsCandidate):number {
 function fairNewsOrder(values:readonly NewsCandidate[],limit:number,featuredUrls:ReadonlySet<string>=new Set()):NewsCandidate[]{
   const rank=(row:NewsCandidate):number=>Number(candidatePriority(row)===2)*1000+Number(featuredUrls.has(row.sourceUrl))*100+candidatePriority(row)*20+acquisitionScore(row);
   const compare=(a:NewsCandidate,b:NewsCandidate):number=>rank(b)-rank(a)||b.indexedAt.localeCompare(a.indexedAt)||a.sourceUrl.localeCompare(b.sourceUrl);
+  // Give each observed, reviewed edition one acquisition opportunity. Unknown
+  // languages remain unknown; a single-language supply keeps its existing order.
+  const firstByLanguage=new Map<NewsSourceLanguage,NewsCandidate>();
+  for(const row of values){
+    const language=sourceLanguage(row.sourceUrl);if(language===null)continue;
+    const previous=firstByLanguage.get(language);
+    if(!previous||compare(row,previous)<0)firstByLanguage.set(language,row);
+  }
+  const languageFirst=firstByLanguage.size>1?[...firstByLanguage.values()].sort(compare).slice(0,limit):[];
+  const promoted=new Set(languageFirst),orderingLimit=limit+languageFirst.length;
   const groups=new Map<NewsCandidate['category'],NewsCandidate[]>();
   for(const row of values){const group=groups.get(row.category)??[];group.push(row);groups.set(row.category,group);}
   const queues=[...groups.values()].map(rows=>{
@@ -78,10 +88,12 @@ function fairNewsOrder(values:readonly NewsCandidate[],limit:number,featuredUrls
   const selected:NewsCandidate[]=[];
   for(;;){
     const active=queues.filter(queue=>queue.cursor<queue.rows.length).sort((a,b)=>compare(a.rows[a.cursor]!,b.rows[b.cursor]!));
-    if(!active.length||selected.length>=limit)break;
-    for(const queue of active){if(selected.length>=limit)break;selected.push(queue.rows[queue.cursor++]!);}
+    if(!active.length||selected.length>=orderingLimit)break;
+    for(const queue of active){if(selected.length>=orderingLimit)break;selected.push(queue.rows[queue.cursor++]!);}
   }
-  return selected;
+  // Removing only the promoted row references preserves the previous remaining
+  // order and leaves canonical-URL deduplication to mergeNewsCandidates.
+  return languageFirst.length?[...languageFirst,...selected.filter(row=>!promoted.has(row))].slice(0,limit):selected;
 }
 /** A global bounded pool includes uncategorized topics and lends unused capacity to any subject. */
 export function mergeNewsCandidates(values:readonly unknown[],now:number):readonly NewsCandidate[]{
@@ -162,6 +174,7 @@ export function readPublisherNewsCandidates(xml:string,index:NewsDiscoveryIndex,
     if(!matchingIndexLanguage(entry.news.publication.language,registered.language??'en'))continue;
     const sourceUrl=canonicalNewsUrl(entry.loc),publisher=publisherForNewsUrl(entry.loc),title=titleText(entry.news.title),date=publicationDate(entry.news.publication_date);
     if(!sourceUrl||!publisher||publisher.id!==index.publisherId||!title||!date||Date.parse(date)<now-DAY||Date.parse(date)>now+300_000)continue;
+    if(registered.articlePath&&!new URL(sourceUrl).pathname.startsWith(registered.articlePath))continue;
     const category=classifyNewsHeadline(title,sourceUrl);
     candidates.push({sourceUrl,title,publisher:publisher.label,indexedAt:new Date(now).toISOString(),category});
   }
@@ -302,6 +315,14 @@ async function fetchText(fetcher:typeof fetch,url:string,limit:number,budget:Bud
 const bounded=(value:number|undefined,fallback:number,max:number):number=>value!==undefined&&Number.isFinite(value)?Math.max(1,Math.min(max,Math.floor(value))):fallback;
 export async function discoverNews(fetcher:typeof fetch,now:number,seedCandidates:readonly NewsCandidate[]=[],onCandidates?:(candidates:readonly NewsCandidate[])=>Promise<void>,options:NewsDiscoveryOptions={}):Promise<readonly SourceResult[]>{
   if(!Number.isFinite(now))throw new Error('NEWS_CLOCK_INVALID');
+  const checkedAt=new Date(now).toISOString(),today=checkedAt.slice(0,10);
+  // Discovery shares one acquisition pipeline. An expired review blocks its
+  // indexes, originals, homepage requests and retained-candidate callbacks.
+  if(NEWS_SOURCES.some(source=>today>source.rightsReviewBy))return Object.freeze(NEWS_SOURCES.map(source=>Object.freeze({
+    cards:Object.freeze([]),
+    health:Object.freeze({id:source.id,label:source.label,publisher:source.publisher,topic:source.topic,state:'unavailable' as const,
+      checkedAt,verifiedAt:null,count:0,rejected:0,error:'RIGHTS_REVIEW_EXPIRED',retryAt:null,scope:source.scope,termsUrl:source.termsUrl,windowed:true}),
+  })));
   const budget:Budget={deadline:Date.now()+bounded(options.deadlineMs,35_000,35_000),timeout:bounded(options.requestTimeoutMs,4000,4000),remaining:bounded(options.maxArticleRequests,80,80),blocked:options.originBackoff??new Map()};
   let incoming:NewsCandidate[]=[],indexError:string|null=null,indexRetry:string|null=null,successfulIndexes=0,indexCursor=0;
   const indexes:(NewsDiscoveryIndex|null)[]=[null,...(options.publisherIndexes===false?[]:NEWS_DISCOVERY_INDEXES)];

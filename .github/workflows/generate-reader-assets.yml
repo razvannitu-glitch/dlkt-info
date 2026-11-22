@@ -1,0 +1,61 @@
+name: Generate DLKT reader assets
+
+on:
+  push:
+    branches:
+      - "codex/generate-*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dlkt-reader-generation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  generate:
+    name: Generate and verify reader assets
+    if: github.repository == 'razvannitu-glitch/dlkt-info' && startsWith(github.ref, 'refs/heads/codex/generate-')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Check the bounded export protocol
+        run: node scripts/export-generated-reader-assets.mjs --self-test
+
+      - name: Compile the strict TypeScript source
+        run: npm --prefix source run build
+
+      - name: Synchronize the compiled public reader modules
+        working-directory: source
+        run: node scripts/sync-reader-assets.mjs
+
+      - name: Generate the release manifest
+        working-directory: source
+        run: node scripts/generate-release-manifest.mjs
+
+      - name: Pin the generated source and public configuration
+        run: npm run source:pin
+
+      - name: Verify the complete generated release
+        run: npm run verify:release
+
+      - name: Build the public package locally
+        run: npm run package:local
+
+      - name: Export only verified generated text changes
+        run: node scripts/export-generated-reader-assets.mjs

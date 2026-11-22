@@ -27,3 +27,13 @@ test('Explore country catalog and native city aliases are public bounded referen
  assert.equal(value.cities[0].id,'2988507');assert.ok(value.cityAliases.length<=32);assert.ok(value.cityAliases.includes('パリ'));assert.equal(value.cityAliases.includes('ハリ'),false);
  assert.equal((await fetch(base+'/api/places?countries=1&country=JP')).status,400);
 });
+
+test('an approximate country can choose the language even when no catalog city matches',async()=>{
+ const r=await fetch(base+'/api/places?hint=1',{headers:{'x-vercel-ip-city':'No matching catalog city','x-vercel-ip-country':'RO'}});
+ const value=await r.json();assert.equal(r.status,200);assert.equal(value.city,null);assert.equal(value.countryCode,'RO');assert.equal(value.estimated,true);
+ assert.equal(r.headers.get('set-cookie'),null);assert.match(r.headers.get('cache-control'),/private, no-store/);
+ for(const code of ['ZZ','ro','RO/EN']){
+  const invalid=await fetch(base+'/api/places?hint=1',{headers:{'x-vercel-ip-city':'Bucharest','x-vercel-ip-country':code}});
+  const hint=await invalid.json();assert.equal(hint.countryCode,null);assert.equal(hint.city,null);
+ }
+});

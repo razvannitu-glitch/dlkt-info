@@ -1,4 +1,4 @@
-import type {SourceDefinition} from './contracts.js';
+import type {SourceDefinition,EvidenceCard} from './contracts.js';
 import {PUBLIC_EDITORIAL_CATEGORIES,EDITORIAL_CATEGORY_LABELS,EDITORIAL_CATEGORY_TOPICS} from './editorial-categories.js';
 
 /** Discovery is a title/link index, not a licence to republish publisher articles or images. */
@@ -106,7 +106,7 @@ export const NEWS_PUBLICATION_SCOPES:readonly PublicationScope[]=Object.freeze([
   publication('guardian','GB','United Kingdom','Global reporting',['/','en']),
   publication('france24','FR','France','Global reporting',['/fr/','fr'],['/en/','en'],['/es/','es'],['/ar/','ar']),
   // Edition paths/hreflang labels checked in DW's official language navigation2026-11-21.
-  // No DW RSS subscription or additional article origin is enabled by these labels.
+  // Language-specific public news sitemaps are registered separately below; no DW RSS subscription or new article origin is enabled.
   publication('dw','DE','Germany','Global reporting',
     ['/en/','en'],['/fr/','fr'],['/de/','de'],['/es/','es'],['/ar/','ar'],['/pt-br/','pt-BR'],['/pt-002/','pt-002'],
     ['/sq/','sq'],['/am/','am'],['/bn/','bn'],['/bs/','bs'],['/bg/','bg'],['/zh/','zh-Hans'],['/zh-hant/','zh-Hant'],['/hr/','hr'],
@@ -170,6 +170,14 @@ export const NEWS_DISCOVERY_INDEXES:readonly NewsDiscoveryIndex[]=Object.freeze(
   {id:'weather-channel-news',publisherId:'weather-channel',url:'https://weather.com/api/payload/v1/sitemaps/en-US/news.xml'},
   {id:'the-hindu-news',publisherId:'the-hindu',url:'https://www.thehindu.com/sitemap/googlenews/all/all.xml'},
   // Public endpoints and channel identities checked2026-11-21. Original article metadata remains mandatory.
+  // Official XML endpoints and representative original pages inspected2026-11-22.
+  // A sitemap headline is only a candidate; mismatching original metadata remains rejected.
+  {id:'dw-ro-news',publisherId:'dw',url:'https://www.dw.com/ro/news-sitemap.xml',language:'ro',articlePath:'/ro/'},
+  {id:'dw-de-news',publisherId:'dw',url:'https://www.dw.com/de/news-sitemap.xml',language:'de',articlePath:'/de/'},
+  {id:'dw-fr-news',publisherId:'dw',url:'https://www.dw.com/fr/news-sitemap.xml',language:'fr',articlePath:'/fr/'},
+  {id:'dw-es-news',publisherId:'dw',url:'https://www.dw.com/es/news-sitemap.xml',language:'es',articlePath:'/es/'},
+  {id:'dw-ar-news',publisherId:'dw',url:'https://www.dw.com/ar/news-sitemap.xml',language:'ar',articlePath:'/ar/'},
+  {id:'france24-en-news',publisherId:'france24',url:'https://www.france24.com/en/rss',format:'rss',language:'en',feedTitle:'France 24 - International breaking news, top stories and headlines',feedHome:'https://www.france24.com/en/',articlePath:'/en/'},
   {id:'france24-fr-news',publisherId:'france24',url:'https://www.france24.com/fr/rss',format:'rss',language:'fr',feedTitle:"France 24 - Infos, news & actualités - L'information internationale en direct",feedHome:'https://www.france24.com/fr/',articlePath:'/fr/'},
   {id:'france24-es-news',publisherId:'france24',url:'https://www.france24.com/es/rss',format:'rss',language:'es',feedTitle:'France 24 - Noticias y actualidad internacional en vivo',feedHome:'https://www.france24.com/es/',articlePath:'/es/'},
   {id:'france24-ar-news',publisherId:'france24',url:'https://www.france24.com/ar/rss',format:'rss',language:'ar',feedTitle:'فرانس 24 – الأخبار والأحداث الدولية على مدار الساعة',feedHome:'https://www.france24.com/ar/',articlePath:'/ar/'},
@@ -196,3 +204,37 @@ export const NEWS_FEATURED_SOURCE:SourceDefinition=Object.freeze({
   rightsCheckedAt:'2026-11-20',rightsReviewBy:'2027-02-20',
 });
 export const NEWS_SOURCES:readonly SourceDefinition[]=Object.freeze([...NEWS_CATEGORY_SOURCES,NEWS_UNCLASSIFIED_SOURCE,NEWS_FEATURED_SOURCE]);
+
+/** Match reviewed edition tags. Unknown provenance never becomes English by default. */
+export function newsLanguageMatches(language:string|null,preferred:string):boolean {
+  if(language===null||language.length>80||preferred.length>80)return false;
+  try{
+    const source=new Intl.Locale(language),target=new Intl.Locale(preferred);
+    if(source.language!==target.language)return false;
+    if(source.language!=='zh')return true;
+    const script=(value:Intl.Locale):string=>value.script??(['TW','HK','MO'].includes(value.region??'')?'Hant':'Hans');
+    return script(source)===script(target);
+  }catch{return false;}
+}
+
+/** A reading projection only. Original cards, hashes and persisted comparisons are unchanged. */
+export function selectNewsLanguage(records:readonly EvidenceCard[],preferred:string):readonly EvidenceCard[] {
+  return Object.freeze(records.filter(card=>card.kind!=='publication'||newsLanguageMatches(sourceLanguage(card),preferred)));
+}
+export interface NewsLanguageCoverage {
+  readonly publications:number;
+  readonly publishers:number;
+  readonly languages:readonly {readonly language:NewsSourceLanguage;readonly count:number}[];
+  readonly unknownLanguage:number;
+}
+/** Call with eligible publications, not the configured catalog or a stale raw snapshot. */
+export function newsLanguageCoverage(records:readonly EvidenceCard[]):NewsLanguageCoverage {
+  const unique=new Map(records.filter(card=>card.kind==='publication').map(card=>[card.identity,card]));
+  const languages=new Map<NewsSourceLanguage,number>(),publishers=new Set<string>();let unknownLanguage=0;
+  for(const card of unique.values()){
+    publishers.add(card.publisher);const language=sourceLanguage(card);
+    if(language===null)unknownLanguage++;else languages.set(language,(languages.get(language)??0)+1);
+  }
+  return Object.freeze({publications:unique.size,publishers:publishers.size,unknownLanguage,
+    languages:Object.freeze([...languages].sort(([a],[b])=>a.localeCompare(b)).map(([language,count])=>Object.freeze({language,count})))});
+}

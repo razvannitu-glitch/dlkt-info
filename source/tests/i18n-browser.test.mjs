@@ -46,8 +46,12 @@ test('all locale modules are compiled exactly and the curated public import grap
  }
 });
 
-test('language presentation has no storage/network side effects and original card titles are not translation keys',()=>{
- const js=read('src/i18n/browser.ts');assert.doesNotMatch(js,/localStorage|sessionStorage|indexedDB|document\.cookie|fetch\(|sendBeacon|navigator\.geolocation/u);
+test('language presentation stores only its manual preference without network side effects or source translation',()=>{
+ const js=read('src/i18n/browser.ts');assert.doesNotMatch(js,/sessionStorage|indexedDB|document\.cookie|fetch\(|sendBeacon|navigator\.geolocation/u);
+ assert.match(js,/const LANGUAGE_STORAGE_KEY='dlkt-reader-language-v1'/u);
+ assert.match(js,/window\.localStorage\.getItem\(LANGUAGE_STORAGE_KEY\)/u);
+ assert.match(js,/window\.localStorage\.setItem\(LANGUAGE_STORAGE_KEY,locale\)/u);
+ assert.doesNotMatch(js,/localStorage\.(?:removeItem|clear)|JSON\.parse/u);
  assert.match(js,/history\.pushState/u);assert.match(js,/document\.documentElement\.dir/u);assert.match(js,/popstate/u);
  const main=read('src/iceo/browser.ts');assert.match(main,/element\.dir='auto'/u);assert.match(main,/element\.setAttribute\('translate','no'\)/u);assert.match(main,/originalText\(detail\)/u);assert.match(main,/originalText\(a,item\)/u);
  assert.doesNotMatch(main,/tr\(card\.(?:title|summary)/u);

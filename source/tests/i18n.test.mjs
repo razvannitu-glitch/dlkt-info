@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {LOCALES,MESSAGE_KEYS,MESSAGES,CATEGORY_LABELS,messageParameters} from '../.build/src/i18n/catalog.js';
-import {resolveLocale,localeFromUrl,localeUrl,t,categoryLabel} from '../.build/src/i18n/locale.js';
+import {resolveLocale,localeFromUrl,localeFromPreference,localeFromCountry,localeUrl,t,categoryLabel} from '../.build/src/i18n/locale.js';
 import {PUBLIC_EDITORIAL_CATEGORIES} from '../.build/src/iceo/editorial-categories.js';
 import {parseExploreState,exploreUrl} from '../.build/src/explore/state.js';
 
@@ -106,7 +106,7 @@ test('language URLs preserve city, country, category, repeated unrelated paramet
   assert.equal(localeUrl('/?city=1850147#cards','ja'),'/?city=1850147&lang=ja#cards');
 });
 
-test('language is independent of geography and does not force an interface from a country code',()=>{
+test('an Explore country URL is not evidence of the reader current country',()=>{
   for(const country of ['JP','FR','ZA','US','RO','SA','IL']){
     assert.equal(resolveLocale('https://www.dlkt.ee/?country='+country,['pl-PL']),'pl');
     assert.equal(resolveLocale('https://www.dlkt.ee/?country='+country+'&lang=hi',['en']),'hi');
@@ -139,4 +139,43 @@ test('missing messages, categories or placeholders fail loudly rather than falli
   assert.throws(()=>categoryLabel('xx','world'),/I18N_LOCALE_INVALID/);
   assert.throws(()=>localeUrl('https://www.dlkt.ee/','xx'),/I18N_LOCALE_INVALID/);
   assert.throws(()=>localeUrl('javascript:alert(1)','fr'),/I18N_URL_INVALID/);
+});
+
+
+test('only exact supported manual preferences survive persistence validation',()=>{
+  for(const locale of expected)assert.equal(localeFromPreference(locale),locale);
+  for(const invalid of [null,undefined,{},[],0,true,'','RO','ro-RO',' en','en ','{"locale":"ro"}','__proto__','<script>','x'.repeat(1000)]){
+    assert.equal(localeFromPreference(invalid),null);
+  }
+});
+
+test('current country defaults to its supported language while multilingual countries negotiate browser choices',()=>{
+  assert.equal(localeFromCountry('RO',['en-GB']),'ro');
+  assert.equal(localeFromCountry('DE',['en-GB']),'de');
+  assert.equal(localeFromCountry('JP',['en-GB']),'ja');
+  assert.equal(localeFromCountry('CA',['fr-CA','en-CA']),'fr');
+  assert.equal(localeFromCountry('CA',['en-CA','fr-CA']),'en');
+  assert.equal(localeFromCountry('CA',['de-DE','fr-CA']),'fr');
+  assert.equal(localeFromCountry('CA',['ja-JP']),'en');
+  assert.equal(localeFromCountry('CH',['it-CH','en']),'it');
+  assert.equal(localeFromCountry('IN',['ta-IN','en']),'ta');
+  assert.equal(localeFromCountry('TW',['en']),'zh-Hant');
+  assert.equal(localeFromCountry('HK',[]),'zh-Hant');
+  assert.equal(localeFromCountry('EE',['ro']),'en','an unshipped national language falls back to English');
+  assert.equal(localeFromCountry('ZZ',['ro']),'en');
+  for(const invalid of [undefined,null,{},'','romania','ro','__proto__','RO?lang=ar'])assert.equal(localeFromCountry(invalid,['fr']),null);
+});
+
+test('reader locale priority is explicit URL, valid manual preference, current country, then browser',()=>{
+  const url='https://www.dlkt.ee/?explore=1&country=JP';
+  assert.equal(resolveLocale(url+'&lang=fr',['ar'],{manualLocale:'en',countryCode:'RO'}),'fr');
+  assert.equal(resolveLocale(url,['ar'],{manualLocale:'en',countryCode:'RO'}),'en');
+  assert.equal(resolveLocale(url,['en'],{countryCode:'RO'}),'ro');
+  assert.equal(resolveLocale(url,['ar'],{countryCode:'EE'}),'en');
+  assert.equal(resolveLocale(url,['ar'],{manualLocale:'{"locale":"en"}'}),'ar');
+  assert.equal(resolveLocale(url,['ar'],{manualLocale:'unknown',countryCode:'RO'}),'ro');
+  assert.equal(resolveLocale(url,['ar']), 'ar');
+  for(const invalid of ['lang=unknown','lang=fr&lang=ar','lang=','lang=%3Cscript%3E']){
+    assert.equal(resolveLocale(url+'&'+invalid,['fr'],{manualLocale:'ro',countryCode:'RO'}),'en',invalid);
+  }
 });

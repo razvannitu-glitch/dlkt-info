@@ -23,6 +23,39 @@ function canonicalLocale(input:unknown):Locale|null {
   }catch{return null;}
 }
 
+
+/** Only exact catalog codes written by the language picker are persistent preferences. */
+export function localeFromPreference(input:unknown):Locale|null {
+  return typeof input==='string'&&supported.has(input)?input as Locale:null;
+}
+
+// Browser preferences resolve supported choices in multilingual countries. The default
+// otherwise comes from the platform's CLDR likely-subtag data, not an inferred user profile.
+const countryAlternatives:Readonly<Record<string,readonly Locale[]>>=Object.freeze({
+  BE:['nl','fr','de'],CA:['en','fr'],CH:['de','fr','it'],CM:['fr','en'],
+  CY:['tr'],DZ:['ar','fr'],HK:['zh-Hant','en'],IE:['en'],IL:['he','ar'],
+  IN:['hi','en','bn','ta','te','ur'],KE:['sw','en'],LK:['ta','en'],LU:['fr','de'],
+  MA:['ar','fr'],MO:['zh-Hant','pt'],MT:['en'],MU:['en','fr'],
+  MY:['ms','en','zh-Hans','ta'],PH:['fil','en'],PK:['ur','en'],
+  SG:['en','ms','zh-Hans','ta'],TN:['ar','fr'],TZ:['sw','en'],UG:['en','sw'],ZA:['en'],
+} as const);
+
+/** A known country takes precedence over browser fallback; an unshipped language uses English. */
+export function localeFromCountry(input:unknown,navigatorLanguages:readonly string[]=[]):Locale|null {
+  if(typeof input!=='string'||!/^[A-Z]{2}$/u.test(input))return null;
+  const alternatives=Object.hasOwn(countryAlternatives,input)?countryAlternatives[input]:undefined;
+  if(alternatives){
+    for(const language of navigatorLanguages.slice(0,32)){
+      const locale=canonicalLocale(language);if(locale&&alternatives.includes(locale))return locale;
+    }
+  }
+  if(input==='HK'||input==='MO')return 'zh-Hant';
+  try{return canonicalLocale(new Intl.Locale('und-'+input).maximize().toString())??'en';}
+  catch{return 'en';}
+}
+
+export type LocaleContext=Readonly<{manualLocale?:unknown;countryCode?:unknown}>;
+
 /** Duplicate/invalid URL values never select an arbitrary first language. Hash contents are ignored. */
 export function localeFromUrl(input:string|URL):Locale|null {
   try{
@@ -31,14 +64,16 @@ export function localeFromUrl(input:string|URL):Locale|null {
   }catch{return null;}
 }
 
-/** An invalid explicit choice falls back to English. Only an absent choice negotiates the browser. */
-export function resolveLocale(explicit:string|URL|null|undefined,navigatorLanguages:readonly string[]=[]):Locale {
+/** URL > explicit saved preference > current country > browser. Invalid explicit URLs use English. */
+export function resolveLocale(explicit:string|URL|null|undefined,navigatorLanguages:readonly string[]=[],context:LocaleContext={}):Locale {
   if(explicit!==null&&explicit!==undefined){
     const isUrl=explicit instanceof URL||/[:/?#]/u.test(explicit);
     if(!isUrl)return canonicalLocale(explicit)??'en';
     try{const url=copyUrl(explicit);if(url.searchParams.has('lang'))return localeFromUrl(url)??'en';}
     catch{return 'en';}
   }
+  const manual=localeFromPreference(context.manualLocale);if(manual)return manual;
+  const country=localeFromCountry(context.countryCode,navigatorLanguages);if(country)return country;
   for(const language of navigatorLanguages.slice(0,32)){const locale=canonicalLocale(language);if(locale)return locale;}
   return 'en';
 }

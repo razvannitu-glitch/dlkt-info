@@ -2,7 +2,7 @@ import {getLocale,translate as tr,translatedCategory,countryLabel,languageLabel}
 import {localeUrl} from '../i18n/locale.js';
 import {object,validCity,type City} from '../local/contracts.js';
 import {PUBLIC_EDITORIAL_CATEGORIES,type PublicEditorialCategory} from '../iceo/editorial-categories.js';
-import {sourceLanguage} from '../iceo/news-sources.js';
+import {sourceLanguage,selectNewsLanguage} from '../iceo/news-sources.js';
 import {editionCardSignature} from '../iceo/live-edition.js';
 import type {IceoSnapshot} from '../iceo/contracts.js';
 import type {ReadingCard} from '../iceo/reader.js';
@@ -145,11 +145,11 @@ export function setupExplore(options:ExploreOptions):ExploreController {
    status.textContent=placePending?tr('lookupLoading'):placeFailed?tr('placeError'):loading?tr('checkingSources'):tr('storiesUnavailable');
    coverage.textContent=tr('coveragePending');lastSelectionKey='';return;
   }
-  const selection=selectExploreCards(snapshot.cards,{city,countryCode:state.countryCode,category:state.category,cityAliases:aliases},now);
+  const selection=selectExploreCards(selectNewsLanguage(snapshot.cards,getLocale()),{city,countryCode:state.countryCode,category:state.category,cityAliases:aliases},now);
   const visible=selection.cards.slice(0,pageSize);
   const checked=new Intl.DateTimeFormat(getLocale(),{hour:'2-digit',minute:'2-digit',timeZone:city?.timezone??'UTC'}).format(new Date(snapshot.generatedAt));
   status.textContent=[tr('matchingStories',{count:selection.matchedCount}),tr('last24Hours'),tr('checkedAt',{time:checked+(city?'':' UTC')}),snapshot.state==='partial'?tr('partialCoverage'):'',loading?tr('checkingUpdates'):options.failed()?tr('refreshUnavailable'):''].filter(Boolean).join(' · ');
-  coverage.textContent=tr('coverage',{total:selection.eligibleCount,local:selection.local.length,national:selection.national.length});
+  coverage.textContent=tr('sourceLanguage',{language:languageLabel(getLocale())})+' · '+tr('coverage',{total:selection.eligibleCount,local:selection.local.length,national:selection.national.length});
   const key=JSON.stringify([getLocale(),state.cityId,state.countryCode,state.category,pageSize,visible.map(item=>[editionCardSignature(item.card),item.explore.scope,item.explore.label])]);
   if(key!==lastSelectionKey){
    const host=document.createElement('div');let previousScope='';

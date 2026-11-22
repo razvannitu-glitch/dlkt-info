@@ -1,9 +1,30 @@
-import {LOCALES,resolveLocale,localeUrl,t,categoryLabel,type Locale,type MessageKey} from './locale.js';
+import {LOCALES,resolveLocale,localeFromPreference,localeUrl,t,categoryLabel,type Locale,type MessageKey} from './locale.js';
 import {PUBLIC_EDITORIAL_CATEGORIES,type PublicEditorialCategory} from '../iceo/editorial-categories.js';
 
-/** Presentation language is URL/browser state, never a change to a saved profile or a source record. */
+const LANGUAGE_STORAGE_KEY='dlkt-reader-language-v1';
+type LanguageState={manualLocale:Locale|null;countryCode:string|null};
+const languageStates=new WeakMap<Document,LanguageState>();
+
+/** Reader preference and automatic country context never rewrite a profile or a source record. */
 export function getLocale():Locale {
-  return resolveLocale(typeof window==='undefined'?null:window.location.href,typeof navigator==='undefined'?[]:navigator.languages??[navigator.language]);
+  const state=typeof document==='undefined'?undefined:languageStates.get(document);
+  return resolveLocale(typeof window==='undefined'?null:window.location.href,typeof navigator==='undefined'?[]:navigator.languages??[navigator.language],state);
+}
+
+/** Only the existing automatic location hint may set the default; explored/saved cities cannot. */
+function detectedCountry(event:Event):string|null {
+  if(!(event instanceof CustomEvent)||!event.detail||typeof event.detail!=='object'||Array.isArray(event.detail))return null;
+  const detail=event.detail as Record<string,unknown>;
+  if(detail.estimated!==true||detail.restored!==false||!detail.city||typeof detail.city!=='object'||Array.isArray(detail.city))return null;
+  const city=detail.city as Record<string,unknown>;
+  return typeof city.countryCode==='string'&&/^[A-Z]{2}$/u.test(city.countryCode)?city.countryCode:null;
+}
+/** A country-only hint remains usable when the location service cannot match a city. */
+function detectedCountryHint(event:Event):string|null {
+  if(!(event instanceof CustomEvent)||!event.detail||typeof event.detail!=='object'||Array.isArray(event.detail))return null;
+  const detail=event.detail as Record<string,unknown>;
+  if(Reflect.ownKeys(detail).length!==2||!Object.hasOwn(detail,'countryCode')||!Object.hasOwn(detail,'estimated'))return null;
+  return detail.estimated===true&&typeof detail.countryCode==='string'&&/^[A-Z]{2}$/u.test(detail.countryCode)?detail.countryCode:null;
 }
 export function translate(key:MessageKey,params?:Readonly<Record<string,string|number>>):string {return t(getLocale(),key,params);}
 export function translatedCategory(category:PublicEditorialCategory):string {return categoryLabel(getLocale(),category);}
@@ -52,6 +73,9 @@ export function setupLanguage():void {
   for(const locale of LOCALES){
     const option=document.createElement('option');option.value=locale.code;option.lang=locale.code;option.dir=locale.direction;option.textContent=locale.nativeName;picker.append(option);
   }
+  let manualLocale:Locale|null=null;
+  try{manualLocale=localeFromPreference(window.localStorage.getItem(LANGUAGE_STORAGE_KEY));}catch{/* Unavailable storage leaves the picker usable. */}
+  const state:LanguageState={manualLocale,countryCode:null};languageStates.set(document,state);
   let applied:Locale|null=null;
   const apply=():void=>{
     const locale=getLocale(),definition=LOCALES.find(value=>value.code===locale);
@@ -61,9 +85,17 @@ export function setupLanguage():void {
     if(applied!==locale){applied=locale;document.dispatchEvent(new CustomEvent('dlkt:language-changed',{detail:{locale}}));}
   };
   picker.addEventListener('change',()=>{
-    if(!LOCALES.some(value=>value.code===picker.value))return;
-    history.pushState(null,'',localeUrl(window.location.href,picker.value as Locale));apply();
+    const locale=localeFromPreference(picker.value);if(!locale)return;
+    state.manualLocale=locale;
+    try{window.localStorage.setItem(LANGUAGE_STORAGE_KEY,locale);}catch{/* The URL and in-memory choice still work. */}
+    history.pushState(null,'',localeUrl(window.location.href,locale));apply();
   });
+  const applyCountry=(country:string|null):void=>{
+    if(country===null||state.countryCode===country)return;
+    state.countryCode=country;apply();
+  };
+  document.addEventListener('dlkt:city-selected',event=>applyCountry(detectedCountry(event)));
+  document.addEventListener('dlkt:country-detected',event=>applyCountry(detectedCountryHint(event)));
   window.addEventListener('popstate',apply);
   window.addEventListener('languagechange',apply);
   // Entry controllers may update contextual labels, but never the source content.
