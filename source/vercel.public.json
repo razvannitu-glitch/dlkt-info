@@ -47,6 +47,9 @@
     },
     "api/share-archive.ts": {
       "maxDuration": 60
+    },
+    "api/article-photo.ts": {
+      "maxDuration": 25
     }
   },
   "buildCommand": "node bootstrap.mjs",
