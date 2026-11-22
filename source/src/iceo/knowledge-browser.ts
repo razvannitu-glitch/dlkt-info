@@ -26,7 +26,7 @@ export function setupKnowledgeReader():void {
  function clearShare():void{shareRevision++;status.textContent='';fallback.hidden=true;fallback.value='';}
  function showMode(mode:'news'|'knowledge',focus=false,updateUrl=true):void {
   document.body.dataset.readerContent=mode;clearShare();
-  if(updateUrl&&knowledgeTargetFromHash(location.hash)){
+  if(updateUrl&&(knowledgeTargetFromHash(location.hash)||mode==='news'&&location.hash==='#knowledge-plan')){
    const url=new URL(location.href);url.hash='';history.replaceState(null,'',url);
   }
   render();document.dispatchEvent(new CustomEvent('dlkt:knowledge-mode'));
@@ -76,7 +76,10 @@ export function setupKnowledgeReader():void {
     const provenance=make('p','knowledge-provenance'),reviewed=make('time','',new Intl.DateTimeFormat(language,{year:'numeric',month:'short',day:'numeric'}).format(new Date(card.reviewedAt)));
     reviewed.dateTime=card.reviewedAt;reviewed.title=card.reviewedAt;
     provenance.append(document.createTextNode(card.source.publisher+' · '+copy.checked+' '),reviewed);
-    const actions=make('div','knowledge-actions'),source=make('a','knowledge-source',copy.source+' ↗');
+    const actions=make('div','knowledge-actions'),source=make('a','knowledge-source',copy.source);
+    const icon=document.createElementNS('http://www.w3.org/2000/svg','svg'),path=document.createElementNS('http://www.w3.org/2000/svg','path');
+    icon.setAttribute('viewBox','0 0 24 24');icon.setAttribute('width','16');icon.setAttribute('height','16');icon.setAttribute('aria-hidden','true');icon.setAttribute('focusable','false');
+    path.setAttribute('d','M7 17 17 7M7 7h10v10');path.setAttribute('fill','none');path.setAttribute('stroke','currentColor');path.setAttribute('stroke-width','1.8');path.setAttribute('stroke-linecap','round');path.setAttribute('stroke-linejoin','round');icon.append(path);source.append(icon);
     source.href=card.source.url;source.target='_blank';source.rel='noopener noreferrer';source.setAttribute('aria-label',copy.source+' · '+card.source.publisher);
     const share=make('button','knowledge-share',copy.copy);share.type='button';share.dataset.knowledgeShare=card.id;
     share.setAttribute('aria-label',copy.copy+' · '+value.title);

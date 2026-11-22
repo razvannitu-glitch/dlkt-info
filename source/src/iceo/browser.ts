@@ -79,6 +79,7 @@ const newsContinuation=new NewsContinuation(fetch,Date.now,()=>queueMicrotask(re
 let restartNewsEdition=false;
 let newsFilter:NewsStreamFilter='all',stopNewsObserver:()=>void=()=>{};
 let newsPeriod:NewsPeriod='today';
+let newsInteractionKey='',newsInteractionRevision=0;
 let lastLocalLanguageRefresh=0;
 const currentCardByNode=new WeakMap<HTMLElement,EvidenceCard>();
 function schedulePublicRefresh():void {
@@ -543,6 +544,8 @@ function reconcileDiscovery(target:HTMLElement,next:HTMLElement):void {
 function renderDiscovery():void {
   clearTimeout(discoveryExpiry);stopNewsObserver();
   worldExplorer?.update();
+  const interactionKey=JSON.stringify([getLocale(),newsFilter,newsPeriod,contextualCity?.id??null,document.body.dataset.entryView,document.body.dataset.worldExplore??null,knowledgeModeActive()]);
+  if(interactionKey!==newsInteractionKey||restartNewsEdition){newsInteractionKey=interactionKey;newsInteractionRevision++;}
   if(knowledgeModeActive()){newsMasonry?.disconnect();newsMasonry=null;return;}
   renderReturnBrief();
   const section=required<HTMLElement>('#discovery'),target=required<HTMLElement>('#discovery-cards'),host=document.createElement('div'),note=required<HTMLElement>('#discovery-status'),button=required<HTMLButtonElement>('#discovery-refresh');
@@ -728,11 +731,11 @@ function renderDiscovery():void {
 }
 async function showNewsPage(focus:boolean):Promise<void> {
   const state=newsContinuation.view();
-  if(document.visibilityState!=='visible'||document.body.dataset.entryView!=='start'||state.loading||state.error==='expired'||state.page?.nextCursor===null)return;
+  if(document.visibilityState!=='visible'||document.body.dataset.entryView!=='start'||knowledgeModeActive()||document.body.dataset.worldExplore||state.loading||state.error==='expired'||state.page?.nextCursor===null)return;
   const target=required<HTMLElement>('#discovery-cards'),before=new Set([...target.querySelectorAll<HTMLElement>('[data-news-stream-key]')].map(node=>node.dataset.newsStreamKey));
-  const language=getLocale(),filter=newsFilter,cityId=contextualCity?.id??null,previousCount=state.items.length;
+  const language=getLocale(),filter=newsFilter,period=newsPeriod,cityId=contextualCity?.id??null,revision=newsInteractionRevision,previousCount=state.items.length;
   await newsContinuation.next();
-  if(language!==getLocale()||filter!==newsFilter||cityId!==(contextualCity?.id??null))return;
+  if(revision!==newsInteractionRevision||period!==newsPeriod||language!==getLocale()||filter!==newsFilter||cityId!==(contextualCity?.id??null)||knowledgeModeActive()||document.body.dataset.entryView!=='start'||document.body.dataset.worldExplore)return;
   renderDiscovery();
   if(focus&&newsContinuation.view().items.length>previousCount){
     const added=[...target.querySelectorAll<HTMLElement>('[data-news-stream-key]')].find(node=>!before.has(node.dataset.newsStreamKey));

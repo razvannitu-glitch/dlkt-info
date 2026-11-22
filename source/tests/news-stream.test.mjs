@@ -181,7 +181,7 @@ test('home global ranking keeps the reading language but receives no city or top
  runInNewContext(declaration+'\n'+candidate+'\nthis.result = candidate;',context);
  assert.strictEqual(context.result,ranking);assert.deepEqual(calls[0].cards,[snapshot.cards[0]]);assert.equal(calls[0].time,now);
  assert.equal(calls[0].rankContext.countryCode,null);assert.equal(calls[0].rankContext.preferredTopics.length,0);assert.equal('city' in calls[0].rankContext,false);
- assert.match(source,/const contextKey = JSON.stringify\(\[language, context.countryCode, city\?\.id \?\? null, \[\.\.\.interests\]\.sort\(\)\]\);/u);
+ assert.match(source,/const contextKey = JSON.stringify\(\[language, context.countryCode, city\?\.id \?\? null, newsPeriod, \[\.\.\.interests\]\.sort\(\)\]\);/u);
  assert.doesNotMatch(source,/Selectia globala/u);assert.doesNotMatch(source,/Global selection/u);
 });
 
