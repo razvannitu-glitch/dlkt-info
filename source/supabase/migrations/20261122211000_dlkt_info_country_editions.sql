@@ -133,11 +133,13 @@ exception when others then return false;
 end;
 $function$;
 
+-- Avoid JIT compilation overhead in this metadata-only attestation; keep all live permission checks.
 CREATE OR REPLACE FUNCTION public.dlkt_info_read_database_readiness()
  RETURNS jsonb
  LANGUAGE plpgsql
  STABLE SECURITY DEFINER
  SET search_path TO 'pg_catalog', 'public', 'dlkt_info_private', 'auth'
+ SET jit TO 'off'
 AS $function$
 declare
   v_required_relations text[] := array[
