@@ -85,9 +85,14 @@ test('Sources describes the complete language-filtered stream and exact-article 
  assert.equal(doc.updated,'22 November 2026');assert.equal(NEWS_CATEGORIES.length,17);
  for(const category of NEWS_CATEGORIES)assert.ok(top.includes(category.iptcLabel),category.id);
  assert.match(top,/editorial inference, not an IPTC certification/u);
- assert.match(top,/up to six eligible primary reports/u);assert.match(top,/does not use your city, country context or saved interests/u);
+ assert.match(top,/Each active category contributes one article before the next round starts/u);
+ assert.match(top,/When another category is available, the first article of a new round differs in category/u);
+ assert.match(top,/when only one remains, all its remaining articles stay available/u);
+ assert.match(top,/category order stays stable for the displayed edition while more cards load/u);
+ assert.match(top,/category filter shows a projection of that same order/u);
+ assert.match(top,/does not use your city, country context or saved interests/u);
  assert.match(top,/English remains an explicit option/u);assert.match(top,/does not translate other-language articles/u);
- assert.match(top,/every other eligible, unique article/u);assert.match(top,/next group of up to twenty automatically/u);assert.match(top,/button remains available for manual loading/u);
+ assert.match(top,/every eligible, unique article/u);assert.match(top,/next group of up to twenty automatically/u);assert.match(top,/button remains available for manual loading/u);
  assert.match(top,/Other topics/u);assert.match(top,/original observation timestamps and content hashes/u);
  assert.match(local,/distinct original articles remain available even when their headlines match/iu);
  assert.match(photos,/exact article/u);assert.match(photos,/original publisher metadata/u);
@@ -96,5 +101,5 @@ test('Sources describes the complete language-filtered stream and exact-article 
  assert.ok(publishers.includes(NEWS_PUBLISHERS.length+' publisher families'));
  assert.match(publishers,/does not mean every publisher was available in the latest check/u);
  const visible=doc.sections.flatMap(value=>value.paragraphs).join(' ');
- assert.doesNotMatch(visible,/monitors twenty editorial categories|standard target of thirty|maximum of forty|At most eight press reports|Other cards use a separately reviewed contextual photograph|does not republish article bodies or photographs/u);
+ assert.doesNotMatch(visible,/up to six eligible primary reports|opening Global selection|After the opening selection|monitors twenty editorial categories|standard target of thirty|maximum of forty|At most eight press reports|Other cards use a separately reviewed contextual photograph|does not republish article bodies or photographs/u);
 });
