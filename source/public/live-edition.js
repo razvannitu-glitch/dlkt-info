@@ -100,10 +100,10 @@ function withCards(base, first, more, now) {
 export class LiveEdition {
     visible = null;
     context = '';
-    present(candidate, context, now, apply = false) {
+    present(candidate, context, now, apply = false, deferInitial = false) {
         if (!Number.isFinite(now))
             throw new Error('LIVE_EDITION_CLOCK_INVALID');
-        if (this.visible === null || this.visible.first.length + this.visible.more.length === 0 || this.context !== context || apply) {
+        if (this.visible === null || (this.visible.first.length + this.visible.more.length === 0 && !deferInitial) || this.context !== context || apply) {
             this.visible = candidate;
             this.context = context;
         }

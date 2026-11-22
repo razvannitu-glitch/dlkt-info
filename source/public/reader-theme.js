@@ -15,7 +15,7 @@
     root.dataset.readerTheme = theme;
     const bindCardSurfaces = () => {
         const surfaces = ['paper', 'ivory', 'coral', 'berry', 'wine', 'gold'];
-        const readerRoots = '#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content';
+        const readerRoots = '#discovery-cards,#home-local-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content';
         const cycle = (previous) => {
             const values = [...surfaces];
             const swap = (left, right) => {
