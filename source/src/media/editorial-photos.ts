@@ -5,7 +5,7 @@ export interface EditorialPhoto {
  readonly path:string;readonly assetUrl:string;readonly sourceUrl:string;readonly creditUrl:string;
  readonly sha256:string;readonly bytes:number;readonly width:number;readonly height:number;readonly mimeType:'image/jpeg';
  readonly alt:string;readonly caption:string;readonly credit:string;readonly license:'CC0';readonly licenseUrl:string;
- readonly changeNote:string;readonly fit:'contain';readonly reviewedAt:string;readonly reviewBy:string;
+ readonly changeNote:string;readonly fit:'cover';readonly reviewedAt:string;readonly reviewBy:string;
 }
 export const EDITORIAL_PHOTOS:readonly EditorialPhoto[]=Object.freeze([
  Object.freeze({
@@ -26,8 +26,8 @@ export const EDITORIAL_PHOTOS:readonly EditorialPhoto[]=Object.freeze([
   "credit": "freestocks.org",
   "license": "CC0",
   "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. General reading illustration, not a photograph of the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. General reading illustration, not a photograph of the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-22T10:03:10.593Z",
   "reviewBy": "2027-11-22T23:59:59.000Z"
 }),
@@ -49,8 +49,8 @@ export const EDITORIAL_PHOTOS:readonly EditorialPhoto[]=Object.freeze([
   "credit": "Porapak Apichodilok",
   "license": "CC0",
   "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. General reading illustration, not a photograph of the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. General reading illustration, not a photograph of the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-22T10:03:10.593Z",
   "reviewBy": "2027-11-22T23:59:59.000Z"
 }),
@@ -72,8 +72,8 @@ export const EDITORIAL_PHOTOS:readonly EditorialPhoto[]=Object.freeze([
   "credit": "Jeff Sheldon",
   "license": "CC0",
   "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. General reading illustration, not a photograph of the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. General reading illustration, not a photograph of the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-22T10:03:10.593Z",
   "reviewBy": "2027-11-22T23:59:59.000Z"
 })

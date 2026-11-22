@@ -68,7 +68,7 @@ export function usableContextPhoto(photo:ContextPhoto,now:number):boolean {
   &&photo.credit.length>0&&photo.credit.length<=200&&photo.changeNote.length>0&&photo.changeNote.length<=200
   &&(photo.requiredAttribution===undefined||photo.requiredAttribution.length>0&&photo.credit.includes(photo.requiredAttribution))
   &&commonsUrl(photo.assetUrl,true)&&commonsUrl(photo.creditUrl)&&photo.sourceUrl===photo.creditUrl
-  &&contextLicenses[photo.license]===photo.licenseUrl&&photo.fit==='contain';
+  &&contextLicenses[photo.license]===photo.licenseUrl&&photo.fit==='cover';
 }
 /** Public article text and URL can establish a subject; a broad feed category cannot. */
 export interface ContextPhotoInput {
@@ -218,7 +218,7 @@ export function usableEditorialPhoto(photo:EditorialPhoto,now:number):boolean {
   &&photo.caption.startsWith('Illustrative photograph: ')&&photo.caption.length<=300
   &&photo.credit.length>0&&photo.credit.length<=200&&photo.changeNote.length>0&&photo.changeNote.length<=200
   &&commonsUrl(photo.assetUrl,true)&&commonsUrl(photo.creditUrl)&&photo.sourceUrl===photo.creditUrl
-  &&photo.license==='CC0'&&photo.licenseUrl==='https://creativecommons.org/publicdomain/zero/1.0/'&&photo.fit==='contain';
+  &&photo.license==='CC0'&&photo.licenseUrl==='https://creativecommons.org/publicdomain/zero/1.0/'&&photo.fit==='cover';
 }
 function editorialMotif(card:ContextPhotoInput):EditorialPhotoMotif|null {
  const category=card.editorialCategory??(card.topic!==undefined&&card.sourceIds!==undefined?editorialCategory({title:card.title,topic:card.topic,sourceIds:card.sourceIds}):null);

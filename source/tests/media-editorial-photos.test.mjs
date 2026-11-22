@@ -83,7 +83,7 @@ test('all editorial photos are locally pinned real JPEG files with bounded paylo
  for(const photo of EDITORIAL_PHOTOS){const bytes=readFileSync('public'+photo.path);total+=bytes.length;
   assert.ok(usableEditorialPhoto(photo,now));assert.deepEqual([...bytes.subarray(0,3)],[255,216,255]);
   assert.equal(bytes.length,photo.bytes);assert.equal(createHash('sha256').update(bytes).digest('hex'),photo.sha256);
-  assert.deepEqual(jpegSize(bytes),{width:photo.width,height:photo.height});assert.equal(photo.fit,'contain');
+  assert.deepEqual(jpegSize(bytes),{width:photo.width,height:photo.height});assert.equal(photo.fit,'cover');
   assert.ok(photo.credit);assert.equal(photo.sourceUrl,photo.creditUrl);assert.match(photo.sourceUrl,/^https:\/\/commons\.wikimedia\.org\/wiki\/File:/u);
  }
  assert.ok(total<300000);

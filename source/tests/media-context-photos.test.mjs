@@ -186,7 +186,7 @@ test('all individually reviewed context files are complete JPEG photographs with
  assert.equal(new Set(CONTEXT_PHOTOS.map(p=>p.sha256)).size,CONTEXT_PHOTOS.length);
  for(const photo of CONTEXT_PHOTOS){assert.ok(usableContextPhoto(photo,now),photo.key);const bytes=readFileSync('public'+photo.path);
   assert.deepEqual([...bytes.subarray(0,3)],[255,216,255]);assert.equal(bytes.length,photo.bytes);assert.equal(createHash('sha256').update(bytes).digest('hex'),photo.sha256);
-  assert.deepEqual(jpegSize(bytes),{width:photo.width,height:photo.height});assert.equal(photo.fit,'contain');
+  assert.deepEqual(jpegSize(bytes),{width:photo.width,height:photo.height});assert.equal(photo.fit,'cover');
  }
 });
 test('presentation still makes no client-side article scrape or remote image request',()=>{

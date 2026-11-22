@@ -17,8 +17,8 @@ export const EDITORIAL_PHOTOS = Object.freeze([
         "credit": "freestocks.org",
         "license": "CC0",
         "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
-        "changeNote": "Wikimedia Commons rendition; shown without cropping. General reading illustration, not a photograph of the reported event.",
-        "fit": "contain",
+        "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. General reading illustration, not a photograph of the reported event.",
+        "fit": "cover",
         "reviewedAt": "2026-11-22T10:03:10.593Z",
         "reviewBy": "2027-11-22T23:59:59.000Z"
     }),
@@ -40,8 +40,8 @@ export const EDITORIAL_PHOTOS = Object.freeze([
         "credit": "Porapak Apichodilok",
         "license": "CC0",
         "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
-        "changeNote": "Wikimedia Commons rendition; shown without cropping. General reading illustration, not a photograph of the reported event.",
-        "fit": "contain",
+        "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. General reading illustration, not a photograph of the reported event.",
+        "fit": "cover",
         "reviewedAt": "2026-11-22T10:03:10.593Z",
         "reviewBy": "2027-11-22T23:59:59.000Z"
     }),
@@ -63,8 +63,8 @@ export const EDITORIAL_PHOTOS = Object.freeze([
         "credit": "Jeff Sheldon",
         "license": "CC0",
         "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
-        "changeNote": "Wikimedia Commons rendition; shown without cropping. General reading illustration, not a photograph of the reported event.",
-        "fit": "contain",
+        "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. General reading illustration, not a photograph of the reported event.",
+        "fit": "cover",
         "reviewedAt": "2026-11-22T10:03:10.593Z",
         "reviewBy": "2027-11-22T23:59:59.000Z"
     })

@@ -29,9 +29,9 @@ test('Info Wallet preserves the approved header stylesheet and original Kate ide
   // Explore only extends existing card selectors; the header adds approved head sizing and the matching compact breakpoint.
   let content=file==='public/iceo.css'?readFileSync(file,'utf8').replaceAll('#discovery-cards,#world-cards,','#discovery-cards,'):readFileSync(file);
   if(file==='public/iceo.css'){
-   // Uniform 16:9 photo frames authorized 22 November 2026. All other bytes remain pinned.
+   // Uniform 16:9 photo frames with balanced 16px side insets authorized 22 November 2026. All other bytes remain pinned.
    const photoRules=[
-    ['.card-photo-frame{position:relative;aspect-ratio:16/9;min-width:0;min-height:0;background:var(--black);overflow:hidden}', '.card-photo-frame{aspect-ratio:16/9;background:var(--black);overflow:hidden}'],
+    ['.card-photo-frame{position:relative;aspect-ratio:16/9;min-width:0;min-height:0;margin-inline:16px;border-radius:10px;background:var(--black);overflow:hidden}', '.card-photo-frame{aspect-ratio:16/9;background:var(--black);overflow:hidden}'],
     ['.card-photo img{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:cover}', '.card-photo img{display:block;width:100%;height:100%;object-fit:cover}'],
    ];
    for(const [approved,original]of photoRules){

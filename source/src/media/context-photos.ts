@@ -7,7 +7,7 @@ export interface ContextPhoto {
  readonly path:string;readonly assetUrl:string;readonly sourceUrl:string;readonly creditUrl:string;
  readonly sha256:string;readonly bytes:number;readonly width:number;readonly height:number;readonly mimeType:'image/jpeg';
  readonly alt:string;readonly caption:string;readonly credit:string;readonly requiredAttribution?:string;readonly license:string;readonly licenseUrl:string;
- readonly changeNote:string;readonly fit:'contain';readonly reviewedAt:string;readonly reviewBy:string;
+ readonly changeNote:string;readonly fit:'cover';readonly reviewedAt:string;readonly reviewBy:string;
 }
 export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
  Object.freeze({
@@ -28,8 +28,8 @@ export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
   "credit": "Tara Moradi / Mehr News Agency",
   "license": "CC BY 4.0",
   "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. Not the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. Not the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-21T09:07:56.681Z",
   "reviewBy": "2027-11-21T23:59:59.000Z",
   "requiredAttribution": "Mehr News Agency"
@@ -52,8 +52,8 @@ export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
   "credit": "Anirudh Koul",
   "license": "CC BY 2.0",
   "licenseUrl": "https://creativecommons.org/licenses/by/2.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. Not the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. Not the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-21T09:07:56.681Z",
   "reviewBy": "2027-11-21T23:59:59.000Z"
 }),
@@ -75,8 +75,8 @@ export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
   "credit": "Prabina Karki",
   "license": "CC BY-SA 4.0",
   "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. Not the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. Not the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-21T09:07:56.681Z",
   "reviewBy": "2027-11-21T23:59:59.000Z"
 }),
@@ -98,8 +98,8 @@ export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
   "credit": "Matti Blume",
   "license": "CC BY-SA 4.0",
   "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. Not the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. Not the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-21T09:07:56.681Z",
   "reviewBy": "2027-11-21T23:59:59.000Z"
 }),
@@ -121,8 +121,8 @@ export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
   "credit": "Ank Kumar",
   "license": "CC BY-SA 4.0",
   "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. Not the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. Not the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-21T09:07:56.681Z",
   "reviewBy": "2027-11-21T23:59:59.000Z"
 }),
@@ -144,8 +144,8 @@ export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
   "credit": "Kurt Kaiser",
   "license": "CC0",
   "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. Not the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. Not the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-21T09:07:56.681Z",
   "reviewBy": "2027-11-21T23:59:59.000Z"
 }),
@@ -167,8 +167,8 @@ export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
   "credit": "Tejeshmavinamar",
   "license": "CC BY-SA 4.0",
   "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. Not the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. Not the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-21T09:07:56.681Z",
   "reviewBy": "2027-11-21T23:59:59.000Z"
 }),
@@ -190,8 +190,8 @@ export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
   "credit": "Jacek Halicki",
   "license": "CC BY-SA 4.0",
   "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. Not the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. Not the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-21T09:07:56.681Z",
   "reviewBy": "2027-11-21T23:59:59.000Z"
 }),
@@ -213,8 +213,8 @@ export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
   "credit": "Szalax",
   "license": "CC0",
   "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. Not the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. Not the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-21T09:07:56.681Z",
   "reviewBy": "2027-11-21T23:59:59.000Z"
 }),
@@ -236,8 +236,8 @@ export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
   "credit": "Tessa Bury",
   "license": "CC BY 4.0",
   "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. Not the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. Not the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-21T09:07:56.681Z",
   "reviewBy": "2027-11-21T23:59:59.000Z"
 }),
@@ -259,8 +259,8 @@ export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
   "credit": "OathOn",
   "license": "CC BY-SA 4.0",
   "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. Not the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. Not the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-21T09:07:56.681Z",
   "reviewBy": "2027-11-21T23:59:59.000Z"
 }),
@@ -282,8 +282,8 @@ export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
   "credit": "Damzow",
   "license": "CC BY-SA 3.0",
   "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. Not the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. Not the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-21T09:07:56.681Z",
   "reviewBy": "2027-11-21T23:59:59.000Z"
 }),
@@ -305,8 +305,8 @@ export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
   "credit": "TausifAlHossain",
   "license": "CC BY-SA 4.0",
   "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. Not the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. Not the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-21T09:07:56.681Z",
   "reviewBy": "2027-11-21T23:59:59.000Z"
 }),
@@ -328,8 +328,8 @@ export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
   "credit": "Xavier Lejeune / © European Union, 2026",
   "license": "CC BY 4.0",
   "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. Not the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. Not the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-21T09:07:56.681Z",
   "reviewBy": "2027-11-21T23:59:59.000Z",
   "requiredAttribution": "© European Union, 2026"
@@ -352,8 +352,8 @@ export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
   "credit": "Md. Shujayt Gani",
   "license": "CC BY-SA 4.0",
   "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. Not the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. Not the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-21T14:43:21.983Z",
   "reviewBy": "2027-11-21T23:59:59.000Z"
 }),
@@ -375,8 +375,8 @@ export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
   "credit": "DigitalMahesh95",
   "license": "CC BY-SA 4.0",
   "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. Not the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. Not the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-21T14:43:21.983Z",
   "reviewBy": "2027-11-21T23:59:59.000Z"
 }),
@@ -398,8 +398,8 @@ export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
   "credit": "Chris Woodrich",
   "license": "CC BY-SA 4.0",
   "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. Not the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. Not the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-21T14:43:21.983Z",
   "reviewBy": "2027-11-21T23:59:59.000Z"
 }),
@@ -421,8 +421,8 @@ export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
   "credit": "Chris Woodrich",
   "license": "CC BY-SA 4.0",
   "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. Not the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. Not the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-21T14:43:21.983Z",
   "reviewBy": "2027-11-21T23:59:59.000Z"
 }),
@@ -444,8 +444,8 @@ export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
   "credit": "Kremlin.ru",
   "license": "CC BY 4.0",
   "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. Not the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. Not the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-21T14:43:21.983Z",
   "reviewBy": "2027-11-21T23:59:59.000Z",
   "requiredAttribution": "Kremlin.ru"
@@ -468,8 +468,8 @@ export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
   "credit": "Jdforrester",
   "license": "CC BY 4.0",
   "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. Not the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. Not the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-21T14:43:21.983Z",
   "reviewBy": "2027-11-21T23:59:59.000Z"
 }),
@@ -491,8 +491,8 @@ export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
   "credit": "Thomas Park",
   "license": "CC BY-SA 4.0",
   "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. Not the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. Not the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-21T14:43:21.983Z",
   "reviewBy": "2027-11-21T23:59:59.000Z"
 }),
@@ -514,8 +514,8 @@ export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
   "credit": "Joseolgon",
   "license": "CC BY-SA 4.0",
   "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. Not the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. Not the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-21T14:43:21.983Z",
   "reviewBy": "2027-11-21T23:59:59.000Z"
 }),
@@ -537,8 +537,8 @@ export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
   "credit": "Michael C. / Bacon Noodles",
   "license": "CC0",
   "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. Not the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. Not the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-21T14:43:21.983Z",
   "reviewBy": "2027-11-21T23:59:59.000Z"
 }),
@@ -560,8 +560,8 @@ export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
   "credit": "Mutney",
   "license": "CC BY-SA 4.0",
   "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. Not the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. Not the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-21T14:43:21.983Z",
   "reviewBy": "2027-11-21T23:59:59.000Z"
 }),
@@ -583,8 +583,8 @@ export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
   "credit": "PDS.2016",
   "license": "CC BY-SA 4.0",
   "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. Not the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. Not the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-21T14:43:21.983Z",
   "reviewBy": "2027-11-21T23:59:59.000Z"
 }),
@@ -606,8 +606,8 @@ export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
   "credit": "Kotivalo",
   "license": "CC BY-SA 4.0",
   "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. Not the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. Not the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-21T14:43:21.983Z",
   "reviewBy": "2027-11-21T23:59:59.000Z"
 }),
@@ -629,8 +629,8 @@ export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
   "credit": "Tiia Monto",
   "license": "CC BY-SA 4.0",
   "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. Not the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. Not the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-21T14:43:21.983Z",
   "reviewBy": "2027-11-21T23:59:59.000Z"
 }),
@@ -652,8 +652,8 @@ export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
   "credit": "Lukasz Kobus / European Commission · © European Union, 2026",
   "license": "CC BY 4.0",
   "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. Not the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. Not the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-21T14:43:21.983Z",
   "reviewBy": "2027-11-21T23:59:59.000Z",
   "requiredAttribution": "© European Union, 2026"
@@ -676,8 +676,8 @@ export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
   "credit": "Tackellyo",
   "license": "CC BY-SA 4.0",
   "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. Not the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. Not the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-21T14:43:21.983Z",
   "reviewBy": "2027-11-21T23:59:59.000Z"
 }),
@@ -699,8 +699,8 @@ export const CONTEXT_PHOTOS:readonly ContextPhoto[]=Object.freeze([
   "credit": "AramilFeraxa",
   "license": "CC BY 4.0",
   "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
-  "changeNote": "Wikimedia Commons rendition; shown without cropping. Not the reported event.",
-  "fit": "contain",
+  "changeNote": "Wikimedia Commons rendition; proportionally framed to fill the card; edges may be cropped. Full image at the credit link. Not the reported event.",
+  "fit": "cover",
   "reviewedAt": "2026-11-21T14:43:21.983Z",
   "reviewBy": "2027-11-21T23:59:59.000Z"
 })
