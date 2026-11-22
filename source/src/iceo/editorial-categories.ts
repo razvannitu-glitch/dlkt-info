@@ -114,6 +114,8 @@ const NEWS_SUBJECTS:readonly (readonly [PublicEditorialCategory,RegExp])[]=[
 ];
 
 function matchesSubject(category:PublicEditorialCategory,pattern:RegExp,title:string):boolean {
+  // West Bank names a place. Keep any independent banking or economic words in the headline.
+  if(category==='business')return pattern.test(title.replace(/\bwest bank\b/gu,' '));
   if(category==='weather')return pattern.test(weatherSubjectText(title));
   if(category==='family')return pattern.test(title)||hasChildProtectionSubject(title);
   if(category==='world')return pattern.test(title)||hasDiplomaticSummitContext(title);
@@ -341,8 +343,10 @@ function englishHeadlineSubject(title:string):PublicEditorialCategory|null {
 }
 
 /** Only explicit contrary subjects invalidate existing discovery provenance. */
-function contradictedHeadlineHints(title:string):readonly PublicEditorialCategory[] {
+export function contradictedHeadlineHints(title:string):readonly PublicEditorialCategory[] {
   const rejected:PublicEditorialCategory[]=[];
+  // Do not let an earlier discovery label restore the same geographic bank false positive.
+  if(/\bwest bank\b/u.test(title)&&englishHeadlineSubject(title)!=='business')rejected.push('business');
   if(hasUnsupportedWeatherDescriptor(title)
     &&!NEWS_SUBJECTS.some(([category,pattern])=>category==='weather'&&matchesSubject(category,pattern,title)))rejected.push('weather');
   if(/\bsummits?\b/u.test(title)&&!hasDiplomaticSummitContext(title)){

@@ -1,6 +1,6 @@
 import type {EvidenceCard} from './contracts.js';
 import type {LocalCard} from '../local/contracts.js';
-import {classifyNewsHeadline,newsCategoryFromSourceId} from './editorial-categories.js';
+import {classifyNewsHeadline,newsCategoryFromSourceId,contradictedHeadlineHints} from './editorial-categories.js';
 
 /**
  * IPTC Media Topics, 17 top-level concepts, checked 2026-11-22.
@@ -111,7 +111,7 @@ const DIRECT:readonly (readonly [NewsCategoryId,RegExp])[]=[
  ['16000000',/\b(?:ceasefire|airstrikes?|air strikes?|armed conflict|peace talks|war in|war against|invasion|razboi(?:ul)?|bombardamente|armistitiu|conflict armat|incetarea focului|cessez-le-feu|waffenstillstand|alto el fuego)\b|停戦|空爆|وقف إطلاق النار/u],
  ['09000000',/\b(?:workers? strike|teachers? strike|industrial action|trade unions?|layoffs?|unemployment|workforce|job vacancies|hiring|recruitment|labour market|labor market|greva|grevis\w*|sindicat\w*|concedieri|somaj|angajari|recrutare|posturi vacante|locuri de munca)\b/u],
  ['14000000',/\b(?:homelessness|social services|public housing|human rights|child protection|parenting|childcare|saracie|asistenta sociala|protectia copilului|drepturile omului|locuinte sociale|persoane fara adapost)\b/u],
- ['11000000',/\b(?:elections?|parliament|prime minister|government policy|city council|urban planning|election results|alegeri|parlament\w*|primari[ae]|primarul|consiliul local|consiliul general|consilierii locali|politic[ai]|guvern(?:ul)?|plan urbanistic)\b/u],
+ ['11000000',/\b(?:elections?|parliament|prime minister|prim[- ]ministru(?:l)?|premier(?:ul)? desemnat|government policy|city council|urban planning|election results|alegeri|parlament\w*|primari[ae]|primarul|consiliul local|consiliul general|consilierii locali|politic[ai]|guvern(?:ul)?|plan urbanistic)\b/u],
  ['05000000',/\b(?:education|schools?|universit(?:y|ies)|students?|curriculum|tuition|scholarships?|educatie|scoal[ai]|scoli|liceu(?:l)?|elevi(?:i|lor)?|gradinit[ae]|universitat\w*|burse scolare|invatamant|bacalaureat)\b/u],
  ['01000000',/\b(?:concert(?:s|ul|e)?|festival(?:s|ul|uri)?|muzeu\w*|teatru\w*|expoziti[aei]|cinema|hollywood|film premieres?|box office|filme|muzica|literatura)\b/u],
  ['15000000',/\b(?:football|soccer|tennis|basketball|formula 1|formula one|grand prix|world cup|motogp|motocross|superbike|rugby|cricket|cycling championship|fotbal|baschet|tenis|handbal|campionat\w*)\b/u],
@@ -170,8 +170,9 @@ export function classifyEvidenceCard(card:EvidenceInput):NewsClassification|null
  if(card.sourceIds.includes('news-unclassified'))return null;
  // A specific, agreed discovery hint can support an otherwise terse headline.
  // Generic world/housing/other/topic defaults cannot classify an unknown article.
+ const unsupportedBusiness=contradictedHeadlineHints(fold(card.title)).includes('business');
  const hints=new Set(card.sourceIds.map(newsCategoryFromSourceId)
-  .filter(value=>value!==null&&value!=='world'&&value!=='housing')
+  .filter(value=>value!==null&&value!=='world'&&value!=='housing'&&!(value==='business'&&unsupportedBusiness))
   .map(value=>value===null?null:legacyCategoryToNewsCategory(value)).filter(isNewsCategoryId));
  if(hints.size===1){const category=[...hints][0];if(category)return result(category,'legacy-topic');}
  return null;

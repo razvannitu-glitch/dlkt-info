@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {selectNewsStream} from '../.build/src/iceo/news-stream.js';
 import {readingCard} from '../.build/src/iceo/reader.js';
+import {classifyNewsHeadline,classifyEditorialCard} from '../.build/src/iceo/editorial-categories.js';
 import {NEWS_CATEGORIES,NEWS_TAXONOMY_VERSION,isNewsCategoryId,newsCategoryLabel,legacyCategoryToNewsCategory,classifyNewsSubject,classifyEvidenceCard,classifyLocalCard,newsCategory} from '../.build/src/iceo/news-taxonomy.js';
 
 const evidence=(title,overrides={})=>({title,sourceUrl:'https://www.theguardian.com/world/2026/nov/22/reported-story',sourceIds:['news-unclassified'],topic:'other',...overrides});
@@ -252,4 +253,37 @@ test('unknown original news stays available in Other topics with all source fiel
  const stream=selectNewsStream({first:[view],more:[]},[],now,'other');
  assert.equal(stream.total,1);assert.equal(stream.filtered.length,1);assert.equal(stream.counts.other,1);
  assert.strictEqual(stream.filtered[0].view.card,original);assert.equal(JSON.stringify(original),before);
+});
+
+test('West Bank is geographic text, not a banking subject or a reusable legacy business hint',()=>{
+ const title='Israel investigates West Bank fires',sourceUrl='https://www.france24.com/en/live-news/controlled-report';
+ assert.equal(classifyNewsHeadline(title,sourceUrl),null);
+ assert.equal(classifyNewsSubject(title,sourceUrl),null,'place alone must not imply economy or conflict');
+ const original=Object.freeze(evidence(title,{sourceUrl,sourceIds:['news-business'],topic:'business',id:'controlled-west-bank',contentHash:'unchanged-hash'}));
+ const before=JSON.stringify(original);
+ assert.equal(classifyEditorialCard(original),null);assert.equal(classifyEvidenceCard(original),null);
+ assert.equal(JSON.stringify(original),before,'classification never rewrites the original record');
+ for(const headline of [
+  'Bank of England keeps interest rates unchanged',
+  'A bank opens branches in the West Bank',
+  'West Bank economy expands',
+  'Israel investigates West Bank fires as bank shares fall',
+ ]){
+  assert.equal(classifyNewsHeadline(headline,sourceUrl),'business',headline);
+  assert.equal(classifyEvidenceCard(evidence(headline,{sourceUrl,sourceIds:['news-business'],topic:'business'}))?.category,'04000000',headline);
+ }
+ const section=classifyNewsSubject(title,'https://www.theguardian.com/business/2026/nov/22/controlled-report');
+ assert.equal(section?.category,'04000000');assert.equal(section?.basis,'publisher-section','an explicit publisher business section remains independent evidence');
+});
+
+test('explicit Romanian prime-minister headlines classify as politics without a generic premier or company-president rule',()=>{
+ const title='Fiul fostului președinte din Republika Srpska, propus pentru funcția de prim-ministru. Este cel mai tânăr premier desemnat din istoria țării - HotNews.ro';
+ const original=Object.freeze(evidence(title,{sourceUrl:'https://hotnews.ro/controlled-report',sourceIds:['news-unclassified'],topic:'other',id:'controlled-ro-politics',contentHash:'unchanged-hash'}));
+ const before=JSON.stringify(original),classified=classifyEvidenceCard(original);
+ assert.equal(classified?.category,'11000000');assert.equal(classified?.basis,'headline');assert.equal(JSON.stringify(original),before);
+ for(const headline of ['Prim ministrul isi prezinta echipa','Premierul desemnat isi prezinta echipa']){
+  assert.equal(classifyEvidenceCard(evidence(headline,{sourceIds:['news-unclassified']}))?.category,'11000000',headline);
+ }
+ assert.equal(classifyEvidenceCard(evidence('Premier League announces its fixtures',{sourceIds:['news-unclassified']}))?.category,'15000000');
+ assert.equal(classifyEvidenceCard(evidence('Compania si-a desemnat noul presedinte',{sourceIds:['news-unclassified']})),null);
 });
