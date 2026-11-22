@@ -1,3 +1,4 @@
+import { setupCommercialRequest } from './commercial-browser.js';
 import { DEFAULT_ORGANIZATION_SETUP, ORGANIZATION_PLANS, ORGANIZATION_STORAGE_KEY, ORGANIZATION_TOPICS, forgetOrganizationSetup, organizationFocusUrl, organizationPilotRequest, organizationPlan, rememberOrganizationSetup, restoreOrganizationSetup, validOrganizationSetup } from './organization-setup.js';
 function get(id) { const node = document.getElementById(id); if (!node)
     throw Error('ORGANIZATION_ELEMENT_MISSING'); return node; }
@@ -121,3 +122,4 @@ window.addEventListener('storage', event => { if (event.key === ORGANIZATION_STO
     savedNotice();
     feedback.textContent = 'Saved organization setup changed in another tab. Your unsaved form choices have been kept.';
 } });
+setupCommercialRequest();

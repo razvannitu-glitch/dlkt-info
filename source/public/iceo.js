@@ -8,9 +8,12 @@ import { LiveEdition, editionCardSignature, editionStorySignature, editionUpdate
 import { publicEditionState } from './home-edition.js';
 import { observeNewsStream, NEWS_PAGE_SIZE } from './news-stream.js';
 import { NewsContinuation, continuationItems } from './news-continuation.js';
+import { newsStorySourcesNode } from './news-story-browser.js';
+import { countryEditionProfile } from './country-editions.js';
+import { commercialCardNode } from './commercial-browser.js';
 import { NEWS_CATEGORIES, newsCategoryLabel, isNewsCategoryId } from './news-taxonomy.js';
 import { NewsMasonry } from './news-masonry.js';
-import { setupKnowledgeReader, knowledgeModeActive, knowledgeCardNode } from './knowledge-browser.js';
+import { knowledgeCardNode } from './knowledge-browser.js';
 import { KNOWLEDGE_CARDS } from './knowledge-catalog.js';
 import { selectInlineKnowledge, interleaveKnowledge } from './knowledge-stream.js';
 import { NewsReadingState } from './news-reading-state.js';
@@ -80,7 +83,7 @@ let newsMasonry = null;
 const newsContinuation = new NewsContinuation(fetch, Date.now, () => queueMicrotask(renderDiscovery));
 let restartNewsEdition = false;
 let newsFilter = 'all', stopNewsObserver = () => { };
-let newsPeriod = 'today';
+let newsPeriod = 'recent';
 let newsInteractionKey = '', newsInteractionRevision = 0;
 const inlineKnowledgeSeen = new Set();
 let inlineKnowledgeContext = '';
@@ -1094,15 +1097,10 @@ function renderDiscovery() {
     clearTimeout(discoveryExpiry);
     stopNewsObserver();
     worldExplorer?.update();
-    const interactionKey = JSON.stringify([getLocale(), newsFilter, newsPeriod, contextualCity?.id ?? null, document.body.dataset.entryView, document.body.dataset.worldExplore ?? null, knowledgeModeActive()]);
+    const interactionKey = JSON.stringify([getLocale(), newsFilter, newsPeriod, contextualCity?.id ?? null, document.body.dataset.entryView, document.body.dataset.worldExplore ?? null]);
     if (interactionKey !== newsInteractionKey || restartNewsEdition) {
         newsInteractionKey = interactionKey;
         newsInteractionRevision++;
-    }
-    if (knowledgeModeActive()) {
-        newsMasonry?.disconnect();
-        newsMasonry = null;
-        return;
     }
     renderReturnBrief();
     const section = required('#discovery'), target = required('#discovery-cards'), host = document.createElement('div'), note = required('#discovery-status'), button = required('#discovery-refresh');
@@ -1143,6 +1141,7 @@ function renderDiscovery() {
     restartNewsEdition = false;
     applyPublicUpdate = false;
     const server = newsContinuation.view(), visible = continuationItems(server.items, now);
+    const pageItemByKey = new Map(server.items.map(item => [item.key, item]));
     const stream = { total: server.page?.total ?? 0, counts: server.page?.counts ?? Object.fromEntries(['other', ...NEWS_CATEGORIES.map(category => category.id)].map(id => [id, 0])) };
     const newsUpdates = live.changes.total + reading.pending;
     const topCount = server.page?.filteredTotal ?? 0, localNewsCount = server.items.filter(item => item.kind === 'local').length;
@@ -1167,6 +1166,8 @@ function renderDiscovery() {
     const suppressLocalPending = (loadingPhase === 'initial' || loadingPhase === 'slow') && !local.supporting.length;
     required('#today-heading').textContent = newsPeriod === 'today' ? (language === 'ro' ? 'Stirile de azi' : language === 'it' ? 'Notizie di oggi' : "Today's news") : (language === 'ro' ? 'Stiri recente' : language === 'it' ? 'Notizie recenti' : 'Recent news');
     const editionCountry = server.page?.countryCode ? countryLabel(server.page.countryCode) : null, coverage = server.page?.coverage;
+    const countryProfile = contextualCity && contextualCity.countryCode !== 'ZZ' ? countryEditionProfile({ code: contextualCity.countryCode, name: contextualCity.country }, language, server.page?.countryCode === contextualCity.countryCode && server.page.language === language ? coverage : undefined) : null;
+    section.dataset.countryEditionState = countryProfile?.state ?? 'unknown';
     const nationalLabel = language === 'ro' ? 'surse nationale' : language === 'it' ? 'fonti nazionali' : 'national sources';
     const internationalLabel = language === 'ro' ? 'surse internationale' : language === 'it' ? 'fonti internazionali' : 'international sources';
     required('#home-location').textContent = server.page && coverage
@@ -1211,10 +1212,10 @@ function renderDiscovery() {
     }
     picker.value = newsFilter;
     const progress = required('#home-news-progress'), format = new Intl.NumberFormat(language);
-    const progressCopy = language === 'ro' ? `${format.format(visible.length)} din ${format.format(topCount)} articole disponibile afisate` : language === 'it' ? `${format.format(visible.length)} di ${format.format(topCount)} articoli disponibili mostrati` : `${format.format(visible.length)} of ${format.format(topCount)} available reports shown`;
+    const progressCopy = language === 'ro' ? `${format.format(visible.length)} din ${format.format(topCount)} subiecte afisate` : language === 'it' ? `${format.format(visible.length)} di ${format.format(topCount)} notizie mostrate` : `${format.format(visible.length)} of ${format.format(topCount)} stories shown`;
     if (progress.textContent !== progressCopy)
         progress.textContent = progressCopy;
-    progress.title = language === 'ro' ? `${format.format(stream.total)} articole disponibile in aceasta limba` : `${format.format(stream.total)} articles available in this language`;
+    progress.title = language === 'ro' ? `${format.format(stream.total)} subiecte din ${format.format(server.page?.articleTotal ?? 0)} articole originale in aceasta limba` : language === 'it' ? `${format.format(stream.total)} notizie da ${format.format(server.page?.articleTotal ?? 0)} articoli originali in questa lingua` : `${format.format(stream.total)} stories from ${format.format(server.page?.articleTotal ?? 0)} original articles in this language`;
     host.dataset.editionState = editionState;
     host.dataset.dailyCoverage = 'connected-sources';
     const inlinePage = server.page;
@@ -1259,6 +1260,20 @@ function renderDiscovery() {
             if (details)
                 details.textContent = tr('sourceDetails');
         }
+        const originalItem = pageItemByKey.get(item.key);
+        if (originalItem?.story && server.page) {
+            node.dataset.storyKey = originalItem.story.key;
+            node.dataset.liveSignature = JSON.stringify([node.dataset.liveSignature, originalItem.story, inlineContext]);
+            node.querySelector('.related')?.remove();
+            const sources = newsStorySourcesNode(originalItem, server.page, language, contextualCity ?? undefined);
+            if (sources) {
+                const evidence = node.querySelector('.evidence');
+                if (evidence)
+                    evidence.before(sources);
+                else
+                    node.append(sources);
+            }
+        }
         node.dataset.editionPart = 'stream';
         node.dataset.newsStreamKey = item.key;
         node.dataset.newsCategory = item.category ?? 'other';
@@ -1269,6 +1284,11 @@ function renderDiscovery() {
     }
     if (!visible.length && loadingPhase === 'hidden') {
         const message = make('p', 'discovery-section-label privacy-note', editionState === 'unavailable' ? tr('storiesUnavailable') : newsPeriod === 'today' ? (language === 'ro' ? 'Nu sunt inca articole verificate pentru aceasta zi, categorie si limba. Alege Recent pentru articolele anterioare.' : language === 'it' ? 'Nessun articolo verificato per questo giorno, categoria e lingua. Scegli Recenti per gli articoli precedenti.' : 'No checked articles match this day, category and language yet. Choose Recent for earlier reports.') : (language === 'ro' ? 'Nu sunt articole verificate pentru aceasta categorie si limba. Acoperirea surselor este partiala.' : language === 'it' ? 'Nessun articolo verificato per questa categoria e lingua. La copertura delle fonti è parziale.' : 'No checked articles match this category and language. Source coverage is partial.'));
+        if (editionState !== 'unavailable' && countryProfile?.state === 'unconnected')
+            message.textContent = language === 'ro'
+                ? `Pentru ${countryProfile.countryName} nu sunt inca conectate surse nationale in ${languageLabel(language)}. Poti incerca perioada Recent sau optiunea English.`
+                : language === 'it' ? `Per ${countryProfile.countryName} non sono ancora collegate fonti nazionali in ${languageLabel(language)}. Prova Recenti oppure English.`
+                    : `National sources in ${languageLabel(language)} are not connected for ${countryProfile.countryName} yet. Try Recent or another reading language.`;
         message.id = 'home-edition-' + editionState;
         host.append(message);
     }
@@ -1292,7 +1312,7 @@ function renderDiscovery() {
         streamEnd.append(next);
     }
     else if (visible.length) {
-        streamEnd.append(make('p', 'privacy-note', language === 'ro' ? 'Ai parcurs aceasta editie verificata. Apasa „Arata noutatile” pentru o editie noua.' : 'You have reached the end of this checked edition. Select Show updates for a new edition.'));
+        streamEnd.append(make('p', 'privacy-note', language === 'ro' ? 'Ai parcurs subiectele disponibile in aceasta editie.' : language === 'it' ? 'Hai letto le notizie disponibili in questa edizione.' : 'You have reached the end of the available stories in this edition.'));
         const update = make('button', 'secondary', language === 'ro' ? 'Arata noutatile' : 'Show updates');
         update.type = 'button';
         update.dataset.newsRestart = 'true';
@@ -1314,6 +1334,8 @@ function renderDiscovery() {
         node.dataset.cityId = contextualCity.id;
         supportHost.append(node);
     }
+    if (contextualCity && !suppressLocalPending)
+        supportHost.append(commercialCardNode({ city: contextualCity.name, country: countryLabel(contextualCity.countryCode, contextualCity.country) }, language));
     if (!suppressLocalPending && !local.supporting.length && !localNewsCount && (contextualCity || contextualLocationPending)) {
         const state = make('div', 'discovery-section-label');
         state.id = 'home-local-state';
@@ -1345,7 +1367,7 @@ function renderDiscovery() {
     const sentinel = controls.querySelector('#home-more-button');
     if (sentinel && !server.loading && !server.error && server.page?.nextCursor)
         stopNewsObserver = observeNewsStream(sentinel, () => { void showNewsPage(false); });
-    const publicationState = stream.total ? `${stream.total} unique articles in the selected language are available from connected sources. ${topCount} match the category filter; ${visible.length} are shown. Articles keep their original titles, publication dates and sources.` : editionState === 'unavailable' ? 'Publications could not be checked. Refresh to try again.' : editionState === 'pending' ? 'Checking connected publications…' : 'No current publications meet this language selection.';
+    const publicationState = stream.total ? `${stream.total} stories from ${server.page?.articleTotal ?? 0} original articles in the selected language are available from connected sources. ${topCount} match the category filter; ${visible.length} are shown. Reports confidently identified as the same event share one card with their original source links. Different events remain separate.` : editionState === 'unavailable' ? 'Publications could not be checked. Refresh to try again.' : editionState === 'pending' ? 'Checking connected publications…' : 'No current publications meet this language selection.';
     const sourceState = loading && !automaticPublicLoad ? ' Checking for updates…' : lastLoadFailed && snapshot ? ' Refresh unavailable; retained source checks are not newly verified.' : snapshot?.state === 'partial' ? ' Some source coverage is incomplete.' : '';
     const localState = (localNewsCount ? ` ${localNewsCount} local reports are among the articles loaded so far.` : '') + (awaitingLocal ? ' Local information is being checked.' : local.supporting.length ? ` ${local.supporting.length} supporting local records are available below.` : contextualCity ? ' Local coverage is shown below.' : '');
     const updateParts = [live.changes.total ? editionUpdateLabel(live.changes) : '', reading.pending ? `${reading.pending} local report changes` : ''].filter(Boolean);
@@ -1381,13 +1403,18 @@ function renderDiscovery() {
         if (coverage) {
             const number = new Intl.NumberFormat(language), national = number.format(coverage.national), localCount = number.format(coverage.local), international = number.format(coverage.international);
             languages.append(make('p', 'privacy-note', language === 'ro'
-                ? `Editii ale surselor nationale: ${national} · Stiri locale verificate: ${localCount} · Surse internationale: ${international}. Tara descrie editia sursei, nu locul fiecarui eveniment.`
-                : language === 'it' ? `Edizioni di fonti nazionali: ${national} · Notizie locali verificate: ${localCount} · Fonti internazionali: ${international}. Il paese descrive l'edizione della fonte, non il luogo di ogni evento.`
-                    : `National publisher editions: ${national} · Verified local reports: ${localCount} · International sources: ${international}. The country describes the publisher edition, not the location of every event.`));
+                ? `Subiecte din editii nationale: ${national} · Subiecte locale verificate: ${localCount} · Subiecte din surse internationale: ${international}. Tara descrie editia sursei, nu locul fiecarui eveniment.`
+                : language === 'it' ? `Notizie da edizioni nazionali: ${national} · Notizie locali verificate: ${localCount} · Notizie da fonti internazionali: ${international}. Il paese descrive l'edizione della fonte, non il luogo di ogni evento.`
+                    : `Stories from national editions: ${national} · Verified local stories: ${localCount} · Stories from international sources: ${international}. The country describes the publisher edition, not the location of every event.`));
             if (coverage.local === 0)
                 languages.append(make('p', 'privacy-note', language === 'ro' ? 'Nicio stire locala verificata in aceasta editie.' : language === 'it' ? 'Nessuna notizia locale verificata in questa edizione.' : 'No verified local news in this edition.'));
-            if (editionCountry && coverage.national === 0)
-                languages.append(make('p', 'privacy-note', language === 'ro' ? 'Nu sunt disponibile surse nationale verificate pentru aceasta limba. Sunt afisate sursele internationale eligibile.' : language === 'it' ? 'Non sono disponibili fonti nazionali verificate per questa lingua. Sono mostrate le fonti internazionali idonee.' : 'No verified national sources are available for this language. Eligible international sources are shown.'));
+            if (countryProfile && coverage.national === 0) {
+                const unconnected = countryProfile.state === 'unconnected';
+                languages.append(make('p', 'privacy-note', language === 'ro'
+                    ? unconnected ? `Nu sunt inca conectate surse nationale pentru ${countryProfile.countryName} in aceasta limba.` : 'Sursele nationale sunt configurate, dar nu au articole eligibile in aceasta editie.'
+                    : language === 'it' ? unconnected ? `Non sono ancora collegate fonti nazionali per ${countryProfile.countryName} in questa lingua.` : 'Le fonti nazionali sono configurate, ma non hanno articoli idonei in questa edizione.'
+                        : unconnected ? `National sources for ${countryProfile.countryName} are not connected in this language yet.` : 'National sources are configured but have no eligible articles in this edition.'));
+            }
         }
     }
     const anchor = anchors.find(item => item.node.isConnected);
@@ -1400,12 +1427,12 @@ function renderDiscovery() {
 }
 async function showNewsPage(focus) {
     const state = newsContinuation.view();
-    if (document.visibilityState !== 'visible' || document.body.dataset.entryView !== 'start' || knowledgeModeActive() || document.body.dataset.worldExplore || state.loading || state.error === 'expired' || state.page?.nextCursor === null)
+    if (document.visibilityState !== 'visible' || document.body.dataset.entryView !== 'start' || document.body.dataset.worldExplore || state.loading || state.error === 'expired' || state.page?.nextCursor === null)
         return;
     const target = required('#discovery-cards'), before = new Set([...target.querySelectorAll('[data-news-stream-key]')].map(node => node.dataset.newsStreamKey));
     const language = getLocale(), filter = newsFilter, period = newsPeriod, cityId = contextualCity?.id ?? null, revision = newsInteractionRevision, previousCount = state.items.length;
     await newsContinuation.next();
-    if (revision !== newsInteractionRevision || period !== newsPeriod || language !== getLocale() || filter !== newsFilter || cityId !== (contextualCity?.id ?? null) || knowledgeModeActive() || document.body.dataset.entryView !== 'start' || document.body.dataset.worldExplore)
+    if (revision !== newsInteractionRevision || period !== newsPeriod || language !== getLocale() || filter !== newsFilter || cityId !== (contextualCity?.id ?? null) || document.body.dataset.entryView !== 'start' || document.body.dataset.worldExplore)
         return;
     renderDiscovery();
     if (focus && newsContinuation.view().items.length > previousCount) {
@@ -1664,8 +1691,6 @@ setupLanguage();
 worldExplorer = setupExplore({ snapshot: () => snapshot, loading: () => loading, failed: () => lastLoadFailed,
     card: (view, index, total) => cardNode(view, index, total, undefined, false), reconcile: reconcileDiscovery,
     refresh: () => { void load(); }, saved: memoryControls });
-setupKnowledgeReader();
-document.addEventListener('dlkt:knowledge-mode', renderDiscovery);
 document.addEventListener('dlkt:language-changed', () => { applyInterfaceLanguage(); render(); });
 const organizationPreview = openOrganizationFocus();
 window.addEventListener('hashchange', openOrganizationFocus);

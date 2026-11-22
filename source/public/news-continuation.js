@@ -1,8 +1,8 @@
-import { validNewsPage } from './news-page-contracts.js';
+import { validNewsPage, validNewsStorySourcesPage, NEWS_MAX_RESPONSE_BYTES } from './news-page-contracts.js';
 import { readingCard } from './reader.js';
 import { editorialCategory } from './editorial-categories.js';
 const contextKey = (context) => JSON.stringify([context.language, context.cityId, context.city?.countryCode ?? null, context.city?.timezone ?? 'UTC', context.filter, context.period ?? 'recent']);
-const MAX_PAGE_BYTES = 1_048_576;
+const MAX_PAGE_BYTES = NEWS_MAX_RESPONSE_BYTES;
 async function jsonBody(response, signal) {
     if (!(response.headers.get('content-type') ?? '').toLowerCase().includes('application/json'))
         throw Error('NEWS_PAGE_INVALID');
@@ -105,7 +105,7 @@ export class NewsContinuation {
         const job = (async () => {
             try {
                 const fetcher = this.fetcher;
-                const response = await fetcher('/api/news-page?' + query.toString(), { method: 'GET', credentials: 'omit', cache: 'no-store',
+                const response = await fetcher('/api/news-page?' + query.toString(), { method: 'GET', credentials: 'omit', cache: cursor === null ? 'default' : 'no-store',
                     headers: { Accept: 'application/json' }, signal: controller.signal });
                 if (generation !== this.generation) {
                     await response.body?.cancel();
@@ -132,24 +132,33 @@ export class NewsContinuation {
                 const prior = this.page;
                 if (prior && (value.epoch !== prior.epoch || value.revision !== prior.revision || value.generatedAt !== prior.generatedAt || value.startedAt !== prior.startedAt
                     || value.period !== prior.period || JSON.stringify(value.day) !== JSON.stringify(prior.day)
-                    || value.expiresAt !== prior.expiresAt || value.total !== prior.total || value.filteredTotal !== prior.filteredTotal || value.countryCode !== prior.countryCode
+                    || value.expiresAt !== prior.expiresAt || value.total !== prior.total || value.articleTotal !== prior.articleTotal || value.filteredTotal !== prior.filteredTotal || value.countryCode !== prior.countryCode
                     || value.coverage.national !== prior.coverage.national || value.coverage.local !== prior.coverage.local || value.coverage.international !== prior.coverage.international
                     || Object.keys(prior.counts).some(key => value.counts[key] !== prior.counts[key])))
                     throw Error('NEWS_PAGE_INVALID');
                 if (value.nextCursor !== null && (value.nextCursor === cursor || value.items.length === 0))
                     throw Error('NEWS_PAGE_INVALID');
-                const ids = new Set(), identities = new Set(), urls = new Set(), keys = new Set();
+                const ids = new Set(), identities = new Set(), urls = new Set(), keys = new Set(), stories = new Set();
                 for (const item of [...this.items, ...value.items]) {
-                    const [id, identity, url] = itemIdentity(item);
-                    if (ids.has(id) || identities.has(identity) || urls.has(url) || keys.has(item.key))
+                    if (keys.has(item.key) || item.story && stories.has(item.story.key))
                         throw Error('NEWS_PAGE_INVALID');
-                    ids.add(id);
-                    identities.add(identity);
-                    urls.add(url);
                     keys.add(item.key);
+                    if (item.story)
+                        stories.add(item.story.key);
+                    const primary = item.kind === 'global' ? { kind: 'global', card: item.card } : { kind: 'local', card: item.card };
+                    for (const original of [primary, ...(item.story?.related ?? [])]) {
+                        const [id, identity, url] = itemIdentity(original);
+                        if (ids.has(id) || identities.has(identity) || urls.has(url))
+                            throw Error('NEWS_PAGE_INVALID');
+                        ids.add(id);
+                        identities.add(identity);
+                        urls.add(url);
+                    }
                 }
                 const items = Object.freeze([...this.items, ...value.items]);
                 if (items.length > value.filteredTotal || value.nextCursor === null && items.length !== value.filteredTotal)
+                    throw Error('NEWS_PAGE_INVALID');
+                if (value.nextCursor === null && value.filteredTotal === value.total && items.reduce((sum, item) => sum + (item.story?.sourceTotal ?? 1), 0) !== value.articleTotal)
                     throw Error('NEWS_PAGE_INVALID');
                 this.page = value;
                 this.items = items;
@@ -173,15 +182,55 @@ export class NewsContinuation {
         return job;
     }
 }
+export class NewsStorySourcesError extends Error {
+    code;
+    constructor(code) {
+        super(code);
+        this.code = code;
+        this.name = 'NewsStorySourcesError';
+    }
+}
+/** Bounded anonymous transport; the caller additionally checks edition, story, offset and prior identities. */
+export async function fetchNewsStorySources(cursor, signal, city, fetcher = fetch, clock = Date.now) {
+    if (typeof cursor !== 'string' || cursor.length > 2048 || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/u.test(cursor) || signal.aborted)
+        throw new NewsStorySourcesError('unavailable');
+    const controller = new AbortController(), abort = () => controller.abort();
+    signal.addEventListener('abort', abort, { once: true });
+    const timeout = setTimeout(abort, 12_000);
+    try {
+        const response = await fetcher('/api/news-page?' + new URLSearchParams({ sources: cursor }).toString(), { method: 'GET', credentials: 'omit', cache: 'no-store', headers: { Accept: 'application/json' }, signal: controller.signal });
+        if (response.status === 410) {
+            await response.body?.cancel();
+            throw new NewsStorySourcesError('expired');
+        }
+        if (!response.ok) {
+            await response.body?.cancel();
+            throw new NewsStorySourcesError('unavailable');
+        }
+        const value = await jsonBody(response, controller.signal);
+        if (!validNewsStorySourcesPage(value, clock(), city) || value.nextCursor === cursor)
+            throw new NewsStorySourcesError('unavailable');
+        return value;
+    }
+    catch (error) {
+        if (error instanceof NewsStorySourcesError)
+            throw error;
+        throw new NewsStorySourcesError('unavailable');
+    }
+    finally {
+        clearTimeout(timeout);
+        signal.removeEventListener('abort', abort);
+    }
+}
 /** Convert views only; the server already fixed categories and sequence for the entire edition. */
 export function continuationItems(items, now) {
     return items.map(item => {
         if (item.kind === 'local')
             return { kind: 'local', card: item.card, key: item.key, category: item.category,
-                url: item.card.sourceUrl, publisher: item.card.publisher, publishedAt: item.card.news.publishedAt };
-        const card = item.card, category = editorialCategory(card);
-        return { kind: 'global', key: item.key, category: item.category, url: card.sourceUrl, publisher: card.publisher, publishedAt: card.date,
-            view: { ...readingCard(card, now), reason: 'Original report in this checked news edition.', localMatch: false, grouping: 'single',
-                storyKey: 'article:' + card.identity, ...(category === null ? {} : { category }) } };
+                url: item.card.sourceUrl, publisher: item.card.publisher, publishedAt: item.card.news.publishedAt, ...(item.story ? { story: item.story } : {}) };
+        const card = item.card, category = editorialCategory(card), related = item.story?.related.flatMap(source => source.kind === 'global' ? [source.card] : []) ?? [];
+        return { kind: 'global', key: item.key, category: item.category, url: card.sourceUrl, publisher: card.publisher, publishedAt: card.date, ...(item.story ? { story: item.story } : {}),
+            view: { ...readingCard(card, now, related), reason: 'Original report in this checked news edition.', localMatch: false, grouping: item.story?.basis ?? 'single',
+                storyKey: item.story?.key ?? 'article:' + card.identity, ...(category === null ? {} : { category }) } };
     });
 }
