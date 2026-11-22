@@ -20,8 +20,8 @@ function item(index){
 }
 function page(offset=0,total=60,overrides={}){
  const counts=Object.fromEntries(['other',...NEWS_CATEGORIES.map(c=>c.id)].map(id=>[id,id==='04000000'?total:0]));
- return {version:'dlkt-news-page-3',epoch:'101',revision:3,generatedAt:iso,startedAt:iso,expiresAt:new Date(now+900000).toISOString(),
-  language:'en',cityId:null,countryCode:null,period:'recent',day:null,coverage:{national:0,local:0,international:total},filter:'all',items:Array.from({length:Math.min(20,total-offset)},(_,i)=>item(offset+i)),total,filteredTotal:total,counts,
+ return {version:'dlkt-news-page-4',epoch:'101',revision:3,generatedAt:iso,startedAt:iso,expiresAt:new Date(now+900000).toISOString(),
+  language:'en',cityId:null,countryCode:null,period:'recent',day:null,coverage:{national:0,local:0,international:total},filter:'all',items:Array.from({length:Math.min(20,total-offset)},(_,i)=>item(offset+i)),total,articleTotal:total,filteredTotal:total,counts,
   nextCursor:offset+20<total?cursor(offset+20):null,...overrides};
 }
 const response=value=>new Response(JSON.stringify(value),{status:200,headers:{'content-type':'application/json'}});
@@ -41,7 +41,8 @@ test('receiver-sensitive browser fetch is called without binding the news contro
  assert.deepEqual(model.view().items.slice(0,20),prefix);
  assert.equal(requests.length,2);assert.deepEqual(receivers,[undefined,undefined]);
  assert.equal(new URL(requests[1].url,'https://www.dlkt.ee').searchParams.get('cursor'),cursor(20));
- assert.equal(requests.every(request=>request.init.method==='GET'&&request.init.credentials==='omit'&&request.init.cache==='no-store'),true);
+ assert.equal(requests.every(request=>request.init.method==='GET'&&request.init.credentials==='omit'),true);
+ assert.deepEqual(requests.map(request=>request.init.cache),['default','no-store']);
 });
 test('three server pages preserve the exact prefix and fetch continuation only on demand',async()=>{
  const requests=[];const model=new NewsContinuation(async(url,init)=>{requests.push({url,init});return response(page((requests.length-1)*20));},()=>now);

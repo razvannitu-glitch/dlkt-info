@@ -6,7 +6,9 @@
 <title>DLKT INFO — Daily Life. Key Things.</title>
 <link rel="canonical" href="https://www.dlkt.ee/"><link rel="shortcut icon" href="/favicon.ico?v=kate-fb7b2e60" type="image/x-icon"><link rel="icon" href="/favicon-kate-fb7b2e60.png" type="image/png" sizes="180x180">
 <script src="/reader-theme.js"></script>
-<link rel="apple-touch-icon" href="/kate-head.png"><link rel="manifest" href="/manifest.webmanifest"><link rel="stylesheet" href="/iceo.css"><link rel="stylesheet" href="/header.css"><link rel="stylesheet" href="/editorial-cards.css"><link rel="stylesheet" href="/explore.css"><link rel="stylesheet" href="/i18n.css"><link rel="stylesheet" href="/loading.css"><link rel="stylesheet" href="/weather-motion.css"><link rel="stylesheet" href="/personal-inbox.css"><link rel="stylesheet" href="/reading-follow.css"><link rel="stylesheet" href="/knowledge.css"><link rel="stylesheet" href="/reader-theme.css"><script src="/entry-browser.js" type="module"></script><script src="/iceo.js" type="module"></script><script src="/local-browser.js" type="module"></script><script src="/daily-browser.js" type="module"></script><script src="/glance-browser.js" type="module"></script><script src="/wallet-home-browser.js" type="module"></script>
+<link rel="apple-touch-icon" href="/kate-head.png"><link rel="manifest" href="/manifest.webmanifest"><link rel="stylesheet" href="/iceo.css"><link rel="stylesheet" href="/header.css"><link rel="stylesheet" href="/editorial-cards.css"><link rel="stylesheet" href="/explore.css"><link rel="stylesheet" href="/i18n.css"><link rel="stylesheet" href="/loading.css"><link rel="stylesheet" href="/weather-motion.css"><link rel="stylesheet" href="/personal-inbox.css"><link rel="stylesheet" href="/reading-follow.css"><link rel="stylesheet" href="/knowledge.css"><link rel="stylesheet" href="/commercial.css">
+  <link rel="stylesheet" href="/news-story.css">
+  <link rel="stylesheet" href="/reader-theme.css"><script src="/entry-browser.js" type="module"></script><script src="/iceo.js" type="module"></script><script src="/local-browser.js" type="module"></script><script src="/daily-browser.js" type="module"></script><script src="/glance-browser.js" type="module"></script><script src="/wallet-home-browser.js" type="module"></script>
 </head>
 <body id="top" data-entry-view="start">
 <a class="skip" href="#briefing">Skip to briefing</a>
@@ -21,7 +23,7 @@
 <p id="glance-screen-summary" class="sr-only"></p>
 </section>
 <main class="reader-shell">
-<div id="reader-content-switch" class="reader-content-switch" role="group" aria-label="Content type"><button id="reader-news-mode" type="button" aria-pressed="true" aria-controls="discovery">News</button><button id="reader-knowledge-mode" type="button" aria-pressed="false" aria-controls="knowledge-discovery">Did you know?</button></div>
+
 <section id="discovery" class="discovery" data-loading="initial" aria-labelledby="entry-title">
 <header class="discovery-heading"><h1 id="entry-title" tabindex="-1"><span id="discovery-title"><span id="today-heading">News</span><span class="title-dot">.</span></span></h1><button id="discovery-refresh" class="secondary" type="button" aria-label="Refresh news">Refresh</button></header>
 <div class="news-context-line"><div class="home-context"><p id="home-location" class="privacy-note">Local context</p><button id="home-city" data-i18n="changeCity" type="button" class="text-button" aria-haspopup="dialog" aria-controls="place-dialog">Change city</button></div><details id="discovery-details" class="edition-details" hidden><summary>About this edition</summary><p id="discovery-details-copy"></p></details></div>
@@ -59,19 +61,6 @@
 <div id="discovery-cards" aria-busy="true"></div>
 <div id="home-more-controls" class="news-continuation"></div>
 <div id="home-local-cards"></div></section>
-<section id="knowledge-discovery" class="knowledge-discovery" aria-labelledby="knowledge-title" hidden>
-  <header class="knowledge-heading"><div><p id="knowledge-preview" class="knowledge-eyebrow">Preview</p><h1 id="knowledge-title" tabindex="-1">A little more to know.</h1><p id="knowledge-intro">Small discoveries. Useful context. Original sources.</p></div><a class="knowledge-plan-jump" href="#knowledge-plan">DLKT Plus <svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path d="M7 17 17 7M7 7h10v10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a></header>
-  <div class="knowledge-toolbar"><div><label id="knowledge-category-label" for="knowledge-category">Category</label><select id="knowledge-category"><option value="all">All categories</option></select></div><p id="knowledge-count"></p></div>
-  <p id="knowledge-language-note" class="knowledge-language-note" hidden></p>
-  <p id="knowledge-share-status" class="knowledge-share-status" role="status" aria-live="polite"></p>
-  <input id="knowledge-copy-link" class="knowledge-copy-link" type="url" readonly aria-describedby="knowledge-share-status" aria-label="Card link" hidden>
-  <div id="knowledge-cards" class="knowledge-cards"></div>
-  <p id="knowledge-end" class="knowledge-end"></p>
-  <aside id="knowledge-plan" class="knowledge-plan" aria-labelledby="knowledge-plan-title">
-    <div><p id="knowledge-plan-label" class="knowledge-eyebrow">Planned membership</p><h2 id="knowledge-plan-title">DLKT Plus</h2><p id="knowledge-plan-price" class="knowledge-plan-price">€6.99 / month</p></div>
-    <div class="knowledge-plan-details"><p id="knowledge-plan-offer">Did you know? is part of the planned Plus membership.</p><p id="knowledge-plan-trial">7 days to explore Plus, then €6.99/month.</p><p id="knowledge-plan-benefits">Planned benefits: the growing knowledge collection, personal collections and reading preferences across devices.</p><p id="knowledge-plan-state" class="knowledge-plan-state">Payments and trial activation are not open yet. This preview is free.</p></div>
-  </aside>
-</section>
 <section id="world-launch" class="world-launch" aria-label="Explore the world"><p><strong data-i18n="exploreTitle">A different place. A new perspective.</strong><span data-i18n="exploreIntro">Discover what is happening around the world.</span></p><button type="button" id="world-open" class="secondary" aria-controls="world-explore"><span data-i18n="exploreTitle">Explore the world</span> <span aria-hidden="true">&#8599;</span></button></section>
 <section id="world-explore" class="world-explore" aria-labelledby="world-title" hidden>
 <div class="world-explore-top"><button type="button" id="world-back" class="text-button"><span aria-hidden="true">&#8592;</span> <span data-i18n="back">Back to my day</span></button><button type="button" id="world-copy" data-i18n="copyViewLink" class="secondary">Copy view link</button></div>

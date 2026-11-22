@@ -1,3 +1,4 @@
+import {setupCommercialRequest} from '../iceo/commercial-browser.js';
 import {DEFAULT_ORGANIZATION_SETUP,ORGANIZATION_PLANS,ORGANIZATION_STORAGE_KEY,ORGANIZATION_TOPICS,forgetOrganizationSetup,organizationFocusUrl,organizationPilotRequest,organizationPlan,rememberOrganizationSetup,restoreOrganizationSetup,validOrganizationSetup,type OrganizationSetup} from './setup.js';
 function get<T extends HTMLElement>(id:string):T {const node=document.getElementById(id);if(!node)throw Error('ORGANIZATION_ELEMENT_MISSING');return node as T;}
 const form=get<HTMLFormElement>('organization-setup');
@@ -61,3 +62,5 @@ get<HTMLButtonElement>('organization-copy').addEventListener('click',()=>{
  void (async()=>{try{if(!navigator.clipboard?.writeText)throw Error('CLIPBOARD_UNAVAILABLE');await navigator.clipboard.writeText(requestText.value);get<HTMLElement>('organization-copy-status').textContent='Request copied. You choose where and when to send it.';}catch{requestText.focus();requestText.select();get<HTMLElement>('organization-copy-status').textContent='Copy is unavailable. The request is selected so you can copy it manually.';}})();
 });
 window.addEventListener('storage',event=>{if(event.key===ORGANIZATION_STORAGE_KEY||event.key===null){savedNotice();feedback.textContent='Saved organization setup changed in another tab. Your unsaved form choices have been kept.';}});
+
+setupCommercialRequest();

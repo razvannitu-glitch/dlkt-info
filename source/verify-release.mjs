@@ -1131,3 +1131,7 @@ console.log('DLKT_INFO_RELEASE_OK', JSON.stringify({
 }));
 
 for(const file of ['api/news-page.ts','src/iceo/news-corpus.ts','src/iceo/news-corpus-store.ts','src/iceo/news-page.ts','src/iceo/news-page-contracts.ts','src/iceo/news-continuation.ts','public/news-page-contracts.js','public/news-continuation.js','public/article-subject.js'])if(!expected.has(file))throw new Error('RELEASE_NEWS_CORPUS_FILE:'+file);
+
+// Country handling and local commercial enquiries ship with their browser-safe dependencies.
+for(const file of ['src/iceo/country-editions.ts','public/country-editions.js','src/iceo/commercial.ts','src/iceo/commercial-browser.ts','public/commercial.js','public/commercial-browser.js','public/commercial.css','src/iceo/news-story.ts','src/iceo/news-story-browser.ts','public/news-story-browser.js','public/news-story.css'])if(!expected.has(file))throw new Error('RELEASE_COUNTRY_STORY_COMMERCIAL_FILE:'+file);
+if(existsSync('public/news-story.js'))throw new Error('RELEASE_SERVER_STORY_ASSET');

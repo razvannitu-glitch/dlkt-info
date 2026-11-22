@@ -82,13 +82,15 @@ test('approved price is a planned offer and cannot represent a paid entitlement'
 });
 test('knowledge assets integrate into the real reader without starting a second site or payment flow',()=>{
  const html=readFileSync('public/iceo.html','utf8'),browser=readFileSync('src/iceo/browser.ts','utf8');
- for(const id of ['reader-content-switch','reader-news-mode','reader-knowledge-mode','knowledge-discovery','knowledge-cards','knowledge-category','knowledge-plan','home-news-period','home-news-day'])assert.equal((html.match(new RegExp('id="'+id+'"','g'))??[]).length,1,id);
+ for(const id of ['reader-content-switch','reader-news-mode','reader-knowledge-mode','knowledge-discovery','knowledge-cards','knowledge-category','knowledge-plan'])assert.equal(html.includes('id="'+id+'"'),false,id);
+ for(const id of ['home-news-period','home-news-day'])assert.equal((html.match(new RegExp('id="'+id+'"','g'))??[]).length,1,id);
  assert.match(html,/<link rel="stylesheet" href="\/knowledge\.css">/);
- assert.match(browser,/setupKnowledgeReader\(\)/);assert.match(browser,/let newsPeriod:NewsPeriod='today'/);
+ assert.doesNotMatch(browser,/setupKnowledgeReader|knowledgeModeActive/);assert.match(browser,/let newsPeriod:NewsPeriod='recent'/);
  assert.match(browser,/filter:newsFilter,period:newsPeriod/);
  const controller=readFileSync('src/iceo/knowledge-browser.ts','utf8');
  assert.doesNotMatch(controller,/\.innerHTML\s*=|localStorage|sessionStorage|\/api\/checkout|\bfetch\(/);
- assert.match(controller,/new NewsMasonry\(grid\)/);
+ assert.doesNotMatch(controller,/setupKnowledgeReader|knowledgeModeActive|knowledge-explore/);
+ assert.match(browser,/interleaveKnowledge\(visible,inlineKnowledgeSelection\)/);
 });
 
 test('knowledge geography is explicit, bounded and multilingual',()=>{

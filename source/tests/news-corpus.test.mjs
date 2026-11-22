@@ -96,9 +96,9 @@ test('strict public request parsing rejects duplicates, unknown fields and arbit
 test('GET and HEAD only read the committed page service; query errors do not touch persistence',async()=>{
  const real=new NewsPageService(new CorpusMemoryStore([epoch([article(1)])]),KEY,()=>NOW);let calls=0;
  const reader={async read(query){calls++;return real.read(query);}};
- const good=response();await handleNewsPage({method:'GET',url:'/api/news-page?lang=en',headers:{}},good,reader);
- assert.equal(good.statusCode,200);assert.equal(JSON.parse(good.body).items.length,1);assert.equal(good.headers['Cache-Control'],'no-store');
- const head=response();await handleNewsPage({method:'HEAD',url:'/api/news-page?lang=en',headers:{}},head,reader);assert.equal(head.statusCode,200);assert.equal(head.body,'');
+ const good=response();await handleNewsPage({method:'GET',url:'/api/news-page?lang=en',headers:{}},good,reader,()=>NOW);
+ assert.equal(good.statusCode,200);assert.equal(JSON.parse(good.body).items.length,1);assert.equal(good.headers['Cache-Control'],'public, max-age=0, s-maxage=10, must-revalidate');
+ const head=response();await handleNewsPage({method:'HEAD',url:'/api/news-page?lang=en',headers:{}},head,reader,()=>NOW);assert.equal(head.statusCode,200);assert.equal(head.body,'');
  const bad=response();await handleNewsPage({method:'GET',url:'/api/news-page?lang=en&limit=200',headers:{}},bad,reader);assert.equal(bad.statusCode,400);assert.equal(calls,2);
  const post=response();await handleNewsPage({method:'POST',url:'/api/news-page?lang=en',headers:{}},post,reader);assert.equal(post.statusCode,405);assert.equal(calls,2);
  const down=response();await handleNewsPage({method:'GET',url:'/api/news-page?lang=en',headers:{}},down,null);assert.equal(down.statusCode,503);
