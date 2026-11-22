@@ -4,7 +4,7 @@ export function setupHeader(): void {
  const nav=document.getElementById('header-navigation');
  const header=nav?.closest<HTMLElement>('.site-header');
  if(!(toggle instanceof HTMLButtonElement)||!nav||!header)return;
- const narrow=matchMedia('(max-width: 1024px)');
+ const narrow=matchMedia('(max-width: 1152px)');
  const label=toggle.querySelector<HTMLElement>('[data-menu-label]');
  const first=():HTMLElement|null=>nav.querySelector<HTMLElement>('button:not([hidden]),a[href]');
  const expanded=(open:boolean):void=>{

@@ -5,7 +5,7 @@ export function setupHeader() {
     const header = nav?.closest('.site-header');
     if (!(toggle instanceof HTMLButtonElement) || !nav || !header)
         return;
-    const narrow = matchMedia('(max-width: 1024px)');
+    const narrow = matchMedia('(max-width: 1152px)');
     const label = toggle.querySelector('[data-menu-label]');
     const first = () => nav.querySelector('button:not([hidden]),a[href]');
     const expanded = (open) => {

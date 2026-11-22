@@ -273,7 +273,7 @@ html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-card
  html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card{transition:none;transform:none}
 }
 
-/* Selected Coral / Ink: the two preview surfaces retain the existing category identities.
+/* Base Coral / Ink fallback. Position-assigned surfaces below supersede these category colors.
    The gold badge is a label; its border/dot accent remains dark enough on salmon. */
 html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card{
  --card-tone-badge:var(--reader-card-violet-badge);--card-tone-badge-ink:var(--reader-card-violet-badge-ink);
@@ -319,4 +319,36 @@ html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-ca
  html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card .card-actions>.save-card[aria-pressed=true]:not(:disabled):hover{
   background:var(--reader-selected)!important;color:var(--reader-selected-ink)!important;
  }
+}
+
+/* Six swatches are assigned to stable reading positions by reader-theme.js.
+   Reset semantic roles for nested cards before the dark overrides, then rebind
+   aliases already computed on html or an enclosing Daily context card. */
+html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface]{
+ --reader-page:var(--card-tone-surface);--reader-surface:var(--card-tone-surface);--reader-panel:var(--card-tone-surface);
+ --reader-ink:#351D24;--reader-muted:#62333E;--reader-rule:#9A615D;--reader-edge:#9A615D;
+ --reader-action:#B42A4C;--reader-action-ink:#FFFFFF;--reader-action-hover:#84203D;--reader-action-hover-ink:#FFFFFF;
+ --reader-selected:#B42A4C;--reader-selected-ink:#FFFFFF;--reader-selected-edge:#B42A4C;
+ --reader-secondary-hover:#FFBCA8;--reader-secondary-hover-ink:#351D24;
+ --reader-link:#351D24;--reader-focus:#1B4DB3;
+ --reader-photo-dark:#351D24;--reader-photo-light:#FFFDF8;--reader-photo-link:#351D24;--reader-photo-focus:#1B4DB3;
+ --black:var(--reader-ink);--white:var(--reader-surface);--muted:var(--reader-muted);
+ --line:var(--reader-rule);--soft:var(--reader-panel);
+ --card-tone-accent:var(--reader-edge);--card-tone-badge:#173D4B;--card-tone-badge-ink:#FFFFFF;
+}
+html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface=paper]{--card-tone-surface:#F1E9E2}
+html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface=ivory]{--card-tone-surface:#FFFDF8}
+html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface=coral]{--card-tone-surface:#FFBCA8}
+html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface=berry]{--card-tone-surface:#B42A4C}
+html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface=wine]{--card-tone-surface:#84203D}
+html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface=gold]{--card-tone-surface:#FFD357}
+html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface=berry],
+html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface=wine]{
+ --reader-ink:#FFFFFF;--reader-muted:#FFFDF8;--reader-rule:#F1E9E2;--reader-edge:#F1E9E2;
+ --reader-action:#FFFDF8;--reader-action-ink:#84203D;--reader-action-hover:#FFD357;--reader-action-hover-ink:#351D24;
+ --reader-selected:#FFD357;--reader-selected-ink:#351D24;--reader-selected-edge:#FFD357;
+ --reader-secondary-hover:#FFD357;--reader-secondary-hover-ink:#351D24;
+ --reader-link:#FFFFFF;--reader-focus:#FFD357;
+ --reader-photo-dark:#351D24;--reader-photo-light:#FFFDF8;--reader-photo-link:#FFFFFF;--reader-photo-focus:#FFD357;
+ --card-tone-accent:#FFD357;--card-tone-badge:#FFD357;--card-tone-badge-ink:#432D04;
 }

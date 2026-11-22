@@ -14,7 +14,41 @@
   }
   root.dataset.readerTheme=theme;
 
+  const bindCardSurfaces=():void=>{
+    const surfaces=['paper','ivory','coral','berry','wine','gold'] as const;
+    type CardSurface=typeof surfaces[number];
+    const readerRoots='#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content';
+    const cycle=(previous:CardSurface|undefined):CardSurface[]=>{
+      const values:CardSurface[]=[...surfaces];
+      const swap=(left:number,right:number):void=>{
+        const a=values[left],b=values[right];
+        if(a!==undefined&&b!==undefined){values[left]=b;values[right]=a;}
+      };
+      for(let index=values.length-1;index>0;index--)swap(index,Math.floor(Math.random()*(index+1)));
+      if(values[0]===previous)swap(0,1+Math.floor(Math.random()*(values.length-1)));
+      return values;
+    };
+    for(const host of document.querySelectorAll<HTMLElement>(readerRoots)){
+      // Appearance belongs to a reading position, never to a story or its data.
+      // Keep complete cycles only; an empty loading state retains one small prefix.
+      const sequence:CardSurface[]=[];
+      const paint=():void=>{
+        const cards=host.querySelectorAll<HTMLElement>('.info-card');
+        const needed=Math.ceil(cards.length/surfaces.length)*surfaces.length;
+        while(sequence.length<needed)sequence.push(...cycle(sequence[sequence.length-1]));
+        cards.forEach((card,index)=>{
+          const surface=sequence[index];
+          if(surface!==undefined&&card.dataset.readerSurface!==surface)card.dataset.readerSurface=surface;
+        });
+        sequence.length=Math.max(needed,Math.min(sequence.length,surfaces.length));
+      };
+      new MutationObserver(paint).observe(host,{childList:true,subtree:true});
+      paint();
+    }
+  };
+
   const bind=():void=>{
+    bindCardSurfaces();
     const button=document.getElementById('reader-theme-toggle');
     if(!(button instanceof HTMLButtonElement))return;
 

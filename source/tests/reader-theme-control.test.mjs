@@ -5,6 +5,8 @@ import {Script} from 'node:vm';
 import {parseDocument,DomUtils} from 'htmlparser2';
 
 const preferenceKey='dlkt-reader-theme-v1';
+const surfaceRoots=['discovery-cards','world-cards','cards','daily-cards','local-cards','edition-content'];
+const surfaceNames=['paper','ivory','coral','berry','wine','gold'];
 const compiled=readFileSync('.build/src/theme/browser.js','utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'');
 const classic=compiled.replace(/^export \{\};\r?\n?/mu,'');
 const script=new Script(classic,{filename:'reader-theme.js'});
@@ -16,6 +18,11 @@ class ElementFixture extends EventTarget {
   }
   setAttribute(name,value){this.attributes.set(name,String(value));}
   getAttribute(name){return this.attributes.get(name)??null;}
+  querySelectorAll(selector){
+    assert.equal(selector,'.info-card');const found=[];
+    const visit=node=>{for(const child of node.children){if((child.className??'').split(/\s+/u).includes('info-card'))found.push(child);visit(child);}};
+    visit(this);return found;
+  }
 }
 class ButtonFixture extends ElementFixture {
   constructor(){super('button','reader-theme-toggle');this.type='button';}
@@ -26,10 +33,11 @@ class CustomEventFixture extends Event {
 }
 
 /** Execute the compiled classic script; fixtures expose browser primitives only. */
-function harness({saved=null,readyState='loading',denyRead=false,denyWrite=false,denyAccess=false,missingButton=false,memory,onTheme}={}){
+function harness({saved=null,readyState='loading',denyRead=false,denyWrite=false,denyAccess=false,missingButton=false,memory,onTheme,cardCounts={},random=Math.random}={}){
   const data=memory??new Map([['private-profile-sentinel','unchanged']]);
   if(saved!==null)data.set(preferenceKey,saved);
-  const reads=[],writeAttempts=[],writes=[],sideEffects=[],themeEvents=[];
+  const reads=[],writeAttempts=[],writes=[],sideEffects=[],themeEvents=[],surfaceWrites=[],surfaceQueries=[],observers=[];
+  let randomCalls=0;
   const denied=name=>(...args)=>{sideEffects.push([name,...args]);throw Error('UNEXPECTED_THEME_SIDE_EFFECT:'+name);};
   const storage={
     getItem(key){reads.push(key);assert.equal(key,preferenceKey);if(denyRead)throw Error('STORAGE_READ_DENIED');return data.get(key)??null;},
@@ -42,10 +50,23 @@ function harness({saved=null,readyState='loading',denyRead=false,denyWrite=false
   const headline=new ElementFixture('h3');headline.textContent='東京の美術館、2026年の展示を発表';headline.lang='ja';headline.dir='auto';headline.setAttribute('translate','no');
   const summary=new ElementFixture('p');summary.textContent='Original publisher excerpt remains unchanged.';
   body.children=[button,headline,summary];root.children=[body];
+  const hosts=new Map();
+  const makeCard=index=>{
+    const card=new ElementFixture('article');card.className='info-card';card.textContent='Original source headline '+index;
+    card.dataset=new Proxy({cardId:'source-'+index,storyKey:'story-'+index},{set(target,key,value){assert.equal(key,'readerSurface','Appearance must not modify source identity');surfaceWrites.push({card,value});target[key]=value;return true;}});
+    return card;
+  };
+  for(const id of surfaceRoots)if(Object.hasOwn(cardCounts,id)){
+    const host=new ElementFixture('section',id);host.children=Array.from({length:cardCounts[id]},(_,index)=>makeCard(index));hosts.set(id,host);body.children.push(host);
+  }
+  class MutationObserverFixture{
+    constructor(callback){this.callback=callback;observers.push(this);}
+    observe(target,options){assert.ok([...hosts.values()].includes(target));assert.equal(options.childList,true);assert.equal(options.subtree,true);assert.equal(options.attributes,undefined);assert.equal(options.characterData,undefined);this.target=target;}
+  }
   const doc=new EventTarget();doc.documentElement=root;doc.body=body;doc.activeElement=button;doc.readyState=readyState;
   let available=readyState!=='loading';
   doc.getElementById=id=>{assert.equal(id,'reader-theme-toggle');return available&&!missingButton?button:null;};
-  doc.querySelectorAll=denied('querySelectorAll');doc.createElement=denied('createElement');
+  doc.querySelectorAll=selector=>{assert.equal(selector,surfaceRoots.map(id=>'#'+id).join(','));surfaceQueries.push(selector);return available?[...hosts.values()]:[];};doc.createElement=denied('createElement');
   Object.defineProperty(doc,'cookie',{get:denied('cookie.read'),set:denied('cookie.write')});
   const win=new EventTarget(),url=new URL('https://www.dlkt.ee/?explore=1&city=1850147&country=JP&category=culture&lang=ar#reading');
   Object.defineProperty(win,'location',{get:()=>url,set:denied('location.write')});
@@ -54,7 +75,7 @@ function harness({saved=null,readyState='loading',denyRead=false,denyWrite=false
   const history={pushState:denied('pushState'),replaceState:denied('replaceState')};
   const navigator={languages:['ar'],language:'ar',sendBeacon:denied('sendBeacon')};
   Object.defineProperty(navigator,'geolocation',{get:denied('geolocation')});
-  const context={document:doc,window:win,navigator,history,HTMLButtonElement:ButtonFixture,CustomEvent:CustomEventFixture,
+  const context={document:doc,window:win,navigator,history,HTMLButtonElement:ButtonFixture,CustomEvent:CustomEventFixture,MutationObserver:MutationObserverFixture,Math:Object.assign(Object.create(Math),{random(){randomCalls++;return random();}}),
     fetch:denied('fetch'),indexedDB:{open:denied('indexedDB.open')},sessionStorage:{getItem:denied('sessionStorage.getItem')}};
   Object.defineProperty(context,'localStorage',{get:()=>win.localStorage});
   doc.addEventListener('dlkt:theme-changed',event=>{
@@ -62,9 +83,12 @@ function harness({saved=null,readyState='loading',denyRead=false,denyWrite=false
     onTheme?.({event,button,root,doc});
   });
   script.runInNewContext(context);
-  return{data,reads,writeAttempts,writes,sideEffects,themeEvents,root,body,doc,win,url,button,moon,sun,headline,summary,
+  return{data,reads,writeAttempts,writes,sideEffects,themeEvents,surfaceWrites,surfaceQueries,observers,hosts,makeCard,root,body,doc,win,url,button,moon,sun,headline,summary,
     ready(){available=true;doc.readyState='interactive';doc.dispatchEvent(new Event('DOMContentLoaded'));},
-    choose(){return button.click();}};
+    choose(){return button.click();},
+    randomCalls(){return randomCalls;},
+    paint(id){const observer=observers.find(value=>value.target===hosts.get(id));assert.ok(observer,'Missing scoped appearance observer');observer.callback([],observer);},
+    colors(id){return hosts.get(id).querySelectorAll('.info-card').map(card=>card.dataset.readerSurface);}};
 }
 
 test('published bootstrap is the exact compiled classic script with no module dependency',()=>{
@@ -183,4 +207,56 @@ test('DOM readiness binds once and a page without the optional control does not 
   assert.equal(h.root.dataset.readerTheme,'night');assert.deepEqual(h.writes,[[preferenceKey,'night']]);assert.deepEqual(h.themeEvents,['prism','night']);
   const without=harness({missingButton:true});without.ready();
   assert.equal(without.root.dataset.readerTheme,'prism');assert.deepEqual(without.writeAttempts,[]);assert.deepEqual(without.themeEvents,[]);assert.deepEqual(without.sideEffects,[]);
+});
+
+function completeCycles(values){
+ for(let start=0;start+surfaceNames.length<=values.length;start+=surfaceNames.length)assert.deepEqual([...values.slice(start,start+surfaceNames.length)].sort(),[...surfaceNames].sort());
+ for(let index=1;index<values.length;index++)assert.notEqual(values[index],values[index-1],`Repeated neighboring surface at ${index}`);
+}
+
+test('all six reading roots receive complete shuffled cycles and a repaired cycle boundary',()=>{
+ let draw=0;const h=harness({cardCounts:Object.fromEntries(surfaceRoots.map(id=>[id,12])),random:()=>draw++<5?0:.999});
+ assert.equal(h.surfaceQueries.length,0);h.ready();assert.equal(h.observers.length,6);
+ for(const id of surfaceRoots){completeCycles(h.colors(id));assert.equal(h.hosts.get(id).children.length,12);}
+ assert.ok(h.randomCalls()>60,'The forced equal boundary must consume a repair draw');
+ assert.deepEqual(h.writes,[]);assert.deepEqual(h.reads,[preferenceKey]);assert.deepEqual(h.sideEffects,[]);
+});
+
+test('insight and disclosure mutations, language changes and theme toggles do not reshuffle existing positions',()=>{
+ const h=harness({readyState:'complete',cardCounts:{'discovery-cards':12}}),host=h.hosts.get('discovery-cards');
+ const before=h.colors('discovery-cards'),nodes=[...host.children],draws=h.randomCalls(),writes=h.surfaceWrites.length;
+ nodes[0].children.push(new ElementFixture('details'));h.paint('discovery-cards');
+ h.doc.dispatchEvent(new Event('dlkt:language-changed'));h.paint('discovery-cards');h.choose();h.choose();
+ assert.deepEqual(h.colors('discovery-cards'),before);assert.deepEqual(host.children,nodes);
+ assert.equal(h.randomCalls(),draws);assert.equal(h.surfaceWrites.length,writes);
+ assert.equal(nodes[0].textContent,'Original source headline 0');assert.equal(nodes[0].dataset.storyKey,'story-0');
+});
+
+test('appending and replacing nested cards reuse the existing position sequence without reading story identity',()=>{
+ const h=harness({readyState:'complete',cardCounts:{'daily-cards':7},random:()=>.4}),host=h.hosts.get('daily-cards');
+ const prefix=h.colors('daily-cards');host.children.push(...Array.from({length:11},(_,i)=>h.makeCard(i+7)));h.paint('daily-cards');
+ const before=h.colors('daily-cards'),draws=h.randomCalls();completeCycles(before);assert.deepEqual(before.slice(0,7),prefix);
+ const nested=new ElementFixture('details');nested.children=Array.from({length:18},(_,i)=>h.makeCard(i+50));
+ // An accidental dependency on stored article identity fails explicitly.
+ for(const card of nested.children){Object.defineProperty(card.dataset,'cardId',{get(){throw Error('Must not inspect source identity');}});Object.defineProperty(card.dataset,'storyKey',{get(){throw Error('Must not inspect story identity');}});}
+ host.children=[nested];h.paint('daily-cards');
+ assert.deepEqual(h.colors('daily-cards'),before);assert.equal(h.randomCalls(),draws);
+ assert.deepEqual(host.children,[nested]);assert.equal(nested.children[0].textContent,'Original source headline 50');
+});
+
+test('reordering or filtering cards preserves the shuffled position prefix and never reorders data itself',()=>{
+ const h=harness({readyState:'complete',cardCounts:{'world-cards':18}}),host=h.hosts.get('world-cards'),prefix=h.colors('world-cards'),draws=h.randomCalls();
+ host.children.reverse();const reversed=[...host.children];h.paint('world-cards');
+ assert.deepEqual(host.children,reversed);assert.deepEqual(h.colors('world-cards'),prefix);assert.equal(h.randomCalls(),draws);
+ host.children=host.children.filter((_,index)=>index%3===0);const filtered=[...host.children];h.paint('world-cards');
+ assert.deepEqual(host.children,filtered);assert.deepEqual(h.colors('world-cards'),prefix.slice(0,6));completeCycles(h.colors('world-cards'));
+});
+
+test('shrinking releases whole unused cycles; temporary empty roots keep only one stable prefix',()=>{
+ const h=harness({readyState:'complete',missingButton:true,cardCounts:{'local-cards':120}}),host=h.hosts.get('local-cards'),prefix=h.colors('local-cards').slice(0,6);
+ host.children=[];h.paint('local-cards');const draws=h.randomCalls();
+ host.children=Array.from({length:6},(_,i)=>h.makeCard(i));h.paint('local-cards');assert.deepEqual(h.colors('local-cards'),prefix);assert.equal(h.randomCalls(),draws);
+ host.children.push(...Array.from({length:114},(_,i)=>h.makeCard(i+6)));h.paint('local-cards');
+ assert.ok(h.randomCalls()>=draws+19*5,'Discarded unused cycles are newly drawn instead of retaining an unbounded history');completeCycles(h.colors('local-cards'));
+ assert.deepEqual(h.writes,[]);assert.deepEqual(h.sideEffects,[]);
 });
