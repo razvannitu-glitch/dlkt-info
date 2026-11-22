@@ -2,12 +2,13 @@ import {readPersistenceConfiguration} from '../persistence/config.js';
 import type {PersistenceFetch} from '../persistence/contracts.js';
 import {validateNewsCandidate, type NewsCandidate} from './news-discovery.js';
 
-export const NEWS_CANDIDATE_STORE_LIMIT = 500;
+/** Match the existing table capacity without changing the500-row RPC contract. */
+export const NEWS_CANDIDATE_STORE_LIMIT = 5000;
+export const NEWS_CANDIDATE_BATCH_LIMIT = 500;
 const WINDOW_MS = 86_400_000;
 const FUTURE_MS = 300_000;
 const MAX_BYTES = 2_097_152;
-const FIRST_READ_LIMIT = 400;
-const DIVERSITY_READ_LIMIT = NEWS_CANDIDATE_STORE_LIMIT - FIRST_READ_LIMIT;
+const PAGE_LIMIT = NEWS_CANDIDATE_BATCH_LIMIT;
 const WRITER_KEY = /^[A-Za-z0-9_-]{43,128}$/u;
 const FIELDS = ['category', 'indexedAt', 'publisher', 'sourceUrl', 'title'];
 const ROW_FIELDS = ['category', 'indexed_at', 'publisher', 'source_url', 'title'];
@@ -22,7 +23,7 @@ export interface NewsCandidateReadResult {
   readonly candidates: readonly NewsCandidate[];
   /** Invalid or conflicting rows were isolated; this is not complete discovery coverage. */
   readonly rejected: number;
-  /** A bounded diversity follow-up failed; the verified first response remains usable. */
+  /** A bounded page failed or the finite table capacity was reached; earlier valid pages remain usable. */
   readonly partial?: true;
 }
 export interface NewsCandidateStore {
@@ -115,39 +116,30 @@ export function createNewsCandidateStore(environment: Readonly<Record<string, st
     async read(now: number): Promise<NewsCandidateReadResult> {
       if (!validNow(now)) throw new NewsCandidateStoreError('NEWS_CANDIDATE_INVALID');
       const budget: RequestBudget = {deadline: Date.now() + 2_500, remainingBytes: MAX_BYTES};
-      const query = new URLSearchParams({select: SELECT, order: 'indexed_at.desc,source_url.asc', limit: String(FIRST_READ_LIMIT)});
-      query.append('indexed_at', `gte.${new Date(now - WINDOW_MS).toISOString()}`);
-      query.append('indexed_at', `lte.${new Date(now + FUTURE_MS).toISOString()}`);
-      const readQuery = async(limit: number): Promise<readonly unknown[]> => {
-        const value = await request(`dlkt_info_news_candidates?${query.toString()}`, {
-        method: 'GET', headers: {apikey: configuration.publishableKey, Accept: 'application/json'},
-        }, budget);
-        if (!Array.isArray(value) || value.length > limit) throw new NewsCandidateStoreError('NEWS_CANDIDATE_STORE_UNAVAILABLE');
-        return value;
-      };
-      const value = await readQuery(FIRST_READ_LIMIT);
-      const accepted = new Map<string, NewsCandidate | null>(); let rejected = 0;
-      const add = (values: readonly unknown[]): void => {for (const raw of values) {
-        const entry = row(raw, now);
-        if (!entry) { rejected++; continue; }
-        const previous = accepted.get(entry.sourceUrl);
-        if (previous === undefined) accepted.set(entry.sourceUrl, entry);
-        else if (previous === null) rejected++;
-        else if (signature(previous) !== signature(entry)) { accepted.set(entry.sourceUrl, null); rejected += 2; }
-      }};
-      add(value);
-      const covered = new Set([...accepted.values()].flatMap(entry => entry ? [entry.category] : []));
-      let partial = false;
-      if (value.length === FIRST_READ_LIMIT) {
-        query.set('limit', String(DIVERSITY_READ_LIMIT));
-        const named = [...covered].filter((category): category is Exclude<NewsCandidate['category'], null> => category !== null);
-        // Recover subjects absent from the first page, including SQL NULL. No category allowlist is a read filter.
-        if (named.length) {
-          if (covered.has(null)) query.set('category', `not.in.(${named.join(',')})`);
-          else query.set('or', `(category.not.in.(${named.join(',')}),category.is.null)`);
-        } else if (covered.has(null)) query.set('category', 'not.is.null');
-        else query.set('offset', String(FIRST_READ_LIMIT));
-        try { add(await readQuery(DIVERSITY_READ_LIMIT)); } catch { partial = true; }
+      const query = new URLSearchParams({select: SELECT, order: 'indexed_at.desc,source_url.asc', limit: String(PAGE_LIMIT)});
+      query.append('indexed_at', 'gte.'+new Date(now - WINDOW_MS).toISOString());
+      query.append('indexed_at', 'lte.'+new Date(now + FUTURE_MS).toISOString());
+      const accepted = new Map<string, NewsCandidate | null>(); let rejected = 0, partial = false;
+      for(let offset=0;offset<NEWS_CANDIDATE_STORE_LIMIT;offset+=PAGE_LIMIT){
+        query.set('offset',String(offset));
+        let values:readonly unknown[];
+        try{
+          const value=await request('dlkt_info_news_candidates?'+query.toString(),{
+            method:'GET',headers:{apikey:configuration.publishableKey,Accept:'application/json'},
+          },budget);
+          if(!Array.isArray(value)||value.length>PAGE_LIMIT)throw new NewsCandidateStoreError('NEWS_CANDIDATE_STORE_UNAVAILABLE');
+          values=value;
+        }catch(error){if(offset===0)throw error;partial=true;break;}
+        for(const raw of values){
+          const entry=row(raw,now);
+          if(!entry){rejected++;continue;}
+          const previous=accepted.get(entry.sourceUrl);
+          if(previous===undefined)accepted.set(entry.sourceUrl,entry);
+          else if(previous===null)rejected++;
+          else if(signature(previous)!==signature(entry)){accepted.set(entry.sourceUrl,null);rejected+=2;}
+        }
+        if(values.length<PAGE_LIMIT)break;
+        if(offset+PAGE_LIMIT===NEWS_CANDIDATE_STORE_LIMIT)partial=true;
       }
       return Object.freeze({candidates: Object.freeze([...accepted.values()].filter((entry): entry is NewsCandidate => entry !== null)), rejected,
         ...(partial ? {partial: true as const} : {})});
@@ -164,14 +156,28 @@ export function createNewsCandidateStore(environment: Readonly<Record<string, st
       }
       if (writerKey === null) throw new NewsCandidateStoreError('NEWS_CANDIDATE_STORE_UNAVAILABLE');
       if (accepted.size === 0) return 0;
-      const body = JSON.stringify({p_candidates: [...accepted.values()]});
-      if (Buffer.byteLength(body, 'utf8') > MAX_BYTES) throw new NewsCandidateStoreError('NEWS_CANDIDATE_INVALID');
-      const value = await request('rpc/dlkt_info_upsert_news_candidates', {method: 'POST',
-        headers: {apikey: configuration.publishableKey, Accept: 'application/json', 'Content-Type': 'application/json', 'x-dlkt-share-write': writerKey}, body},
-        {deadline: Date.now() + 2_500, remainingBytes: MAX_BYTES});
-      if (!exactObject(value, ['accepted']) || !Number.isInteger(value.accepted) || typeof value.accepted !== 'number'
-        || value.accepted < 0 || value.accepted > accepted.size) throw new NewsCandidateStoreError('NEWS_CANDIDATE_STORE_UNAVAILABLE');
-      return value.accepted;
+      const rows=[...accepted.values()],bodies:string[]=[];
+      let requestBytes=0;
+      for(let offset=0;offset<rows.length;offset+=NEWS_CANDIDATE_BATCH_LIMIT){
+        const body=JSON.stringify({p_candidates:rows.slice(offset,offset+NEWS_CANDIDATE_BATCH_LIMIT)});
+        requestBytes+=Buffer.byteLength(body,'utf8');bodies.push(body);
+      }
+      // Validate the entire operation before the first write; retain one shared
+      // time/byte budget and the purpose-bound500-row RPC on every batch.
+      if(requestBytes>MAX_BYTES)throw new NewsCandidateStoreError('NEWS_CANDIDATE_INVALID');
+      const budget:RequestBudget={deadline:Date.now()+2_500,remainingBytes:MAX_BYTES};
+      let acceptedCount=0;
+      for(let index=0;index<bodies.length;index++){
+        const value=await request('rpc/dlkt_info_upsert_news_candidates',{method:'POST',
+          headers:{apikey:configuration.publishableKey,Accept:'application/json','Content-Type':'application/json','x-dlkt-share-write':writerKey},
+          body:bodies[index],
+        },budget);
+        const size=Math.min(NEWS_CANDIDATE_BATCH_LIMIT,rows.length-index*NEWS_CANDIDATE_BATCH_LIMIT);
+        if(!exactObject(value,['accepted'])||!Number.isInteger(value.accepted)||typeof value.accepted!=='number'
+          ||value.accepted<0||value.accepted>size)throw new NewsCandidateStoreError('NEWS_CANDIDATE_STORE_UNAVAILABLE');
+        acceptedCount+=value.accepted;
+      }
+      return acceptedCount;
     },
   });
 }

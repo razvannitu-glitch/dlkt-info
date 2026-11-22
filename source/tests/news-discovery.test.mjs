@@ -17,8 +17,8 @@ const xmlResponse=body=>new Response(body,{headers:{'content-type':'application/
 const htmlResponse=body=>new Response(body,{headers:{'content-type':'text/html'}});
 const rowsByCategory=amount=>PUBLIC_EDITORIAL_CATEGORIES.flatMap(category=>Array.from({length:amount},(_,i)=>candidate(category,i)));
 
-test('catalog has20 organizational category sources, an unclassified source and70 exact publisher families',()=>{
- assert.equal(NEWS_SOURCES.length,22);assert.equal(NEWS_CATEGORY_SOURCES.length,20);assert.equal(NEWS_PUBLISHERS.length,70);assert.equal(new Set(NEWS_SOURCES.map(s=>s.id)).size,22);
+test('catalog has20 organizational category sources, an unclassified source and72 exact publisher families',()=>{
+ assert.equal(NEWS_SOURCES.length,22);assert.equal(NEWS_CATEGORY_SOURCES.length,20);assert.equal(NEWS_PUBLISHERS.length,72);assert.equal(new Set(NEWS_SOURCES.map(s=>s.id)).size,22);
  assert.equal(NEWS_UNCLASSIFIED_SOURCE.id,'news-unclassified');assert.equal(NEWS_UNCLASSIFIED_SOURCE.topic,'other');
  assert.ok(NEWS_CATEGORY_SOURCES.every(s=>s.adapter==='news-index'&&s.endpoint===NEWS_INDEX_URL));assert.equal(NEWS_FEATURED_SOURCE.id,'editorial-frontpage');
  for(const source of ['https://www.rte.ie/news/story','https://blogs.nvidia.com/blog/story','https://www.reuters.com/world/story'])assert.ok(publisherForNewsUrl(source));
@@ -37,7 +37,7 @@ test('candidate validation fails closed for spoofed publishers, extra/private fi
  const row=candidate();assert.ok(validateNewsCandidate(row,now));
  for(const change of [{publisher:'Associated Press'},{publishedAt:date},{email:'private@example.invalid'},{category:'world'},{title:'x'.repeat(201)},{indexedAt:new Date(now-86400001).toISOString()},{indexedAt:new Date(now+300001).toISOString()},{sourceUrl:'https://attacker.invalid/story'}])assert.equal(validateNewsCandidate({...row,...change},now),null);
  assert.equal(mergeNewsCandidates([row,row,{...row,sourceUrl:row.sourceUrl+'?utm_source=feed'}],now).length,1);
- assert.equal(mergeNewsCandidates(rowsByCategory(30),now).length,500);
+ assert.equal(mergeNewsCandidates(rowsByCategory(30),now).length,600);
 });
 test('unclassified subjects survive both public indexes without inventing a category',()=>{
  const row=unclassified(),found=readNewsCandidates(rss([row]),now);
@@ -51,10 +51,10 @@ test('unclassified subjects survive both public indexes without inventing a cate
 });
 test('global pool capacity preserves uncategorized subjects and is not a fixed category quota',()=>{
  const niche=Array.from({length:600},(_,i)=>unclassified(i));
- const onlyNiche=mergeNewsCandidates(niche,now);assert.equal(onlyNiche.length,500);assert.ok(onlyNiche.every(row=>row.category===null));
- const mixed=mergeNewsCandidates([...rowsByCategory(30),...niche],now);assert.equal(mixed.length,500);
+ const onlyNiche=mergeNewsCandidates(niche,now);assert.equal(onlyNiche.length,600);assert.ok(onlyNiche.every(row=>row.category===null));
+ const mixed=mergeNewsCandidates([...rowsByCategory(30),...niche],now);assert.equal(mixed.length,1200);
  assert.deepEqual(new Set(mixed.map(row=>row.category)),new Set([...PUBLIC_EDITORIAL_CATEGORIES,null]));
- assert.equal(new Set(mixed.map(row=>row.sourceUrl)).size,500);
+ assert.equal(new Set(mixed.map(row=>row.sourceUrl)).size,1200);
 });
 test('verified original headline may change the index category while retaining identity and metadata guards',async()=>{
  const neutral='Guild members present detailed findings about techniques used across the county';

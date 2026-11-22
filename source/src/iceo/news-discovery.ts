@@ -2,15 +2,18 @@ import {createHash} from 'node:crypto';
 import {XMLParser,XMLValidator} from 'fast-xml-parser';
 import {parseDocument,DomUtils} from 'htmlparser2';
 import type {EvidenceCard,SourceResult} from './contracts.js';
-import {cardContent} from './card-validation.js';
+import {cardContent,validCard} from './card-validation.js';
+import {COMPARISON_MAX_AGE_MS} from './comparison.js';
+import {consistentCards} from './evidence-consistency.js';
 import {collectFrontpageHighlights} from './news-frontpages.js';
 import {EDITORIAL_CATEGORY_TOPICS,classifyNewsHeadline,headlineDiscoveryPriority,type PublicEditorialCategory} from './editorial-categories.js';
 import {NEWS_INDEX_URL,NEWS_PUBLISHERS,NEWS_CATEGORY_SOURCES,NEWS_UNCLASSIFIED_SOURCE,NEWS_FEATURED_SOURCE,NEWS_DISCOVERY_INDEXES,NEWS_SOURCES,canonicalNewsUrl,publisherForNewsUrl,sourcePublicationContext,sourceLanguage,type NewsDiscoveryIndex,type NewsSourceLanguage} from './news-sources.js';
 
 /** Untrusted discovery metadata. indexedAt is never a publisher publication date. */
 export interface NewsCandidate {readonly sourceUrl:string;readonly title:string;readonly publisher:string;readonly indexedAt:string;readonly category:PublicEditorialCategory|null}
-export interface NewsDiscoveryOptions {readonly deadlineMs?:number;readonly requestTimeoutMs?:number;readonly maxArticleRequests?:number;readonly concurrency?:number;readonly publisherIndexes?:boolean;readonly frontpageHighlights?:boolean;readonly originBackoff?:Map<string,string|null>}
-const DAY=86_400_000,INDEX_BYTES=3_145_728,HTML_BYTES=1_048_576,MAX_CANDIDATES=500;
+export interface NewsDiscoveryOptions {readonly deadlineMs?:number;readonly requestTimeoutMs?:number;readonly maxArticleRequests?:number;readonly concurrency?:number;readonly publisherIndexes?:boolean;readonly frontpageHighlights?:boolean;readonly originBackoff?:Map<string,string|null>;readonly retainedCards?:readonly EvidenceCard[]}
+const DAY=86_400_000,INDEX_BYTES=3_145_728,HTML_BYTES=1_048_576,MAX_CANDIDATES=5000;
+export const NEWS_ACQUISITION_ROTATION_MS=300_000;
 const KEYS=['category','indexedAt','publisher','sourceUrl','title'];
 const object=(value:unknown):value is Record<string,unknown>=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 const digest=(value:unknown):string=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -96,9 +99,27 @@ function fairNewsOrder(values:readonly NewsCandidate[],limit:number,featuredUrls
   return languageFirst.length?[...languageFirst,...selected.filter(row=>!promoted.has(row))].slice(0,limit):selected;
 }
 /** A global bounded pool includes uncategorized topics and lends unused capacity to any subject. */
+/** Preserve urgent/language opportunities, then rotate the remaining finite queue.
+ * A stable pool is traversed across refresh slots instead of repeatedly checking its first80 rows.
+ * This schedules requests only; every admitted card still needs original publication metadata.
+ */
+export function newsAcquisitionOrder(values:readonly NewsCandidate[],limit:number,now:number,featuredUrls:ReadonlySet<string>=new Set()):readonly NewsCandidate[]{
+  if(!Number.isFinite(now)||!Number.isSafeInteger(limit)||limit<1||limit>80)throw new Error('NEWS_SCHEDULE_INVALID');
+  const ordered=fairNewsOrder(values,values.length,featuredUrls);
+  if(ordered.length<=limit)return Object.freeze(ordered);
+  const anchors=ordered.slice(0,Math.min(4,limit)),anchored=new Set(anchors.map(row=>row.sourceUrl)),languages=new Set(anchors.map(row=>sourceLanguage(row.sourceUrl)).filter(language=>language!==null));
+  for(const row of ordered){
+    const language=sourceLanguage(row.sourceUrl);
+    if(language!==null&&!languages.has(language)&&anchors.length<limit){anchors.push(row);anchored.add(row.sourceUrl);languages.add(language);}
+  }
+  const rest=ordered.filter(row=>!anchored.has(row.sourceUrl)),capacity=limit-anchors.length;
+  if(capacity===0)return Object.freeze(anchors);
+  const offset=(Math.floor(now/NEWS_ACQUISITION_ROTATION_MS)*capacity)%rest.length;
+  return Object.freeze([...anchors,...Array.from({length:Math.min(capacity,rest.length)},(_,index)=>rest[(offset+index)%rest.length]!)]);
+}
 export function mergeNewsCandidates(values:readonly unknown[],now:number):readonly NewsCandidate[]{
   const byUrl=new Map<string,NewsCandidate>();
-  for(const raw of values.slice(0,20_000)){const row=validateNewsCandidate(raw,now);if(!row)continue;const old=byUrl.get(row.sourceUrl);if(!old||row.indexedAt>old.indexedAt)byUrl.set(row.sourceUrl,row);}
+  for(const raw of values.slice(0,MAX_CANDIDATES*(NEWS_DISCOVERY_INDEXES.length+2))){const row=validateNewsCandidate(raw,now);if(!row)continue;const old=byUrl.get(row.sourceUrl);if(!old||row.indexedAt>old.indexedAt)byUrl.set(row.sourceUrl,row);}
   return Object.freeze(fairNewsOrder([...byUrl.values()],MAX_CANDIDATES));
 }
 /** The index's pubDate is deliberately ignored: GAL mixes publication and first-seen times. */
@@ -144,7 +165,7 @@ function rssPublicationDate(value:unknown):string|null{
 /** Index dates only filter candidates. The bound original headline and publication date must still agree. */
 export function readPublisherNewsCandidates(xml:string,index:NewsDiscoveryIndex,now:number):readonly NewsCandidate[]{
   const registered=NEWS_DISCOVERY_INDEXES.find(row=>row.id===index.id);
-  if(!registered||(['url','publisherId','format','language','feedTitle','feedHome','articlePath'] as const).some(key=>registered[key]!==index[key]))throw new Error('NEWS_INDEX_NOT_REGISTERED');
+  if(!registered||(['url','publisherId','format','language','feedTitle','feedHome','articlePath','allowMissingLanguage'] as const).some(key=>registered[key]!==index[key]))throw new Error('NEWS_INDEX_NOT_REGISTERED');
   if(Buffer.byteLength(xml)>HTML_BYTES||/<!\s*(?:DOCTYPE|ENTITY)/iu.test(xml)||XMLValidator.validate(xml)!==true)throw new Error('NEWS_INDEX_XML_INVALID');
   // RSS atom:link/dc:language are distinct from channel link/language; collapsing
   // namespaces would corrupt the identity check on the reviewed live feeds.
@@ -152,7 +173,8 @@ export function readPublisherNewsCandidates(xml:string,index:NewsDiscoveryIndex,
   if(registered.format==='rss'){
     if(!object(parsed)||!object(parsed.rss)||!object(parsed.rss.channel))throw new Error('NEWS_INDEX_SCHEMA_INVALID');
     const channel=parsed.rss.channel;
-    if(channel.title!==registered.feedTitle||channel.link!==registered.feedHome||!matchingIndexLanguage(channel.language,registered.language??'en'))throw new Error('NEWS_INDEX_IDENTITY_INVALID');
+    const languageMatches=channel.language===undefined&&registered.allowMissingLanguage===true||matchingIndexLanguage(channel.language,registered.language??'en');
+    if(channel.title!==registered.feedTitle||channel.link!==registered.feedHome||!languageMatches)throw new Error('NEWS_INDEX_IDENTITY_INVALID');
     const entries:unknown[]=channel.item===undefined?[]:Array.isArray(channel.item)?channel.item:[channel.item];
     if(entries.length>5000)throw new Error('NEWS_INDEX_TOO_MANY_ITEMS');
     const candidates:NewsCandidate[]=[];
@@ -367,7 +389,8 @@ export async function discoverNews(fetcher:typeof fetch,now:number,seedCandidate
   if(onCandidates){let timer:ReturnType<typeof setTimeout>|undefined;try{await Promise.race([onCandidates(pool),new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error('NEWS_STORE_TIMEOUT')),Math.max(1,Math.min(3000,budget.deadline-Date.now())));})]);}catch{storeError=true;}finally{if(timer)clearTimeout(timer);}}
   const frontpages=await frontpagePromise,knownCandidateUrls=new Set(pool.map(row=>row.sourceUrl));
   const featuredUrls=new Set(frontpages.urls.filter(url=>knownCandidateUrls.has(url)));
-  const selected=fairNewsOrder(pool,budget.remaining,featuredUrls);
+  const selected=newsAcquisitionOrder(pool,budget.remaining,now,featuredUrls);
+  const selectedUrls=new Set(selected.map(row=>row.sourceUrl));
   const identities=new Map<string,{card:EvidenceCard;category:NewsCandidate['category']}>(),conflicts=new Set<string>();
   const cards=new Map<NewsCandidate['category'],EvidenceCard[]>(),errors=new Map<NewsCandidate['category'],string[]>(),retries=new Map<NewsCandidate['category'],string>();let cursor=0;
   const worker=async():Promise<void>=>{for(;;){const candidate=selected[cursor++];if(!candidate)return;
@@ -392,11 +415,29 @@ export async function discoverNews(fetcher:typeof fetch,now:number,seedCandidate
     }catch(error){const previous=errors.get(candidate.category)??[];previous.push(error instanceof NewsRequestError?error.code:'NEWS_ARTICLE_UNAVAILABLE');errors.set(candidate.category,previous);if(error instanceof NewsRequestError&&error.retryAt)retries.set(candidate.category,error.retryAt);}
   }};
   await Promise.all(Array.from({length:Math.min(bounded(options.concurrency,10,10),selected.length)},()=>worker()));
+  // Only untouched, still-eligible prior observations survive rotation. Never
+  // refresh their timestamp/hash or resurrect a selected original that failed revalidation.
+  let retainedCount=0;
+  const retained=consistentCards((options.retainedCards??[]).slice(0,5000).filter(validCard)).filter(card=>{
+    if(card.id!==digest(card.identity).slice(0,24)||card.contentHash!==digest(cardContent(card))
+      ||Object.keys(card).some(key=>!['id','identity','title','topic','kind','sourceUrl','publisher','sourceIds','date','dateLabel','observedAt','contentHash','boundary','deadline','version','attribution','sourceState','summary','byline','licenseUrl','context'].includes(key))||card.kind!=='publication'||card.dateLabel!=='Published'||card.sourceState==='stale'||selectedUrls.has(card.sourceUrl))return false;
+    const published=Date.parse(card.date),observed=Date.parse(card.observedAt),publisher=publisherForNewsUrl(card.sourceUrl);
+    const categoryIds=card.sourceIds.filter(id=>id===NEWS_UNCLASSIFIED_SOURCE.id||NEWS_CATEGORY_SOURCES.some(source=>source.id===id));
+    return publisher?.label===card.publisher&&canonicalNewsUrl(card.sourceUrl)===card.sourceUrl&&card.identity===card.sourceUrl
+      &&published<=now&&published>now-DAY&&observed<=now+300_000&&now-observed<COMPARISON_MAX_AGE_MS
+      &&categoryIds.length===1&&card.sourceIds.every(id=>id===NEWS_FEATURED_SOURCE.id||id===categoryIds[0]);
+  });
+  for(const card of retained){
+    if(identities.has(card.identity)||conflicts.has(card.identity))continue;
+    const sourceId=card.sourceIds.find(id=>id!==NEWS_FEATURED_SOURCE.id)!;
+    const category=sourceId===NEWS_UNCLASSIFIED_SOURCE.id?null:sourceId.slice(5) as PublicEditorialCategory;
+    identities.set(card.identity,{card,category});const previous=cards.get(category)??[];previous.push(card);cards.set(category,previous);retainedCount++;
+  }
   const categoryResults:SourceResult[]=[...NEWS_CATEGORY_SOURCES,NEWS_UNCLASSIFIED_SOURCE].map(source=>{
     const category=source.id===NEWS_UNCLASSIFIED_SOURCE.id?null:source.id.slice(5) as PublicEditorialCategory,accepted=cards.get(category)??[],failed=errors.get(category)??[],checkedAt=new Date(now).toISOString();
     // A failed alternative does not invalidate a separately checked public card.
     const error=accepted.length?null:indexError??(storeError?'NEWS_CANDIDATE_STORE_FAILED':null)??failed[0]??null;
-    return Object.freeze({cards:Object.freeze(accepted),health:Object.freeze({id:source.id,label:source.label,publisher:source.publisher,topic:source.topic,state:accepted.length?'partial' as const:error?'unavailable' as const:'partial' as const,checkedAt,verifiedAt:accepted.length?checkedAt:null,count:accepted.length,rejected:failed.length,error,retryAt:retries.get(category)??indexRetry,scope:source.scope+` Discovery indexes with valid metadata: ${successfulIndexes}/${indexes.length}.`,termsUrl:source.termsUrl,windowed:true})});
+    return Object.freeze({cards:Object.freeze(accepted),health:Object.freeze({id:source.id,label:source.label,publisher:source.publisher,topic:source.topic,state:accepted.length?'partial' as const:error?'unavailable' as const:'partial' as const,checkedAt,verifiedAt:accepted.length?new Date(Math.max(...accepted.map(card=>Date.parse(card.observedAt)))).toISOString():null,count:accepted.length,rejected:failed.length,error,retryAt:retries.get(category)??indexRetry,scope:source.scope+` Discovery indexes with valid metadata: ${successfulIndexes}/${indexes.length}. Retained candidate pool: ${pool.length}; scheduled originals: ${selected.length}; candidates deferred by request capacity: ${Math.max(0,pool.length-selected.length)}. Queue rotation: five minutes. Earlier eligible observations retained without re-dating: ${retainedCount}.`,termsUrl:source.termsUrl,windowed:true})});
   });
   const featuredCount=categoryResults.flatMap(result=>result.cards).filter(card=>card.sourceIds.includes(NEWS_FEATURED_SOURCE.id)).length;
   const featuredResult:SourceResult=Object.freeze({cards:Object.freeze([]),health:Object.freeze({id:NEWS_FEATURED_SOURCE.id,label:NEWS_FEATURED_SOURCE.label,publisher:NEWS_FEATURED_SOURCE.publisher,topic:NEWS_FEATURED_SOURCE.topic,

@@ -76,4 +76,29 @@ export function reconcile(results:readonly SourceResult[]):IceoSnapshot {
   const ordered=[...cards.values()].sort((left,right)=>Date.parse(right.date)-Date.parse(left.date)||left.id.localeCompare(right.id));
   return Object.freeze({version:ICEO_VERSION,product:'dlkt-info',productVersion:PRODUCT_VERSION,mode:'current-official-records',generatedAt:new Date(Math.max(0,...sources.map(source=>Date.parse(source.checkedAt)))).toISOString(),state:available.length===0?'unavailable':sources.every(source=>source.state==='verified')&&conflicts.size===0?'ready':'partial',sources,cards:ordered,conflictCount:conflicts.size,duplicateCount,deltaAvailable:false,scheduledDelivery:false,accountPersistence:false,coverage:[...new Set(ordered.map(card=>card.topic))]});
 }
+
+/** Bound the complete public envelope below its existing1MiB transport contract.
+ * Selection here is a byte-capacity fallback only: no category/publisher quotas.
+ * The margin also covers Postgres jsonb text spacing in the durable envelope.
+ */
+export function fitPublicSnapshot(snapshot:IceoSnapshot,maximumBytes=900_000):IceoSnapshot{
+  if(!Number.isSafeInteger(maximumBytes)||maximumBytes<10_000||maximumBytes>900_000)throw new Error('PUBLIC_SNAPSHOT_BUDGET_INVALID');
+  if(Buffer.byteLength(JSON.stringify(snapshot),'utf8')<=maximumBytes&&snapshot.cards.length<=5000)return snapshot;
+  const ordered=[...snapshot.cards].sort((a,b)=>Date.parse(b.observedAt)-Date.parse(a.observedAt)||Date.parse(b.date)-Date.parse(a.date)||a.id.localeCompare(b.id));
+  const project=(count:number):IceoSnapshot=>{
+    const cards=Object.freeze(ordered.slice(0,count));
+    const sources=Object.freeze(snapshot.sources.map(source=>{
+      const retained=cards.filter(card=>card.sourceIds.includes(source.id)).length;
+      const omitted=snapshot.cards.filter(card=>card.sourceIds.includes(source.id)).length-retained;
+      return Object.freeze({...source,count:retained,scope:source.scope+` Transport capacity: ${omitted} checked records deferred from this response; original observations were not re-dated.`});
+    }));
+    return Object.freeze({...snapshot,cards,sources,state:snapshot.state==='unavailable'?'unavailable':'partial',coverage:Object.freeze([...new Set(cards.map(card=>card.topic))])});
+  };
+  let low=0,high=Math.min(5000,ordered.length),best=project(0);
+  if(Buffer.byteLength(JSON.stringify(best),'utf8')>maximumBytes)throw new Error('PUBLIC_SNAPSHOT_METADATA_TOO_LARGE');
+  while(low<=high){const middle=Math.floor((low+high)/2),candidate=project(middle);
+    if(Buffer.byteLength(JSON.stringify(candidate),'utf8')<=maximumBytes){best=candidate;low=middle+1;}else high=middle-1;
+  }
+  return best;
+}
 export const iceoEngine=new IceoEngine();
