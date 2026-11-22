@@ -28,6 +28,17 @@ test('Info Wallet preserves the approved header stylesheet and original Kate ide
   const expected=file==='public/iceo.css'?'5cef7425d372494aa4ced0a7dc426bdbadbdf0ba271b2de7de1a15bb26b95585':file==='public/header.css'?'3438c5339e50762e5409d9a84b9e3220ab3f1a531a28fd3df8725fcf247fde4c':baseline.files[file];
   // Explore only extends existing card selectors; the header adds approved head sizing and the matching compact breakpoint.
   let content=file==='public/iceo.css'?readFileSync(file,'utf8').replaceAll('#discovery-cards,#world-cards,','#discovery-cards,'):readFileSync(file);
+  if(file==='public/iceo.css'){
+   // Uniform 16:9 photo frames authorized 22 November 2026. All other bytes remain pinned.
+   const photoRules=[
+    ['.card-photo-frame{position:relative;aspect-ratio:16/9;min-width:0;min-height:0;background:var(--black);overflow:hidden}', '.card-photo-frame{aspect-ratio:16/9;background:var(--black);overflow:hidden}'],
+    ['.card-photo img{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:cover}', '.card-photo img{display:block;width:100%;height:100%;object-fit:cover}'],
+   ];
+   for(const [approved,original]of photoRules){
+    assert.equal(content.split(approved).length,2,'Exactly one approved photo geometry rule');
+    content=content.replace(approved,original);
+   }
+  }
   if(file==='public/header.css'){
    const sizing='/* The original 180px head has 6px transparent edges; 64px balances the full visible wordmark and tagline. */\n.site-header a.brand.brand-header{grid-template-columns:64px max-content}\n.site-header .brand-header .kate-mark{grid-row:1/-1;width:64px;height:64px;align-self:end}\n';
    const header=content.toString();assert.equal(header.split(sizing).length,2,'Exactly one header-only sizing override');

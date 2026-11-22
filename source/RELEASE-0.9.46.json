@@ -856,7 +856,7 @@
     "tests/unified-shell-ui.test.mjs": "6c4a9a184de310a88a24bd15760c23037fc6ed6acc4a63e77f312890b3ce7607",
     "tests/unified-shell.test.mjs": "fe636e31bf26b6b6afb1d38c526dac38ccb05c13aa72669ad49d5d5ca4c40e38",
     "tests/wallet-api.test.mjs": "abfbdc5c9bb1d56f426a7de04fc9c5e819f343bd10698d1a25db0e7e9d23276b",
-    "tests/wallet-assets.test.mjs": "4e3d74dc49e877cb8373e36bd0b0e80a3834bbe352c6caa7f6027e85a271288e",
+    "tests/wallet-assets.test.mjs": "b25361479824c2011a66bf63a4319d6361ddacbe08c4966a39bc6df40f6de8ce",
     "tests/wallet-daily.test.mjs": "f87c7b59d37f8550ce9064d6bc253a4667353c19641a5ad9fb5eb7303b3738c7",
     "tests/wallet-events.test.mjs": "773b2925c04ae35de59339a04fe2016b1aef14b56b05d57bd562e57fead38ced",
     "tests/wallet-gmail.test.mjs": "5160e5339effa242b64bd360919193105ff2f1c13e21a9d3d925acbadd41a67a",
