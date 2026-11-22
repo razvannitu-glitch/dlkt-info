@@ -71,7 +71,7 @@ for(const name of ['entry-browser','iceo']){
 await import('./generate-legal-pages.mjs');
 
 for(const [name,target]of [['catalog','card-photo-catalog'],['reviewed-photos','reviewed-photos'],['context-photos','context-photos'],['editorial-photos','editorial-photos'],['article-photo-reference','article-photo-reference'],['browser','card-photo-browser']]){
- const js=readFileSync(`.build/src/media/${name}.js`,'utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'').replaceAll('../iceo/','./').replaceAll("'./catalog.js'","'./card-photo-catalog.js'").replaceAll("'../i18n/browser.js'","'./i18n-browser.js'");
+ const js=readFileSync(`.build/src/media/${name}.js`,'utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'').replaceAll('../iceo/','./').replaceAll("'../local/news-policy.js'","'./local-news-policy.js'").replaceAll("'./catalog.js'","'./card-photo-catalog.js'").replaceAll("'../i18n/browser.js'","'./i18n-browser.js'");
  writeFileSync(`public/${target}.js`,js);
 }
 for(const name of ['iceo','daily-browser','shared-card-browser','edition-browser']){
