@@ -1,29 +1,27 @@
 import { DEFAULT_PREFERENCES, CURRENCIES, FX_HOME, FX_SOURCE, GLANCE_VERSION, object, validFx, validGlance, validPreferences } from './glance-contracts.js';
-import { currentLocalCards, forecastRange, keyThing, quoteCurrency, nextGlanceDelay } from './glance-presentation.js';
+import { currentLocalCards, forecastRange, quoteCurrency, nextGlanceDelay, localDay } from './glance-presentation.js';
 import { currentLocalSnapshot, validCity } from './local-contracts.js';
-import { PUBLIC_TOPICS } from './topics.js';
-import { safeLink } from './card-validation.js';
 import { readPreferences, savePreferences, clearPreferences } from './glance-preferences.js';
-import { NewsTicker } from './glance-ticker.js';
 import { weatherMotionNode, updateWeatherMotion } from './glance-weather-motion.js';
-import { getLocale } from './i18n-browser.js';
+import { getLocale, countryLabel, translate } from './i18n-browser.js';
 const get = (id) => { const n = document.getElementById(id); if (!n)
     throw Error('GLANCE_ELEMENT_MISSING'); return n; };
 const node = (tag, text = '', className = '') => { const n = document.createElement(tag); n.textContent = text; n.className = className; return n; };
 export function setupGlance() {
     const root = get('today-glance'), custom = get('glance-customize'), detail = get('glance-detail'), body = get('glance-detail-body'), status = get('glance-status'), refresh = get('glance-refresh');
     const list = get('glance-list'), read = get('glance-read');
-    const ticker = new NewsTicker(root, openSignal);
+    let detailReturn = null;
+    // No urgency metadata exists in this payload: ordinary headlines never initialize an alert ticker.
     const weatherMotion = weatherMotionNode(null, Date.now(), true);
     get('glance-weather').append(weatherMotion);
-    let preferences = readPreferences(() => localStorage), snapshot = null, city = null, local = null, topics = [], busy = false, localBusy = false, localTicket = 0, attempted = false, timer, opened = null;
+    let preferences = readPreferences(() => localStorage), snapshot = null, city = null, local = null, estimatedCity = false, busy = false, localBusy = false, localTicket = 0, attempted = false, timer, opened = null;
     let browserZone = 'UTC';
     try {
         browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     }
     catch { /* UTC remains explicit. */ }
     const zone = () => city?.timezone ?? browserZone;
-    const date = (value, withTime = false) => new Intl.DateTimeFormat('en-GB', { timeZone: zone(), day: 'numeric', month: 'short', year: 'numeric', ...(withTime ? { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' } : {}) }).format(new Date(value));
+    const date = (value, withTime = false) => new Intl.DateTimeFormat(getLocale(), { timeZone: zone(), day: 'numeric', month: 'short', year: 'numeric', ...(withTime ? { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' } : {}) }).format(new Date(value));
     function link(text, url) { const a = node('a', text, 'source-link'); a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer'; return a; }
     function tile(id, title, note) { get(id + '-value').textContent = title; get(id + '-note').textContent = note; }
     const quote = () => preferences.currency === 'auto' ? quoteCurrency(city?.countryCode) : preferences.currency;
@@ -34,7 +32,7 @@ export function setupGlance() {
     function renderDetail() {
         if (!opened)
             return;
-        const now = Date.now(), cards = currentLocalCards(local, city, now), key = keyThing(snapshot?.publications ?? [], local, city, topics, now, zone(), getLocale());
+        const now = Date.now(), cards = currentLocalCards(local, city, now);
         body.replaceChildren();
         const title = get('glance-detail-title');
         if (opened === 'weather') {
@@ -60,37 +58,6 @@ export function setupGlance() {
             else
                 body.append(node('p', 'The selected reference rate is unavailable or expired. Refresh to check the ECB source.'));
         }
-        if (opened === 'key') {
-            title.textContent = key?.title ?? 'Today’s key thing';
-            if (key) {
-                body.append(node('p', key.reason, 'privacy-note'));
-                if (key.event)
-                    localDetail(key.event);
-                if (key.news) {
-                    const n = key.news.news;
-                    if (n) {
-                        body.append(node('p', `${n.byline ? n.byline + ' · ' : ''}${n.publisher} · Published ${date(n.publishedAt, true)}`, 'privacy-note'));
-                        if (n.summary)
-                            body.append(node('p', n.summary));
-                        body.append(node('p', `Source checked ${date(n.checkedAt, true)}.`, 'privacy-note'), node('p', n.attribution, 'privacy-note'), link('Read the full report', n.url));
-                        if (n.licenseUrl)
-                            body.append(link('CC BY 4.0', n.licenseUrl));
-                    }
-                }
-                if (key.publication) {
-                    const p = key.publication;
-                    body.append(node('p', `${p.publisher} · ${p.dateLabel} ${date(p.date)}`, 'privacy-note'));
-                    if (p.summary)
-                        body.append(node('p', p.summary));
-                    body.append(node('p', `Source checked ${date(p.observedAt, true)}. ${p.boundary}`, 'privacy-note'), node('p', 'Selected from the connected publishers. This is not a ranking of all world news or an independent verification of the publisher’s claims.', 'privacy-note'), node('p', p.attribution, 'privacy-note'));
-                    const url = safeLink(p.sourceUrl);
-                    if (url)
-                        body.append(link('Open original publication', url));
-                }
-            }
-            else
-                body.append(node('p', 'No recent item from the connected sources is available. Refresh to check again.'));
-        }
         if (opened === 'notice') {
             title.textContent = 'Local heads-up';
             const card = cards.find(c => c.kind === 'transport-notice');
@@ -101,38 +68,42 @@ export function setupGlance() {
         }
     }
     function render() {
-        const now = Date.now(), cards = currentLocalCards(local, city, now);
-        get('glance-date').textContent = new Intl.DateTimeFormat('en-GB', { timeZone: zone(), weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' }).format(now);
-        get('glance-zone').textContent = city ? `${city.name} · ${zone()}` : browserZone;
-        get('glance-city').textContent = city ? 'Change city' : 'Choose city';
+        const now = Date.now(), cards = currentLocalCards(local, city, now), locale = getLocale();
+        const calendar = get('glance-date');
+        calendar.textContent = new Intl.DateTimeFormat(locale, { timeZone: zone(), weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' }).format(now);
+        calendar.dateTime = localDay(now, zone());
+        calendar.title = zone();
+        get('glance-title').textContent = translate('navToday');
+        get('glance-city-label').textContent = city?.name ?? translate('chooseCity');
+        get('glance-city').setAttribute('aria-label', city ? translate('changeCity') + ': ' + city.name + ', ' + countryLabel(city.countryCode, city.country) : translate('chooseCity'));
+        get('glance-zone').textContent = city ? countryLabel(city.countryCode, city.country) + (estimatedCity ? (locale === 'ro' ? ' · aproximativ' : locale === 'it' ? ' · approssimativo' : ' · approximate') : '') : '';
+        get('glance-locate').textContent = locale === 'ro' ? 'Foloseste locatia mea' : locale === 'it' ? 'Usa la mia posizione' : 'Use my location';
         get('glance-weather').hidden = !preferences.weather;
         get('glance-forex').hidden = !preferences.forex;
-        get('glance-key').hidden = !preferences.keyThing;
         const forecast = cards.find(c => c.kind === 'forecast'), range = forecast ? forecastRange(forecast) : null;
         updateWeatherMotion(weatherMotion, forecast ?? null, now);
         tile('glance-weather', city ? range ?? (localBusy ? 'Checking forecast…' : 'Unavailable') : 'Choose your city', forecast ? `Forecast · ${city?.name} · ${new Intl.DateTimeFormat('en-GB', { timeZone: zone(), hour: '2-digit', minute: '2-digit' }).format(new Date(forecast.validFrom))}–${new Intl.DateTimeFormat('en-GB', { timeZone: zone(), hour: '2-digit', minute: '2-digit' }).format(new Date(forecast.validTo))}` : city ? localBusy ? 'Checking the connected source' : 'Refresh to check the source' : 'Local forecast, when connected');
         const fx = snapshot?.forex, q = quote();
         const n = fx && validFx(fx, now) ? fx.rates[q] : undefined;
         tile('glance-forex', n !== undefined ? `1 EUR = ${new Intl.NumberFormat('en-GB', { maximumFractionDigits: 4 }).format(n)} ${q}` : busy ? 'Checking ECB…' : 'Unavailable', n !== undefined && fx ? `ECB reference · ${date(fx.date)}` : 'Reference rates · not live quotes');
-        const key = keyThing(snapshot?.publications ?? [], local, city, topics, now, zone(), getLocale());
-        tile('glance-key', key?.title ?? (busy ? 'Finding a key thing…' : 'No current item available'), key?.news ? `Local report · ${key.news.publisher} · ${date(key.news.news?.publishedAt ?? key.news.checkedAt)}` : key?.event ? `Upcoming today · ${city?.name}` : key?.publication ? `Selected publication · ${key.publication.publisher} · ${date(key.publication.date)}` : 'Only from connected sources');
         const notice = cards.find(c => c.kind === 'transport-notice'), headsup = get('glance-headsup');
         headsup.hidden = !notice;
         headsup.textContent = notice ? `Local heads-up · ${notice.title}` : '';
-        const items = [];
-        for (const [enabled, id, signal, label] of [[preferences.weather, 'glance-weather', 'weather', 'Weather'], [preferences.forex, 'glance-forex', 'forex', 'Currency'], [preferences.keyThing, 'glance-key', 'key', 'Today']])
-            if (enabled)
-                items.push({ signal, label, value: get(id + '-value').textContent ?? '', note: get(id + '-note').textContent ?? '' });
-        if (notice)
-            items.push({ signal: 'notice', label: 'Local heads-up', value: notice.title, note: notice.publisher });
-        ticker.update(items);
-        get('glance-empty').hidden = preferences.weather || preferences.forex || preferences.keyThing;
+        const weatherQuick = get('glance-weather-quick'), forexQuick = get('glance-forex-quick');
+        weatherQuick.hidden = !preferences.weather || !forecast || !range;
+        weatherQuick.textContent = (locale === 'ro' ? 'Vreme' : locale === 'it' ? 'Meteo' : 'Weather') + ' · ' + (range ?? '');
+        weatherQuick.title = get('glance-weather-note').textContent ?? '';
+        forexQuick.hidden = !preferences.forex || n === undefined;
+        forexQuick.textContent = n !== undefined ? 'ECB · 1 EUR = ' + new Intl.NumberFormat(locale, { maximumFractionDigits: 4 }).format(n) + ' ' + q : '';
+        forexQuick.title = get('glance-forex-note').textContent ?? '';
+        read.textContent = locale === 'ro' ? 'Vreme si curs' : locale === 'it' ? 'Meteo e cambi' : 'Weather & rates';
+        get('glance-empty').hidden = preferences.weather || preferences.forex;
         refresh.disabled = busy || localBusy;
         if (detail.open)
             renderDetail();
         clearTimeout(timer);
         if (document.visibilityState === 'visible')
-            timer = setTimeout(render, nextGlanceDelay(cards, snapshot?.publications ?? [], fx ?? null, now));
+            timer = setTimeout(render, nextGlanceDelay(cards, [], fx ?? null, now));
     }
     async function load() {
         if (busy)
@@ -153,7 +124,7 @@ export function setupGlance() {
             if (!validGlance(data, Date.now()))
                 throw Error('GLANCE_INVALID');
             snapshot = data;
-            status.textContent = !data.forex || !data.publications.length ? 'Some connected sources are unavailable. Open a signal for details.' : '';
+            status.textContent = !data.forex && preferences.forex ? 'The currency reference is unavailable. Open details or refresh to try again.' : '';
         }
         catch {
             snapshot = null;
@@ -193,8 +164,8 @@ export function setupGlance() {
             }
         }
     }
-    function populate() { get('glance-show-weather').checked = preferences.weather; get('glance-show-forex').checked = preferences.forex; get('glance-show-key').checked = preferences.keyThing; get('glance-currency').value = preferences.currency; get('glance-save-status').textContent = ''; }
-    function openSignal(kind) { if (list.open)
+    function populate() { get('glance-show-weather').checked = preferences.weather; get('glance-show-forex').checked = preferences.forex; get('glance-currency').value = preferences.currency; get('glance-save-status').textContent = ''; }
+    function openSignal(kind) { detailReturn = list.open ? read : document.activeElement instanceof HTMLElement ? document.activeElement : read; if (list.open)
         list.close(); if (kind === 'weather' && !city) {
         get('entry-show-city').click();
         return;
@@ -203,18 +174,20 @@ export function setupGlance() {
     currencies.append(new Option('For my city, otherwise USD', 'auto'));
     for (const c of CURRENCIES)
         currencies.append(new Option(`EUR / ${c}`, c));
-    get('glance-customize-open').addEventListener('click', () => { populate(); custom.showModal(); });
+    get('glance-customize-open').addEventListener('click', () => { if (list.open)
+        list.close(); populate(); custom.showModal(); });
+    custom.addEventListener('close', () => read.focus());
     get('glance-customize-close').addEventListener('click', () => custom.close());
     get('glance-detail-close').addEventListener('click', () => detail.close());
-    detail.addEventListener('close', () => { opened = null; read.focus(); });
+    detail.addEventListener('close', () => { opened = null; (detailReturn?.isConnected && !detailReturn.hidden ? detailReturn : read).focus(); detailReturn = null; });
     read.addEventListener('click', () => list.showModal());
     get('glance-list-close').addEventListener('click', () => list.close());
-    get('glance-preferences').addEventListener('submit', e => { e.preventDefault(); const next = { version: GLANCE_VERSION, weather: get('glance-show-weather').checked, forex: get('glance-show-forex').checked, keyThing: get('glance-show-key').checked, currency: currencies.value }; if (!validPreferences(next))
-        return; preferences = next; get('glance-save-status').textContent = savePreferences(preferences, () => localStorage) ? 'Saved in this browser.' : 'Applied for this visit. Browser storage is unavailable.'; render(); if (!attempted && (preferences.forex || preferences.keyThing))
+    get('glance-preferences').addEventListener('submit', e => { e.preventDefault(); const next = { version: GLANCE_VERSION, weather: get('glance-show-weather').checked, forex: get('glance-show-forex').checked, keyThing: false, currency: currencies.value }; if (!validPreferences(next))
+        return; preferences = next; get('glance-save-status').textContent = savePreferences(preferences, () => localStorage) ? 'Saved in this browser.' : 'Applied for this visit. Browser storage is unavailable.'; render(); if (!attempted && preferences.forex)
         void load(); });
     refresh.addEventListener('click', () => { void refreshCity(); void load(); });
     get('glance-city').addEventListener('click', () => get('choose-place').click());
-    for (const [id, kind] of [['glance-weather', 'weather'], ['glance-forex', 'forex'], ['glance-key', 'key'], ['glance-headsup', 'notice']])
+    for (const [id, kind] of [['glance-weather', 'weather'], ['glance-forex', 'forex'], ['glance-weather-quick', 'weather'], ['glance-forex-quick', 'forex'], ['glance-headsup', 'notice']])
         get(id).addEventListener('click', () => openSignal(kind));
     document.addEventListener('dlkt:city-selected', event => { if (event instanceof CustomEvent && object(event.detail) && validCity(event.detail.city)) {
         if (event.detail.restored === true && document.body.dataset.entryView === 'daily' && city)
@@ -222,16 +195,13 @@ export function setupGlance() {
         ++localTicket;
         localBusy = true;
         city = event.detail.city;
+        estimatedCity = event.detail.estimated === true;
         local = null;
         render();
     } });
     document.addEventListener('dlkt:local-snapshot', event => { if (!(event instanceof CustomEvent) || !object(event.detail) || !validCity(event.detail.city))
         return; const c = event.detail.city; if (city && city.id !== c.id && !(event.detail.origin === 'daily' && document.body.dataset.entryView === 'daily'))
         return; ++localTicket; localBusy = false; city = c; local = currentLocalSnapshot(event.detail.snapshot, c, Date.now()) ? event.detail.snapshot : null; render(); });
-    document.addEventListener('dlkt:topic-context', event => { if (event instanceof CustomEvent && object(event.detail) && Array.isArray(event.detail.topics) && event.detail.topics.every(t => PUBLIC_TOPICS.includes(t))) {
-        topics = event.detail.topics;
-        render();
-    } });
     document.addEventListener('dlkt:daily-cleared', () => { preferences = { ...DEFAULT_PREFERENCES }; clearPreferences(() => localStorage); render(); });
     document.addEventListener('dlkt:language-changed', render);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible')
@@ -241,7 +211,7 @@ export function setupGlance() {
     window.addEventListener('pageshow', render);
     root.hidden = false;
     render();
-    if (preferences.forex || preferences.keyThing)
+    if (preferences.forex)
         void load();
 }
 if (typeof document !== 'undefined')

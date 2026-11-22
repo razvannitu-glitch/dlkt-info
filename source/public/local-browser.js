@@ -83,7 +83,7 @@ export function setupLocal() {
         return; const value = button.dataset.localInterest; if (!['all', 'events', 'food', 'culture', 'administration', 'transport', 'outdoors', 'local'].includes(value ?? ''))
         return; interest = value; for (const b of interests.querySelectorAll('button'))
         b.setAttribute('aria-pressed', String(b === button)); render(); });
-    const open = () => { if (!chooser.open)
+    const open = () => { autoSuppressed = true; if (!chooser.open)
         chooser.showModal(); input.focus(); };
     location.addEventListener('click', open);
     get('close-place').addEventListener('click', () => chooser.close());
@@ -116,7 +116,9 @@ export function setupLocal() {
         message.textContent = 'City search is unavailable. Your existing selection has not changed.';
     } }
     input.addEventListener('input', () => { clearTimeout(timer); ++searchSequence; lookup?.abort(); timer = setTimeout(() => { void search(); }, 100); });
-    get('locate-place').addEventListener('click', () => { if (!navigator.geolocation) {
+    document.getElementById('glance-locate')?.addEventListener('click', () => { autoSuppressed = true; if (!chooser.open)
+        chooser.showModal(); const locate = get('locate-place'); locate.focus(); locate.click(); });
+    get('locate-place').addEventListener('click', () => { autoSuppressed = true; if (!navigator.geolocation) {
         message.textContent = 'Location is not supported here. Search for your city instead.';
         return;
     } const ticket = ++searchSequence; lookup?.abort(); results.replaceChildren(); message.textContent = 'Waiting for location permission…'; navigator.geolocation.getCurrentPosition(position => { if (ticket !== searchSequence)

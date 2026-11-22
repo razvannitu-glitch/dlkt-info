@@ -1148,9 +1148,13 @@ function renderDiscovery() {
     }
     const suppressLocalPending = (loadingPhase === 'initial' || loadingPhase === 'slow') && !local.supporting.length;
     required('#today-heading').textContent = language === 'ro' ? 'Stiri' : 'News';
-    required('#home-location').textContent = contextualCity
-        ? `${contextualCity.name} · ${countryLabel(contextualCity.countryCode, contextualCity.country)}${contextualLocation === 'estimated' ? ' · approximate' : ''}`
-        : contextualLocationPending ? tr('lookupLoading') : tr('chooseCity');
+    const editionCountry = server.page?.countryCode ? countryLabel(server.page.countryCode) : null, coverage = server.page?.coverage;
+    const nationalLabel = language === 'ro' ? 'surse nationale' : language === 'it' ? 'fonti nazionali' : 'national sources';
+    const internationalLabel = language === 'ro' ? 'surse internationale' : language === 'it' ? 'fonti internazionali' : 'international sources';
+    required('#home-location').textContent = server.page && coverage
+        ? [editionCountry, coverage.national > 0 ? nationalLabel : internationalLabel, languageLabel(language)].filter(Boolean).join(' · ')
+        : contextualCity ? `${contextualCity.name} · ${countryLabel(contextualCity.countryCode, contextualCity.country)}${contextualLocation === 'estimated' ? ' · approximate' : ''}`
+            : contextualLocationPending ? tr('lookupLoading') : tr('chooseCity');
     const discoveryDelay = nextDailyEditionDelay(today, now), returnDelay = checkpoint ? nextReturnDelay(snapshot, selectReturnBrief(checkpoint, null, now, false).topics, now) : null;
     const localBoundaries = [local.expiresAt, reading.expiresAt, server.page ? Date.parse(server.page.expiresAt) : null].filter((time) => time !== null && time > now);
     const localDelay = localBoundaries.length ? Math.max(25, Math.min(...localBoundaries) - now + 25) : null;
@@ -1326,8 +1330,20 @@ function renderDiscovery() {
         editionDetails.append(languages);
     }
     languages.replaceChildren();
-    if (server.page)
+    if (server.page) {
         languages.append(make('p', 'privacy-note', languageLabel(server.page.language) + ' · ' + tr('matchingStories', { count: server.page.total }) + ' · ' + tr('partialCoverage')));
+        if (coverage) {
+            const number = new Intl.NumberFormat(language), national = number.format(coverage.national), localCount = number.format(coverage.local), international = number.format(coverage.international);
+            languages.append(make('p', 'privacy-note', language === 'ro'
+                ? `Editii ale surselor nationale: ${national} · Stiri locale verificate: ${localCount} · Surse internationale: ${international}. Tara descrie editia sursei, nu locul fiecarui eveniment.`
+                : language === 'it' ? `Edizioni di fonti nazionali: ${national} · Notizie locali verificate: ${localCount} · Fonti internazionali: ${international}. Il paese descrive l'edizione della fonte, non il luogo di ogni evento.`
+                    : `National publisher editions: ${national} · Verified local reports: ${localCount} · International sources: ${international}. The country describes the publisher edition, not the location of every event.`));
+            if (coverage.local === 0)
+                languages.append(make('p', 'privacy-note', language === 'ro' ? 'Nicio stire locala verificata in aceasta editie.' : language === 'it' ? 'Nessuna notizia locale verificata in questa edizione.' : 'No verified local news in this edition.'));
+            if (editionCountry && coverage.national === 0)
+                languages.append(make('p', 'privacy-note', language === 'ro' ? 'Nu sunt disponibile surse nationale verificate pentru aceasta limba. Sunt afisate sursele internationale eligibile.' : language === 'it' ? 'Non sono disponibili fonti nazionali verificate per questa lingua. Sono mostrate le fonti internazionali idonee.' : 'No verified national sources are available for this language. Eligible international sources are shown.'));
+        }
+    }
     const anchor = anchors.find(item => item.node.isConnected);
     if (anchor) {
         const offset = anchor.node.getBoundingClientRect().top - anchor.top;

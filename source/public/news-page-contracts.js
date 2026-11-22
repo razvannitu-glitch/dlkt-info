@@ -1,10 +1,10 @@
 import { validCard } from './card-validation.js';
 import { NEWS_CATEGORIES, isNewsCategoryId, newsCategory } from './news-taxonomy.js';
-import { sourceLanguage, newsLanguageMatches } from './news-sources.js';
+import { sourceLanguage, newsLanguageMatches, sourceEditionCountryCode } from './news-sources.js';
 import { localeFromPreference } from './i18n-locale.js';
 import { validCity } from './local-contracts.js';
 import { newsFeed, validLocalNewsArticle, NEWS_WINDOW_MS } from './local-news-policy.js';
-export const NEWS_PAGE_VERSION = 'dlkt-news-page-1';
+export const NEWS_PAGE_VERSION = 'dlkt-news-page-2';
 export const NEWS_SERVER_PAGE_SIZE = 20;
 const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const exact = (value, keys) => Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
@@ -55,12 +55,18 @@ export function validNewsPageItem(value, now, city) {
 }
 /** Browser-safe boundary. Context continuity and cross-page duplicates are checked by the reader controller. */
 export function validNewsPage(value, now = Date.now(), city) {
-    if (!Number.isFinite(now) || !object(value) || !exact(value, ['version', 'epoch', 'revision', 'generatedAt', 'startedAt', 'expiresAt', 'language', 'cityId', 'filter', 'items', 'total', 'filteredTotal', 'counts', 'nextCursor'])
+    if (!Number.isFinite(now) || !object(value) || !exact(value, ['version', 'epoch', 'revision', 'generatedAt', 'startedAt', 'expiresAt', 'language', 'cityId', 'countryCode', 'coverage', 'filter', 'items', 'total', 'filteredTotal', 'counts', 'nextCursor'])
         || value.version !== NEWS_PAGE_VERSION || !validNewsEpochId(value.epoch) || !integer(value.revision, Number.MAX_SAFE_INTEGER) || value.revision === 0
         || !timestamp(value.generatedAt) || !timestamp(value.startedAt) || !timestamp(value.expiresAt) || Date.parse(value.generatedAt) > now + 5000
         || Date.parse(value.startedAt) > now + 5000 || Date.parse(value.startedAt) < Date.parse(value.generatedAt) - 5000 || Date.parse(value.expiresAt) <= Date.parse(value.startedAt) || Date.parse(value.expiresAt) <= now
         || Date.parse(value.expiresAt) > Date.parse(value.generatedAt) + 3600000 || Date.parse(value.expiresAt) <= Date.parse(value.generatedAt)
         || localeFromPreference(value.language) === null || (value.cityId !== null && !validNewsCityId(value.cityId)) || !validNewsStreamFilter(value.filter)
+        || (value.countryCode !== null && (typeof value.countryCode !== 'string' || !/^[A-Z]{2}$/u.test(value.countryCode)))
+        || (value.cityId === null) !== (value.countryCode === null)
+        || city !== undefined && (!validCity(city) || value.cityId !== city.id || value.countryCode !== city.countryCode)
+        || !object(value.coverage) || !exact(value.coverage, ['national', 'local', 'international']) || !Object.values(value.coverage).every(count => integer(count))
+        || Number(value.coverage.national) + Number(value.coverage.local) + Number(value.coverage.international) !== value.total
+        || value.countryCode === null && (value.coverage.national !== 0 || value.coverage.local !== 0)
         || !integer(value.total) || !integer(value.filteredTotal) || value.filteredTotal > value.total
         || !object(value.counts) || !exact(value.counts, ['other', ...NEWS_CATEGORIES.map(category => category.id)]) || !Object.values(value.counts).every(count => integer(count))
         || Object.values(value.counts).reduce((sum, count) => sum + Number(count), 0) !== value.total
@@ -70,6 +76,7 @@ export function validNewsPage(value, now = Date.now(), city) {
         || (value.filteredTotal === 0 && (value.items.length !== 0 || value.nextCursor !== null)))
         return false;
     const language = value.language, keys = new Set(), ids = new Set(), urls = new Set(), identities = new Set();
+    const observed = { national: 0, local: 0, international: 0 };
     for (const item of value.items) {
         if (!validNewsPageItem(item, now, city) || (value.filter !== 'all' && (item.category ?? 'other') !== value.filter))
             return false;
@@ -81,15 +88,20 @@ export function validNewsPage(value, now = Date.now(), city) {
         urls.add(url);
         identities.add(identity);
         if (item.kind === 'global') {
+            if (value.countryCode !== null && sourceEditionCountryCode(item.card) === value.countryCode)
+                observed.national++;
+            else
+                observed.international++;
             if (!newsLanguageMatches(sourceLanguage(item.card), language) || Date.parse(value.expiresAt) > Math.min(Date.parse(item.card.observedAt) + 3600000, Date.parse(item.card.date) + 86400000))
                 return false;
         }
         else {
+            observed.local++;
             const article = item.card.news;
             if (!article || article.cityId !== value.cityId || !newsLanguageMatches(newsFeed(article.sourceId)?.language ?? null, language)
                 || Date.parse(value.expiresAt) > Math.min(Date.parse(article.validUntil), Date.parse(article.publishedAt) + NEWS_WINDOW_MS + 1))
                 return false;
         }
     }
-    return true;
+    return observed.national <= Number(value.coverage.national) && observed.local <= Number(value.coverage.local) && observed.international <= Number(value.coverage.international);
 }
