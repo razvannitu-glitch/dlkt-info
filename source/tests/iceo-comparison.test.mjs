@@ -1,5 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import{captureCheckpoint,compareCheckpoint,parseCheckpoint,metadataChanges,COMPARISON_MAX_AGE_MS}from'../.build/src/iceo/comparison.js';
+import{contextForCard}from'../.build/src/iceo/context.js';
 const now=Date.parse('2026-11-14T14:00:00.000Z');const stamp=new Date(now).toISOString();
 const rev='11111111-1111-4111-8111-111111111111';
 const card={id:'a'.repeat(24),identity:'https://github.com/nodejs/node/releases/tag/v22.1.0',title:'Node.js v22.1.0',topic:'technology',kind:'software-release',sourceUrl:'https://github.com/nodejs/node/releases/tag/v22.1.0',publisher:'Node.js maintainers',sourceIds:['nodejs'],date:'2026-11-13T09:00:00.000Z',dateLabel:'Published',observedAt:stamp,contentHash:'b'.repeat(64),boundary:'Publisher listing.',deadline:null,version:'v22.1.0',attribution:'Node.js',sourceState:'verified'};
@@ -9,6 +10,31 @@ const base=()=>captureCheckpoint(snap(),now,rev);
 const second={...card,id:'c'.repeat(24),identity:'second',title:'Second listing',sourceUrl:'https://github.com/nodejs/node/releases/tag/v22.2.0',version:'v22.2.0'};
 test('explicit baseline roundtrips only documented public data',()=>{const b=base();assert.deepEqual(parseCheckpoint({...b,secret:'omit'}),b);assert.equal('secret' in parseCheckpoint({...b,secret:'omit'}),false);});
 test('same metadata has zero changes despite a later observation and new hash',()=>{const b=base();const result=compareCheckpoint(b,snap([{...card,observedAt:new Date(now+60000).toISOString(),contentHash:'e'.repeat(64)}]),now+60000);assert.equal(result.state,'complete');assert.equal(result.cards.length,0);assert.equal(result.unchanged,1);});
+test('context object property order is transport-only through capture and comparison, including country property order',()=>{
+  const context=contextForCard({sourceIds:['govuk-news']});
+  const reordered={basis:context.basis,label:context.label,boundary:context.boundary,countries:context.countries.map(country=>({name:country.name,code:country.code}))};
+  const original={...card,kind:'publication',topic:'world',sourceIds:['govuk-news'],sourceUrl:'https://www.gov.uk/government/news/example',context:reordered};
+  const current={...snap([original],[{...source,id:'govuk-news',topic:'world'}]),coverage:['world']},before=JSON.stringify(current);
+  const checkpoint=captureCheckpoint(current,now,rev);
+  assert.notEqual(JSON.stringify(checkpoint.records[0].context),JSON.stringify(original.context));
+  assert.deepEqual(checkpoint.records[0].context,original.context);
+  assert.deepEqual(metadataChanges(checkpoint.records[0],original),[]);
+  const result=compareCheckpoint(checkpoint,current,now);assert.equal(result.state,'complete');assert.equal(result.cards.length,0);assert.equal(result.unchanged,1);
+  assert.equal(JSON.stringify(current),before);
+});
+test('semantic context changes remain visible for basis, label, boundary and country values or order',()=>{
+  const context={countries:[{code:'FR',name:'France'},{code:'GB',name:'United Kingdom'}],basis:'publisher-category',label:'Publisher country categories',boundary:'Publisher categories, not an inferred event location.'};
+  for(const [field,changed]of [
+    ['basis',{...context,basis:'publisher-scope'}],['label',{...context,label:'Revised publisher country coverage'}],['boundary',{...context,boundary:'Revised source scope boundary.'}],
+    ['countries',{...context,countries:[{code:'DE',name:'Germany'}]}],['country name',{...context,countries:[{code:'FR',name:'Revised country name'},context.countries[1]]}],
+    ['country order',{...context,countries:[...context.countries].reverse()}],
+  ]){
+    const changes=metadataChanges({...card,context},{...card,context:changed});assert.equal(changes.length,1,field);assert.equal(changes[0].field,'context',field);
+    assert.deepEqual(JSON.parse(changes[0].before),context,field);assert.deepEqual(JSON.parse(changes[0].after),changed,field);
+  }
+  const added=metadataChanges(card,{...card,context}),removed=metadataChanges({...card,context},card);
+  assert.equal(added[0].before,null);assert.deepEqual(JSON.parse(added[0].after),context);assert.equal(removed[0].after,null);assert.deepEqual(JSON.parse(removed[0].before),context);
+});
 test('new-to-check listing is not claimed to be newly published',()=>{const result=compareCheckpoint(base(),snap([card,{...second,date:'2024-01-01T00:00:00.000Z'}]),now);assert.equal(result.cards.length,1);assert.equal(result.cards[0].kind,'not-in-saved-check');});
 test('changed title preserves exact before and after even if hash unchanged',()=>{const r=compareCheckpoint(base(),snap([{...card,title:'Corrected title'}]),now);assert.deepEqual(r.cards[0].changes,[{field:'title',before:card.title,after:'Corrected title'}]);});
 for(const field of ['date','dateLabel','deadline','version','sourceUrl','publisher'])test('exact change tracked: '+field,()=>{const after={...card,[field]:field==='date'||field==='deadline'?'2026-11-14':field==='sourceUrl'?'https://github.com/nodejs/node/releases/tag/v22.1.1':'Changed'};assert.equal(metadataChanges(card,after)[0].field,field);});

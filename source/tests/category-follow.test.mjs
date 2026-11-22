@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {CATEGORY_FOLLOW_VERSION,parseCategoryFollows,changeCategoryFollow,acknowledgeCategoryFollow,selectCategoryFollowReturn,nextCategoryFollowDelay,captureCategoryFollowBaseline} from '../.build/src/iceo/category-follow.js';
 import {EDITORIAL_CATEGORIES_VERSION,EDITORIAL_CATEGORY_TOPICS} from '../.build/src/iceo/editorial-categories.js';
 import {COMPARISON_MAX_AGE_MS} from '../.build/src/iceo/comparison.js';
+import {contextForCard} from '../.build/src/iceo/context.js';
 
 const now=Date.parse('2026-11-22T10:00:00.000Z'),stamp=new Date(now).toISOString();
 const rev=number=>`${number.toString(16).padStart(8,'0')}-1111-4111-8111-111111111111`;
@@ -72,6 +73,25 @@ test('return counts original metadata changes and older new-to-check listings wi
   }
   const transport=selectCategoryFollowReturn(state,snapshot([card('gaming',1,{contentHash:'c'.repeat(64),observedAt:new Date(now+1000).toISOString()})]),now+1000,true);
   assert.equal(transport.newCount+transport.updatedCount,0);
+});
+
+test('follow and ACK of the same publisher context report zero updates despite public JSON property order',()=>{
+  // Reproduces the observed EFF family card's context shape, including the public
+  // transport order basis/label/boundary/countries versus the saved canonical order.
+  const original=card('family',1,{title:'Tech Tips for Parents this Digital Parenting Week',topic:'digital-life',sourceIds:['eff-digital'],
+    sourceUrl:'https://www.eff.org/deeplinks/2026/10/tech-tips-parents-digital-parenting-week',publisher:'Electronic Frontier Foundation',
+    byline:'By Paige Collings',licenseUrl:'https://creativecommons.org/licenses/by/4.0/'});
+  const semantic=contextForCard(original);original.context={basis:semantic.basis,label:semantic.label,boundary:semantic.boundary,countries:semantic.countries};
+  const health=source('digital-life',[original],{id:'eff-digital',publisher:'Electronic Frontier Foundation',state:'partial',termsUrl:'https://www.eff.org/copyright'});
+  const current=freeze({...snapshot([original],[health]),state:'partial',conflictCount:1}),before=JSON.stringify(current);
+  let state=followed('family',current);
+  assert.ok(state.entries[0].baseline);assert.notEqual(JSON.stringify(state.entries[0].baseline.records[0].context),JSON.stringify(original.context));
+  for(const revision of [2,3]){
+    const result=selectCategoryFollowReturn(state,current,now,true);assert.equal(result.state,'partial');assert.equal(result.newCount,0);assert.equal(result.updatedCount,0);assert.deepEqual(result.highlights,[]);
+    state=parseCategoryFollows(acknowledgeCategoryFollow(state,'family',current,now,rev(revision)));assert.ok(state);
+    const after=selectCategoryFollowReturn(state,current,now,true);assert.equal(after.newCount,0);assert.equal(after.updatedCount,0);assert.equal(after.items[0].comparison.state,'partial');
+  }
+  assert.equal(JSON.stringify(current),before);
 });
 
 test('acknowledgement advances only the selected category, retaining all other baselines',()=>{

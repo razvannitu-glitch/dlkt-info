@@ -1,6 +1,6 @@
 import {PUBLIC_TOPICS} from './topics.js';
 import type {EvidenceCard,IceoSnapshot,SourceHealth,Topic} from './contracts.js';
-import {copyCard,validCard} from './card-validation.js';
+import {cardContent,copyCard,validCard} from './card-validation.js';
 import {sourceMatchesCardTopic,sourceRelevantToTopics} from './source-relevance.js';
 import {hasEditorialTopics} from './editorial-topics.js';
 
@@ -83,7 +83,9 @@ export function captureCheckpoint(snapshot:IceoSnapshot,now:number,revision:stri
 /** Transport timestamps, hashes and ordering do not by themselves represent a content change. */
 export function metadataChanges(before:EvidenceCard,after:EvidenceCard):readonly MetadataChange[]{
   const changes:MetadataChange[]=FIELDS.filter(field=>before[field]!==after[field]).map(field=>({field,before:before[field]??null,after:after[field]??null}));
-  const oldContext=before.context===undefined?null:JSON.stringify(before.context),newContext=after.context===undefined?null:JSON.stringify(after.context);
+  // Wire/IndexedDB property order is not a change to publisher context. Reuse the
+  // same canonical public fields as card integrity, including country code/name.
+  const oldContext=before.context===undefined?null:JSON.stringify(cardContent(before).context),newContext=after.context===undefined?null:JSON.stringify(cardContent(after).context);
   if(oldContext!==newContext)changes.push({field:'context',before:oldContext,after:newContext});
   return changes;
 }
