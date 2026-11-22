@@ -3,9 +3,9 @@
 html[data-reader-theme=prism]{
  --reader-page:#F0EDE5;--reader-surface:#F0EDE5;--reader-panel:#D8D6CD;
  --reader-ink:#121416;--reader-muted:#142D44;--reader-rule:#142D44;--reader-edge:#142D44;
- --reader-action:#142D44;--reader-action-ink:#F0EDE5;--reader-action-hover:#121416;--reader-action-hover-ink:#F0EDE5;
+ --reader-action:#142D44;--reader-action-ink:#F0EDE5;--reader-action-hover:#F66061;--reader-action-hover-ink:#121416;
  --reader-selected:#142D44;--reader-selected-ink:#F0EDE5;--reader-selected-edge:#142D44;
- --reader-secondary-hover:#D8D6CD;--reader-secondary-hover-ink:#121416;
+ --reader-secondary-hover:#F66061;--reader-secondary-hover-ink:#121416;
  --reader-link:#121416;--reader-focus:#142D44;
  --reader-photo-dark:#142D44;--reader-photo-light:#F0EDE5;--reader-photo-link:#121416;--reader-photo-focus:#142D44;
  color-scheme:light;
@@ -311,13 +311,13 @@ html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-ca
  html[data-reader-theme=prism] :is(.primary,.focus-button,.entry-field>button,.source-link):not(:disabled):not([aria-disabled=true]):hover,
  html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card .source-link:not(:disabled):not([aria-disabled=true]):hover,
  html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card.editorial-card .card-actions>.source-link:not(:disabled):not([aria-disabled=true]):hover{
-  border-color:var(--reader-action-hover)!important;
+  border-color:var(--reader-action)!important;
  }
  html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card .card-actions>:is(.save-card,.share-source):not(:disabled):hover{
-  background:var(--card-tone-surface)!important;color:var(--reader-ink)!important;border-color:var(--reader-focus)!important;
+  background:var(--reader-secondary-hover)!important;color:var(--reader-secondary-hover-ink)!important;border-color:var(--reader-edge)!important;
  }
  html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card .card-actions>.save-card[aria-pressed=true]:not(:disabled):hover{
-  background:var(--reader-selected)!important;color:var(--reader-selected-ink)!important;
+  background:var(--reader-action-hover)!important;color:var(--reader-action-hover-ink)!important;
  }
 }
 
@@ -328,9 +328,9 @@ html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-ca
 html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface]{
  --reader-page:var(--card-tone-surface);--reader-surface:var(--card-tone-surface);--reader-panel:var(--card-tone-surface);
  --reader-ink:#121416;--reader-muted:#142D44;--reader-rule:#142D44;--reader-edge:#142D44;
- --reader-action:#142D44;--reader-action-ink:#F0EDE5;--reader-action-hover:#121416;--reader-action-hover-ink:#F0EDE5;
+ --reader-action:#142D44;--reader-action-ink:#F0EDE5;--reader-action-hover:#F66061;--reader-action-hover-ink:#121416;
  --reader-selected:#142D44;--reader-selected-ink:#F0EDE5;--reader-selected-edge:#142D44;
- --reader-secondary-hover:#D8D6CD;--reader-secondary-hover-ink:#121416;
+ --reader-secondary-hover:#F66061;--reader-secondary-hover-ink:#121416;
  --reader-link:#121416;--reader-focus:#142D44;
  --reader-photo-dark:#142D44;--reader-photo-light:#F0EDE5;--reader-photo-link:#121416;--reader-photo-focus:#142D44;
  --black:var(--reader-ink);--white:var(--reader-surface);--muted:var(--reader-muted);
@@ -339,7 +339,11 @@ html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-ca
 }
 html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface=paper]{--card-tone-surface:#F0EDE5}
 html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface=ivory]{--card-tone-surface:#D8D6CD}
-html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface=coral]{--card-tone-surface:#F66061}
+html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface=coral]{
+ --card-tone-surface:#F66061;
+ --reader-action-hover:#F0EDE5;--reader-action-hover-ink:#142D44;
+ --reader-secondary-hover:#F0EDE5;--reader-secondary-hover-ink:#142D44;
+}
 html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface=berry]{--card-tone-surface:#142D44}
 html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface=wine]{--card-tone-surface:#7D969B}
 html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card[data-reader-surface=gold]{--card-tone-surface:#B7C4C3}
@@ -347,7 +351,7 @@ html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards,#daily-ca
  --reader-ink:#F0EDE5;--reader-muted:#D8D6CD;--reader-rule:#B7C4C3;--reader-edge:#B7C4C3;
  --reader-action:#F66061;--reader-action-ink:#121416;--reader-action-hover:#F0EDE5;--reader-action-hover-ink:#142D44;
  --reader-selected:#F66061;--reader-selected-ink:#121416;--reader-selected-edge:#F66061;
- --reader-secondary-hover:#D8D6CD;--reader-secondary-hover-ink:#121416;
+ --reader-secondary-hover:#F0EDE5;--reader-secondary-hover-ink:#142D44;
  --reader-link:#F0EDE5;--reader-focus:#F66061;
  --reader-photo-dark:#142D44;--reader-photo-light:#F0EDE5;--reader-photo-link:#F0EDE5;--reader-photo-focus:#F66061;
  --card-tone-accent:#B7C4C3;--card-tone-badge:#F66061;--card-tone-badge-ink:#121416;

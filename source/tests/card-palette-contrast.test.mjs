@@ -79,6 +79,12 @@ function resolve(value,vars,seen=[]){
   return resolve(vars[key],vars,[...seen,key]);
  });
 }
+// Hover fills may be pink or paper; the actual opaque border retains the control boundary.
+const primaryHoverSelector='html[data-reader-theme=prism] :is(.primary,.focus-button,.entry-field>button,.source-link):not(:disabled):not([aria-disabled=true]):hover';
+const primaryHoverBorder=rules.filter(([,selectors])=>selectorList(selectors).includes(primaryHoverSelector))
+ .flatMap(([, ,body])=>body.split(';').map(item=>item.trim()).filter(item=>item.startsWith('border-color:')))
+ .at(-1)?.slice('border-color:'.length).replace(/\s*!important\s*$/u,'').trim();
+assert.ok(primaryHoverBorder,'The shipped primary hover must retain a visible border');
 const approvedSurfaces={paper:'#F0EDE5',ivory:'#D8D6CD',coral:'#F66061',berry:'#142D44',wine:'#7D969B',gold:'#B7C4C3'};
 const rootVariables=Object.assign(variables('prism'),customDeclarations(themeScope));
 function cardVariables(name,inherited){
@@ -100,12 +106,16 @@ for(const [name,expected]of Object.entries(approvedSurfaces))test(`Prism ${name}
  for(const role of ['--reader-ink','--reader-muted','--reader-link','--black','--muted','--card-ink','--card-title','--card-muted','--reader-photo-link'])check(role,paint(role),surface,4.5);
  for(const [label,ink,background]of [
   ['primary','--reader-action-ink','--reader-action'],['primary hover','--reader-action-hover-ink','--reader-action-hover'],
-  ['legacy primary','--card-action-ink','--card-action'],['saved and saved hover','--reader-selected-ink','--reader-selected'],
+  ['legacy primary','--card-action-ink','--card-action'],['saved','--reader-selected-ink','--reader-selected'],
+  ['saved hover','--reader-action-hover-ink','--reader-action-hover'],
   ['secondary hover','--reader-secondary-hover-ink','--reader-secondary-hover'],['legacy hover','--card-hover-ink','--card-hover'],
   ['topic badge','--card-tone-badge-ink','--card-tone-badge'],
  ])check(label,paint(ink),paint(background),4.5);
  check('photo kind label',surface,paint('--reader-ink'),4.5);
- for(const role of ['--reader-edge','--reader-rule','--reader-action','--reader-action-hover','--reader-selected-edge','--reader-focus','--reader-photo-focus','--card-tone-accent'])check(role,paint(role),surface,3);
+ for(const role of ['--reader-edge','--reader-rule','--reader-action','--reader-selected-edge','--reader-focus','--reader-photo-focus','--card-tone-accent'])check(role,paint(role),surface,3);
+ check('primary hover boundary',resolve(primaryHoverBorder,vars),surface,3);
+ for(const [label,normal,hover]of [['primary','--reader-action','--reader-action-hover'],['saved','--reader-selected','--reader-action-hover']])
+  if(luminance(paint(normal))<.1)check(`${label} dark-to-hover state change`,paint(hover),paint(normal),3);
  const text=measured.filter(value=>value.minimum===4.5).sort((a,b)=>a.ratio-b.ratio)[0];
  const control=measured.filter(value=>value.minimum===3).sort((a,b)=>a.ratio-b.ratio)[0];
  t.diagnostic(`${measured.length} real role pairs; minimum text ${text.ratio.toFixed(3)}:1, minimum control ${control.ratio.toFixed(3)}:1`);
@@ -122,7 +132,8 @@ test('all 36 nested surface pairs reset semantic paints after inheriting a compu
    assert.equal(paint(role),resolve(standalone[role],standalone),`${parent} > ${child}: inherited ${role}`);
   for(const role of ['--reader-ink','--reader-muted','--reader-link','--black','--muted','--card-ink','--card-title','--card-muted','--reader-photo-link'])
    assert.ok(contrast(paint(role),surface)>=4.5,`${parent} > ${child}: ${role} requires 4.5:1`);
-  for(const role of ['--reader-edge','--reader-action','--reader-action-hover','--reader-selected-edge','--reader-focus','--reader-photo-focus','--card-tone-accent'])
+  for(const role of ['--reader-edge','--reader-action','--reader-selected-edge','--reader-focus','--reader-photo-focus','--card-tone-accent'])
    assert.ok(contrast(paint(role),surface)>=3,`${parent} > ${child}: ${role} requires 3:1`);
+  assert.ok(contrast(resolve(primaryHoverBorder,nested),surface)>=3,`${parent} > ${child}: actual hover border requires 3:1`);
  }
 });
