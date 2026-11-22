@@ -2,10 +2,9 @@ import type {ArticleSubjectMetadata} from './contracts.js';
 
 const record=(value:unknown):value is Record<string,unknown>=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 function terms(value:unknown,maximum:number):value is readonly string[]{
-  return Array.isArray(value)&&value.length<=maximum&&value.every((term,index)=>typeof term==='string'
-    &&term.length>0&&term.length<=80&&!/[<>\u0000-\u001f\u007f]/u.test(term)
-    &&term===term.normalize('NFC').replace(/\s+/gu,' ').trim()
-    &&(index===0||typeof value[index-1]==='string'&&value[index-1]<term));
+  return Array.isArray(value)&&value.length<=maximum&&new Set(value).size===value.length&&value.every(term=>typeof term==='string'
+    &&term.length>0&&[...term].length<=80&&!/[<>\u0000-\u001f\u007f]/u.test(term)
+    &&term===term.normalize('NFC').replace(/\s+/gu,' ').trim());
 }
 /** The binding is publication evidence; neither a title guess nor another page's tags may supply it. */
 export function validArticleSubject(value:unknown,sourceUrl:unknown):value is ArticleSubjectMetadata {

@@ -155,6 +155,7 @@ begin
       union all select value from jsonb_array_elements(p_card->'articleSubject'->'keywords') loop
       if jsonb_typeof(item.value)<>'string' or length(item.value #>> '{}') not between 1 and 80
         or item.value #>> '{}' ~ '[<>[:cntrl:]]'
+        or strpos(item.value #>> '{}',chr(65279))>0
         or item.value #>> '{}' <> normalize(item.value #>> '{}',NFC)
         or item.value #>> '{}' <> btrim(regexp_replace(item.value #>> '{}','\s+',' ','g')) then return false; end if;
     end loop;
