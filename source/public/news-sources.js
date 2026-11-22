@@ -117,6 +117,12 @@ export const NEWS_PUBLICATION_SCOPES = Object.freeze([
     publication('edweek', 'US', 'United States', 'United States education reporting', ['/', 'en']),
     publication('guardian', 'GB', 'United Kingdom', 'Global reporting', ['/', 'en']),
     publication('france24', 'FR', 'France', 'Global reporting', ['/fr/', 'fr'], ['/en/', 'en'], ['/es/', 'es'], ['/ar/', 'ar']),
+    // Existing admitted origins only, reviewed2026-11-23. These are English editorial editions,
+    // not native-language coverage, article-location evidence, or newly connected feeds.
+    // https://www.aljazeera.com/about-us ; /news/ and /economy/ original English sections.
+    publication('aljazeera', 'QA', 'Qatar', 'English-language regional and global reporting', ['/news/', 'en'], ['/economy/', 'en']),
+    // https://corp.scmp.com/our-business/news/ ; scmp.com/news and scmp.com/business originals.
+    publication('scmp', 'HK', 'Hong Kong', 'English-language Hong Kong, China, Asia and global reporting', ['/news/', 'en'], ['/business/', 'en']),
     // Edition paths/hreflang labels checked in DW's official language navigation2026-11-21.
     // Language-specific public news sitemaps are registered separately below; no DW RSS subscription or new article origin is enabled.
     publication('dw', 'DE', 'Germany', 'Global reporting', ['/en/', 'en'], ['/fr/', 'fr'], ['/de/', 'de'], ['/es/', 'es'], ['/ar/', 'ar'], ['/pt-br/', 'pt-BR'], ['/pt-002/', 'pt-002'], ['/sq/', 'sq'], ['/am/', 'am'], ['/bn/', 'bn'], ['/bs/', 'bs'], ['/bg/', 'bg'], ['/zh/', 'zh-Hans'], ['/zh-hant/', 'zh-Hant'], ['/hr/', 'hr'], ['/fa-af/', 'fa-AF'], ['/el/', 'el'], ['/ha/', 'ha'], ['/hi/', 'hi'], ['/id/', 'id'], ['/sw/', 'sw'], ['/mk/', 'mk'], ['/ps/', 'ps'], ['/fa-ir/', 'fa-IR'], ['/pl/', 'pl'], ['/ro/', 'ro'], ['/ru/', 'ru'], ['/sr/', 'sr'], ['/tr/', 'tr'], ['/uk/', 'uk'], ['/ur/', 'ur']),

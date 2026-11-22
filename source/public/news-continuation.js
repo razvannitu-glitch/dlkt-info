@@ -1,7 +1,7 @@
 import { validNewsPage } from './news-page-contracts.js';
 import { readingCard } from './reader.js';
 import { editorialCategory } from './editorial-categories.js';
-const contextKey = (context) => JSON.stringify([context.language, context.cityId, context.city?.countryCode ?? null, context.filter]);
+const contextKey = (context) => JSON.stringify([context.language, context.cityId, context.city?.countryCode ?? null, context.city?.timezone ?? 'UTC', context.filter, context.period ?? 'recent']);
 const MAX_PAGE_BYTES = 1_048_576;
 async function jsonBody(response, signal) {
     if (!(response.headers.get('content-type') ?? '').toLowerCase().includes('application/json'))
@@ -96,7 +96,7 @@ export class NewsContinuation {
         this.controller = controller;
         this.loading = true;
         this.error = null;
-        const query = new URLSearchParams({ lang: context.language, category: context.filter });
+        const query = new URLSearchParams({ lang: context.language, category: context.filter, period: context.period ?? 'recent' });
         if (context.cityId !== null)
             query.set('city', context.cityId);
         if (cursor !== null)
@@ -123,7 +123,7 @@ export class NewsContinuation {
                 const value = await jsonBody(response, controller.signal);
                 if (generation !== this.generation)
                     return;
-                if (!validNewsPage(value, this.clock(), context.city) || value.language !== context.language || value.cityId !== context.cityId || value.countryCode !== (context.city?.countryCode ?? null) || value.filter !== context.filter)
+                if (!validNewsPage(value, this.clock(), context.city) || value.language !== context.language || value.cityId !== context.cityId || value.countryCode !== (context.city?.countryCode ?? null) || value.filter !== context.filter || value.period !== (context.period ?? 'recent'))
                     throw Error('NEWS_PAGE_INVALID');
                 if (Date.parse(value.expiresAt) <= this.clock()) {
                     this.error = 'expired';
@@ -131,6 +131,7 @@ export class NewsContinuation {
                 }
                 const prior = this.page;
                 if (prior && (value.epoch !== prior.epoch || value.revision !== prior.revision || value.generatedAt !== prior.generatedAt || value.startedAt !== prior.startedAt
+                    || value.period !== prior.period || JSON.stringify(value.day) !== JSON.stringify(prior.day)
                     || value.expiresAt !== prior.expiresAt || value.total !== prior.total || value.filteredTotal !== prior.filteredTotal || value.countryCode !== prior.countryCode
                     || value.coverage.national !== prior.coverage.national || value.coverage.local !== prior.coverage.local || value.coverage.international !== prior.coverage.international
                     || Object.keys(prior.counts).some(key => value.counts[key] !== prior.counts[key])))

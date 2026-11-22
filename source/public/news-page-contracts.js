@@ -4,7 +4,8 @@ import { sourceLanguage, newsLanguageMatches, sourceEditionCountryCode } from '.
 import { localeFromPreference } from './i18n-locale.js';
 import { validCity } from './local-contracts.js';
 import { newsFeed, validLocalNewsArticle, NEWS_WINDOW_MS } from './local-news-policy.js';
-export const NEWS_PAGE_VERSION = 'dlkt-news-page-2';
+import { newsPublishedInDay, validNewsDayWindow, validNewsPeriod } from './news-day.js';
+export const NEWS_PAGE_VERSION = 'dlkt-news-page-3';
 export const NEWS_SERVER_PAGE_SIZE = 20;
 const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const exact = (value, keys) => Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
@@ -55,8 +56,8 @@ export function validNewsPageItem(value, now, city) {
 }
 /** Browser-safe boundary. Context continuity and cross-page duplicates are checked by the reader controller. */
 export function validNewsPage(value, now = Date.now(), city) {
-    if (!Number.isFinite(now) || !object(value) || !exact(value, ['version', 'epoch', 'revision', 'generatedAt', 'startedAt', 'expiresAt', 'language', 'cityId', 'countryCode', 'coverage', 'filter', 'items', 'total', 'filteredTotal', 'counts', 'nextCursor'])
-        || value.version !== NEWS_PAGE_VERSION || !validNewsEpochId(value.epoch) || !integer(value.revision, Number.MAX_SAFE_INTEGER) || value.revision === 0
+    if (!Number.isFinite(now) || !object(value) || !exact(value, ['version', 'epoch', 'revision', 'generatedAt', 'startedAt', 'expiresAt', 'language', 'cityId', 'countryCode', 'coverage', 'period', 'day', 'filter', 'items', 'total', 'filteredTotal', 'counts', 'nextCursor'])
+        || value.version !== NEWS_PAGE_VERSION || !validNewsPeriod(value.period) || !validNewsEpochId(value.epoch) || !integer(value.revision, Number.MAX_SAFE_INTEGER) || value.revision === 0
         || !timestamp(value.generatedAt) || !timestamp(value.startedAt) || !timestamp(value.expiresAt) || Date.parse(value.generatedAt) > now + 5000
         || Date.parse(value.startedAt) > now + 5000 || Date.parse(value.startedAt) < Date.parse(value.generatedAt) - 5000 || Date.parse(value.expiresAt) <= Date.parse(value.startedAt) || Date.parse(value.expiresAt) <= now
         || Date.parse(value.expiresAt) > Date.parse(value.generatedAt) + 3600000 || Date.parse(value.expiresAt) <= Date.parse(value.generatedAt)
@@ -75,10 +76,19 @@ export function validNewsPage(value, now = Date.now(), city) {
         || (value.nextCursor !== null && (!bounded(value.nextCursor, 2048) || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/u.test(value.nextCursor) || value.items.length !== NEWS_SERVER_PAGE_SIZE))
         || (value.filteredTotal === 0 && (value.items.length !== 0 || value.nextCursor !== null)))
         return false;
+    if (value.period === 'recent') {
+        if (value.day !== null)
+            return false;
+    }
+    else if (value.cityId !== null && city === undefined || !validNewsDayWindow(value.day, Date.parse(value.startedAt), city?.timezone ?? 'UTC')
+        || Date.parse(value.expiresAt) > Date.parse(value.day.end))
+        return false;
+    const day = value.period === 'today' ? value.day : null;
     const language = value.language, keys = new Set(), ids = new Set(), urls = new Set(), identities = new Set();
     const observed = { national: 0, local: 0, international: 0 };
     for (const item of value.items) {
-        if (!validNewsPageItem(item, now, city) || (value.filter !== 'all' && (item.category ?? 'other') !== value.filter))
+        if (!validNewsPageItem(item, now, city) || (value.filter !== 'all' && (item.category ?? 'other') !== value.filter)
+            || day !== null && !newsPublishedInDay(item.kind === 'global' ? item.card.date : item.card.news.publishedAt, day))
             return false;
         const url = item.card.sourceUrl, identity = item.kind === 'global' ? item.card.identity : url;
         if (keys.has(item.key) || ids.has(item.card.id) || urls.has(url) || identities.has(identity))

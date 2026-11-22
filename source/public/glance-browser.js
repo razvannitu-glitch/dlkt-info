@@ -90,10 +90,14 @@ export function setupGlance() {
         headsup.hidden = !notice;
         headsup.textContent = notice ? `Local heads-up · ${notice.title}` : '';
         const weatherQuick = get('glance-weather-quick'), forexQuick = get('glance-forex-quick');
-        weatherQuick.hidden = !preferences.weather || !forecast || !range;
+        const weatherHidden = !preferences.weather || !forecast || !range, forexHidden = !preferences.forex || n === undefined;
+        // Preserve keyboard position before an expired or unavailable utility leaves the toolbar.
+        if (document.activeElement === weatherQuick && weatherHidden || document.activeElement === forexQuick && forexHidden)
+            read.focus({ preventScroll: true });
+        weatherQuick.hidden = weatherHidden;
         weatherQuick.textContent = (locale === 'ro' ? 'Vreme' : locale === 'it' ? 'Meteo' : 'Weather') + ' · ' + (range ?? '');
         weatherQuick.title = get('glance-weather-note').textContent ?? '';
-        forexQuick.hidden = !preferences.forex || n === undefined;
+        forexQuick.hidden = forexHidden;
         forexQuick.textContent = n !== undefined ? 'ECB · 1 EUR = ' + new Intl.NumberFormat(locale, { maximumFractionDigits: 4 }).format(n) + ' ' + q : '';
         forexQuick.title = get('glance-forex-note').textContent ?? '';
         read.textContent = locale === 'ro' ? 'Vreme si curs' : locale === 'it' ? 'Meteo e cambi' : 'Weather & rates';
