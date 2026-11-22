@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {runInNewContext} from 'node:vm';
 import {NewsReadingState,newsEditionSeed} from '../.build/src/iceo/news-reading-state.js';
 import {selectNewsStream,newsStreamPage} from '../.build/src/iceo/news-stream.js';
 import {readingCard} from '../.build/src/iceo/reader.js';
@@ -113,4 +114,39 @@ test('a changed RSS hash refreshes unchanged originals and stages only the added
  assert.equal(updated.local.length,1);assert.strictEqual(updated.local[0],same);assert.equal(updated.pending,1);assert.equal(updated.seed,initial.seed);
  const retained=state.present(empty,incoming,'ro','ro',now+300100);
  assert.strictEqual(retained.local[0],same);assert.equal(retained.pending,1);assert.equal(retained.expiresAt,now+599000);
+});
+
+test('the real startup load stages its first200 after local news is already readable, while manual refresh adopts it',async()=>{
+ const source=readFileSync('.build/src/iceo/browser.js','utf8'),start=source.indexOf('async function load('),end=source.indexOf('/** Reuse unchanged article nodes',start);
+ assert.ok(start>=0&&end>start);
+ const startup=source.match(/if\s*\(!organizationPreview\)\s*void load\(false, false\);/u)?.[0];assert.ok(startup,'startup must not imply an explicit acceptance');
+ const live=new LiveEdition(),state=new NewsReadingState();let local=[],shown,reading,resolveInitial,requests=0,renders=0,checks=0;
+ const value={generatedAt:checkedAt,state:'partial',cards:[global(501,'ro')],sources:[]};
+ const response={status:200,ok:true,headers:{get:()=>null},json:async()=>value};
+ const initial=new Promise(resolve=>{resolveInitial=resolve;});
+ const draw=()=>{
+  const candidate={first:(context.snapshot?.cards??[]).map(view),more:[]};
+  shown=live.present(candidate,'ro',now,context.applyPublicUpdate,state.hasVisibleLocal(now));
+  reading=state.present(shown.selection,local,'ro','ro',now,context.applyPublicUpdate);context.applyPublicUpdate=false;
+ };
+ const context={loading:false,publicRefreshTimer:undefined,lastPublicCheckAttempt:0,initialCheckStarted:false,automaticPublicLoad:false,refresh:{disabled:false},
+  briefing:{setAttribute(){}},status:{textContent:''},savedView:false,publicEtag:null,snapshot:null,lastLoadFailed:true,lastLoadRegressed:false,
+  publicRefreshFailures:0,applyPublicUpdate:false,changesView:false,organizationPreview:false,
+  discoveryLoading:{begin(){},finish(){}},Date:class extends Date{static now(){return now;}},clearTimeout(){},
+  AbortSignal:{timeout(ms){assert.equal(ms,45000);return {timeout:ms};}},
+  fetch:async(url,options)=>{assert.equal(url,'/api/iceo');assert.equal(options.credentials,'omit');assert.equal(options.cache,'no-cache');requests++;return requests===1?initial:response;},
+  valid:incoming=>{assert.strictEqual(incoming,value);return true;},snapshotProgress:{accept(incoming,at){assert.strictEqual(incoming,value);assert.equal(at,now);checks++;return 'accepted';}},
+  renderDiscovery:draw,render:()=>{renders++;draw();},renderHealth(){},savedCards(){},memoryControls(){},schedulePublicRefresh(){},
+ };
+ runInNewContext(source.slice(start,end)+'\n'+startup.replace('void load(', 'this.pendingLoad = load('),context);
+ assert.equal(context.loading,true);assert.equal(requests,1);
+ local=selectHomeLanguage(localSnapshot(3),city,now,'ro').cards;draw();
+ const first=selectNewsStream(shown.selection,reading.local,now,'all',reading.seed),seed=reading.seed;assert.equal(first.total,3);
+ resolveInitial(response);await context.pendingLoad;
+ assert.equal(context.loading,false);assert.equal(checks,1);assert.equal(renders,1,'startup still renders restored reader views');
+ assert.equal(shown.selection.first.length,0);assert.equal(shown.changes.added,1);assert.equal(reading.seed,seed);
+ assert.deepEqual(selectNewsStream(shown.selection,reading.local,now,'all',reading.seed).items.map(item=>item.key),first.items.map(item=>item.key));
+ await context.load();
+ assert.equal(requests,2);assert.equal(checks,2);assert.equal(renders,2);assert.equal(shown.changes.total,0);
+ assert.equal(selectNewsStream(shown.selection,reading.local,now,'all',reading.seed).total,4);
 });

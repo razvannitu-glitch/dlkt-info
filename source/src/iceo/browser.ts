@@ -486,16 +486,16 @@ function render():void {
   more.hidden=selection.cards.length>=selection.availableGroups;explore.hidden=mode==='records';
   briefing.setAttribute('aria-busy','false');memoryControls();
 }
-async function load(automatic=false):Promise<void>{
+async function load(automatic=false,acceptUpdates=!automatic):Promise<void>{
   if(loading)return;clearTimeout(publicRefreshTimer);lastPublicCheckAttempt=Date.now();initialCheckStarted=true;loading=true;discoveryLoading.begin();automaticPublicLoad=automatic;refresh.disabled=true;briefing.setAttribute('aria-busy','true');if(!automatic)status.textContent='Checking the available source snapshot…';renderDiscovery();if(savedView&&!automatic)savedCards();
   try{
     const headers:Record<string,string>={Accept:'application/json'};if(publicEtag&&snapshot)headers['If-None-Match']=publicEtag;
     const response=await fetch('/api/iceo',{credentials:'omit',cache:'no-cache',headers,signal:AbortSignal.timeout(45000)});
-    if(response.status===304&&snapshot){lastLoadFailed=false;lastLoadRegressed=false;publicRefreshFailures=0;if(!automatic)applyPublicUpdate=true;return;}
+    if(response.status===304&&snapshot){lastLoadFailed=false;lastLoadRegressed=false;publicRefreshFailures=0;if(acceptUpdates)applyPublicUpdate=true;return;}
     if(!response.ok)throw new Error('SNAPSHOT_UNAVAILABLE');
     const value:unknown=await response.json();if(!valid(value))throw new Error('SNAPSHOT_INVALID');
     const progress=snapshotProgress.accept(value,Date.now());if(progress!=='accepted')throw new Error(progress==='regressed'?'SNAPSHOT_REGRESSED':'SNAPSHOT_INVALID');
-    snapshot=value;const etag=response.headers.get('etag');publicEtag=etag&&/^"[a-f0-9]{64}"$/u.test(etag)?etag:null;lastLoadFailed=false;lastLoadRegressed=false;publicRefreshFailures=0;if(!automatic)applyPublicUpdate=true;
+    snapshot=value;const etag=response.headers.get('etag');publicEtag=etag&&/^"[a-f0-9]{64}"$/u.test(etag)?etag:null;lastLoadFailed=false;lastLoadRegressed=false;publicRefreshFailures=0;if(acceptUpdates)applyPublicUpdate=true;
     if(!automatic)render();else renderDiscovery();renderHealth();
   }catch(error){
     publicRefreshFailures=Math.min(2,publicRefreshFailures+1);
@@ -811,7 +811,7 @@ document.addEventListener('dlkt:language-changed',()=>{applyInterfaceLanguage();
 const organizationPreview=openOrganizationFocus();
 window.addEventListener('hashchange',openOrganizationFocus);
 // Public cards do not wait for browser storage, location or a saved-profile restoration.
-if(!organizationPreview)void load();
+if(!organizationPreview)void load(false,false);
 void readDevice(true);
 
 setupEdition(settings);
