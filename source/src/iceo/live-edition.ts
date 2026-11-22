@@ -97,9 +97,9 @@ function withCards(base:ContextualToday,first:readonly EditorialReadingCard[],mo
 export class LiveEdition {
   private visible:ContextualToday|null=null;
   private context='';
-  present(candidate:ContextualToday,context:string,now:number,apply=false):LiveEditionView {
+  present(candidate:ContextualToday,context:string,now:number,apply=false,deferInitial=false):LiveEditionView {
     if(!Number.isFinite(now))throw new Error('LIVE_EDITION_CLOCK_INVALID');
-    if(this.visible===null||this.visible.first.length+this.visible.more.length===0||this.context!==context||apply){this.visible=candidate;this.context=context;}
+    if(this.visible===null||(this.visible.first.length+this.visible.more.length===0&&!deferInitial)||this.context!==context||apply){this.visible=candidate;this.context=context;}
     else {
       const incoming=editionIndex([...candidate.first,...candidate.more]),used=new Set<string>();
       // Same story, newly checked evidence: update metadata without rearranging the reading order.

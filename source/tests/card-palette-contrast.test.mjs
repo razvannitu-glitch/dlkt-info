@@ -55,7 +55,7 @@ for(const theme of ['prism','night'])test(`${theme}: every category surface keep
 });
 
 const themeScope='html:is([data-reader-theme=prism],[data-reader-theme=night])';
-const readingRoots=':is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content)';
+const readingRoots=':is(#discovery-cards,#home-local-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content)';
 const prismCard=`html[data-reader-theme=prism] ${readingRoots} .info-card`;
 function selectorList(value){
  const result=[];let depth=0,start=0;

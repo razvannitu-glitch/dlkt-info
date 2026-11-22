@@ -17,8 +17,15 @@
 <p id="glance-screen-summary" class="sr-only"></p><p class="glance-ticker-empty">Your signals are hidden. Customize to bring them back.</p><p id="glance-status" class="glance-status" role="status" aria-live="polite"></p>
 </section>
 <main class="reader-shell">
-<section id="discovery" class="discovery" data-loading="initial" aria-labelledby="entry-title"><header class="discovery-heading"><h1 id="entry-title" tabindex="-1"><span id="discovery-title"><span id="today-heading" data-i18n="todayTop">Today's top</span><span class="title-dot">.</span></span></h1><button id="discovery-refresh" class="secondary" type="button" aria-label="Refresh daily top">Refresh</button></header><div class="home-context"><p id="home-location" class="privacy-note">The daily top, plus local information for your city.</p><button id="home-city" data-i18n="changeCity" type="button" class="text-button" aria-haspopup="dialog" aria-controls="place-dialog">Change city</button></div><p id="discovery-status" class="status sr-only" role="status" aria-live="polite">Loading today's stories.</p>
-<details id="discovery-details" class="edition-details" hidden><summary>About this edition</summary><p id="discovery-details-copy"></p></details>
+<section id="discovery" class="discovery" data-loading="initial" aria-labelledby="entry-title">
+<header class="discovery-heading"><h1 id="entry-title" tabindex="-1"><span id="discovery-title"><span id="today-heading">News</span><span class="title-dot">.</span></span></h1><button id="discovery-refresh" class="secondary" type="button" aria-label="Refresh news">Refresh</button></header>
+<div class="news-context-line"><div class="home-context"><p id="home-location" class="privacy-note">Local context</p><button id="home-city" data-i18n="changeCity" type="button" class="text-button" aria-haspopup="dialog" aria-controls="place-dialog">Change city</button></div><details id="discovery-details" class="edition-details" hidden><summary>About this edition</summary><p id="discovery-details-copy"></p></details></div>
+<div id="home-news-toolbar" class="news-toolbar" hidden>
+  <div id="home-news-language" class="news-language"><span id="home-news-language-caption" class="news-control-label">News language</span><span id="home-news-language-label">English</span><button id="home-news-english" class="text-button" type="button" lang="en" hidden>English</button></div>
+  <div id="home-news-filter" class="news-category"><label id="home-news-category-label" class="news-control-label" for="home-news-category">Category</label><select id="home-news-category" aria-describedby="home-news-progress"><option value="all">All categories</option></select></div>
+  <p id="home-news-progress" class="news-progress" aria-live="off"></p>
+</div>
+<p id="discovery-status" class="status sr-only" role="status" aria-live="polite">Loading current stories.</p>
 <div id="discovery-loading" class="edition-loading" data-phase="initial" aria-labelledby="discovery-loading-title">
   <div class="edition-loading-intro">
     <div class="edition-loading-copy">
@@ -42,7 +49,9 @@
 </div>
 <noscript><p class="privacy-note">Enable JavaScript to load current stories. The menu links remain available.</p></noscript>
 <section id="following-brief" class="following-brief" aria-labelledby="following-title" hidden></section>
-<div id="discovery-cards" aria-busy="true"></div></section>
+<div id="discovery-cards" aria-busy="true"></div>
+<div id="home-more-controls" class="news-continuation"></div>
+<div id="home-local-cards"></div></section>
 <section id="world-launch" class="world-launch" aria-label="Explore the world"><p><strong data-i18n="exploreTitle">A different place. A new perspective.</strong><span data-i18n="exploreIntro">Discover what is happening around the world.</span></p><button type="button" id="world-open" class="secondary" aria-controls="world-explore"><span data-i18n="exploreTitle">Explore the world</span> <span aria-hidden="true">&#8599;</span></button></section>
 <section id="world-explore" class="world-explore" aria-labelledby="world-title" hidden>
 <div class="world-explore-top"><button type="button" id="world-back" class="text-button"><span aria-hidden="true">&#8592;</span> <span data-i18n="back">Back to my day</span></button><button type="button" id="world-copy" data-i18n="copyViewLink" class="secondary">Copy view link</button></div>

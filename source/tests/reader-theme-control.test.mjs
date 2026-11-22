@@ -5,7 +5,7 @@ import {Script} from 'node:vm';
 import {parseDocument,DomUtils} from 'htmlparser2';
 
 const preferenceKey='dlkt-reader-theme-v1';
-const surfaceRoots=['discovery-cards','world-cards','cards','daily-cards','local-cards','edition-content'];
+const surfaceRoots=['discovery-cards','home-local-cards','world-cards','cards','daily-cards','local-cards','edition-content'];
 const surfaceNames=['paper','ivory','coral','berry','wine','gold'];
 const compiled=readFileSync('.build/src/theme/browser.js','utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'');
 const classic=compiled.replace(/^export \{\};\r?\n?/mu,'');
@@ -216,7 +216,7 @@ function completeCycles(values){
 
 test('all six reading roots receive complete shuffled cycles and a repaired cycle boundary',()=>{
  let draw=0;const h=harness({cardCounts:Object.fromEntries(surfaceRoots.map(id=>[id,12])),random:()=>draw++<5?0:.999});
- assert.equal(h.surfaceQueries.length,0);h.ready();assert.equal(h.observers.length,6);
+ assert.equal(h.surfaceQueries.length,0);h.ready();assert.equal(h.observers.length,7);
  for(const id of surfaceRoots){completeCycles(h.colors(id));assert.equal(h.hosts.get(id).children.length,12);}
  assert.ok(h.randomCalls()>60,'The forced equal boundary must consume a repair draw');
  assert.deepEqual(h.writes,[]);assert.deepEqual(h.reads,[preferenceKey]);assert.deepEqual(h.sideEffects,[]);

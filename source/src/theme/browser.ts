@@ -17,7 +17,7 @@
   const bindCardSurfaces=():void=>{
     const surfaces=['paper','ivory','coral','berry','wine','gold'] as const;
     type CardSurface=typeof surfaces[number];
-    const readerRoots='#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content';
+    const readerRoots='#discovery-cards,#home-local-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content';
     const cycle=(previous:CardSurface|undefined):CardSurface[]=>{
       const values:CardSurface[]=[...surfaces];
       const swap=(left:number,right:number):void=>{
