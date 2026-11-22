@@ -6,7 +6,8 @@ import { contextForCard } from './context.js';
 import { nextDailyEditionDelay, selectContextualToday } from './contextual-today.js';
 import { LiveEdition, editionCardSignature, editionStorySignature, editionUpdateLabel, PUBLIC_EDITION_POLL_MS, publicEditionPollDelay } from './live-edition.js';
 import { publicEditionState } from './home-edition.js';
-import { selectNewsStream, newsStreamPage, observeNewsStream, NEWS_PAGE_SIZE } from './news-stream.js';
+import { observeNewsStream, NEWS_PAGE_SIZE } from './news-stream.js';
+import { NewsContinuation, continuationItems } from './news-continuation.js';
 import { NEWS_CATEGORIES, newsCategoryLabel, isNewsCategoryId } from './news-taxonomy.js';
 import { NewsMasonry } from './news-masonry.js';
 import { NewsReadingState } from './news-reading-state.js';
@@ -73,7 +74,8 @@ let publicRefreshFailures = 0, publicEtag = null, automaticPublicLoad = false, a
 const liveEdition = new LiveEdition();
 const newsReading = new NewsReadingState();
 let newsMasonry = null;
-let continuationCount = NEWS_PAGE_SIZE, continuationContext = '', newsAvailable = 0;
+const newsContinuation = new NewsContinuation(fetch, Date.now, () => queueMicrotask(renderDiscovery));
+let restartNewsEdition = false;
 let newsFilter = 'all', stopNewsObserver = () => { };
 let lastLocalLanguageRefresh = 0;
 const currentCardByNode = new WeakMap();
@@ -1088,7 +1090,7 @@ function renderDiscovery() {
     const section = required('#discovery'), target = required('#discovery-cards'), host = document.createElement('div'), note = required('#discovery-status'), button = required('#discovery-refresh');
     const support = required('#home-local-cards'), supportHost = document.createElement('div'), controls = required('#home-more-controls'), toolbar = required('#home-news-toolbar');
     button.disabled = loading;
-    target.setAttribute('aria-busy', String(loading));
+    target.setAttribute('aria-busy', String(loading || newsContinuation.view().loading));
     if (document.body.dataset.entryView !== 'start') {
         section.dataset.loading = 'hidden';
         renderDiscoveryLoading(discoveryLoadingElements, 'hidden');
@@ -1117,22 +1119,20 @@ function renderDiscovery() {
     const awaitingLocal = contextualLocationPending || contextualCity !== null && contextualLocalState === 'loading';
     const candidate = snapshot ? selectContextualToday(selectNewsLanguage(snapshot.cards, language), globalContext, now) : { first: [], more: [] };
     const contextKey = JSON.stringify([language, context.countryCode, city?.id ?? null, [...interests].sort()]);
-    if (continuationContext !== contextKey) {
-        continuationContext = contextKey;
-        continuationCount = NEWS_PAGE_SIZE;
-    }
     const live = liveEdition.present(candidate, contextKey, now, applyPublicUpdate, newsReading.hasVisibleLocal(now));
     const today = live.selection, reading = newsReading.present(today, local.cards, contextKey, language, now, applyPublicUpdate);
+    void newsContinuation.start({ language, cityId: contextualCity?.id ?? null, filter: newsFilter, ...(contextualCity ? { city: contextualCity } : {}) }, restartNewsEdition);
+    restartNewsEdition = false;
     applyPublicUpdate = false;
-    const stream = selectNewsStream(today, reading.local, now, newsFilter, reading.seed), visible = newsStreamPage(stream, continuationCount);
+    const server = newsContinuation.view(), visible = continuationItems(server.items, now);
+    const stream = { total: server.page?.total ?? 0, counts: server.page?.counts ?? Object.fromEntries(['other', ...NEWS_CATEGORIES.map(category => category.id)].map(id => [id, 0])) };
     const newsUpdates = live.changes.total + reading.pending;
-    const topCount = stream.filtered.length, localNewsCount = stream.items.filter(item => item.kind === 'local').length;
-    newsAvailable = topCount;
+    const topCount = server.page?.filteredTotal ?? 0, localNewsCount = server.items.filter(item => item.kind === 'local').length;
     target.dataset.newsLanguage = language;
     button.textContent = newsUpdates ? (language === 'ro' ? 'Arata noutatile' : 'Show updates') + ' · ' + new Intl.NumberFormat(language).format(newsUpdates) : tr('refresh');
     button.setAttribute('aria-label', button.textContent);
     const globalEditionState = publicEditionState(today, { snapshotState: snapshot?.state ?? null, loading: loading || !initialCheckStarted, failed: lastLoadFailed });
-    const editionState = stream.total > 0 ? (topCount > 0 ? 'ready' : 'empty') : awaitingLocal ? 'pending' : globalEditionState;
+    const editionState = server.page ? (topCount > 0 ? 'ready' : 'empty') : server.loading ? 'pending' : server.error ? 'unavailable' : globalEditionState;
     const loadingPhase = discoveryLoading.phase({ pending: editionState === 'pending', unavailable: editionState === 'unavailable', firstCount: visible.length, moreCount: Math.max(0, topCount - visible.length) });
     section.dataset.loading = loadingPhase;
     renderDiscoveryLoading(discoveryLoadingElements, loadingPhase);
@@ -1152,7 +1152,7 @@ function renderDiscovery() {
         ? `${contextualCity.name} · ${countryLabel(contextualCity.countryCode, contextualCity.country)}${contextualLocation === 'estimated' ? ' · approximate' : ''}`
         : contextualLocationPending ? tr('lookupLoading') : tr('chooseCity');
     const discoveryDelay = nextDailyEditionDelay(today, now), returnDelay = checkpoint ? nextReturnDelay(snapshot, selectReturnBrief(checkpoint, null, now, false).topics, now) : null;
-    const localBoundaries = [local.expiresAt, reading.expiresAt].filter((time) => time !== null);
+    const localBoundaries = [local.expiresAt, reading.expiresAt, server.page ? Date.parse(server.page.expiresAt) : null].filter((time) => time !== null && time > now);
     const localDelay = localBoundaries.length ? Math.max(25, Math.min(...localBoundaries) - now + 25) : null;
     const delays = [discoveryDelay, returnDelay, localDelay, following.nextDelay(now)].filter((n) => n !== null);
     if (delays.length && document.visibilityState === 'visible')
@@ -1223,15 +1223,30 @@ function renderDiscovery() {
         host.append(message);
     }
     const streamEnd = document.createElement('div');
-    if (visible.length < topCount) {
-        const next = make('button', 'secondary', tr('showMore', { count: Math.min(NEWS_PAGE_SIZE, topCount - visible.length), remaining: topCount - visible.length }));
+    if (server.error === 'expired') {
+        streamEnd.append(make('p', 'privacy-note', language === 'ro' ? 'Aceasta editie trebuie actualizata pentru a continua. Articolele citite raman pe ecran.' : 'Update this edition to continue. Reports already read remain on screen.'));
+        const update = make('button', 'secondary', language === 'ro' ? 'Arata noutatile' : 'Show updates');
+        update.type = 'button';
+        update.dataset.newsRestart = 'true';
+        streamEnd.append(update);
+    }
+    else if (server.loading || server.error || server.page?.nextCursor) {
+        const label = server.loading ? (language === 'ro' ? 'Se incarca urmatoarele articole…' : 'Loading more reports…') : server.error ? (language === 'ro' ? 'Reincearca incarcarea' : 'Retry loading') : tr('showMore', { count: Math.min(NEWS_PAGE_SIZE, topCount - visible.length), remaining: topCount - visible.length });
+        if (server.error)
+            streamEnd.append(make('p', 'privacy-note', language === 'ro' ? 'Urmatorul lot nu a putut fi incarcat. Ordinea articolelor afisate este pastrata.' : 'The next page could not be loaded. The reports already shown keep their order.'));
+        const next = make('button', 'secondary', label);
         next.type = 'button';
+        next.disabled = server.loading;
         next.id = 'home-more-button';
         next.dataset.publicMore = 'true';
         streamEnd.append(next);
     }
     else if (visible.length) {
-        streamEnd.append(make('p', 'privacy-note', language === 'ro' ? 'Ai ajuns la toate articolele disponibile in aceasta selectie. Sursele conectate au acoperire partiala.' : 'You have reached all available articles in this selection. Connected sources provide partial coverage.'));
+        streamEnd.append(make('p', 'privacy-note', language === 'ro' ? 'Ai parcurs aceasta editie verificata. Apasa „Arata noutatile” pentru o editie noua.' : 'You have reached the end of this checked edition. Select Show updates for a new edition.'));
+        const update = make('button', 'secondary', language === 'ro' ? 'Arata noutatile' : 'Show updates');
+        update.type = 'button';
+        update.dataset.newsRestart = 'true';
+        streamEnd.append(update);
     }
     controls.replaceChildren(...streamEnd.childNodes);
     // Operational city information remains separate from the news stream.
@@ -1278,8 +1293,8 @@ function renderDiscovery() {
         newsMasonry = new NewsMasonry(target);
     newsMasonry.update();
     const sentinel = controls.querySelector('#home-more-button');
-    if (sentinel)
-        stopNewsObserver = observeNewsStream(sentinel, () => showNewsPage(false));
+    if (sentinel && !server.loading && !server.error && server.page?.nextCursor)
+        stopNewsObserver = observeNewsStream(sentinel, () => { void showNewsPage(false); });
     const publicationState = stream.total ? `${stream.total} unique articles in the selected language are available from connected sources. ${topCount} match the category filter; ${visible.length} are shown. Articles keep their original titles, publication dates and sources.` : editionState === 'unavailable' ? 'Publications could not be checked. Refresh to try again.' : editionState === 'pending' ? 'Checking connected publications…' : 'No current publications meet this language selection.';
     const sourceState = loading && !automaticPublicLoad ? ' Checking for updates…' : lastLoadFailed && snapshot ? ' Refresh unavailable; retained source checks are not newly verified.' : snapshot?.state === 'partial' ? ' Some source coverage is incomplete.' : '';
     const localState = (localNewsCount ? ` ${localNewsCount} local reports are included in the stream.` : '') + (awaitingLocal ? ' Local information is being checked.' : local.supporting.length ? ` ${local.supporting.length} supporting local records are available below.` : contextualCity ? ' Local coverage is shown below.' : '');
@@ -1287,7 +1302,7 @@ function renderDiscovery() {
     const updates = newsUpdates ? ` ${updateParts.join(' · ')}. Select Show updates when you are ready; your reading position stays stable.` : '';
     const noteText = (snapshot ? `${formatted(snapshot.generatedAt, true)} · Source check ${formatted(snapshot.generatedAt)}. ` : '') + publicationState + sourceState + localState + updates;
     if (loadingPhase === 'hidden') {
-        const checkedTime = snapshot ? new Intl.DateTimeFormat(getLocale(), { hour: '2-digit', minute: '2-digit' }).format(new Date(snapshot.generatedAt)) : null;
+        const checkedTime = server.page ? new Intl.DateTimeFormat(getLocale(), { hour: '2-digit', minute: '2-digit' }).format(new Date(server.page.generatedAt)) : null;
         const compact = getLocale() === 'en' ? compactEditionStatus({ state: editionState, count: topCount, continuation: 0, checkedTime, refreshing: loading && !automaticPublicLoad, refreshFailed: lastLoadFailed && snapshot !== null, partial: true, updates: newsUpdates })
             : editionState === 'unavailable' ? tr('storiesUnavailable') : editionState === 'pending' && !topCount ? tr('loadingStories')
                 : [tr('matchingStories', { count: topCount }), checkedTime ? tr('checkedAt', { time: checkedTime }) : '', lastLoadFailed && snapshot ? tr('refreshUnavailable') : loading && !automaticPublicLoad ? tr('checkingUpdates') : '', tr('partialCoverage')].filter(Boolean).join(' · ');
@@ -1326,13 +1341,17 @@ function renderDiscovery() {
     }
     memoryControls();
 }
-function showNewsPage(focus) {
-    if (document.visibilityState !== 'visible' || document.body.dataset.entryView !== 'start' || continuationCount >= newsAvailable)
+async function showNewsPage(focus) {
+    const state = newsContinuation.view();
+    if (document.visibilityState !== 'visible' || document.body.dataset.entryView !== 'start' || state.loading || state.error === 'expired' || state.page?.nextCursor === null)
         return;
     const target = required('#discovery-cards'), before = new Set([...target.querySelectorAll('[data-news-stream-key]')].map(node => node.dataset.newsStreamKey));
-    continuationCount += NEWS_PAGE_SIZE;
+    const language = getLocale(), filter = newsFilter, cityId = contextualCity?.id ?? null, previousCount = state.items.length;
+    await newsContinuation.next();
+    if (language !== getLocale() || filter !== newsFilter || cityId !== (contextualCity?.id ?? null))
+        return;
     renderDiscovery();
-    if (focus) {
+    if (focus && newsContinuation.view().items.length > previousCount) {
         const added = [...target.querySelectorAll('[data-news-stream-key]')].find(node => !before.has(node.dataset.newsStreamKey));
         const title = added?.querySelector('h3');
         if (title) {
@@ -1346,8 +1365,15 @@ function showNewsPage(focus) {
     }
 }
 required('#discovery').addEventListener('click', event => {
-    if (event.target instanceof Element && event.target.closest('[data-public-more]'))
-        showNewsPage(true);
+    if (!(event.target instanceof Element))
+        return;
+    if (event.target.closest('[data-news-restart]')) {
+        restartNewsEdition = true;
+        applyPublicUpdate = true;
+        renderDiscovery();
+    }
+    else if (event.target.closest('[data-public-more]'))
+        void showNewsPage(true);
 });
 required('#discovery').addEventListener('change', event => {
     if (!(event.target instanceof HTMLSelectElement) || event.target.id !== 'home-news-category')
@@ -1357,7 +1383,6 @@ required('#discovery').addEventListener('change', event => {
         return;
     const restoreFocus = document.activeElement === event.target;
     newsFilter = value;
-    continuationCount = NEWS_PAGE_SIZE;
     renderDiscovery();
     if (restoreFocus)
         required('#home-news-category').focus({ preventScroll: true });
@@ -1398,7 +1423,7 @@ else
 required('#return-refresh').addEventListener('click', () => { void load(); });
 required('#comparison-saved-only').addEventListener('change', () => { if (changesView)
     render(); });
-required('#discovery-refresh').addEventListener('click', () => { applyPublicUpdate = true; renderDiscovery(); void load(); if (contextualCity && contextualLocalState !== 'loading') {
+required('#discovery-refresh').addEventListener('click', () => { restartNewsEdition = true; applyPublicUpdate = true; renderDiscovery(); void load(); if (contextualCity && contextualLocalState !== 'loading') {
     contextualLocalState = 'loading';
     required('#refresh-local').click();
     renderDiscovery();

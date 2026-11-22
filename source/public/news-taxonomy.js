@@ -1,3 +1,4 @@
+import { validArticleSubject } from './article-subject.js';
 import { classifyNewsHeadline, newsCategoryFromSourceId, contradictedHeadlineHints } from './editorial-categories.js';
 /**
  * IPTC Media Topics, 17 top-level concepts, checked 2026-11-22.
@@ -25,7 +26,7 @@ const DEFINITIONS = [
     ['16000000', 'conflict, war and peace', 'War & peace', 'Razboi si pace'],
     ['17000000', 'weather', 'Weather', 'Vreme'],
 ];
-export const NEWS_TAXONOMY_VERSION = 'iptc-media-topics-top-level-2026-10-16-dlkt-2';
+export const NEWS_TAXONOMY_VERSION = 'iptc-media-topics-top-level-2026-10-16-dlkt-3';
 export const NEWS_CATEGORIES = Object.freeze(DEFINITIONS.map(([id, iptcLabel, label, labelRo]) => Object.freeze({ id, qcode: ('medtop:' + id), uri: 'http://cv.iptc.org/newscodes/mediatopic/' + id, iptcLabel, label, labelRo })));
 const ids = new Set(NEWS_CATEGORIES.map(category => category.id));
 export function isNewsCategoryId(value) { return typeof value === 'string' && ids.has(value); }
@@ -141,6 +142,7 @@ function headlineCategory(title) {
     const direct = DIRECT.find(([, pattern]) => pattern.test(title));
     return direct?.[0] ?? (INDUSTRY.test(title) ? '04000000' : null);
 }
+const retailCare = (title) => /\bretail medicine\b/u.test(title) && !FINANCIAL.test(title);
 /** DLKT classification, not an IPTC-provided classifier. No summaries, place names or invented tags. */
 export function classifyNewsSubject(title, sourceUrl) {
     if (!title.trim() || title.length > 4000 || /[\u0000-\u001f\u007f]/u.test(title))
@@ -156,7 +158,7 @@ export function classifyNewsSubject(title, sourceUrl) {
         return null;
     const normalized = fold(title), section = sectionCategory(url);
     // This care-delivery subject is explicit even when a publisher files it on a broad business desk.
-    if (/\bretail medicine\b/u.test(normalized) && !FINANCIAL.test(normalized))
+    if (retailCare(normalized))
         return result('07000000', 'headline');
     if (section !== null)
         return result(section, 'publisher-section');
@@ -179,7 +181,30 @@ export function classifyNewsSubject(title, sourceUrl) {
     const category = legacyCategoryToNewsCategory(legacy);
     return category === null ? null : result(category, 'headline');
 }
+function publisherSubject(card) {
+    const metadata = card.articleSubject;
+    if (!validArticleSubject(metadata, card.sourceUrl))
+        return null;
+    const mapped = (values) => new Set(values.flatMap(term => {
+        const normalized = fold(term), key = normalized.replaceAll(' ', '-');
+        const definition = NEWS_CATEGORIES.find(category => [category.iptcLabel, category.label, category.labelRo, category.qcode, category.uri].some(label => fold(label) === normalized));
+        const category = definition?.id ?? (Object.hasOwn(SECTIONS, key) ? SECTIONS[key] : undefined);
+        return category ? [category] : [];
+    }));
+    const sections = mapped(metadata.sections), keywords = mapped(metadata.keywords);
+    // A precise section takes precedence over broad keywords. Conflicting sections are not collapsed into one label.
+    if (sections.size > 1)
+        return null;
+    const choices = sections.size ? sections : keywords;
+    const category = choices.size === 1 ? [...choices][0] : undefined;
+    return category ? result(category, 'publisher-metadata') : null;
+}
 export function classifyEvidenceCard(card) {
+    if (retailCare(fold(card.title)))
+        return result('07000000', 'headline');
+    const provided = publisherSubject(card);
+    if (provided)
+        return provided;
     const subject = classifyNewsSubject(card.title, card.sourceUrl);
     if (subject)
         return subject;
