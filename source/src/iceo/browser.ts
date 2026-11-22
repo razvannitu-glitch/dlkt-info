@@ -10,7 +10,9 @@ import {observeNewsStream,NEWS_PAGE_SIZE,type NewsStreamFilter} from './news-str
 import {NewsContinuation,continuationItems} from './news-continuation.js';
 import {NEWS_CATEGORIES,newsCategoryLabel,isNewsCategoryId} from './news-taxonomy.js';
 import {NewsMasonry} from './news-masonry.js';
-import {setupKnowledgeReader,knowledgeModeActive} from './knowledge-browser.js';
+import {setupKnowledgeReader,knowledgeModeActive,knowledgeCardNode} from './knowledge-browser.js';
+import {KNOWLEDGE_CARDS} from './knowledge-catalog.js';
+import {selectInlineKnowledge,interleaveKnowledge,type InlineKnowledge} from './knowledge-stream.js';
 import type {NewsPeriod} from './news-day.js';
 import {NewsReadingState} from './news-reading-state.js';
 import {DiscoveryLoading,renderDiscoveryLoading,bindDiscoveryLoadingActions,type DiscoveryLoadingElements} from './loading.js';
@@ -80,6 +82,9 @@ let restartNewsEdition=false;
 let newsFilter:NewsStreamFilter='all',stopNewsObserver:()=>void=()=>{};
 let newsPeriod:NewsPeriod='today';
 let newsInteractionKey='',newsInteractionRevision=0;
+const inlineKnowledgeSeen=new Set<string>();
+let inlineKnowledgeContext='';
+let inlineKnowledgeSelection:readonly InlineKnowledge[]=[];
 let lastLocalLanguageRefresh=0;
 const currentCardByNode=new WeakMap<HTMLElement,EvidenceCard>();
 function schedulePublicRefresh():void {
@@ -634,7 +639,21 @@ function renderDiscovery():void {
   if(progress.textContent!==progressCopy)progress.textContent=progressCopy;
   progress.title=language==='ro'?`${format.format(stream.total)} articole disponibile in aceasta limba`:`${format.format(stream.total)} articles available in this language`;
   host.dataset.editionState=editionState;host.dataset.dailyCoverage='connected-sources';
-  for(const [index,item] of visible.entries()){
+  const inlinePage=server.page;
+  const inlineContext=inlinePage?JSON.stringify([inlinePage.epoch,inlinePage.revision,inlinePage.startedAt,inlinePage.language,inlinePage.cityId,inlinePage.countryCode,inlinePage.filter,inlinePage.period,inlinePage.day?.date??null]):'';
+  if(inlineContext!==inlineKnowledgeContext){
+    inlineKnowledgeContext=inlineContext;
+    inlineKnowledgeSelection=inlinePage?selectInlineKnowledge(KNOWLEDGE_CARDS.filter(card=>!inlineKnowledgeSeen.has(card.id)),{cityId:inlinePage.cityId,countryCode:inlinePage.countryCode},now,inlinePage.epoch+':'+inlinePage.revision):[];
+  }
+  let newsIndex=0;
+  for(const entry of interleaveKnowledge(visible,inlineKnowledgeSelection)){
+    if(entry.kind==='knowledge'){
+      if(now>=Date.parse(entry.item.card.reviewBy))continue;
+      host.append(knowledgeCardNode(entry.item.card,entry.item.scope));
+      if(!document.body.dataset.worldExplore)inlineKnowledgeSeen.add(entry.item.card.id);
+      continue;
+    }
+    const item=entry.item,index=newsIndex++;
     let node:HTMLElement;
     if(item.kind==='global'){
       node=cardNode(item.view,index,topCount,undefined,false,'related');node.dataset.liveSignature=JSON.stringify([language,editionCardSignature(item.view.card),editionStorySignature(item.view)]);

@@ -8,6 +8,7 @@ export interface KnowledgeCard {
  readonly kind:'knowledge';readonly id:string;readonly revision:number;readonly category:NewsCategoryId;
  readonly topic:Readonly<Record<KnowledgeLanguage,string>>;
  readonly source:Readonly<{publisher:string;url:string}>;
+ readonly geography?:Readonly<{countryCode:string;cityIds:readonly string[];label:Readonly<Record<KnowledgeLanguage,string>>}>;
  readonly copy:Readonly<Record<KnowledgeLanguage,KnowledgeCopy>>;
  readonly reviewedAt:string;readonly reviewBy:string;
 }
@@ -19,9 +20,15 @@ const origins=new Set([
  'https://science.nasa.gov','https://home.cern','https://www.kew.org',
  'https://oceanservice.noaa.gov','https://weather.metoffice.gov.uk','https://www.qrcode.com',
  'https://www.nps.gov','https://www.ecb.europa.eu','https://www.olympics.com','https://www.afb.org',
+ 'https://www.museoegizio.it','https://www.filarmonicaenescu.ro',
 ]);
 function object(value:unknown):value is Record<string,unknown>{return typeof value==='object'&&value!==null&&!Array.isArray(value);}
 function text(value:unknown,max:number):value is string{return typeof value==='string'&&value.trim().length>0&&value.length<=max&&!/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f<>]/u.test(value);}
+function validKnowledgeGeography(value:unknown):boolean{
+ if(!object(value)||typeof value.countryCode!=='string'||!/^[A-Z]{2}$/u.test(value.countryCode)||!Array.isArray(value.cityIds)||value.cityIds.length>20||!object(value.label))return false;
+ if(value.cityIds.some(id=>typeof id!=='string'||!/^[1-9]\d{0,11}$/u.test(id))||new Set(value.cityIds).size!==value.cityIds.length)return false;
+ const label=value.label;return languages.every(language=>text(label[language],100));
+}
 function instant(value:unknown):value is string{
  if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value))return false;
  const ms=Date.parse(value);return Number.isFinite(ms)&&new Date(ms).toISOString()===value;
@@ -34,6 +41,7 @@ export function validKnowledgeCard(value:unknown):value is KnowledgeCard {
  if(!object(value)||value.kind!=='knowledge'||typeof value.id!=='string'||!/^[a-z][a-z0-9-]{2,79}$/u.test(value.id)||
   !Number.isSafeInteger(value.revision)||Number(value.revision)<1||!isNewsCategoryId(value.category)||
   !object(value.source)||!text(value.source.publisher,100)||!safeKnowledgeSource(value.source.url)||
+  value.geography!==undefined&&!validKnowledgeGeography(value.geography)||
   !instant(value.reviewedAt)||!instant(value.reviewBy)||Date.parse(value.reviewBy)<=Date.parse(value.reviewedAt)||
   Date.parse(value.reviewBy)-Date.parse(value.reviewedAt)>366*86400000||!object(value.copy)||!object(value.topic))return false;
  return languages.every(language=>{

@@ -10,7 +10,7 @@ The user selected EUR 6.99 per month on 23 November 2026 (Europe/Bucharest). Sev
 
 The news reader offers a continuous stream. Twenty is a transport page size, not a commercial or editorial total. Today uses the selected validated city's calendar date and time zone. Recent retains the existing source eligibility windows. Publication date, source-check time, publisher origin and event location have distinct meanings.
 
-Did you know is a separate mode of the same reader. Original short explanations, useful connections, primary-source links and review timestamps form a finite curated preview. The preview uses existing IPTC category identifiers, with 11 cards across 8 populated categories. It does not claim all categories already contain content or that an autonomous fact-generation service is running. Encyclopedic information is never presented as a newly reported event. Source documents and images retain their own rights.
+Did you know is a separate mode of the same reader and a light insertion in the news stream. Original short explanations, useful connections, primary-source links and review timestamps form a finite curated preview. The preview uses existing IPTC category identifiers, with 13 cards across 8 populated categories. It does not claim all categories already contain content or that an autonomous fact-generation service is running. Encyclopedic information is never presented as a newly reported event. Source documents and images retain their own rights.
 
 ## Acceptance
 
@@ -21,6 +21,10 @@ Country and language selection use the common city/country path. National publis
 The utility band keeps the date, city/country, Use my location, Weather & rates, language and theme in a compact main row. A secondary row exists only when actual weather or ECB values are available. Expiring controls transfer focus before hiding when necessary. No empty breaking-news ticker or invented alert is introduced.
 
 Knowledge cards contain original English, Romanian and Italian copy. Other interface languages explicitly fall back to English content. All links use reviewed primary origins. Text rendering uses textContent. Cards carry a review date, future re-review deadline, revision and canonical share link. Category rounds avoid repetition until all currently available categories have been used. Masonry preserves DOM reading order. The finite collection is never recycled to imitate fresh content.
+
+The user selected one knowledge card in every 23 displayed cards: 22 original news records, then one knowledge card at positions 23, 46, 69 and so on. This projection preserves every original news object, news ordering, counts and signed cursors. It uses an immutable selected sequence throughout the current edition, including 20-record page boundaries. Inserted knowledge IDs are not selected again when changing editions in the same loaded reader. With fewer than 22 news records or an exhausted checked catalogue, news continues without fake filler.
+
+Geography belongs to the verified fact, never to its publisher. Selection first uses the selected city, then facts in the same country, then clearly labeled general knowledge. Another-city national fallback retains its true city label. This release includes one verified Turin fact and one Bucharest fact; it does not claim worldwide local-fact coverage or region-level metadata. Other-country local facts are excluded from this inline selection. No continuous GPS or extra geolocation permission is needed.
 
 The planned EUR 6.99 monthly offer and 7-day trial are visible, together with the fact that payments and trial activation are not open. There is no billing call, browser entitlement, fake checkout button or charge in this release.
 
@@ -36,10 +40,10 @@ Source registration is not proof of successful ingestion or complete national co
 
 Database readiness manifest 9 retains its historical page-v2 permission metadata and fingerprint. The database permission boundary is unchanged; that metadata is not an attestation of the new HTTP page-v3 protocol. Do not recompute its fingerprint independently of its migration.
 
-Knowledge sources were reviewed during this task. The Statue of Liberty review also used the NPS detailed FAQ, which explains protective patina: https://www.nps.gov/stli/planyourvisit/frequently-asked-questions-statue-of-liberty.htm. Knowledge content is not automatically refreshed, billed or translated on demand.
+Knowledge sources were reviewed during this task. The Statue of Liberty review also used the NPS detailed FAQ, which explains protective patina: https://www.nps.gov/stli/planyourvisit/frequently-asked-questions-statue-of-liberty.htm. Knowledge content is not automatically refreshed, billed or translated on demand. Local source reviews: https://www.museoegizio.it/en/discover/story (foundation in 1824, not public opening), https://www.museoegizio.it/info/come-raggiungerci (Turin location), and https://www.filarmonicaenescu.ro/ro/istoric-ateneul-roman (circular Athenaeum foundations).
 
 ## Commercial hypothesis
 
 The paid value to test is useful selection, reliable context, continuity across devices and personal collections. Public facts alone are not a defensible paid product. The approved price is a product decision, not evidence of conversion, retention or profit.
 
-A later Plus trial must have a server-verified start/end, clear tax-inclusive checkout, cancellation, webhook verification, duplicate-event handling and access revocation. Personal learning trails, collections, saved discoveries and a deliberate optional insertion into the news feed are product directions to validate after the independent reader preview. Any sponsorship must be labeled and must not affect factual verification.
+A later Plus trial must have a server-verified start/end, clear tax-inclusive checkout, cancellation, webhook verification, duplicate-event handling and access revocation. Personal learning trails, collections and saved discoveries are product directions to validate. The one-in-23 inline sample is free in this release; the full collection is planned as a Plus benefit. Frequency 23 is a hypothesis, not an experimentally proven optimum. Card exposure, source opening, saving and continuation metrics are not instrumented in this release. Any sponsorship must be labeled and must not affect factual verification.

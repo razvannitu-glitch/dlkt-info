@@ -4,6 +4,8 @@ import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 import {parseDocument,DomUtils} from 'htmlparser2';
 import {NewsMasonry,newsMasonryPositions} from '../.build/src/iceo/news-masonry.js';
+import {KNOWLEDGE_CARDS} from '../.build/src/iceo/knowledge-catalog.js';
+import {selectInlineKnowledge,interleaveKnowledge} from '../.build/src/iceo/knowledge-stream.js';
 
 test('two hundred variable-height articles retain DOM order and exact gaps beyond grid track limits',()=>{
  const heights=Array.from({length:200},(_,index)=>260.25+(index%7)*67.5),positions=newsMasonryPositions(heights,2);
@@ -160,4 +162,70 @@ test('the English shortcut leaves keyboard focus in the visible toolbar after se
  const context={Event:class{constructor(type,options){this.type=type;this.bubbles=options.bubbles;}},
   required:selector=>selector==='#home-news-english'?{addEventListener(type,callback){assert.equal(type,'click');action=callback;}}:selector==='#reader-language'?picker:selector==='#home-news-category'?category:null};
  runInNewContext(source.slice(start,end),context);action();assert.equal(changes,1);assert.equal(focuses,1);
+});
+
+test('compiled inline rendering preserves22-plus1 cadence, append prefixes and unseen facts across contexts without inserting expired slots',()=>{
+ const source=readFileSync('.build/src/iceo/browser.js','utf8'),renderStart=source.indexOf('function renderDiscovery()');
+ const start=source.indexOf('const inlinePage = server.page;',renderStart),end=source.indexOf('if (!visible.length && loadingPhase',start);
+ assert.ok(renderStart>=0&&start>renderStart&&end>start);
+ const body=source.slice(start,end),now=Date.parse('2026-11-23T12:00:00.000Z');
+ const originals=Array.from({length:80},(_,index)=>{
+  const card=Object.freeze({id:'original-'+index,title:'Original article '+index,sourceUrl:'https://www.theguardian.com/world/2026/nov/23/inline-fixture-'+index,date:new Date(now-index*1000).toISOString(),observedAt:new Date(now).toISOString(),contentHash:index.toString(16).padStart(64,'0')});
+  return Object.freeze(index%7===0?{kind:'local',key:'news-'+index,category:'13000000',card}:{kind:'global',key:'news-'+index,category:'13000000',view:Object.freeze({card})});
+ });
+ const originalsBefore=JSON.stringify(originals);
+ const originalCard=item=>item.kind==='global'?item.view.card:item.card;
+ const sequence=nodes=>nodes.map(node=>node.fixtureKind==='knowledge'?'knowledge:'+node.card.id:node.dataset.newsStreamKey);
+ const facts=nodes=>nodes.filter(node=>node.fixtureKind==='knowledge');
+ function harness(catalog=KNOWLEDGE_CARDS){
+  const host={children:[],append(node){this.children.push(node);}};
+  function newsNode(card){
+   const heading={setAttribute(){}},topic={},link={},details={};
+   return {fixtureKind:'news',card,dataset:{},querySelector:selector=>selector==='h3'?heading:selector==='.card-topic'?topic:selector==='.card-content > .source-link'?link:selector==='.evidence > summary'?details:null};
+  }
+  const context={
+   server:{page:{epoch:17,revision:9,startedAt:new Date(now).toISOString(),language:'en',cityId:'683506',countryCode:'RO',filter:'all',period:'today',day:{date:'2026-11-23'}}},
+   now,language:'en',topCount:80,visible:[],host,document:{body:{dataset:{}}},
+   contextualCity:{id:'683506',name:'Bucharest',countryCode:'RO'},inlineKnowledgeSeen:new Set(),inlineKnowledgeContext:'',inlineKnowledgeSelection:[],
+   KNOWLEDGE_CARDS:catalog,selectInlineKnowledge,interleaveKnowledge,
+   knowledgeCardNode:(card,scope)=>({fixtureKind:'knowledge',card,scope,dataset:{}}),
+   cardNode:view=>newsNode(view.card),localCardNode:card=>newsNode(card),
+   editionCardSignature:card=>card.id,editionStorySignature:view=>view.card.id,newsCategoryLabel:category=>category,tr:key=>key,
+  };
+  runInNewContext('function renderInline(){\n'+body+'\n}',context);
+  return {context,render(count){
+   context.visible=originals.slice(0,count);host.children=[];runInNewContext('renderInline();',context);
+   const nodes=[...host.children],news=nodes.filter(node=>node.fixtureKind==='news');
+   assert.equal(news.length,count);news.forEach((node,index)=>{assert.strictEqual(node.card,originalCard(originals[index]));assert.equal(node.dataset.newsStreamKey,originals[index].key);});
+   return nodes;
+  }};
+ }
+ const h=harness();let previous=h.render(20);const selected=h.context.inlineKnowledgeSelection;
+ assert.ok(selected.length>=3);assert.equal(facts(previous).length,0);assert.equal(h.context.inlineKnowledgeSeen.size,0);
+ for(const count of [22,40,44,66]){
+  const next=h.render(count);
+  assert.deepEqual(sequence(next).slice(0,previous.length),sequence(previous),'existing prefix at '+count+' news');
+  assert.strictEqual(h.context.inlineKnowledgeSelection,selected,'append reuses the same selected catalogue');
+  previous=next;
+ }
+ assert.deepEqual(previous.flatMap((node,index)=>node.fixtureKind==='knowledge'?[index+1]:[]),[23,46,69]);
+ assert.deepEqual(facts(previous).map(node=>node.card.id),selected.slice(0,3).map(item=>item.card.id));
+ assert.equal(h.context.inlineKnowledgeSeen.size,3);assert.deepEqual(sequence(h.render(66)),sequence(previous));
+ const seen=new Set(h.context.inlineKnowledgeSeen);
+ h.context.server.page={...h.context.server.page,filter:'13000000',period:'recent',day:null};
+ const changed=h.render(22);
+ assert.equal(facts(changed).length,1);assert.equal(changed.length,23);
+ assert.ok(facts(changed).every(node=>!seen.has(node.card.id)),'a new context never reuses a fact already displayed');
+ assert.equal(h.context.inlineKnowledgeSeen.size,seen.size+1);
+ const firstId=selected[0].card.id,expires=now+1000;
+ const bounded=KNOWLEDGE_CARDS.map(card=>({...card,reviewedAt:new Date(now-1000).toISOString(),reviewBy:new Date(card.id===firstId?expires:now+10000).toISOString()}));
+ const expiring=harness(bounded);assert.equal(facts(expiring.render(20)).length,0);
+ const slots=expiring.context.inlineKnowledgeSelection;assert.equal(slots[0].card.id,firstId);
+ expiring.context.now=expires;
+ const afterExpiry=expiring.render(44),shown=facts(afterExpiry);
+ assert.strictEqual(expiring.context.inlineKnowledgeSelection,slots,'expiry does not compact the selected slots');
+ assert.equal(shown.length,1);assert.strictEqual(shown[0].card,slots[1].card);
+ assert.equal(afterExpiry.indexOf(shown[0]),44,'the second fact stays after44 news; it cannot fill the expired first slot');
+ assert.equal(expiring.context.inlineKnowledgeSeen.has(firstId),false);assert.equal(expiring.context.inlineKnowledgeSeen.has(slots[1].card.id),true);
+ assert.equal(JSON.stringify(originals),originalsBefore);
 });

@@ -375,6 +375,96 @@ const reviewed=[
     "revision": 1,
     "reviewedAt": "2026-11-22T22:10:14.000Z",
     "reviewBy": "2027-05-21T22:10:14.000Z"
+  },
+  {
+    "id": "torino-museo-egizio-1824",
+    "category": "01000000",
+    "topic": {
+      "en": "History",
+      "ro": "Istorie",
+      "it": "Storia"
+    },
+    "geography": {
+      "countryCode": "IT",
+      "cityIds": [
+        "3165524"
+      ],
+      "label": {
+        "en": "Turin · Italy",
+        "ro": "Torino · Italia",
+        "it": "Torino · Italia"
+      }
+    },
+    "source": {
+      "publisher": "Museo Egizio",
+      "url": "https://www.museoegizio.it/en/discover/story"
+    },
+    "copy": {
+      "en": {
+        "title": "Turin's Egyptian museum dates to 1824.",
+        "explanation": "Founded in 1824, Museo Egizio describes itself as the world's oldest museum devoted entirely to ancient Egyptian culture.",
+        "connection": "A Turin institution connects the city's cultural heritage with ancient Egypt."
+      },
+      "ro": {
+        "title": "Muzeul egiptean din Torino dateaza din 1824.",
+        "explanation": "Fondat in 1824, Museo Egizio se prezinta drept cel mai vechi muzeu din lume dedicat integral culturii Egiptului antic.",
+        "connection": "O institutie din Torino leaga patrimoniul cultural al orasului de Egiptul antic."
+      },
+      "it": {
+        "title": "Il museo egizio di Torino risale al 1824.",
+        "explanation": "Fondato nel 1824, il Museo Egizio si presenta come il più antico museo al mondo dedicato interamente alla cultura dell'antico Egitto.",
+        "connection": "Un'istituzione torinese collega il patrimonio culturale della città all'antico Egitto."
+      }
+    },
+    "kind": "knowledge",
+    "revision": 1,
+    "reviewedAt": "2026-11-22T22:36:16.000Z",
+    "reviewBy": "2027-05-21T22:36:16.000Z"
+  },
+  {
+    "id": "bucharest-athenaeum-circular-foundations",
+    "category": "01000000",
+    "topic": {
+      "en": "History",
+      "ro": "Istorie",
+      "it": "Storia"
+    },
+    "geography": {
+      "countryCode": "RO",
+      "cityIds": [
+        "683506"
+      ],
+      "label": {
+        "en": "Bucharest · Romania",
+        "ro": "Bucuresti · Romania",
+        "it": "Bucarest · Romania"
+      }
+    },
+    "source": {
+      "publisher": "Filarmonica George Enescu",
+      "url": "https://www.filarmonicaenescu.ro/ro/istoric-ateneul-roman"
+    },
+    "copy": {
+      "en": {
+        "title": "Why Bucharest's Athenaeum is round.",
+        "explanation": "The Romanian Athenaeum was built over foundations prepared for a riding school. Its circular shape comes from that earlier project.",
+        "connection": "Plans for horse riding helped shape a space for music in Bucharest."
+      },
+      "ro": {
+        "title": "De ce este Ateneul din Bucuresti rotund.",
+        "explanation": "Ateneul Roman a fost construit peste fundatiile pregatite pentru o scoala de echitatie. De aici provine forma sa circulara.",
+        "connection": "Un proiect pentru echitatie a influentat arhitectura unei sali de concerte din Bucuresti."
+      },
+      "it": {
+        "title": "Perché l'Ateneo di Bucarest è rotondo.",
+        "explanation": "L'Ateneo Romeno fu costruito sulle fondamenta predisposte per una scuola di equitazione. La sua forma circolare deriva da quel progetto precedente.",
+        "connection": "Un progetto per l'equitazione ha contribuito a dare forma a uno spazio per la musica a Bucarest."
+      }
+    },
+    "kind": "knowledge",
+    "revision": 1,
+    "reviewedAt": "2026-11-22T22:36:16.000Z",
+    "reviewBy": "2027-05-21T22:36:16.000Z"
   }
 ] as const satisfies readonly KnowledgeCard[];
 export const KNOWLEDGE_CARDS:readonly KnowledgeCard[]=Object.freeze(validateKnowledgeCatalog(reviewed));

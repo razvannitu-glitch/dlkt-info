@@ -57,3 +57,11 @@ html[data-reader-theme=night] .knowledge-actions>.knowledge-source:hover{backgro
 @media(min-width:1600px){.knowledge-cards{--news-columns:3;grid-template-columns:repeat(3,minmax(0,1fr))}.knowledge-card{padding:24px}}
 @media(max-width:680px){.reader-content-switch{margin-bottom:20px}.reader-content-switch>button{padding-inline:16px}.knowledge-heading{display:block}.knowledge-plan-jump{margin-top:18px}.knowledge-toolbar{align-items:flex-start}.knowledge-toolbar>div{flex:1;flex-wrap:wrap}.knowledge-toolbar select{flex:1;min-width:140px}.knowledge-cards{--news-columns:1;grid-template-columns:minmax(0,1fr)}.knowledge-card{padding:22px}.knowledge-card-title{font-size:1.75rem}.knowledge-card-meta{margin-bottom:22px}.knowledge-plan{grid-template-columns:minmax(0,1fr);gap:24px;padding:24px}.news-period{flex:1}.news-period select{flex:1}}
 @media(prefers-reduced-motion:reduce){.knowledge-discovery *{scroll-behavior:auto!important}}
+
+/* One editorial discovery after each22 news cards, with the same masonry geometry. */
+#discovery-cards[data-news-masonry=true]>.knowledge-card{position:absolute;margin:0}
+#discovery-cards>.knowledge-card-inline{border-top:4px solid #F66061;background:var(--reader-panel,var(--soft))}
+.knowledge-card-inline .knowledge-category-tag{background:#F66061;color:#121416}
+.knowledge-card-inline .knowledge-topic{font-weight:700}
+.knowledge-actions>.knowledge-explore{background:var(--reader-surface,var(--white));color:var(--reader-ink,var(--black))}
+body[data-reader-content=knowledge][data-entry-view=start]:not([data-world-explore]) .reader-shell>section:not(#knowledge-discovery){display:none!important}

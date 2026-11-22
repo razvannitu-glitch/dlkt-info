@@ -7,8 +7,8 @@ import {NEWS_CATEGORIES} from '../.build/src/iceo/news-taxonomy.js';
 const now=Date.parse('2026-11-23T12:00:00.000Z');
 const copy=value=>JSON.parse(JSON.stringify(value));
 test('knowledge preview keeps original multilingual copy, primary provenance and bounded review dates',()=>{
- assert.equal(KNOWLEDGE_CARDS.length,11);assert.equal(new Set(KNOWLEDGE_CARDS.map(card=>card.category)).size,8);
- assert.equal(validateKnowledgeCatalog(KNOWLEDGE_CARDS).length,11);
+ assert.equal(KNOWLEDGE_CARDS.length,13);assert.equal(new Set(KNOWLEDGE_CARDS.map(card=>card.category)).size,8);
+ assert.equal(validateKnowledgeCatalog(KNOWLEDGE_CARDS).length,13);
  for(const card of KNOWLEDGE_CARDS){
   assert.ok(validKnowledgeCard(card));assert.ok(NEWS_CATEGORIES.some(category=>category.id===card.category));
   for(const language of ['en','ro','it'])for(const field of ['title','explanation','connection'])assert.ok(card.copy[language][field].trim().length>15);
@@ -89,4 +89,23 @@ test('knowledge assets integrate into the real reader without starting a second 
  const controller=readFileSync('src/iceo/knowledge-browser.ts','utf8');
  assert.doesNotMatch(controller,/\.innerHTML\s*=|localStorage|sessionStorage|\/api\/checkout|\bfetch\(/);
  assert.match(controller,/new NewsMasonry\(grid\)/);
+});
+
+test('knowledge geography is explicit, bounded and multilingual',()=>{
+ const local=KNOWLEDGE_CARDS.filter(card=>card.geography!==undefined);
+ assert.deepEqual(local.map(card=>[card.id,card.geography.countryCode,card.geography.cityIds]),[
+  ['torino-museo-egizio-1824','IT',['3165524']],
+  ['bucharest-athenaeum-circular-foundations','RO',['683506']],
+ ]);
+ for(const card of local)assert.ok(validKnowledgeCard(card));
+ const base=copy(local[0]);
+ for(const geography of [
+  {...base.geography,countryCode:'it'},
+  {...base.geography,countryCode:'ITALY'},
+  {...base.geography,cityIds:['3165524','3165524']},
+  {...base.geography,cityIds:['../3165524']},
+  {...base.geography,cityIds:[3165524]},
+  {...base.geography,label:{en:'Turin',ro:'Torino'}},
+ ])assert.equal(validKnowledgeCard({...base,geography}),false);
+ assert.ok(validKnowledgeCard({...base,geography:{...base.geography,cityIds:[]}}));
 });
