@@ -1,0 +1,35 @@
+name: Probe bounded article photo metadata
+
+on:
+  push:
+    branches:
+      - "codex/probe-article-photos-*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dlkt-article-photo-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    if: github.repository == 'razvannitu-glitch/dlkt-info' && startsWith(github.ref, 'refs/heads/codex/probe-article-photos-')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out the exact diagnostic candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install existing locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Compile existing robots and bounded response helpers
+        run: npm --prefix source run build
+      - name: Inspect the single unresolved article and its declared original image
+        run: node scripts/probe-article-photo-metadata.mjs
