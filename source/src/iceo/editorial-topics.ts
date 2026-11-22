@@ -1,4 +1,5 @@
 import type {Topic} from './topics.js';
+import {weatherSubjectText,hasChildProtectionSubject} from './editorial-subject-semantics.js';
 
 /** Reviewed multi-subject feeds. Topic labels are editorial, never publisher verification. */
 const MULTI_TOPIC_SOURCES:readonly string[]=['govuk-news','govuk-products','gv-world','gv-culture','nasa-news','sanews','ec-press','eu-council','cbs-news','scidev-news','360-news','noaa-news','nist-news','nsf-news','fed-news','ftc-consumer','fda-food','beehive-news'];
@@ -9,7 +10,7 @@ const rules:readonly (readonly [Topic,RegExp])[]=[
  ['weather',/\b(?:weather|hurricanes?|typhoons?|cyclones?|tornadoes?|earthquakes?|floods?|flooding|wildfires?|storm warnings?|emergency warnings?)\b/u],
  ['food',/\b(?:food|agriculture|farming|farmers?|fisheries|product safety|product recall|contaminated|allergens?)\b/u],
  ['health',/\b(?:health|medical|medicine|medicines|vaccin(?:e|es|ation)|hospital|cancer|disease|ebola|fistula|hiv|clinical|patient|patients)\b/u],
- ['digital-life',/\b(?:cybersecurity|cyber security|privacy|phishing|scams?|ransomware|data protection|digital rights|online safety)\b/u],
+ ['digital-life',/\b(?:cybersecurity|cyber security|privacy|phishing|scams?|ransomware|data protection|digital rights|online safety|online child safety|child safety online|child protection online|parental controls?)\b/u],
  ['energy',/\b(?:energy|electricity|renewables?|solar power|wind power|nuclear power|gas supply|oil prices?|power grid)\b/u],
  ['housing',/\b(?:housing|homes?|rent|rents|rental|urban|cities|city planning|construction|homelessness)\b/u],
  ['travel',/\b(?:travel|transport|mobility|railway|rail|trains?|aviation|airports?|flights?|roads?|traffic|tourism|tourists?)\b/u],
@@ -28,7 +29,9 @@ const rules:readonly (readonly [Topic,RegExp])[]=[
 export function editorialTopic(sourceId:string,fallback:Topic,title:string,categories:readonly string[]):Topic {
  if(!hasEditorialTopics(sourceId))return fallback;
  const tags=categories.slice(0,128).map(value=>value.normalize('NFKC').toLowerCase().trim());
- for(const [topic,pattern]of rules)if(tags.some(value=>pattern.test(value)))return topic;
+ if(tags.some(hasChildProtectionSubject))return 'public-affairs';
+ for(const [topic,pattern]of rules)if(tags.some(value=>pattern.test(topic==='weather'?weatherSubjectText(value):value)))return topic;
  const headline=title.normalize('NFKC').toLowerCase();
- return rules.find(([,pattern])=>pattern.test(headline))?.[0]??fallback;
+ if(hasChildProtectionSubject(headline))return 'public-affairs';
+ return rules.find(([topic,pattern])=>pattern.test(topic==='weather'?weatherSubjectText(headline):headline))?.[0]??fallback;
 }

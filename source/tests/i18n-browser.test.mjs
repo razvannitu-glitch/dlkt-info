@@ -19,8 +19,8 @@ test('every explicitly translated HTML interface binding exists and requires no 
 });
 
 test('all locale modules are compiled exactly and the curated public import graph resolves',()=>{
- for(const name of ['catalog','locale','browser']){
-  const compiled=read(`.build/src/i18n/${name}.js`).replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'').replaceAll('../iceo/','./').replaceAll("'./catalog.js'","'./i18n-catalog.js'").replaceAll("'./locale.js'","'./i18n-locale.js'");
+ for(const name of ['catalog','locale','browser','reading-messages']){
+  const compiled=read(`.build/src/i18n/${name}.js`).replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'').replaceAll('../iceo/','./').replaceAll("'./reading-messages.js'","'./i18n-reading-messages.js'").replaceAll("'./catalog.js'","'./i18n-catalog.js'").replaceAll("'./locale.js'","'./i18n-locale.js'");
   const js=read(`public/i18n-${name}.js`);assert.equal(js,compiled);
   assert.doesNotMatch(js,/from\s*['"](?:node:|\.\.\/)|innerHTML|outerHTML|eval\s*\(/u);
   for(const match of js.matchAll(/from\s*['"]\.\/([^'"]+\.js)['"]/gu))assert.ok(existsSync('public/'+match[1]));

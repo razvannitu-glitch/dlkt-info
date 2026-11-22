@@ -1,6 +1,8 @@
 import {PUBLIC_TOPICS} from './topics.js';
 import {DAILY_KEY,parseDaily,type DailyState,type DailyDraft} from '../daily/contracts.js';
 import {captureCheckpoint,parseCheckpoint,type ComparisonCheckpoint} from './comparison.js';
+import {CATEGORY_FOLLOW_KEY,parseCategoryFollows,isFollowCategory,validCategoryFollowRevision,changeCategoryFollow,acknowledgeCategoryFollow,type CategoryFollowState} from './category-follow.js';
+import type {PublicEditorialCategory} from './editorial-categories.js';
 import type {IceoSnapshot} from './contracts.js';
 import type {EvidenceCard,Topic} from './contracts.js';
 import type {ReaderSettings} from './reader.js';
@@ -30,6 +32,8 @@ export function parseSaved(value:unknown):SavedCard|null{
   return {version:1,id:value.card.id,savedAt:value.savedAt,card:copyCard(value.card)};
 }
 export function memoryError(error:unknown):string{
+  if(error instanceof Error&&error.message==='CATEGORY_FOLLOW_CONCURRENT_UPDATE')return 'Another tab changed your followed categories. Refresh before changing them.';
+  if(error instanceof Error&&/^CATEGORY_FOLLOW_/u.test(error.message))return 'This category change could not be saved safely. Refresh and check source availability; your previous follows are unchanged.';
   if(error instanceof Error&&error.message==='CHECKPOINT_CONCURRENT_UPDATE')return 'Another tab changed the saved source check. Refresh before replacing it.';
   if(error instanceof Error&&/^CHECKPOINT_/.test(error.message))return 'This source check cannot replace the saved baseline. Refresh the page and check source availability; your previous data is unchanged.';
   if(error instanceof Error&&error.name==='QuotaExceededError')return 'Browser storage is full. Nothing was saved. Remove saved cards or free space and retry.';
@@ -119,6 +123,32 @@ export class DeviceMemory {
   async forgetCheckpoint(expectedRevision:string):Promise<void>{
     await this.run<void>(['meta'],'readwrite',(tx,done,fail)=>{const store=tx.objectStore('meta');const request=store.get('comparison');
       request.onsuccess=()=>{try{const prior=parseCheckpoint(request.result as unknown);if(!prior||prior.revision!==expectedRevision)throw new Error('CHECKPOINT_CONCURRENT_UPDATE');store.delete('comparison');done(undefined);}catch(error){fail(error);}};});
+  }
+  async readCategoryFollows():Promise<CategoryFollowState|null>{
+    return this.run(['meta'],'readonly',(tx,done,fail)=>{const request=tx.objectStore('meta').get(CATEGORY_FOLLOW_KEY);
+      request.onsuccess=()=>{try{const raw:unknown=request.result,prior=raw===undefined?null:parseCategoryFollows(raw);if(raw!==undefined&&!prior)throw Error('CATEGORY_FOLLOW_STORAGE_INVALID');done(prior);}catch(error){fail(error);}};});
+  }
+  async setCategoryFollow(category:PublicEditorialCategory,followed:boolean,snapshot:IceoSnapshot|null,expectedRevision:string|null):Promise<CategoryFollowState|null>{
+    if(!isFollowCategory(category)||typeof followed!=='boolean'||expectedRevision!==null&&!validCategoryFollowRevision(expectedRevision))throw Error('CATEGORY_FOLLOW_DATA_INVALID');
+    return this.run(['meta'],'readwrite',(tx,done,fail)=>{const store=tx.objectStore('meta'),request=store.get(CATEGORY_FOLLOW_KEY);
+      request.onsuccess=()=>{try{
+        const raw:unknown=request.result,prior=raw===undefined?null:parseCategoryFollows(raw);
+        if(raw!==undefined&&!prior)throw Error('CATEGORY_FOLLOW_STORAGE_INVALID');
+        if((prior?.revision??null)!==expectedRevision)throw Error('CATEGORY_FOLLOW_CONCURRENT_UPDATE');
+        const next=changeCategoryFollow(prior,category,followed,snapshot,this.clock(),crypto.randomUUID());
+        if(next.changed&&next.state)store.put(next.state,CATEGORY_FOLLOW_KEY);done(next.state);
+      }catch(error){fail(error);}};});
+  }
+  async acknowledgeCategoryFollow(category:PublicEditorialCategory,snapshot:IceoSnapshot,expectedRevision:string):Promise<CategoryFollowState>{
+    if(!isFollowCategory(category)||!validCategoryFollowRevision(expectedRevision))throw Error('CATEGORY_FOLLOW_DATA_INVALID');
+    return this.run(['meta'],'readwrite',(tx,done,fail)=>{const store=tx.objectStore('meta'),request=store.get(CATEGORY_FOLLOW_KEY);
+      request.onsuccess=()=>{try{
+        const raw:unknown=request.result,prior=raw===undefined?null:parseCategoryFollows(raw);
+        if(raw!==undefined&&!prior)throw Error('CATEGORY_FOLLOW_STORAGE_INVALID');
+        if((prior?.revision??null)!==expectedRevision)throw Error('CATEGORY_FOLLOW_CONCURRENT_UPDATE');
+        if(!prior)throw Error('CATEGORY_FOLLOW_NOT_FOLLOWED');
+        const next=acknowledgeCategoryFollow(prior,category,snapshot,this.clock(),crypto.randomUUID());store.put(next,CATEGORY_FOLLOW_KEY);done(next);
+      }catch(error){fail(error);}};});
   }
   /** Explicit replacement only, called after account-restore confirmation. */
   async restorePersonal(value:{readonly focus:SavedFocus|null;readonly cards:readonly SavedCard[];readonly checkpoint:ComparisonCheckpoint|null},signal?:AbortSignal):Promise<void>{

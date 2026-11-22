@@ -15,8 +15,8 @@ test('the shipped catalog identifies all30 locales and four RTL interfaces witho
   for(const value of LOCALES){assert.ok(Object.isFrozen(value));assert.ok(value.nativeName.trim());assert.equal(Intl.getCanonicalLocales(value.code)[0],value.code);}
 });
 
-test('all30 dictionaries contain exactly82 messages and20 categories with identical placeholder contracts',()=>{
-  assert.equal(MESSAGE_KEYS.length,82);assert.equal(new Set(MESSAGE_KEYS).size,82);
+test('all30 dictionaries contain exactly112 messages and20 categories with identical placeholder contracts',()=>{
+  assert.equal(MESSAGE_KEYS.length,112);assert.equal(new Set(MESSAGE_KEYS).size,112);
   assert.equal(PUBLIC_EDITORIAL_CATEGORIES.length,20);
   assert.deepEqual(Object.keys(MESSAGES),expected);assert.deepEqual(Object.keys(CATEGORY_LABELS),expected);
   for(const locale of expected){

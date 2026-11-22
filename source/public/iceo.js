@@ -1,4 +1,4 @@
-import { getLocale, translate as tr, translatedCategory, countryLabel, setupLanguage, applyInterfaceLanguage } from './i18n-browser.js';
+import { getLocale, translate as tr, translatedCategory, countryLabel, languageLabel, setupLanguage, applyInterfaceLanguage } from './i18n-browser.js';
 import { sourceLanguage } from './news-sources.js';
 import { photoNode, integratePhotoHeadline } from './card-photo-browser.js';
 import { setupExplore } from './explore-browser.js';
@@ -15,11 +15,12 @@ import { selectReturnBrief, nextReturnDelay } from './return-brief.js';
 import { selectSavedUpdates, nextSavedUpdateDelay, SnapshotProgress } from './saved-updates.js';
 import { cardLink } from './shared-card-link.js';
 import { cardGuideNode } from './card-guide.js';
-import { editorialCardPresentation, compactEditionStatus } from './editorial-presentation.js';
+import { editorialCardPresentation, editorialSourceContext, compactEditionStatus } from './editorial-presentation.js';
 import { organizationSetupFromHash, organizationReadingSettings } from './organization-setup.js';
 import { cardCreditsNode } from './credits.js';
 import { PUBLIC_TOPICS, TOPIC_LABELS } from './topics.js';
-import { PUBLIC_EDITORIAL_CATEGORIES, EDITORIAL_CATEGORY_LABELS } from './editorial-categories.js';
+import { PUBLIC_EDITORIAL_CATEGORIES, EDITORIAL_CATEGORY_LABELS, editorialCategory as categoryForCard } from './editorial-categories.js';
+import { CategoryFollowing } from './follow-browser.js';
 import { shareCard } from './shared-card-actions.js';
 import { setupEdition } from './edition-browser.js';
 import { captureCheckpoint, compareCheckpoint, focusedSnapshot, compareFocusedCheckpoint } from './comparison.js';
@@ -89,6 +90,8 @@ let visitInterests = null;
 let savedView = false, changesView = false, deviceBusy = false, editedFocus = false;
 let checkpoint = null, checkpointInvalid = false, checkpointLoaded = false, lastLoadFailed = true;
 const memoryMessage = required('#memory-status');
+const following = new CategoryFollowing({ device, snapshot: () => snapshot, available: () => !lastLoadFailed && !lastLoadRegressed && !loading,
+    loading: () => loading, busy: () => deviceBusy, write: writeDevice, refresh: () => { void load(); }, personalise: openSettings });
 let toastTimer;
 function toast(message) { const item = required('#reader-toast'); clearTimeout(toastTimer); item.textContent = message; item.hidden = false; toastTimer = setTimeout(() => { item.hidden = true; }, 5500); }
 let changes = null;
@@ -100,7 +103,7 @@ catch { /* Reading and storage do not depend on cross-tab messaging. */ }
 function memoryControls() {
     required('#saved-count').textContent = String(deviceState.cards.length);
     required('#forget-focus').hidden = deviceState.focus === null;
-    required('#clear-device').disabled = deviceBusy || (!deviceState.focus && !deviceState.cards.length && !deviceState.rejected && !checkpoint && !checkpointInvalid && !dailyPresent);
+    required('#clear-device').disabled = deviceBusy || (!deviceState.focus && !deviceState.cards.length && !deviceState.rejected && !checkpoint && !checkpointInvalid && !dailyPresent && !following.hasMemory);
     document.querySelectorAll('[data-memory-write]').forEach(b => { b.disabled = deviceBusy; });
     document.querySelectorAll('[data-save-card]').forEach(b => {
         const saved = deviceState.cards.some(entry => entry.id === b.dataset.saveCard);
@@ -115,6 +118,7 @@ function memoryControls() {
     });
     comparisonControls();
     renderReturnBrief();
+    following.render();
 }
 function restoreSettings(s) {
     form.querySelectorAll('input[name=topic]').forEach(i => { i.checked = s.topics.includes(i.value); });
@@ -135,6 +139,10 @@ async function readDevice(restore = false) {
             savedInterests = [];
         }
         await readComparison();
+        try {
+            await following.read();
+        }
+        catch { /* The following panel exposes its own storage error. */ }
         if (restore && deviceState.focus && !editedFocus) {
             restoreSettings(deviceState.focus.settings);
             memoryMessage.textContent = 'Your remembered focus was restored in this browser.';
@@ -150,13 +158,17 @@ async function readDevice(restore = false) {
     catch (error) {
         checkpointLoaded = true;
         checkpointInvalid = true;
+        try {
+            await following.read();
+        }
+        catch { /* New controls retain their localized unavailable state. */ }
         memoryMessage.textContent = memoryError(error);
         memoryControls();
         if (changesView)
             render();
     }
 }
-async function writeDevice(action, message, after) {
+async function writeDevice(action, message, after, localizedErrors = false) {
     if (deviceBusy)
         return;
     deviceBusy = true;
@@ -176,6 +188,13 @@ async function writeDevice(action, message, after) {
             savedInterests = [];
         }
         await readComparison();
+        try {
+            await following.read();
+        }
+        catch (error) {
+            if (localizedErrors)
+                throw error; /* Invalid following data cannot interrupt a committed saved-card or legacy-check action. */
+        }
         memoryMessage.textContent = message;
         announcement.textContent = message;
         toast(message);
@@ -193,7 +212,15 @@ async function writeDevice(action, message, after) {
             if (changesView)
                 render();
         }
-        memoryMessage.textContent = committed ? 'Change saved, but this page could not reload it. Refresh to view the stored data.' : memoryError(error);
+        let followConflict = false;
+        if (error instanceof Error && error.message === 'CATEGORY_FOLLOW_CONCURRENT_UPDATE') {
+            try {
+                await following.read();
+                followConflict = true;
+            }
+            catch { /* A failed reload is a storage error, never a claimed successful reconciliation. */ }
+        }
+        memoryMessage.textContent = localizedErrors ? tr(committed ? 'followReloadError' : followConflict ? 'followConflict' : 'followSaveError') : committed ? 'Change saved, but this page could not reload it. Refresh to view the stored data.' : memoryError(error);
         announcement.textContent = memoryMessage.textContent;
         toast(memoryMessage.textContent);
     }
@@ -636,7 +663,7 @@ function cardNode(view, index, total, saved, automaticInsights = true) {
         node.dataset.contextual = 'true';
     }
     node.dataset.coverage = coverage.basis;
-    const editorialCategory = 'category' in view && typeof view.category === 'string' && PUBLIC_EDITORIAL_CATEGORIES.includes(view.category) ? view.category : null;
+    const editorialCategory = 'category' in view && typeof view.category === 'string' && PUBLIC_EDITORIAL_CATEGORIES.includes(view.category) ? view.category : categoryForCard(card);
     const unclassified = 'editorial' in view && object(view.editorial) && view.editorial.classification === 'unclassified';
     put('.card-topic', unclassified ? tr('otherTopics') : editorialCategory ? translatedCategory(editorialCategory) : labels[card.topic]);
     if (editorialCategory)
@@ -648,7 +675,7 @@ function cardNode(view, index, total, saved, automaticInsights = true) {
         kind.hidden = !presentation.kindLabel;
     put('h3', presentation.headline);
     const title = node.querySelector('h3'), sourceUrl = safeLink(card.sourceUrl);
-    for (const original of node.querySelectorAll('h3,.card-context,.card-publisher'))
+    for (const original of node.querySelectorAll('h3,.card-publisher'))
         originalText(original);
     if (title && sourceUrl) {
         const titleLink = make('a', 'card-title-link', presentation.headline);
@@ -664,13 +691,36 @@ function cardNode(view, index, total, saved, automaticInsights = true) {
     put('.card-publisher', card.publisher);
     put('.card-date', `${view.dateLabel === 'Published' ? '' : view.dateLabel + ': '}${formatted(card.date, true)}`);
     const readingContext = node.querySelector('.card-context'), guide = cardGuideNode(card);
-    if (readingContext instanceof HTMLElement)
+    if (readingContext instanceof HTMLElement) {
         readingContext.hidden = presentation.visibleContext === null;
+        if (card.summary !== undefined && presentation.visibleContext === card.summary) {
+            const wording = make('span', '', card.summary);
+            originalText(wording);
+            readingContext.replaceChildren(make('strong', '', tr('publisherExcerpt') + ': '), wording);
+        }
+        else if (presentation.visibleContext !== null)
+            readingContext.lang = 'en';
+    }
+    if (card.kind === 'publication') {
+        const provenance = editorialSourceContext(card), context = make('div', 'card-source-context');
+        if (provenance.editionLanguage)
+            context.append(make('p', '', tr('editionLanguage', { language: languageLabel(provenance.editionLanguage) })));
+        if (provenance.publisherCountry)
+            context.append(make('p', '', tr('publisherCountry', { country: countryLabel(provenance.publisherCountry.code, provenance.publisherCountry.name) })));
+        if (provenance.coverage) {
+            const countries = new Intl.ListFormat(getLocale(), { style: 'short', type: 'conjunction' }).format(provenance.coverage.countries.map(country => countryLabel(country.code, country.name)));
+            context.append(make('p', '', tr(provenance.coverage.basis === 'publisher-category' ? 'publisherCountryTags' : 'publisherScopeCountries', { countries })));
+        }
+        if (context.childNodes.length)
+            readingContext?.after(context);
+        if (kind && presentation.kindLabel === 'From the publisher')
+            kind.hidden = true;
+    }
     if (presentation.detailContext)
         evidence?.append(make('p', 'card-detail-context', presentation.detailContext));
     if (presentation.safetyNote)
         readingContext?.after(make('p', 'card-scope-note', presentation.safetyNote));
-    if (card.summary !== undefined && card.summary !== view.context) {
+    if (card.summary !== undefined && card.summary !== presentation.visibleContext) {
         const excerpt = make('p', 'card-context publisher-excerpt');
         const wording = make('span', '', card.summary);
         originalText(wording);
@@ -754,6 +804,8 @@ function cardNode(view, index, total, saved, automaticInsights = true) {
             void writeDevice(() => exists ? device.remove(card.id) : device.save(currentCardByNode.get(node) ?? card), exists ? 'Card removed from this browser.' : 'Card saved in this browser only.');
         });
     }
+    if (editorialCategory && !unclassified)
+        following.attach(node, editorialCategory);
     if (saved) {
         const note = make('p', 'saved-copy-note', `Saved here ${formatted(saved.savedAt)}. Original source check ${formatted(card.observedAt)}. This saved copy is retained; current comparisons appear separately when available.`);
         evidence?.append(note);
@@ -1006,7 +1058,7 @@ function renderDiscovery() {
         : contextualLocationPending ? tr('lookupLoading') : tr('chooseCity');
     const discoveryDelay = nextDailyEditionDelay(today, now), returnDelay = checkpoint ? nextReturnDelay(snapshot, selectReturnBrief(checkpoint, null, now, false).topics, now) : null;
     const localDelay = local.expiresAt === null ? null : Math.max(25, local.expiresAt - now + 25);
-    const delays = [discoveryDelay, returnDelay, localDelay].filter((n) => n !== null);
+    const delays = [discoveryDelay, returnDelay, localDelay, following.nextDelay(now)].filter((n) => n !== null);
     if (delays.length && document.visibilityState === 'visible')
         discoveryExpiry = setTimeout(renderDiscovery, Math.min(...delays));
     host.replaceChildren();

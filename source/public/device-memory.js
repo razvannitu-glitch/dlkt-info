@@ -1,6 +1,7 @@
 import { PUBLIC_TOPICS } from './topics.js';
 import { DAILY_KEY, parseDaily } from './daily-contracts.js';
 import { captureCheckpoint, parseCheckpoint } from './comparison.js';
+import { CATEGORY_FOLLOW_KEY, parseCategoryFollows, isFollowCategory, validCategoryFollowRevision, changeCategoryFollow, acknowledgeCategoryFollow } from './category-follow.js';
 import { validCard, copyCard } from './card-validation.js';
 export { copyCard } from './card-validation.js';
 export const MEMORY_DATABASE = 'dlkt-info-device-memory-v1';
@@ -25,6 +26,10 @@ export function parseSaved(value) {
     return { version: 1, id: value.card.id, savedAt: value.savedAt, card: copyCard(value.card) };
 }
 export function memoryError(error) {
+    if (error instanceof Error && error.message === 'CATEGORY_FOLLOW_CONCURRENT_UPDATE')
+        return 'Another tab changed your followed categories. Refresh before changing them.';
+    if (error instanceof Error && /^CATEGORY_FOLLOW_/u.test(error.message))
+        return 'This category change could not be saved safely. Refresh and check source availability; your previous follows are unchanged.';
     if (error instanceof Error && error.message === 'CHECKPOINT_CONCURRENT_UPDATE')
         return 'Another tab changed the saved source check. Refresh before replacing it.';
     if (error instanceof Error && /^CHECKPOINT_/.test(error.message))
@@ -229,6 +234,67 @@ export class DeviceMemory {
             catch (error) {
                 fail(error);
             } };
+        });
+    }
+    async readCategoryFollows() {
+        return this.run(['meta'], 'readonly', (tx, done, fail) => {
+            const request = tx.objectStore('meta').get(CATEGORY_FOLLOW_KEY);
+            request.onsuccess = () => { try {
+                const raw = request.result, prior = raw === undefined ? null : parseCategoryFollows(raw);
+                if (raw !== undefined && !prior)
+                    throw Error('CATEGORY_FOLLOW_STORAGE_INVALID');
+                done(prior);
+            }
+            catch (error) {
+                fail(error);
+            } };
+        });
+    }
+    async setCategoryFollow(category, followed, snapshot, expectedRevision) {
+        if (!isFollowCategory(category) || typeof followed !== 'boolean' || expectedRevision !== null && !validCategoryFollowRevision(expectedRevision))
+            throw Error('CATEGORY_FOLLOW_DATA_INVALID');
+        return this.run(['meta'], 'readwrite', (tx, done, fail) => {
+            const store = tx.objectStore('meta'), request = store.get(CATEGORY_FOLLOW_KEY);
+            request.onsuccess = () => {
+                try {
+                    const raw = request.result, prior = raw === undefined ? null : parseCategoryFollows(raw);
+                    if (raw !== undefined && !prior)
+                        throw Error('CATEGORY_FOLLOW_STORAGE_INVALID');
+                    if ((prior?.revision ?? null) !== expectedRevision)
+                        throw Error('CATEGORY_FOLLOW_CONCURRENT_UPDATE');
+                    const next = changeCategoryFollow(prior, category, followed, snapshot, this.clock(), crypto.randomUUID());
+                    if (next.changed && next.state)
+                        store.put(next.state, CATEGORY_FOLLOW_KEY);
+                    done(next.state);
+                }
+                catch (error) {
+                    fail(error);
+                }
+            };
+        });
+    }
+    async acknowledgeCategoryFollow(category, snapshot, expectedRevision) {
+        if (!isFollowCategory(category) || !validCategoryFollowRevision(expectedRevision))
+            throw Error('CATEGORY_FOLLOW_DATA_INVALID');
+        return this.run(['meta'], 'readwrite', (tx, done, fail) => {
+            const store = tx.objectStore('meta'), request = store.get(CATEGORY_FOLLOW_KEY);
+            request.onsuccess = () => {
+                try {
+                    const raw = request.result, prior = raw === undefined ? null : parseCategoryFollows(raw);
+                    if (raw !== undefined && !prior)
+                        throw Error('CATEGORY_FOLLOW_STORAGE_INVALID');
+                    if ((prior?.revision ?? null) !== expectedRevision)
+                        throw Error('CATEGORY_FOLLOW_CONCURRENT_UPDATE');
+                    if (!prior)
+                        throw Error('CATEGORY_FOLLOW_NOT_FOLLOWED');
+                    const next = acknowledgeCategoryFollow(prior, category, snapshot, this.clock(), crypto.randomUUID());
+                    store.put(next, CATEGORY_FOLLOW_KEY);
+                    done(next);
+                }
+                catch (error) {
+                    fail(error);
+                }
+            };
         });
     }
     /** Explicit replacement only, called after account-restore confirmation. */

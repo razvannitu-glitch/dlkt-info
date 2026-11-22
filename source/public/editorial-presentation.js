@@ -1,4 +1,15 @@
 import { cardGuide } from './card-guide.js';
+import { contextForCard } from './context.js';
+import { sourcePublicationContext } from './news-sources.js';
+/** Provenance, never a guessed event location, article translation or personal impact. */
+export function editorialSourceContext(card) {
+    const publication = sourcePublicationContext(card), context = contextForCard(card);
+    return Object.freeze({
+        editionLanguage: publication?.language ?? null,
+        publisherCountry: publication ? Object.freeze({ code: publication.publisherCountryCode, name: publication.publisherCountryName }) : null,
+        coverage: context.basis !== 'unspecified' && context.countries.length ? Object.freeze({ basis: context.basis, countries: context.countries }) : null,
+    });
+}
 /** Condense ordinary reading copy without hiding a status that changes its meaning. */
 export function editorialCardPresentation(view, savedCopy = false) {
     const card = view.card, publication = card.kind === 'publication';

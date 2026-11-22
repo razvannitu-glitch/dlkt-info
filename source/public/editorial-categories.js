@@ -1,9 +1,10 @@
+import { weatherSubjectText, hasUnsupportedWeatherDescriptor, hasChildProtectionSubject, hasDiplomaticSummitContext } from './editorial-subject-semantics.js';
 /** Audience-facing editorial categories. Persisted Topic IDs and card hashes stay unchanged. */
 export const PUBLIC_EDITORIAL_CATEGORIES = [
     'world', 'business', 'technology', 'money', 'health', 'sport', 'gaming', 'culture', 'shopping', 'travel',
     'work', 'education', 'family', 'science', 'environment', 'public-affairs', 'digital-life', 'food', 'housing', 'weather',
 ];
-export const EDITORIAL_CATEGORIES_VERSION = 'dlkt-public-editorial-categories-5';
+export const EDITORIAL_CATEGORIES_VERSION = 'dlkt-public-editorial-categories-6';
 export const EDITORIAL_CATEGORY_LABELS = Object.freeze({
     world: 'World & geopolitics', business: 'Business & economy', technology: 'AI & technology', money: 'Money & cost of living',
     health: 'Health & wellbeing', sport: 'Sports & competitions', gaming: 'Gaming & esports', culture: 'Culture & entertainment', shopping: 'Shopping & consumer products',
@@ -21,7 +22,11 @@ export const EDITORIAL_CATEGORY_TOPICS = Object.freeze({
 /** Shared acquisition/ranking hints from the headline, not measured reach or proven impact. */
 export function editorialHeadlineSignals(value, category) {
     const title = value.normalize('NFKC').toLocaleLowerCase('en').replace(/\s+/gu, ' ').trim(), signals = [];
-    if (category === 'world' && /\b(?:summits?|nuclear(?:[- ]arms| (?:weapons|disarmament))? talks?|arms[- ]control talks?|peace (?:agreements?|accords?)|ceasefires?)\b/u.test(title))
+    const summitSubject = /\bsummits?\b/u.test(title) ? englishHeadlineSubject(title) : null;
+    // A checked World hint can support an otherwise terse summit title, but an
+    // explicit civic/sectoral subject cannot acquire a diplomatic bonus from it.
+    const diplomaticSummit = /\bsummits?\b/u.test(title) && (hasDiplomaticSummitContext(title) || summitSubject === null || summitSubject === 'world');
+    if (category === 'world' && (diplomaticSummit || /\b(?:nuclear(?:[- ]arms| (?:weapons|disarmament))? talks?|arms[- ]control talks?|peace (?:agreements?|accords?)|ceasefires?)\b/u.test(title)))
         signals.push('diplomatic-development');
     if (['world', 'public-affairs', 'business', 'money', 'technology', 'digital-life', 'shopping', 'health'].includes(category)
         && /\b(?:investigates?|under investigation|opens? (?:an? )?investigation|antitrust|regulatory (?:action|inquiry|investigation)|export (?:controls?|bans?))\b/u.test(title))
@@ -83,7 +88,7 @@ const NEWS_SUBJECTS = [
     ...SUBJECTS.slice(0, 3),
     ['sport', /\b(?:sports?|football|soccer|rugby|cricket|tennis|basketball|baseball|hockey|olympics?|athletics|formula one|formula 1|f1|grand prix|world cup|champions league|premier league|equestrian|dressage|show[- ]jumping|horse racing|cycling|swimming|sailing|climbing|badminton|volleyball|motogp|triathlon)\b/u],
     ['weather', /\b(?:weather|hurricanes?|typhoons?|cyclones?|tornadoes?|earthquakes?|floods?|flooding|wildfires?|tsunami|heatwave|storm warnings?|snowstorm)\b/u],
-    ['digital-life', /\b(?:cybersecurity|cyber security|cyber[- ]?attacks?|cyber director|data leaks?|data breach|ransomware|phishing|digital privacy|digital rights|online safety|social media|internet censorship|passwords?)\b/u],
+    ['digital-life', /\b(?:cybersecurity|cyber security|cyber[- ]?attacks?|cyber director|data leaks?|data breach|ransomware|phishing|digital privacy|digital rights|online safety|online child safety|child safety online|child protection online|parental controls?|social media|internet censorship|passwords?)\b/u],
     ['health', /\b(?:health|medical|medicine|vaccin(?:e|es|ation)|hospitals?|cancer|disease|clinical|patients?|mental health|nutrition|fitness|dementia|diabetes|first[- ]aid|cpr|cardiopulmonary resuscitation|life[- ]saving (?:techniques?|skills?|training|procedures?|treatments?))\b/u],
     ['science', /\b(?:science|scientific|researchers?|research|discovery|discoveries|astronom(?:y|ers?)|astrophysics|stellar|black holes?|neutron stars?|physics|chemistry|biology|fossils?(?!\s+fuels?\b)|archaeology|spacecraft|exoplanet|telescope|astronauts?|lunar|galaxies|milky way)\b/u],
     ['environment', /\b(?:climate|environment|biodiversity|conservation|pollution|emissions|carbon|deforestation|fossil fuels?|renewable energy|clean energy|cop\d{2})\b/u],
@@ -95,9 +100,18 @@ const NEWS_SUBJECTS = [
     ['technology', /\b(?:artificial intelligence|ai|technology|technologies|software|semiconductors?|computer chips?|computing|robotics|quantum computing|smartphones?|smartwatches?|laptops?|large language models?|virtual reality|augmented reality|mixed reality|vr headsets?|spatial computing|3d displays?)\b/u],
     ['business', /\b(?:business|economy|economic|earnings|profits?|revenue|mergers?|acquisitions?|stock markets?|stock exchange|shares?|investors?|investment|inflation|interest rates?|tariffs?|trade deals?|banks?|banking)\b/u],
     ['culture', /\b(?:culture|cultural|arts?|music|musicians?|films?|movies?|cinema|actors?|actresses|television|museums?|heritage|festivals?|concerts?|entertainment|books?|novels?|oscars?|grammys?|dj sets?|dj live(?:stream)?|djs?|theatre|theater|exhibitions?|dance performances?)\b/u],
-    ['world', /\b(?:war|wars|ceasefire|conflict|invasion|missiles?|airstrikes?|air strikes?|diplomatic|diplomacy|summits?|bilateral talks|state visits?|foreign affairs|humanitarian|peace talks|sanctions|international relations|border clashes|defen[cs]e)\b/u],
-    ['public-affairs', /\b(?:politics|political|elections?|parliament|congress|senate|president|prime minister|government|governor|mayor|courts? (?:rules?|rulings?|orders?|judgments?|decisions?|overturns?|upholds?|rejects?|blocks?|hears?)|judicial|judiciary|legislation|legislature|laws?|voters?|democracy|civil rights)\b/u],
+    ['world', /\b(?:war|wars|ceasefire|conflict|invasion|missiles?|airstrikes?|air strikes?|diplomatic|diplomacy|bilateral talks|state visits?|foreign affairs|humanitarian|peace talks|peace (?:agreements?|accords?)|nuclear(?:[- ]arms| (?:weapons|disarmament))? talks?|arms[- ]control talks?|sanctions|international relations|border clashes|defen[cs]e)\b/u],
+    ['public-affairs', /\b(?:politics|political|elections?|parliament|congress|senate|president|prime minister|government|governor|mayor|republicans?|democrats?|conservatives?|liberals?|maga|(?:left|right)[ -]wing|courts? (?:rules?|rulings?|orders?|judgments?|decisions?|overturns?|upholds?|rejects?|blocks?|hears?)|judicial|judiciary|legislation|legislature|laws?|voters?|democracy|civil rights)\b/u],
 ];
+function matchesSubject(category, pattern, title) {
+    if (category === 'weather')
+        return pattern.test(weatherSubjectText(title));
+    if (category === 'family')
+        return pattern.test(title) || hasChildProtectionSubject(title);
+    if (category === 'world')
+        return pattern.test(title) || hasDiplomaticSummitContext(title);
+    return pattern.test(title);
+}
 const SECTIONS = Object.freeze({
     world: 'world', international: 'world', business: 'business', economy: 'business', markets: 'business',
     technology: 'technology', tech: 'technology', 'artificial-intelligence': 'technology', money: 'money', 'personal-finance': 'money',
@@ -317,6 +331,38 @@ function educationInstitutionMerger(title) {
         && !ASTRONOMICAL_MERGER.test(title)
         && !FINANCIAL_DEVELOPMENT.test(title);
 }
+/** The same subject rules repair proven stale hints and classify newly discovered headlines. */
+function englishHeadlineSubject(title) {
+    const financial = FINANCIAL_DEVELOPMENT.test(title);
+    const merger = /\b(?:mergers?|acquisitions?)\b/u.test(title) && !ASTRONOMICAL_MERGER.test(title);
+    if (educationInstitutionMerger(title))
+        return 'education';
+    if (financial || merger)
+        return 'business';
+    if (/\b(?:budget cuts?|spending cuts?|cost[- ]cutting|cost[- ]savings?|efficiency savings|round of savings)\b/u.test(title)
+        && !/\b(?:household|personal finance|savings accounts?|income tax|pensions?|retirement)\b/u.test(title))
+        return 'business';
+    if (/\b(?:photographer of the year|photography (?:awards?|competitions?|contests?)|photo (?:awards?|competitions?|contests?))\b/u.test(title))
+        return 'culture';
+    // Holiday weather is an attribute of a destination, not a major disruption.
+    if (/\b(?:getaways?|holiday destinations?|vacation destinations?)\b/u.test(title)
+        && !/\b(?:hurricanes?|typhoons?|cyclones?|tornadoes?|earthquakes?|floods?|flooding|wildfires?|tsunami|heatwave|storm warnings?|snowstorm)\b/u.test(title))
+        return 'travel';
+    return NEWS_SUBJECTS.find(([category, pattern]) => matchesSubject(category, pattern, title))?.[0] ?? null;
+}
+/** Only explicit contrary subjects invalidate existing discovery provenance. */
+function contradictedHeadlineHints(title) {
+    const rejected = [];
+    if (hasUnsupportedWeatherDescriptor(title)
+        && !NEWS_SUBJECTS.some(([category, pattern]) => category === 'weather' && matchesSubject(category, pattern, title)))
+        rejected.push('weather');
+    if (/\bsummits?\b/u.test(title) && !hasDiplomaticSummitContext(title)) {
+        const subject = englishHeadlineSubject(title);
+        if (subject !== null && subject !== 'world')
+            rejected.push('world');
+    }
+    return rejected;
+}
 /** Discovery classification uses explicit subjects/section names, never a guessed global-topic fallback. */
 export function classifyNewsHeadline(title, sourceUrl) {
     if (!title.trim() || title.length > 4000 || /[\u0000-\u001f\u007f]/u.test(title))
@@ -338,22 +384,7 @@ export function classifyNewsHeadline(title, sourceUrl) {
     if (/\s[–—-]\s*cartoon\s*$/u.test(normalized))
         return null;
     // The nature of the reported development matters more than the company sector.
-    const financial = FINANCIAL_DEVELOPMENT.test(normalized);
-    const merger = /\b(?:mergers?|acquisitions?)\b/u.test(normalized) && !ASTRONOMICAL_MERGER.test(normalized);
-    if (educationInstitutionMerger(normalized))
-        return 'education';
-    if (financial || merger)
-        return 'business';
-    if (/\b(?:budget cuts?|spending cuts?|cost[- ]cutting|cost[- ]savings?|efficiency savings|round of savings)\b/u.test(normalized)
-        && !/\b(?:household|personal finance|savings accounts?|income tax|pensions?|retirement)\b/u.test(normalized))
-        return 'business';
-    if (/\b(?:photographer of the year|photography (?:awards?|competitions?|contests?)|photo (?:awards?|competitions?|contests?))\b/u.test(normalized))
-        return 'culture';
-    // Holiday weather is an attribute of a destination, not a major disruption.
-    if (/\b(?:getaways?|holiday destinations?|vacation destinations?)\b/u.test(normalized)
-        && !/\b(?:hurricanes?|typhoons?|cyclones?|tornadoes?|earthquakes?|floods?|flooding|wildfires?|tsunami|heatwave|storm warnings?|snowstorm)\b/u.test(normalized))
-        return 'travel';
-    const category = NEWS_SUBJECTS.find(([, pattern]) => pattern.test(normalized))?.[0];
+    const category = englishHeadlineSubject(normalized);
     // A team/squad summit on a sports desk is not an international diplomatic summit.
     if (category === 'world' && url.pathname.toLowerCase().split('/').some(segment => segment === 'sport' || segment === 'sports')
         && !/\b(?:war|wars|ceasefire|conflict|invasion|missiles?|airstrikes?|air strikes?|foreign affairs|diplomacy|diplomatic|bilateral talks|state visits?|nuclear)\b/u.test(normalized))
@@ -363,10 +394,12 @@ export function classifyNewsHeadline(title, sourceUrl) {
     if (category === 'work' && url.pathname.toLowerCase().split('/').some(segment => segment === 'sport' || segment === 'sports')
         && !/\b(?:employment|unemployment|jobs?|workforce|workers?|workplace|hiring|recruitment|layoffs?|redundancies|labour market|labor market)\b/u.test(normalized))
         return 'sport';
-    if (category !== undefined)
+    if (category !== null)
         return category;
     for (const segment of url.pathname.toLowerCase().split('/')) {
         const section = Object.hasOwn(SECTIONS, segment) ? SECTIONS[segment] : undefined;
+        if (section === 'weather' && contradictedHeadlineHints(normalized).includes('weather'))
+            continue;
         if (section !== undefined)
             return section;
     }
@@ -386,8 +419,15 @@ export function classifyEditorialCard(card) {
     if (card.sourceIds.includes('news-unclassified'))
         return null;
     const title = card.title.normalize('NFKC').toLowerCase();
-    const subjects = SUBJECTS.filter(([, pattern]) => pattern.test(title)).map(([category]) => category);
-    const hints = PUBLIC_EDITORIAL_CATEGORIES.filter(category => card.sourceIds.some(id => newsCategoryFromSourceId(id) === category));
+    const subjects = SUBJECTS.filter(([category, pattern]) => matchesSubject(category, pattern, title)).map(([category]) => category);
+    const discovered = PUBLIC_EDITORIAL_CATEGORIES.filter(category => card.sourceIds.some(id => newsCategoryFromSourceId(id) === category));
+    const contradicted = contradictedHeadlineHints(title), hints = discovered.filter(category => !contradicted.includes(category));
+    // Apply the shared semantic correction in the reading view as well, without
+    // mutating original titles, IDs, hashes, provenance or saved preferences.
+    if (!hints.length && (discovered.length > 0 || contradicted.some(category => category === card.topic))) {
+        const category = englishHeadlineSubject(title);
+        return category === null ? null : Object.freeze({ category, basis: discovered.length ? 'category-discovery' : 'headline-subject' });
+    }
     // Correct only the old generic-merger discovery hint. Preserve the original
     // card/source IDs and discovery provenance, including a checked frontpage link.
     if (hints.length === 1 && hints[0] === 'business' && educationInstitutionMerger(title))
@@ -412,8 +452,15 @@ export function classifyEditorialCard(card) {
 export function editorialCategory(card) {
     return classifyEditorialCard(card)?.category ?? null;
 }
-/** Match the corrected school-merger discovery hint without rewriting saved Topics. */
+/** Match corrected discovery hints without rewriting card identity or saved Topics. */
 export function editorialInterestTopic(card) {
+    if (!card.sourceIds.includes('news-unclassified')) {
+        const contradicted = contradictedHeadlineHints(card.title.normalize('NFKC').toLowerCase());
+        if (contradicted.some(category => card.sourceIds.includes(`news-${category}`))) {
+            const category = classifyEditorialCard(card)?.category;
+            return category === undefined ? 'other' : EDITORIAL_CATEGORY_TOPICS[category];
+        }
+    }
     if (card.topic !== 'business' || !card.sourceIds.includes('news-business')
         || card.sourceIds.some(id => { const category = newsCategoryFromSourceId(id); return category !== null && category !== 'business'; }))
         return card.topic;

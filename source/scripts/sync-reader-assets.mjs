@@ -6,7 +6,7 @@ const theme=readFileSync('.build/src/theme/browser.js','utf8')
 if(/^\s*(?:import|export)\b/mu.test(theme))throw Error('READER_THEME_CLASSIC_SCRIPT_REQUIRED');
 writeFileSync('public/reader-theme.js',theme);
 /** Ship the exact compiled strict-TypeScript controller without source map disclosure. */
-for(const [name,target] of [['editorial-presentation','editorial-presentation'],['live-edition','live-edition'],['editorial-relevance','editorial-relevance'],['news-sources','news-sources'],['editorial-categories','editorial-categories'],['editorial-ranking','editorial-ranking'],['source-relevance','source-relevance'],['editorial-topics','editorial-topics'],['context','context'],['contextual','contextual'],['contextual-today','contextual-today'],['home-local','home-local'],['home-edition','home-edition'],['loading','loading'],['card-guide','card-guide'],['source-links','source-links'],['credits','credits'],['topics','topics'],['browser','iceo'],['reader','reader'],['insight-browser','insight-browser'],['insight-contracts','insight-contracts'],['device-memory','device-memory'],['comparison','comparison'],['return-brief','return-brief'],['saved-updates','saved-updates'],['card-validation','card-validation']]){
+for(const [name,target] of [['editorial-presentation','editorial-presentation'],['category-follow','category-follow'],['follow-browser','follow-browser'],['editorial-subject-semantics','editorial-subject-semantics'],['live-edition','live-edition'],['editorial-relevance','editorial-relevance'],['news-sources','news-sources'],['editorial-categories','editorial-categories'],['editorial-ranking','editorial-ranking'],['source-relevance','source-relevance'],['editorial-topics','editorial-topics'],['context','context'],['contextual','contextual'],['contextual-today','contextual-today'],['home-local','home-local'],['home-edition','home-edition'],['loading','loading'],['card-guide','card-guide'],['source-links','source-links'],['credits','credits'],['topics','topics'],['browser','iceo'],['reader','reader'],['insight-browser','insight-browser'],['insight-contracts','insight-contracts'],['device-memory','device-memory'],['comparison','comparison'],['return-brief','return-brief'],['saved-updates','saved-updates'],['card-validation','card-validation']]){
  const compiled=readFileSync(`.build/src/iceo/${name}.js`,'utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'');
  writeFileSync(`public/${target}.js`,compiled);
 }
@@ -49,7 +49,7 @@ for(const [source,target] of [['link','shared-card-link'],['actions','shared-car
  const compiled=readFileSync(`.build/src/share/${source}.js`,'utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'').replaceAll('../iceo/','./').replaceAll("'./link.js'","'./shared-card-link.js'");
  writeFileSync(`public/${target}.js`,compiled);
 }
-for(const name of ['iceo','daily-browser','entry-browser']){
+for(const name of ['iceo','daily-browser','entry-browser','follow-browser']){
  const js=readFileSync(`public/${name}.js`,'utf8').replaceAll("'../share/actions.js'","'./shared-card-actions.js'").replaceAll("'../share/link.js'","'./shared-card-link.js'");
  writeFileSync(`public/${name}.js`,js);
 }
@@ -91,10 +91,10 @@ for(const [source,target] of [['browser','connections-browser'],['types','connec
 
 writeFileSync('public/data-guards.js',readFileSync('.build/src/data/guards.js','utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,''));
 
-for(const name of ['catalog','locale','browser']){
- const compiled=readFileSync(`.build/src/i18n/${name}.js`,'utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'').replaceAll('../iceo/','./').replaceAll("'./catalog.js'","'./i18n-catalog.js'").replaceAll("'./locale.js'","'./i18n-locale.js'");
+for(const name of ['catalog','locale','browser','reading-messages']){
+ const compiled=readFileSync(`.build/src/i18n/${name}.js`,'utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'').replaceAll('../iceo/','./').replaceAll("'./reading-messages.js'","'./i18n-reading-messages.js'").replaceAll("'./catalog.js'","'./i18n-catalog.js'").replaceAll("'./locale.js'","'./i18n-locale.js'");
  writeFileSync(`public/i18n-${name}.js`,compiled);
 }
-for(const name of ['iceo','explore-browser']){
+for(const name of ['iceo','explore-browser','follow-browser']){
  const js=readFileSync(`public/${name}.js`,'utf8').replaceAll("'../i18n/browser.js'","'./i18n-browser.js'").replaceAll("'../i18n/locale.js'","'./i18n-locale.js'");writeFileSync(`public/${name}.js`,js);
 }

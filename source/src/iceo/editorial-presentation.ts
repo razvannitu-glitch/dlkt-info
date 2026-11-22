@@ -1,4 +1,7 @@
 import {cardGuide} from './card-guide.js';
+import {contextForCard} from './context.js';
+import {sourcePublicationContext} from './news-sources.js';
+import type {EvidenceCard} from './contracts.js';
 import type {ReadingCard} from './reader.js';
 import type {PublicEditionState} from './home-edition.js';
 
@@ -9,6 +12,21 @@ export interface EditorialCardPresentation {
  readonly detailContext:string|null;
  readonly safetyNote:string|null;
  readonly originalTitleInDetails:boolean;
+}
+
+export interface EditorialSourceContext {
+ readonly editionLanguage:string|null;
+ readonly publisherCountry:Readonly<{code:string;name:string}>|null;
+ readonly coverage:Readonly<{basis:'publisher-category'|'publisher-scope';countries:readonly Readonly<{code:string;name:string}>[]}>|null;
+}
+/** Provenance, never a guessed event location, article translation or personal impact. */
+export function editorialSourceContext(card:EvidenceCard):EditorialSourceContext {
+ const publication=sourcePublicationContext(card),context=contextForCard(card);
+ return Object.freeze({
+  editionLanguage:publication?.language??null,
+  publisherCountry:publication?Object.freeze({code:publication.publisherCountryCode,name:publication.publisherCountryName}):null,
+  coverage:context.basis!=='unspecified'&&context.countries.length?Object.freeze({basis:context.basis,countries:context.countries}):null,
+ });
 }
 
 /** Condense ordinary reading copy without hiding a status that changes its meaning. */
