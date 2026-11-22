@@ -141,7 +141,9 @@ for(const theme of ['prism','night']){
   });
 
   test(`${theme}: real photo headline, hover, focus and badges pass over the brightest possible image`,t=>{
-    const vars=Object.assign(variables(theme),declarations(themeRules,`${scope} ${toneCards}`),declarations(themeRules,`${scope} .photo-editorial:not(.photo-unavailable) .card-photo-visual`));
+    const themeCardSelector=`html[data-reader-theme=${theme}] ${toneCards}`;
+    const themeCardRules=themeRules.filter(rule=>rule.selectors.includes(themeCardSelector)).map(rule=>rule.declarations);
+    const vars=Object.assign(variables(theme),declarations(themeRules,`${scope} ${toneCards}`),...themeCardRules,declarations(themeRules,`${scope} .photo-editorial:not(.photo-unavailable) .card-photo-visual`));
     const check=checks(t),white=color('#fff',{});
     const panelSelector=`${scope} ${toneCards} .photo-editorial .card-photo-headline`;
     const panel=color(property(themeRules,panelSelector,'background'),vars);assert.equal(panel.alpha,1,'Both themes use an opaque reading panel below the complete photo');
@@ -152,7 +154,9 @@ for(const theme of ['prism','night']){
     check.add('photo title',title,background,4.5);check.add('photo title hover',hover,background,4.5);check.add('photo focus',focus,background,3);
     const longBackground=background;
     check.add('long photo title',title,longBackground,4.5);check.add('long photo title hover',hover,longBackground,4.5);check.add('long photo focus',focus,longBackground,3);
-    for(const [label,rules,selector]of [['image label',themeRules,`${scope} .card-photo-label`],['topic badge',themeRules,`${scope} ${toneCards} .photo-editorial .card-topic`]]){
+    const scopedLabel=`${themeCardSelector} .card-photo-label`;
+    const imageLabel=optionalProperty(themeRules,scopedLabel,'background')===undefined?`${scope} .card-photo-label`:scopedLabel;
+    for(const [label,rules,selector]of [['image label',themeRules,imageLabel],['topic badge',themeRules,`${scope} ${toneCards} .photo-editorial .card-topic`]]){
       check.add(label,color(property(rules,selector,'color'),vars),over(color(property(rules,selector,'background'),vars),white),4.5);
     }
     t.diagnostic(`Headline opacity ${(panel.alpha*100).toFixed(0)}%; image pixels cannot change headline contrast. The photo label is additionally checked over a white image.`);

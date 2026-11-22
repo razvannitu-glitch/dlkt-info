@@ -43,7 +43,10 @@ for(const theme of ['prism','night'])test(`${theme}: every category surface keep
   const surface=vars[token],tone=token.slice('--reader-card-'.length,-'-surface'.length);
   for(const role of ['ink','muted','link'])check(`${tone} ${role}`,vars[`--reader-${role}`],surface,4.5);
   for(const role of ['edge','action','focus','selected-edge'])check(`${tone} ${role}`,vars[`--reader-${role}`],surface,3);
-  check(`${tone} photo topic badge`,vars['--reader-card-badge-ink'],vars[`--reader-card-${tone}-accent`],4.5);
+  // A label's gold background is independent of the dark category border/dot.
+  const badge=vars[`--reader-card-${tone}-badge`]??vars[`--reader-card-${tone}-accent`];
+  const badgeInk=vars[`--reader-card-${tone}-badge-ink`]??vars['--reader-card-badge-ink'];
+  check(`${tone} photo topic badge`,badgeInk,badge,4.5);
   check(`${tone} category accent`,vars[`--reader-card-${tone}-accent`],surface,3);
  }
  const text=observations.filter(item=>item.minimum===4.5).sort((a,b)=>a.ratio-b.ratio)[0];
