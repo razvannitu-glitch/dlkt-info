@@ -3,6 +3,14 @@ import { cardLink } from './shared-card-link.js';
 import { uniqueFollowStories } from './follow-stories.js';
 import { sourceLanguage } from './news-sources.js';
 import { nextCategoryFollowDelay, selectCategoryFollowReturn } from './category-follow.js';
+function relatedLabel(followed, removing = false) {
+    const ro = getLocale() === 'ro';
+    return removing ? (ro ? 'Nu mai urmari stiri conexe' : 'Unfollow related coverage') : followed ? (ro ? 'Urmaresti stiri conexe' : 'Following related coverage') : (ro ? 'Urmareste stiri conexe' : 'Follow related coverage');
+}
+function relatedScope(category) {
+    const filter = translatedCategory(category);
+    return getLocale() === 'ro' ? `Filtru asociat: ${filter}. Actiunea urmareste stiri conexe prin filtrul existent, nu toate articolele categoriei afisate.` : `Associated filter: ${filter}. This follows related coverage through the existing filter, not every article in the displayed category.`;
+}
 function element(tag, className, text) {
     const node = document.createElement(tag);
     node.className = className;
@@ -61,7 +69,7 @@ export class CategoryFollowing {
     }
     nextDelay(now) { return nextCategoryFollowDelay(this.state, this.options.snapshot(), now); }
     follows(category) { return this.state?.entries.some(entry => entry.category === category) ?? false; }
-    async toggle(category, desired) {
+    async toggle(category, desired, presentation = 'category') {
         if (this.options.busy() || !this.loaded)
             return;
         if (this.invalid) {
@@ -75,7 +83,7 @@ export class CategoryFollowing {
         }
         const followed = desired ?? !this.follows(category), expected = this.state?.revision ?? null;
         const snapshot = this.options.available() ? this.options.snapshot() : null;
-        const message = tr(followed ? 'followSaved' : 'followRemoved', { category: translatedCategory(category) });
+        const message = presentation === 'related' ? (getLocale() === 'ro' ? (followed ? 'Stirile conexe sunt urmarite in acest browser.' : 'Urmarirea stirilor conexe a fost oprita in acest browser.') : (followed ? 'Related coverage is followed in this browser.' : 'Related coverage is no longer followed in this browser.')) : tr(followed ? 'followSaved' : 'followRemoved', { category: translatedCategory(category) });
         await this.options.write(async () => { this.state = await this.options.device.setCategoryFollow(category, followed, snapshot, expected); this.readGeneration++; this.invalid = false; }, message, undefined, true);
     }
     async acknowledge(category) {
@@ -84,7 +92,7 @@ export class CategoryFollowing {
             return;
         await this.options.write(async () => { this.state = await this.options.device.acknowledgeCategoryFollow(category, snapshot, revision); this.readGeneration++; }, tr('followAcknowledged', { category: translatedCategory(category) }), undefined, true);
     }
-    attach(article, category) {
+    attach(article, category, presentation = 'category') {
         const content = article.querySelector('.card-content');
         if (!content)
             return;
@@ -92,17 +100,18 @@ export class CategoryFollowing {
         const button = element('button', 'follow-category');
         button.type = 'button';
         button.dataset.followCategory = category;
-        button.addEventListener('click', () => { void this.toggle(category); });
+        button.dataset.followPresentation = presentation;
+        button.addEventListener('click', () => { void this.toggle(category, undefined, presentation); });
         row.append(button, element('span', 'follow-scope', tr('browserOnly')));
         content.append(row);
         this.updateButton(button, category);
     }
     updateButton(button, category) {
-        const followed = this.follows(category), label = tr(followed ? 'followingCategory' : 'followCategory', { category: translatedCategory(category) });
+        const followed = this.follows(category), related = button.dataset.followPresentation === 'related', label = related ? relatedLabel(followed) : tr(followed ? 'followingCategory' : 'followCategory', { category: translatedCategory(category) });
         button.textContent = (followed ? '✓ ' : '+ ') + label;
         button.setAttribute('aria-pressed', String(followed));
-        button.setAttribute('aria-label', label);
-        button.title = tr(followed ? 'unfollowCategory' : 'followCategory', { category: translatedCategory(category) }) + ' · ' + tr('browserOnly');
+        button.setAttribute('aria-label', label + (related ? '. ' + relatedScope(category) : ''));
+        button.title = (related ? relatedLabel(followed, followed) + '. ' + relatedScope(category) : tr(followed ? 'unfollowCategory' : 'followCategory', { category: translatedCategory(category) })) + ' · ' + tr('browserOnly');
         button.disabled = this.options.busy() || !this.loaded;
     }
     render() {
