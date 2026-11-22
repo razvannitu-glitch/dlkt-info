@@ -119,7 +119,7 @@ test('manual continuation awaits its page and focuses after final placement whil
  let nodes=[old],state={loading:false,error:null,page:{nextCursor:'next'},items:[old]};
  let placements=newsMasonryPositions(nodes.map(node=>node.height),2),language='en';
  const announcement={textContent:''};
- const context={document:{visibilityState:'visible',body:{dataset:{entryView:'start'}}},innerHeight:700,newsFilter:'all',contextualCity:{id:'683506'},
+ const context={document:{visibilityState:'visible',body:{dataset:{entryView:'start'}}},innerHeight:700,newsFilter:'all',newsPeriod:'today',newsInteractionRevision:0,knowledgeModeActive:()=>false,contextualCity:{id:'683506'},
   newsContinuation:{view:()=>state,next(){
    requests++;state={...state,loading:true};return new Promise(resolve=>{finishNext=items=>{state={...state,loading:false,items};resolve();};});
   }},
