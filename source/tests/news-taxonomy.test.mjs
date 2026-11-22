@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {selectNewsStream} from '../.build/src/iceo/news-stream.js';
+import {readingCard} from '../.build/src/iceo/reader.js';
 import {NEWS_CATEGORIES,NEWS_TAXONOMY_VERSION,isNewsCategoryId,newsCategoryLabel,legacyCategoryToNewsCategory,classifyNewsSubject,classifyEvidenceCard,classifyLocalCard,newsCategory} from '../.build/src/iceo/news-taxonomy.js';
 
 const evidence=(title,overrides={})=>({title,sourceUrl:'https://www.theguardian.com/world/2026/nov/22/reported-story',sourceIds:['news-unclassified'],topic:'other',...overrides});
@@ -141,4 +143,113 @@ test('identifier-style publisher URLs never turn the preceding article slug into
  ])assert.equal(classifyNewsSubject('An unexpected outcome',url),null,url);
  const health=classifyNewsSubject('An unexpected outcome','https://www.thehindu.com/sci-tech/health/a-reported-story/article12345678.ece');
  assert.equal(health.category,'07000000');assert.equal(health.basis,'publisher-section');
+});
+
+test('markets, crypto, insurance and commercial sectors use economy without creating new categories',()=>{
+ for(const [title,expected] of [
+  ['S&P500 closes at a record high','04000000'],
+  ['S & P 500 posts a weekly gain','04000000'],
+  ['Nasdaq rises as Bitcoin drops','04000000'],
+  ['Ethereum and cryptocurrency trading accelerate','04000000'],
+  ['Criptomonedele cresc la Bursa de valori','04000000'],
+  ['Insurance premiums rise for motorists','04000000'],
+  ['Asiguratorii prezinta noi polite de asigurari','04000000'],
+  ['Manufacturing output expands across the region','04000000'],
+  ['Automotive industry opens a new factory','04000000'],
+  ['Freight operators expand logistics capacity','04000000'],
+  ['Oportunitati de afaceri pentru firmele mici','04000000'],
+  ['Startup funding creates new business opportunities','04000000'],
+  ['Health insurance expands access to treatment','07000000'],
+  ['Health insurance company quarterly earnings rise','04000000'],
+  ['Students receive a new scholarship','05000000'],
+ ])assert.equal(category(title),expected,title);
+});
+
+test('Hollywood personal stories, entertainment, employment and development retain distinct subjects',()=>{
+ for(const [title,expected] of [
+  ['Hollywood gossip focuses on a celebrity wedding','08000000'],
+  ['Actorii anunta o nunta dupa logodna','08000000'],
+  ['Hollywood prepares a new film premiere','01000000'],
+  ['Entertainment festival announces its programme','01000000'],
+  ['Software companies announce layoffs','09000000'],
+  ['Workers strike at a crypto exchange over wages','09000000'],
+  ['Crypto company announces layoffs','09000000'],
+  ['Hiring rises for information technology specialists','09000000'],
+  ['Companiile anunta locuri de munca si posturi vacante','09000000'],
+  ['JavaScript introduces a new web development tool','13000000'],
+  ['Limbaje de programare pentru dezvoltare web','13000000'],
+  ['Cybersecurity researchers publish a new defence','13000000'],
+ ])assert.equal(category(title),expected,title);
+});
+
+test('leisure, pets, nature, science and transport incidents use the reported subject',()=>{
+ for(const [title,expected] of [
+  ['Gardening tips for a weekend hobby','10000000'],
+  ['Gradinarit si ingrijirea plantelor in gradina','10000000'],
+  ['Birdwatching becomes a popular hobby','10000000'],
+  ['Pet care and dog training improve daily routines','06000000'],
+  ['Pet care becomes a weekend hobby','10000000'],
+  ['Animale de companie: ingrijirea cainilor','06000000'],
+  ['Veterinary treatment protects pets','07000000'],
+  ['Wildlife conservation protects endangered species','06000000'],
+  ['Conservarea naturii protejeaza specii pe cale de disparitie','06000000'],
+  ['Cercetatori descopera noi galaxii in cosmos','13000000'],
+  ['New telescope observes a distant exoplanet','13000000'],
+  ['Vacante in noi destinatii turistice','10000000'],
+  ['Classic cars attract car enthusiasts','10000000'],
+  ['Motorcycle review explores a new touring model','10000000'],
+  ['MotoGP championship announces the final result','15000000'],
+  ['Football club wins the championship','15000000'],
+  ['Car crash closes a busy road','03000000'],
+  ['Train derailment disrupts freight services','03000000'],
+  ['Coliziune rutiera: accidentul rutier blocheaza traficul','03000000'],
+  ['Police investigate a robbery','02000000'],
+  ['Bitcoin crash sparks investor concern','04000000'],
+  ['Software crash prompts an urgent update','13000000'],
+ ])assert.equal(category(title),expected,title);
+});
+
+test('adult-sector reporting distinguishes business, government regulation and court action',()=>{
+ for(const [title,expected] of [
+  ['Adult entertainment industry expands internationally','04000000'],
+  ['Porn industry reports commercial expansion','04000000'],
+  ['Pornography industry faces new regulations','11000000'],
+  ['Noi reglementari pentru industria pornografica','11000000'],
+  ['Adult-content platforms announce new business models','04000000'],
+  ['Industria pentru adulti prezinta noi rezultate financiare','04000000'],
+  ['Regulators introduce new laws for adult websites','11000000'],
+  ['Noi reglementari pentru industria pentru adulti','11000000'],
+  ['Court rules on adult industry licensing','02000000'],
+  ['Adult entertainment companies announce layoffs','09000000'],
+  ['Adult education opens new courses','05000000'],
+  ['Entertainment festival opens to adults','01000000'],
+ ])assert.equal(category(title),expected,title);
+});
+
+test('new section hints remain exact subject segments and do not classify words in a final article slug',()=>{
+ for(const [section,expected] of [
+  ['crypto','04000000'],['insurance','04000000'],['jobs','09000000'],['gossip','08000000'],
+  ['gardening','10000000'],['pets','06000000'],['software-development','13000000'],['motogp','15000000'],
+ ]){
+  const sourceUrl='https://www.theguardian.com/'+section+'/2026/nov/22/reported-story';
+  const classified=classifyNewsSubject('An unexpected outcome',sourceUrl);
+  assert.equal(classified?.category,expected,section);assert.equal(classified?.basis,'publisher-section');
+  assert.equal(category('An unexpected outcome','https://www.theguardian.com/world/2026/nov/22/'+section),null,section+' slug');
+  assert.equal(category('An unexpected outcome','https://www.dw.com/ro/'+section+'/a-12345678'),null,section+' DW slug');
+ }
+ assert.equal(category('An unexpected outcome','https://www.theguardian.com/development/reported-story'),null,'development alone is not software evidence');
+});
+
+test('unknown original news stays available in Other topics with all source fields intact',()=>{
+ const now=Date.parse('2026-11-22T12:00:00.000Z');
+ const original=Object.freeze(evidence('An unexpected outcome',{
+  id:'1'.repeat(24),identity:'controlled:unknown-news',kind:'publication',date:new Date(now-1000).toISOString(),dateLabel:'Published',
+  observedAt:new Date(now).toISOString(),contentHash:'2'.repeat(64),publisher:'The Guardian',sourceState:'verified',
+  boundary:'Controlled original news fixture.',attribution:'Source: The Guardian.',deadline:null,version:null,
+ }));
+ const before=JSON.stringify(original),view={...readingCard(original,now),reason:'Controlled source.',localMatch:false,grouping:'single'};
+ assert.equal(newsCategory(original),null);
+ const stream=selectNewsStream({first:[view],more:[]},[],now,'other');
+ assert.equal(stream.total,1);assert.equal(stream.filtered.length,1);assert.equal(stream.counts.other,1);
+ assert.strictEqual(stream.filtered[0].view.card,original);assert.equal(JSON.stringify(original),before);
 });

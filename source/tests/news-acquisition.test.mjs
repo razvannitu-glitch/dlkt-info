@@ -175,6 +175,15 @@ test('Digi24 joins only its bound Article local date with the same explicit head
   const canonicalTag='<link rel="canonical" href="'+row.sourceUrl+'">';
   assert.equal(readNewsArticleMetadata(document().replace(canonicalTag,''),row,row.sourceUrl,metadataNow),null,'an inferred final URL does not replace explicit canonical evidence for this fallback');
   assert.equal(readNewsArticleMetadata(document().replace(canonicalTag,'').replace('<body>','<body>'+canonicalTag),row,row.sourceUrl,metadataNow),null,'body markup cannot bind the publication date');
+  const splitCanonical=document().replace(canonicalTag,'<link rel="canonical">').replace('<body>','<body>'+canonicalTag);
+  assert.equal(readNewsArticleMetadata(splitCanonical,row,row.sourceUrl,metadataNow),null,'a head placeholder and a separate body href cannot jointly satisfy the canonical binding');
+  const emptyHeadHref=document().replace(canonicalTag,'<link rel="canonical" href="">').replace('<body>','<body>'+canonicalTag);
+  assert.equal(readNewsArticleMetadata(emptyHeadHref,row,row.sourceUrl,metadataNow),null,'an empty head href is not canonical evidence');
+  const nestedHead=document().replace('<html><head>','<html><body><head>').replace('</head><body>','</head>');
+  assert.equal(readNewsArticleMetadata(nestedHead,row,row.sourceUrl,metadataNow),null,'a head element nested under body is not the document head');
+  const dateTag='<meta name="publish-date" content="'+explicit+'">';
+  const nestedDate=document().replace(dateTag,'').replace('<body>','<body><head>'+dateTag+'</head>');
+  assert.equal(readNewsArticleMetadata(nestedDate,row,row.sourceUrl,metadataNow),null,'nested body head metadata cannot supply the publication timestamp');
   const conflict='<script type="application/ld+json">'+JSON.stringify({'@type':'NewsArticle',url:row.sourceUrl,headline:row.title,datePublished:'2026-11-22 19:36:37'})+'</script>';
   assert.equal(readNewsArticleMetadata(document({extra:conflict}),row,row.sourceUrl,metadataNow),null,'contradictory local publication declarations remain rejected');
   const other={...row,publisher:'HotNews.ro',sourceUrl:'https://hotnews.ro/controlled-source-123'};

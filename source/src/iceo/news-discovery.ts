@@ -241,13 +241,22 @@ export function readNewsArticleMetadata(html:string,candidate:NewsCandidate,fina
     const raw=html.slice(node.startIndex,node.endIndex+1);return script?/<\/script\s*>$/iu.test(raw):raw.endsWith('>');
   };
   const meta=DomUtils.getElementsByTagName('meta',document,true).filter(node=>completeTag(node)),links=DomUtils.getElementsByTagName('link',document,true).filter(node=>completeTag(node));
-  const inHead=(node:typeof meta[number]):boolean=>{let parent=node.parent;while(parent){if(parent.type==='tag'&&parent.name==='head')return true;parent=parent.parent;}return false;};
+  const inHead=(node:typeof meta[number]):boolean=>{
+    const head=node.parent,html=head?.parent;
+    return head?.type==='tag'&&head.name==='head'&&html?.type==='tag'&&html.name==='html'&&html.parent?.type==='root';
+  };
   let canonical=canonicalNewsUrl(finalUrl);if(!canonical)return null;
   const canonicalLinks=links.filter(node=>(node.attribs.rel??'').toLowerCase().split(/\s+/u).includes('canonical')).map(node=>node.attribs.href).filter((value):value is string=>typeof value==='string');
   if(canonicalLinks.length>1&&new Set(canonicalLinks).size>1)return null;
   if(canonicalLinks[0]){
     try{const declared=canonicalNewsUrl(new URL(canonicalLinks[0],finalUrl).href);if(!declared||publisherForNewsUrl(declared)?.id!==publisher.id)return null;canonical=declared;}catch{return null;}
   }
+  const canonicalInHead=links.some(node=>{
+    const href=node.attribs.href;
+    if(!inHead(node)||!(node.attribs.rel??'').toLowerCase().split(/\s+/u).includes('canonical')
+      ||typeof href!=='string'||href.length===0||/[\u0000-\u0020\u007f<>\\]/u.test(href))return false;
+    try{return canonicalNewsUrl(new URL(href,finalUrl).href)===canonical;}catch{return false;}
+  });
   const titles:string[]=[],dates:string[]=[],boundAlternativeTitles:string[]=[];
   const digi24Bindings:{readonly headline:string;readonly localDate:string}[]=[];
   const titleKey=(value:string):string=>value.normalize('NFKC').toLowerCase(),candidateTitle=titleText(candidate.title);
@@ -279,7 +288,7 @@ export function readNewsArticleMetadata(html:string,candidate:NewsCandidate,fina
       // publishes its explicit offset separately in head meta[name=publish-date].
       // Keep the two declarations bound; never infer a timezone from the publisher.
       if(same&&explicitBinding&&publisher.id==='digi24'&&canonicalLinks.length===1
-        &&links.some(node=>inHead(node)&&(node.attribs.rel??'').toLowerCase().split(/\s+/u).includes('canonical'))&&canonicalNewsUrl(candidate.sourceUrl)===canonical
+        &&canonicalInHead&&canonicalNewsUrl(candidate.sourceUrl)===canonical
         &&typeof value.datePublished==='string'&&/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/u.test(value.datePublished)){
         const headline=titleText(value.headline);
         if(headline&&matchingNewsHeadline(candidate.title,headline,publisher.label,'ro'))digi24Bindings.push({headline,localDate:value.datePublished});
