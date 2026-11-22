@@ -4,7 +4,12 @@ import {NEWS_WINDOW_MS,NEWS_CHECK_MS} from '../local/news-policy.js';
 
 interface ReadingEdition {readonly local:readonly LocalCard[];readonly pending:number;readonly seed:string;readonly expiresAt:number|null}
 function localSignature(card:LocalCard):string {
-  return JSON.stringify([card.id,card.sourceUrl,card.news?.id,card.news?.documentHash]);
+  const news=card.news;
+  // The RSS document hash changes when any article changes; it is check evidence, not this article's wording.
+  return JSON.stringify([card.id,card.sourceUrl,card.title,card.text,card.publisher,
+    news?.id,news?.url,news?.documentUrl,news?.sourceId,news?.cityId,news?.title,news?.summary??null,
+    news?.publishedAt,news?.publisher,news?.topic,news?.byline??null,news?.licenseUrl??null,
+    news?.geographyBasis,news?.geoAnchors,news?.attribution]);
 }
 function current(card:LocalCard,now:number):boolean {
   const checked=Date.parse(card.checkedAt),published=Date.parse(card.news?.publishedAt??'');

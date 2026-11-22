@@ -43,7 +43,7 @@ test('rechecks, category changes and pagination retain the adopted seed and exac
  const today={first:[view(global(100,'ro'))],more:[]},original=selectHomeLanguage(localSnapshot(2),city,now,'ro').cards,state=new NewsReadingState();
  const before=JSON.stringify(original),first=state.present(today,original,'ro','ro',now);
  assert.strictEqual(first.local[0],original[0]);
- const fresh=original.map(card=>newsCard({...card.news,checkedAt:new Date(now+299000).toISOString(),validUntil:new Date(now+599000).toISOString()},city));
+ const fresh=original.map(card=>newsCard({...card.news,documentHash:'e'.repeat(64),checkedAt:new Date(now+299000).toISOString(),validUntil:new Date(now+599000).toISOString()},city));
  const rechecked=state.present({...today,first:today.first.map(item=>({...item,card:{...item.card,observedAt:new Date(now+299000).toISOString()}}))},fresh,'ro','ro',now+299000);
  assert.equal(rechecked.seed,first.seed);assert.equal(rechecked.pending,0);assert.strictEqual(rechecked.local[0],fresh[0]);
  const retained=state.present(today,[],'ro','ro',now+300100);assert.equal(retained.local.length,2);assert.equal(retained.seed,first.seed);
@@ -102,4 +102,15 @@ test('a first global response arriving after visible local news stays staged unt
  const accepted=live.present(candidate,'ro',now+1000,true,state.hasVisibleLocal(now+1000));
  const updated=state.present(accepted.selection,local,'ro','ro',now+1000,true);
  assert.equal(selectNewsStream(accepted.selection,updated.local,now+1000,'all',updated.seed).total,4);assert.equal(accepted.changes.total,0);
+});
+
+test('a changed RSS hash refreshes unchanged originals and stages only the added article',()=>{
+ const empty={first:[],more:[]},first=selectHomeLanguage(localSnapshot(1),city,now,'ro').cards;
+ const incoming=selectHomeLanguage(localSnapshot(2),city,now,'ro').cards.map(card=>newsCard({...card.news,checkedAt:new Date(now+299000).toISOString(),validUntil:new Date(now+599000).toISOString()},city));
+ const same=incoming.find(card=>card.id===first[0].id);assert.ok(same);assert.notEqual(same.news.documentHash,first[0].news.documentHash);
+ assert.equal(same.title,first[0].title);assert.equal(same.sourceUrl,first[0].sourceUrl);
+ const state=new NewsReadingState(),initial=state.present(empty,first,'ro','ro',now),updated=state.present(empty,incoming,'ro','ro',now+299000);
+ assert.equal(updated.local.length,1);assert.strictEqual(updated.local[0],same);assert.equal(updated.pending,1);assert.equal(updated.seed,initial.seed);
+ const retained=state.present(empty,incoming,'ro','ro',now+300100);
+ assert.strictEqual(retained.local[0],same);assert.equal(retained.pending,1);assert.equal(retained.expiresAt,now+599000);
 });
