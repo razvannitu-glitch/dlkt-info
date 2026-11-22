@@ -45,7 +45,12 @@ export function applyInterfaceLanguage(root = document) {
     }
     for (const item of root.querySelectorAll('[data-i18n]')) {
         const key = item.dataset.i18n;
-        if (key)
+        if (key === 'photoArchiveLabel') {
+            const year = item.dataset.i18nYear;
+            if (year && /^(?:19|20)\d{2}$/u.test(year))
+                item.textContent = translate(key, { year });
+        }
+        else if (key)
             item.textContent = translate(key);
     }
     for (const item of root.querySelectorAll('[data-i18n-label]')) {

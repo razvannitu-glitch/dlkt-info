@@ -2,6 +2,8 @@ import type {ArticleContext,EvidenceCard} from '../iceo/contracts.js';
 import {validContextForCard} from '../iceo/context.js';
 import {REVIEWED_PHOTOS} from './reviewed-photos.js';
 import {CONTEXT_PHOTOS,type ContextPhoto,type ContextPhotoSubject} from './context-photos.js';
+import {EDITORIAL_PHOTOS,type EditorialPhoto,type EditorialPhotoMotif} from './editorial-photos.js';
+import {editorialCategory,type PublicEditorialCategory} from '../iceo/editorial-categories.js';
 
 export interface ReviewedPhoto {
  readonly key:string;readonly cardId:string;readonly identity:string;readonly sourceUrl:string;
@@ -72,6 +74,7 @@ export function usableContextPhoto(photo:ContextPhoto,now:number):boolean {
 export interface ContextPhotoInput {
  readonly title:string;readonly sourceUrl?:string;
  readonly topic?:EvidenceCard['topic'];readonly sourceIds?:readonly string[];
+ readonly editorialCategory?:PublicEditorialCategory|null;
 }
 const folded=(value:string):string=>value.normalize('NFKD').replace(/\p{M}/gu,'').toLowerCase();
 function articleUrl(value:string|undefined):URL|null {
@@ -203,7 +206,39 @@ export function contextPhotoFor(card:ContextPhotoInput,now=Date.now(),photos:rea
  }
  return selected;
 }
-/** Exact reviewed article photograph first; explicitly labelled topic context otherwise. */
-export function displayPhotoFor(card:EvidenceCard,now=Date.now()):ReviewedPhoto|ContextPhoto|null {
- return photoFor(card,now)??contextPhotoFor(card,now);
+/** Editorial illustrations have their own finite rights review, separate from subject evidence. */
+export function usableEditorialPhoto(photo:EditorialPhoto,now:number):boolean {
+ return Number.isFinite(now)&&Number.isFinite(Date.parse(photo.reviewedAt))&&Number.isFinite(Date.parse(photo.reviewBy))
+  &&Date.parse(photo.reviewedAt)<=now&&now<=Date.parse(photo.reviewBy)
+  &&photo.kind==='editorial'&&['reading','world','digital-reading'].includes(photo.motif)&&photo.mimeType==='image/jpeg'
+  &&/^[a-f0-9]{64}$/u.test(photo.sha256)&&photo.path===`/card-media/${photo.sha256.slice(0,16)}.jpg`
+  &&Number.isSafeInteger(photo.bytes)&&photo.bytes>1000&&photo.bytes<=260000
+  &&Number.isSafeInteger(photo.width)&&photo.width>=640&&photo.width<=1000&&Number.isSafeInteger(photo.height)&&photo.height>=300&&photo.height<=1000
+  &&photo.alt.startsWith('Illustrative photograph: ')&&photo.alt.endsWith('Not the reported event.')&&photo.alt.length<=300
+  &&photo.caption.startsWith('Illustrative photograph: ')&&photo.caption.length<=300
+  &&photo.credit.length>0&&photo.credit.length<=200&&photo.changeNote.length>0&&photo.changeNote.length<=200
+  &&commonsUrl(photo.assetUrl,true)&&commonsUrl(photo.creditUrl)&&photo.sourceUrl===photo.creditUrl
+  &&photo.license==='CC0'&&photo.licenseUrl==='https://creativecommons.org/publicdomain/zero/1.0/'&&photo.fit==='contain';
+}
+function editorialMotif(card:ContextPhotoInput):EditorialPhotoMotif|null {
+ const category=card.editorialCategory??(card.topic!==undefined&&card.sourceIds!==undefined?editorialCategory({title:card.title,topic:card.topic,sourceIds:card.sourceIds}):null);
+ if(category===null)return null;
+ if(['world','public-affairs','environment','weather','travel','housing'].includes(category))return 'world';
+ if(['technology','digital-life','business','money','work','gaming'].includes(category))return 'digital-reading';
+ return 'reading';
+}
+/** General editorial representation only: no place, person or event inference and no card mutation. */
+export function editorialPhotoFor(card:ContextPhotoInput,now=Date.now(),photos:readonly EditorialPhoto[]=EDITORIAL_PHOTOS):EditorialPhoto|null {
+ const usable=photos.filter(photo=>usableEditorialPhoto(photo,now));if(usable.length===0)return null;
+ const motif=editorialMotif(card),matching=usable.filter(photo=>photo.motif===motif),eligible=matching.length?matching:usable;
+ const identity=photoIdentity(card);let selected:EditorialPhoto|null=null,score=-1;
+ for(const photo of eligible){
+  const candidateScore=selectionScore(`${identity}\n${photo.key}`);
+  if(candidateScore>score||candidateScore===score&&selected!==null&&photo.key<selected.key){selected=photo;score=candidateScore;}
+ }
+ return selected;
+}
+/** Exact source photograph, strict subject context, then clearly marked neutral editorial imagery. */
+export function displayPhotoFor(card:EvidenceCard,now=Date.now()):ReviewedPhoto|ContextPhoto|EditorialPhoto|null {
+ return photoFor(card,now)??contextPhotoFor(card,now)??editorialPhotoFor(card,now);
 }

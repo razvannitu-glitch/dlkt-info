@@ -1,4 +1,22 @@
 import {localCardLabel,type City,type LocalCard,type LocalDomain,type LocalSnapshot} from './contracts.js';
+import type {PublicEditorialCategory} from '../iceo/editorial-categories.js';
+import type {NewsTopic} from './news-policy.js';
+
+const LOCAL_NEWS_CATEGORIES:Readonly<Record<NewsTopic,PublicEditorialCategory>>={
+ transport:'travel',education:'education',city:'housing',utilities:'housing',safety:'public-affairs',
+ culture:'culture',events:'culture',economy:'business',environment:'environment',
+};
+/** Presentation color follows the existing validated local kind/topic, never inferred article geography. */
+export function localCardCategory(card:LocalCard):PublicEditorialCategory {
+ if(card.news)return LOCAL_NEWS_CATEGORIES[card.news.topic];
+ switch(card.kind){
+  case'forecast':return 'weather';
+  case'transport':case'transport-notice':return 'travel';
+  case'utility-notice':return 'housing';
+  case'event':return 'culture';
+  default:return 'public-affairs';
+ }
+}
 
 /** Unknown event dates remain publisher listings, never today recommendations. */
 export function localDiscoveryLabel(cards:readonly LocalCard[]):string {

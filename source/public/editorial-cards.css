@@ -1,4 +1,4 @@
-/* The approved editorial card treatment. All ink derives from the DLKT palette. */
+/* Editorial card geometry. Reader themes supply the final opaque topic surfaces. */
 :is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card{
  --card-bg:var(--white);--card-ink:var(--black);--card-title:var(--black);
  --card-muted:var(--muted);--card-rule:var(--line);--card-action:var(--black);
@@ -51,12 +51,13 @@
 .info-card.editorial-card .evidence .contextual-reason{margin:12px 0}
 .info-card.editorial-card .evidence .card-guide{border:0;padding:0;margin:12px 0}
 .card-photo-label{
- position:absolute;top:14px;right:14px;padding:6px 9px;z-index:2;
+ position:absolute;inset-block-start:14px;inset-inline-end:14px;padding:6px 9px;z-index:2;
  color:var(--white);background:color-mix(in srgb,var(--black) 92%,transparent);
  border-radius:5px;font-size:.75rem;line-height:1.35;max-width:calc(48% - 20px);
 }
 .card-photo-frame{position:relative}
 .card-photo-caption .card-photo-credit{display:inline;line-height:1.6}
+.card-photo .card-photo-note{font-size:.75rem;line-height:1.6;margin:5px 0 0;color:inherit}
 .card-photo-caption .photo-details{margin-top:4px}
 .card-photo-caption .photo-details summary{font-size:.8125rem;min-height:36px}
 .card-photo-caption .photo-details p{font-size:.875rem;line-height:1.6}
@@ -66,7 +67,7 @@
 .photo-editorial .card-photo-frame img{height:100%;width:100%;object-fit:cover}
 .photo-editorial.photo-contain .card-photo-frame img{object-fit:contain}
 .photo-editorial .card-photo-overline{
- position:absolute;top:14px;left:16px;z-index:3;display:flex;align-items:start;
+ position:absolute;inset-block-start:14px;inset-inline-start:16px;z-index:3;display:flex;align-items:start;
  max-width:calc(52% - 20px);padding:0;font-size:.8125rem;line-height:1.4;
 }
 .photo-editorial .card-topic{
@@ -75,20 +76,17 @@
 }
 .photo-editorial .card-topic:before{display:none}
 .photo-editorial .card-photo-headline{
- position:relative;z-index:1;padding:0 22px 22px;margin-top:-48px;
+ position:relative;z-index:1;padding:20px 22px 22px;margin-top:0;
  background:color-mix(in srgb,var(--black) 86%,transparent);color:var(--white);
 }
-.photo-editorial .card-photo-headline:before{
- content:"";position:absolute;left:0;right:0;bottom:100%;height:70px;z-index:-1;pointer-events:none;
- background:linear-gradient(to top,color-mix(in srgb,var(--black) 86%,transparent),transparent);
-}
+/* Headline panels follow the complete photo; neither text nor a fade hides its content. */
+.photo-editorial .card-photo-headline:before{display:none}
 :is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card .card-photo-headline h3{
  color:var(--white);margin:0;font-size:clamp(1.5rem,2.6vw,1.8rem);line-height:1.16;
 }
 :is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card .card-photo-headline a{color:var(--white)}
 :is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card .card-photo-headline a:focus-visible{outline-color:var(--white)}
-.photo-editorial.photo-title-long .card-photo-headline{margin-top:-24px;background:var(--black)}
-.photo-editorial.photo-title-long .card-photo-headline:before{background:linear-gradient(to top,var(--black),transparent)}
+.photo-editorial.photo-title-long .card-photo-headline{margin-top:0;background:var(--black)}
 .info-card.editorial-card .card-photo-caption{
  padding:10px 22px 0;font-size:.75rem;line-height:1.6;color:var(--muted);background:var(--white);
 }
@@ -114,15 +112,15 @@
 @media(max-width:600px){
  .info-card.editorial-card>header{padding:19px 18px 0}
  .info-card.editorial-card .card-content{padding:16px 18px 18px}
- .photo-editorial .card-photo-headline{padding:0 18px 21px}
+ .photo-editorial .card-photo-headline{padding:18px 18px 21px}
  .info-card.editorial-card .card-photo-caption{padding:9px 18px 0}
  .info-card.editorial-card .evidence{padding:0 18px}
  .photo-editorial.photo-unavailable .card-photo-overline{padding:19px 18px 0}
  .photo-editorial.photo-unavailable .card-photo-headline{padding:17px 18px 0}
 }
 @media(max-width:350px){
- .photo-editorial .card-photo-overline{left:12px;max-width:calc(52% - 18px);font-size:.75rem}
- .card-photo-label{right:12px;font-size:.6875rem;max-width:calc(48% - 18px)}
+ .photo-editorial .card-photo-overline{inset-inline-start:12px;max-width:calc(52% - 18px);font-size:.75rem}
+ .card-photo-label{inset-inline-end:12px;font-size:.6875rem;max-width:calc(48% - 18px)}
  .info-card.editorial-card .card-actions{gap:6px!important}
  .info-card.editorial-card .card-actions>.source-link{font-size:.8125rem;padding-left:8px;padding-right:8px}
 }

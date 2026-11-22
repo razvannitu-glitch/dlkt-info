@@ -15,8 +15,8 @@ test('the shipped catalog identifies all30 locales and four RTL interfaces witho
   for(const value of LOCALES){assert.ok(Object.isFrozen(value));assert.ok(value.nativeName.trim());assert.equal(Intl.getCanonicalLocales(value.code)[0],value.code);}
 });
 
-test('all30 dictionaries contain exactly116 messages and20 categories with identical placeholder contracts',()=>{
-  assert.equal(MESSAGE_KEYS.length,116);assert.equal(new Set(MESSAGE_KEYS).size,116);
+test('all30 dictionaries contain exactly125 messages and20 categories with identical placeholder contracts',()=>{
+  assert.equal(MESSAGE_KEYS.length,125);assert.equal(new Set(MESSAGE_KEYS).size,125);
   assert.equal(PUBLIC_EDITORIAL_CATEGORIES.length,20);
   assert.deepEqual(Object.keys(MESSAGES),expected);assert.deepEqual(Object.keys(CATEGORY_LABELS),expected);
   for(const locale of expected){
@@ -35,7 +35,7 @@ test('all30 dictionaries contain exactly116 messages and20 categories with ident
 
 test('non-English locales supply their own reading, lookup and coverage copy instead of silent English inheritance',()=>{
   for(const locale of expected.filter(value=>value!=='en')){
-    for(const key of ['navToday','lookupError','coverage','openSource','originalContentNote','followExcludedConflicts','storyReports','storyReportsNote','storyCoverageAdded']){
+    for(const key of ['navToday','lookupError','coverage','openSource','originalContentNote','followExcludedConflicts','storyReports','storyReportsNote','storyCoverageAdded','photoDetailsLabel','photoEditorialLabel','photoEditorialNote','photoContextNote']){
       assert.notEqual(MESSAGES[locale][key],MESSAGES.en[key],locale+':'+key);
     }
   }

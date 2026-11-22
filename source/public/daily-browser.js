@@ -1,10 +1,11 @@
 import { translate as tr } from './i18n-browser.js';
 import { sourceLanguage } from './news-sources.js';
 import { contextForCard } from './context.js';
-import { photoNode } from './card-photo-browser.js';
+import { photoNode, contextPhotoNode } from './card-photo-browser.js';
+import { editorialCategory as categoryForCard } from './editorial-categories.js';
 import { cardGuideNode } from './card-guide.js';
 import { cardCreditsNode } from './credits.js';
-import { localReading } from './local-presentation.js';
+import { localReading, localCardCategory } from './local-presentation.js';
 import { sharedTopic } from './shared-card-link.js';
 import { addCardSharing } from './shared-card-actions.js';
 import { planDailyReading, changeExplanation, nextReadingBoundary } from './daily-reading.js';
@@ -143,12 +144,16 @@ function renderItem(item) {
     a.dataset.dailyId = item.id;
     if (item.topic?.storyKey)
         a.dataset.storyKey = item.topic.storyKey;
+    const category = item.topic ? categoryForCard(item.topic.card) : item.local ? localCardCategory(item.local) : null;
+    if (category)
+        a.dataset.editorialCategory = category;
     const head = make('header');
     head.append(make('span', item.local ? localCardLabel(item.local) : item.topic?.label ?? 'Selected source', 'card-topic'));
+    const headline = item.local?.kind === 'forecast' && city ? `Weather in ${city.name}` : item.local?.title ?? item.topic?.heading ?? '';
     const body = make('div', '', 'card-content');
     if (item.topic)
         body.append(make('p', item.reason, 'card-kind'));
-    body.append(make('h3', item.local?.kind === 'forecast' && city ? `Weather in ${city.name}` : item.local?.title ?? item.topic?.heading ?? ''));
+    body.append(make('h3', headline));
     const details = make('details', '', 'evidence');
     details.append(make('summary', 'Source and details'));
     let source = null;
@@ -274,11 +279,9 @@ function renderItem(item) {
     }
     body.append(actions);
     a.append(head);
-    if (item.topic) {
-        const photograph = photoNode(item.topic.card);
-        if (photograph)
-            a.append(photograph);
-    }
+    const photograph = item.topic ? photoNode(item.topic.card) : item.local ? contextPhotoNode({ title: headline, sourceUrl: item.local.sourceUrl, ...(category ? { editorialCategory: category } : {}) }) : null;
+    if (photograph)
+        a.append(photograph);
     a.append(body, details);
     if (item.topic)
         attachInsight(a, item.topic.card);

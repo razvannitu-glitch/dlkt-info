@@ -1,5 +1,6 @@
 import {PUBLIC_EDITORIAL_CATEGORIES,type PublicEditorialCategory} from '../iceo/editorial-categories.js';
 import {READING_MESSAGE_KEYS,READING_ROWS} from './reading-messages.js';
+import {MEDIA_MESSAGE_KEYS,MEDIA_ROWS} from './media-messages.js';
 
 const definitions=[
   {code:'en',nativeName:'English',direction:'ltr'},{code:'ro',nativeName:'Română',direction:'ltr'},
@@ -29,6 +30,7 @@ export const MESSAGE_KEYS=[
   'todayLocalTitle','dailyBriefTitle','loadMore','sourceEdition','readInOriginal',
   'switchToDarkMode','switchToLightMode',
   ...READING_MESSAGE_KEYS,
+  ...MEDIA_MESSAGE_KEYS,
 ] as const;
 export type MessageKey=typeof MESSAGE_KEYS[number];
 export type Messages=Readonly<Record<MessageKey,string>>;
@@ -292,9 +294,9 @@ export function messageParameters(value:string):readonly string[] {
   return Object.freeze([...value.matchAll(/\{([a-z][a-zA-Z]*)\}/gu)].map(match=>match[1]??'').sort());
 }
 function buildMessages():Readonly<Record<Locale,Messages>> {
-  const result={} as Record<Locale,Messages>,reference=[...rows.en.split('|'),...extraRows.en.split('|'),...appearanceRows.en,...READING_ROWS.en.split('|')];
+  const result={} as Record<Locale,Messages>,reference=[...rows.en.split('|'),...extraRows.en.split('|'),...appearanceRows.en,...READING_ROWS.en.split('|'),...MEDIA_ROWS.en.split('|')];
   for(const {code} of LOCALES){
-    const values=[...rows[code].split('|'),...extraRows[code].split('|'),...appearanceRows[code],...READING_ROWS[code].split('|')];
+    const values=[...rows[code].split('|'),...extraRows[code].split('|'),...appearanceRows[code],...READING_ROWS[code].split('|'),...MEDIA_ROWS[code].split('|')];
     if(values.length!==MESSAGE_KEYS.length||values.some(value=>!value.trim()))throw Error('I18N_MESSAGE_COUNT:'+code);
     for(const [index,value] of values.entries()){
       if(JSON.stringify(messageParameters(value))!==JSON.stringify(messageParameters(reference[index]??'')))throw Error('I18N_PLACEHOLDERS:'+code+':'+MESSAGE_KEYS[index]);

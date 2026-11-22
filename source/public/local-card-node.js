@@ -1,5 +1,5 @@
 import { localCardLabel } from './local-contracts.js';
-import { localReading } from './local-presentation.js';
+import { localReading, localCardCategory } from './local-presentation.js';
 import { localEventCalendar } from './local-event-calendar.js';
 import { weatherMotionNode } from './glance-weather-motion.js';
 import { contextPhotoNode } from './card-photo-browser.js';
@@ -108,13 +108,12 @@ export function localCardNode(card, c, now = Date.now()) {
         license.rel = 'noopener noreferrer';
         details.append(license);
     }
+    const category = localCardCategory(card);
+    a.dataset.editorialCategory = category;
     a.append(head);
-    if (card.kind !== 'forecast') {
-        const topic = card.kind === 'event' ? 'culture' : card.kind === 'transport' || card.kind === 'transport-notice' ? 'travel' : card.kind === 'utility-notice' ? 'housing' : undefined;
-        const photo = contextPhotoNode({ title: card.title, ...(topic ? { topic } : {}) }, now);
-        if (photo)
-            a.append(photo);
-    }
+    const photo = contextPhotoNode({ title: reading.title, sourceUrl: card.sourceUrl, editorialCategory: category }, now);
+    if (photo)
+        a.append(photo);
     a.append(body, details);
     return a;
 }

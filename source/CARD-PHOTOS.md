@@ -1,4 +1,16 @@
-# Selective reviewed card photographs
+# Card photographs
+
+## Current reading-card coverage — 22 November 2026
+
+Every current top-level reading card receives a photograph through a three-step presentation lookup: its exact reviewed source photograph, a strictly matched reviewed context photograph, or a separately reviewed neutral editorial photograph. The final tier has its own `kind: editorial` discriminant and visible translated illustrative label. It depicts general reading, a globe or a digital workspace; it is not evidence about the article or a photograph of its event. This explicitly supersedes the earlier no-fallback presentation decision below while retaining all exact-source and subject-matching guards.
+
+Three CC0 photographs are served from local immutable hash paths, totalling267,874bytes. Their original credits, primary Commons pages and review windows are recorded in `src/media/editorial-photos.ts`. All source/context/editorial rights checks remain finite. Media affect presentation only, without altering source identities, hashes, freshness, story grouping or saved records. Article wording remains original. Image labels and the distinction between context and event photography have explicit copy in all30 supported interface locales.
+
+Today, Explore, Saved, Daily, local information including forecasts, prepared-edition cards and public shared-card pages use the reviewed media path. Forecast animation remains separate and tied to its own verified period. Photographs use fixed dimensions, lazy loading, asynchronous decoding and same-origin URLs. When an image fails, its original title, source links and actions remain usable; no unreviewed external image is substituted. A missing or expired media review still fails closed.
+
+Reader card colors follow the existing editorial category. The photograph is fully shown with contain and its title below it in an opaque reading panel. Desktop hover is restrained, keyboard focus is visible, and movement follows reduced-motion preferences. No measured retention increase is claimed by these presentation changes.
+
+## Original exact-source implementation
 
 Finite first catalog: three source images, World and Science. Culture/other photos without reusable individual permission are excluded. Each entry binds exact card id,identity,URL,topic,publisher,source id,title,date and content hash to reviewed media. Content changes withhold the photograph until review. Core EvidenceCard hashes,comparison checkpoints,saved/imported/exported data and source ordering remain unchanged. Media rights checks are separate from publisher-text licensing.
 

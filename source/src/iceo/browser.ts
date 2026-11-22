@@ -448,7 +448,7 @@ function cardNode(view:ReadingCard,index:number,total:number,saved?:SavedCard,au
     integratePhotoHeadline(photograph,title,node.querySelector<HTMLElement>(':scope > header')??undefined);
     const photoDetails=photograph.querySelector<HTMLDetailsElement>('.photo-details');
     if(photoDetails&&evidence){
-      const photoEvidence=make('div','card-photo-evidence');photoEvidence.append(make('p','details-label','About this image'));
+      const photoEvidence=make('div','card-photo-evidence'),photoLabel=make('p','details-label',tr('photoDetailsLabel'));photoLabel.dataset.i18n='photoDetailsLabel';photoEvidence.append(photoLabel);
       for(const child of [...photoDetails.children])if(child.tagName!=='SUMMARY')photoEvidence.append(child);
       const photoCredit=photograph.querySelector('.card-photo-credit');if(photoCredit)photoEvidence.append(photoCredit.cloneNode(true));
       evidence.append(photoEvidence);photoDetails.remove();

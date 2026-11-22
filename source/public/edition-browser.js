@@ -1,4 +1,6 @@
 import { cardGuideNode } from './card-guide.js';
+import { photoNode } from './card-photo-browser.js';
+import { editorialCategory } from './editorial-categories.js';
 import { cardCreditsNode } from './credits.js';
 import { safeLink } from './card-validation.js';
 import { verifyBrowserArtifact } from './edition-artifact.js';
@@ -63,6 +65,12 @@ export function setupEdition(readSettings) {
                     const article = text('article', '', 'info-card'), inner = text('div', '', 'card-content');
                     article.dataset.editionCard = c.id;
                     article.dataset.contentState = insight.state;
+                    const category = editorialCategory(c);
+                    if (category)
+                        article.dataset.editorialCategory = category;
+                    const photograph = photoNode(c);
+                    if (photograph)
+                        article.append(photograph);
                     inner.append(text('h3', c.title));
                     const credit = cardCreditsNode(c);
                     if (credit)

@@ -1,5 +1,6 @@
 import { PUBLIC_EDITORIAL_CATEGORIES } from './editorial-categories.js';
 import { READING_MESSAGE_KEYS, READING_ROWS } from './i18n-reading-messages.js';
+import { MEDIA_MESSAGE_KEYS, MEDIA_ROWS } from './i18n-media-messages.js';
 const definitions = [
     { code: 'en', nativeName: 'English', direction: 'ltr' }, { code: 'ro', nativeName: 'Română', direction: 'ltr' },
     { code: 'fr', nativeName: 'Français', direction: 'ltr' }, { code: 'es', nativeName: 'Español', direction: 'ltr' },
@@ -26,6 +27,7 @@ export const MESSAGE_KEYS = [
     'todayLocalTitle', 'dailyBriefTitle', 'loadMore', 'sourceEdition', 'readInOriginal',
     'switchToDarkMode', 'switchToLightMode',
     ...READING_MESSAGE_KEYS,
+    ...MEDIA_MESSAGE_KEYS,
 ];
 // Three explicit groups of25 messages per locale. No inherited English entries or silent fallback.
 const rows = {
@@ -282,9 +284,9 @@ export function messageParameters(value) {
     return Object.freeze([...value.matchAll(/\{([a-z][a-zA-Z]*)\}/gu)].map(match => match[1] ?? '').sort());
 }
 function buildMessages() {
-    const result = {}, reference = [...rows.en.split('|'), ...extraRows.en.split('|'), ...appearanceRows.en, ...READING_ROWS.en.split('|')];
+    const result = {}, reference = [...rows.en.split('|'), ...extraRows.en.split('|'), ...appearanceRows.en, ...READING_ROWS.en.split('|'), ...MEDIA_ROWS.en.split('|')];
     for (const { code } of LOCALES) {
-        const values = [...rows[code].split('|'), ...extraRows[code].split('|'), ...appearanceRows[code], ...READING_ROWS[code].split('|')];
+        const values = [...rows[code].split('|'), ...extraRows[code].split('|'), ...appearanceRows[code], ...READING_ROWS[code].split('|'), ...MEDIA_ROWS[code].split('|')];
         if (values.length !== MESSAGE_KEYS.length || values.some(value => !value.trim()))
             throw Error('I18N_MESSAGE_COUNT:' + code);
         for (const [index, value] of values.entries()) {

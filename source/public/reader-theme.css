@@ -105,7 +105,7 @@ html:is([data-reader-theme=prism],[data-reader-theme=night]) .card-photo-frame{
 html:is([data-reader-theme=prism],[data-reader-theme=night]) .card-photo-label{
  background:color-mix(in srgb,var(--reader-photo-dark) 92%,transparent);color:var(--reader-photo-light);
 }
-/* Prism keeps the approved opaque lavender title panel; the image and badges stay dark. */
+/* Base Prism panel; the stable topic surfaces below refine the same reading geometry. */
 html[data-reader-theme=prism] .photo-editorial:not(.photo-unavailable) .card-photo-headline{
  background:var(--reader-panel);color:var(--reader-ink);
 }
@@ -189,4 +189,85 @@ html[data-reader-theme=night] #reader-theme-toggle [data-theme-icon=sun]{display
 @media(max-width:600px){
  html:is([data-reader-theme=prism],[data-reader-theme=night]) .reader-language-bar{gap:8px}
  html:is([data-reader-theme=prism],[data-reader-theme=night]) .reader-language{gap:8px;max-width:calc(100% - 52px)}
+}
+
+/* Topic color is stable across views and ordering; it is decoration, not a status signal.
+   Opaque reading surfaces keep normal and hovered text independent of the photograph. */
+html[data-reader-theme=prism]{
+ --reader-card-violet-surface:#F1EEFF;--reader-card-violet-accent:#5841A5;
+ --reader-card-mint-surface:#E9F7F0;--reader-card-mint-accent:#236550;
+ --reader-card-sky-surface:#EBF4FF;--reader-card-sky-accent:#245E91;
+ --reader-card-peach-surface:#FFF1E5;--reader-card-peach-accent:#89461D;
+ --reader-card-rose-surface:#FFF0F5;--reader-card-rose-accent:#983E62;
+ --reader-card-sage-surface:#F2F5E6;--reader-card-sage-accent:#50612A;
+ --reader-card-badge-ink:#FFFFFF;
+ --reader-card-shadow:#28203F0D;--reader-card-hover-shadow:#28203F1F;
+}
+html[data-reader-theme=night]{
+ --reader-card-violet-surface:#2A263B;--reader-card-violet-accent:#C9BAFF;
+ --reader-card-mint-surface:#20352F;--reader-card-mint-accent:#9FDDC4;
+ --reader-card-sky-surface:#22313F;--reader-card-sky-accent:#ABD2FA;
+ --reader-card-peach-surface:#392C25;--reader-card-peach-accent:#FFC79E;
+ --reader-card-rose-surface:#382733;--reader-card-rose-accent:#F4B7CF;
+ --reader-card-sage-surface:#2C3226;--reader-card-sage-accent:#CDDDA3;
+ --reader-card-badge-ink:#14181C;
+ --reader-card-shadow:#00000029;--reader-card-hover-shadow:#00000052;
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card{
+ --card-tone-surface:var(--reader-card-violet-surface);--card-tone-accent:var(--reader-card-violet-accent);
+ --card-bg:var(--card-tone-surface);--card-ink:var(--reader-ink);--card-title:var(--reader-ink);
+ --card-muted:var(--reader-muted);--card-rule:var(--reader-rule);
+ --card-action:var(--reader-action);--card-action-ink:var(--reader-action-ink);
+ --card-hover:var(--reader-secondary-hover);--card-hover-ink:var(--reader-secondary-hover-ink);
+ background:var(--card-tone-surface);color:var(--reader-ink);border-radius:18px;
+ border-color:color-mix(in srgb,var(--card-tone-accent) 28%,var(--reader-rule));
+ border-block-start:3px solid var(--card-tone-accent);
+ box-shadow:0 3px 14px var(--reader-card-shadow);
+ transition:border-color .16s ease,box-shadow .16s ease,transform .16s ease;
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card:is([data-editorial-category=technology],[data-editorial-category=science],[data-editorial-category=gaming],[data-editorial-category=digital-life]){
+ --card-tone-surface:var(--reader-card-violet-surface);--card-tone-accent:var(--reader-card-violet-accent);
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card:is([data-editorial-category=health],[data-editorial-category=environment],[data-editorial-category=weather]){
+ --card-tone-surface:var(--reader-card-mint-surface);--card-tone-accent:var(--reader-card-mint-accent);
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card:is([data-editorial-category=world],[data-editorial-category=public-affairs],[data-editorial-category=travel]){
+ --card-tone-surface:var(--reader-card-sky-surface);--card-tone-accent:var(--reader-card-sky-accent);
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card:is([data-editorial-category=business],[data-editorial-category=money],[data-editorial-category=work],[data-editorial-category=shopping]){
+ --card-tone-surface:var(--reader-card-peach-surface);--card-tone-accent:var(--reader-card-peach-accent);
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card:is([data-editorial-category=culture],[data-editorial-category=family]){
+ --card-tone-surface:var(--reader-card-rose-surface);--card-tone-accent:var(--reader-card-rose-accent);
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card:is([data-editorial-category=food],[data-editorial-category=housing],[data-editorial-category=education],[data-editorial-category=sport]){
+ --card-tone-surface:var(--reader-card-sage-surface);--card-tone-accent:var(--reader-card-sage-accent);
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card .card-topic:before{background:var(--card-tone-accent)}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card .photo-editorial .card-topic{
+ background:var(--card-tone-accent);color:var(--reader-card-badge-ink);
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card .photo-editorial .card-photo-headline{
+ background:var(--card-tone-surface);color:var(--reader-ink);
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card .card-photo-caption{
+ background:var(--card-tone-surface);color:var(--reader-muted);
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card .evidence{
+ background:color-mix(in srgb,var(--reader-surface) 40%,var(--card-tone-surface));
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card:focus-within{
+ border-color:var(--card-tone-accent);
+ box-shadow:0 0 0 1px var(--card-tone-accent),0 8px 24px var(--reader-card-shadow);
+}
+@media(hover:hover) and (pointer:fine){
+ html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card:hover{
+  border-color:var(--card-tone-accent);box-shadow:0 12px 30px var(--reader-card-hover-shadow);
+ }
+}
+@media(hover:hover) and (pointer:fine) and (prefers-reduced-motion:no-preference){
+ html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card:hover{transform:translateY(-2px)}
+}
+@media(prefers-reduced-motion:reduce){
+ html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card{transition:none;transform:none}
 }

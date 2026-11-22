@@ -1,4 +1,5 @@
-import { displayPhotoFor, contextPhotoFor } from './card-photo-catalog.js';
+import { displayPhotoFor, contextPhotoFor, editorialPhotoFor } from './card-photo-catalog.js';
+import { translate as tr } from './i18n-browser.js';
 const watched = new WeakSet();
 /** Cover parser-time errors as well as failures after lazy loading; retain all text/actions. */
 export function watchCardPhotos(root) {
@@ -71,19 +72,21 @@ export function photoNode(card, now = Date.now()) {
 }
 /** Local information has presentation metadata, never a fabricated EvidenceCard. */
 export function contextPhotoNode(card, now = Date.now()) {
-    const p = contextPhotoFor(card, now);
+    const p = contextPhotoFor(card, now) ?? editorialPhotoFor(card, now);
     return p ? renderPhotoNode(p) : null;
 }
 function renderPhotoNode(p) {
     const figure = document.createElement('figure');
     figure.className = `card-photo${p.fit === 'contain' ? ' photo-contain' : ''}`;
     figure.dataset.photoId = p.key;
-    figure.dataset.photoKind = 'kind' in p ? 'context' : 'source';
+    figure.dataset.photoKind = 'kind' in p ? p.kind : 'source';
     const frame = document.createElement('div');
     frame.className = 'card-photo-frame';
     const image = document.createElement('img');
     image.src = p.path;
     image.alt = p.alt;
+    image.lang = 'en';
+    image.translate = false;
     image.width = p.width;
     image.height = p.height;
     image.loading = 'lazy';
@@ -93,21 +96,40 @@ function renderPhotoNode(p) {
     frame.append(image);
     const badge = document.createElement('span');
     badge.className = 'card-photo-label';
-    badge.textContent = photoLabel(p);
+    const label = photoLabel(p);
+    badge.textContent = tr(label.key, label.year === undefined ? undefined : { year: label.year });
+    badge.dataset.i18n = label.key;
+    if (label.year !== undefined)
+        badge.dataset.i18nYear = label.year;
     frame.append(badge);
     const caption = document.createElement('figcaption');
     caption.className = 'card-photo-caption';
     const credit = document.createElement('span');
     credit.className = 'card-photo-credit';
-    credit.append(document.createTextNode('Photo: '), photoLink(p.credit, p.creditUrl), document.createTextNode(' · '), photoLink(p.license, p.licenseUrl));
+    const creditLabel = document.createElement('span');
+    creditLabel.dataset.i18n = 'photoCreditLabel';
+    creditLabel.textContent = tr('photoCreditLabel');
+    credit.append(creditLabel, document.createTextNode(' '), photoLink(p.credit, p.creditUrl), document.createTextNode(' · '), photoLink(p.license, p.licenseUrl));
     const details = document.createElement('details');
     details.className = 'photo-details';
     const summary = document.createElement('summary');
-    summary.textContent = 'About this image';
+    summary.dataset.i18n = 'photoDetailsLabel';
+    summary.textContent = tr('photoDetailsLabel');
     const description = document.createElement('p');
+    description.lang = 'en';
+    description.translate = false;
     description.textContent = `${p.caption} ${p.changeNote}`;
     details.append(summary, description);
-    caption.append(credit, details);
+    caption.append(credit);
+    if ('kind' in p) {
+        const note = document.createElement('p');
+        note.className = 'card-photo-note';
+        const key = p.kind === 'editorial' ? 'photoEditorialNote' : 'photoContextNote';
+        note.dataset.i18n = key;
+        note.textContent = tr(key);
+        caption.append(note);
+    }
+    caption.append(details);
     figure.append(frame, caption);
     watchCardPhotos(figure);
     return figure;
@@ -122,10 +144,10 @@ function photoLink(label, url) {
 }
 function photoLabel(p) {
     if ('kind' in p)
-        return 'Context image';
+        return { key: p.kind === 'editorial' ? 'photoEditorialLabel' : 'photoContextLabel' };
     // Only expose an archival year already stated explicitly in the reviewed caption.
     const year = /\(((?:19|20)\d{2})\)/u.exec(p.caption)?.[1];
     if (year && Number(year) < Number(p.articleDate.slice(0, 4)))
-        return `Archive photo · ${year}`;
-    return /source photo collage/iu.test(p.caption) ? 'Source collage' : 'Source photo';
+        return { key: 'photoArchiveLabel', year };
+    return { key: /source photo collage/iu.test(p.caption) ? 'photoCollageLabel' : 'photoSourceLabel' };
 }

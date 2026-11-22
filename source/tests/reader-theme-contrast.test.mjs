@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 
 const scope='html:is([data-reader-theme=prism],[data-reader-theme=night])';
 const cards=':is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card';
+const toneCards=':is(#discovery-cards,#world-cards,#cards,#daily-cards,#local-cards,#edition-content) .info-card';
 const normalise=value=>value.replace(/\s+/gu,' ').trim();
 
 // Read the shipped declarations; no second copy of the palette or its opacity values.
@@ -140,25 +141,21 @@ for(const theme of ['prism','night']){
   });
 
   test(`${theme}: real photo headline, hover, focus and badges pass over the brightest possible image`,t=>{
-    const vars=Object.assign(variables(theme),declarations(themeRules,`${scope} .photo-editorial:not(.photo-unavailable) .card-photo-visual`));
+    const vars=Object.assign(variables(theme),declarations(themeRules,`${scope} ${toneCards}`),declarations(themeRules,`${scope} .photo-editorial:not(.photo-unavailable) .card-photo-visual`));
     const check=checks(t),white=color('#fff',{});
-    const prismPanel='html[data-reader-theme=prism] .photo-editorial:not(.photo-unavailable) .card-photo-headline';
-    const panelValue=theme==='prism'?property(themeRules,prismPanel,'background'):property(cardRules,'.photo-editorial .card-photo-headline','background');
-    const panel=color(panelValue,vars);if(theme==='prism')assert.equal(panel.alpha,1,'Prism uses an opaque reading panel');
+    const panelSelector=`${scope} ${toneCards} .photo-editorial .card-photo-headline`;
+    const panel=color(property(themeRules,panelSelector,'background'),vars);assert.equal(panel.alpha,1,'Both themes use an opaque reading panel below the complete photo');
     const background=over(panel,white);
-    const titleValue=theme==='prism'
-      ?property(themeRules,`html[data-reader-theme=prism] ${cards} .photo-editorial:not(.photo-unavailable) .card-photo-headline :is(h3,a)`,'color')
-      :property(cardRules,`${cards} .card-photo-headline h3`,'color');
-    const title=color(titleValue,vars);
+    const title=color(property(themeRules,panelSelector,'color'),vars);
     const hover=color(property(themeRules,`${scope} ${cards} .card-title-link:not(:disabled):hover`,'color'),vars);
     const focus=color(property(themeRules,`${scope} ${cards} .photo-editorial:not(.photo-unavailable) .card-photo-headline a:focus-visible`,'outline-color'),vars);
     check.add('photo title',title,background,4.5);check.add('photo title hover',hover,background,4.5);check.add('photo focus',focus,background,3);
-    const longBackground=theme==='prism'?background:color(property(cardRules,'.photo-editorial.photo-title-long .card-photo-headline','background'),vars);
+    const longBackground=background;
     check.add('long photo title',title,longBackground,4.5);check.add('long photo title hover',hover,longBackground,4.5);check.add('long photo focus',focus,longBackground,3);
-    for(const [label,rules,selector]of [['image label',themeRules,`${scope} .card-photo-label`],['topic badge',cardRules,'.photo-editorial .card-topic']]){
+    for(const [label,rules,selector]of [['image label',themeRules,`${scope} .card-photo-label`],['topic badge',themeRules,`${scope} ${toneCards} .photo-editorial .card-topic`]]){
       check.add(label,color(property(rules,selector,'color'),vars),over(color(property(rules,selector,'background'),vars),white),4.5);
     }
-    t.diagnostic(`Headline opacity ${(panel.alpha*100).toFixed(0)}%; white image is the worst-case backdrop for the dark photo overlays.`);
+    t.diagnostic(`Headline opacity ${(panel.alpha*100).toFixed(0)}%; image pixels cannot change headline contrast. The photo label is additionally checked over a white image.`);
     check.report();
   });
 }

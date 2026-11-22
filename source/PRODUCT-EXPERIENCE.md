@@ -24,6 +24,14 @@ The source classifier now distinguishes unsupported figurative weather descripto
 
 The previous companion specification below describes its separate routes and runtime gates.
 
+# Public reader: card imagery and category colors — 22 November 2026
+
+The card palette uses six color families for the20 existing editorial categories, stable across Today, Explore, Saved, Daily, local information and prepared editions. Prism and Night retain their explicit appearance preference. Unknown categories use the neutral violet family. Colored surfaces, a narrow category accent and visible keyboard focus provide consistent structure; fine-pointer hover moves the card by at most2px, with no movement when reduced motion is requested.
+
+Every current reading card is eligible for a local reviewed photograph. Exact source photography retains first priority, followed by strictly matched context photography. Remaining cards receive a distinct, labelled editorial reading illustration. General editorial images must never be described as photographs of the reported event. Credits, media review windows and exact source checks remain separate. Original titles, story keys, ordering, source links, saved data and the one-story-per-card rule are unchanged.
+
+Photographs remain completely visible above opaque headline panels. All new image labels and context disclosures are supplied in the30 shipped interface locales. Existing source language markers remain attached to original publisher wording. Return visits and enjoyment are product goals, not measured outcomes of this release.
+
 # DLKT Info 0.8.8 — Exact Companion Handoff
 
 DLKT Info is a finite personal information companion. It does not transfer an infinite feed to the user and does not hide selection, evidence or follow-up rules.

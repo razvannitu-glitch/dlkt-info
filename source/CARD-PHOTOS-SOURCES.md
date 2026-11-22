@@ -79,3 +79,16 @@ Context photo: European Union flag, photographed in May 2021. Credit: Tackellyo.
 ### context-us-politics-white-house
 
 Context photo: The White House, photographed in May 2024. Credit: AramilFeraxa. License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Source and rights record: https://commons.wikimedia.org/wiki/File:White_House_front_view_(2024).jpg. Rendition: https://thumb.wikimedia.org/wikipedia/commons/thumb/1/1f/White_House_front_view_%282024%29.jpg/960px-White_House_front_view_%282024%29.jpg. Verified file: 6860db27850b82a788d6fa2941eb9d27bc054cd89317b68044f7b1b63c069bcc; 171132 bytes; 960 × 720. Selection scope: Explicit US presidency, White House or US federal executive policy; not all US local news or every use of the word president.
+
+
+## Neutral editorial photographs — 22 November 2026
+
+These are general reading illustrations, separately labelled as editorial media and never treated as photographs of the reported event. The exact metadata and SHA-256 values are in `src/media/editorial-photos.ts`. All three assets are local JPEG Commons renditions shown without cropping, with their original author and CC0 source link available on each card.
+
+Open book: freestocks.org, https://commons.wikimedia.org/wiki/File:Open_book_(26421751605).jpg. The Commons page states CC0 and records a Flickr licence review. Asset `/card-media/7a142335e5ac5fe8.jpg`, 960×640, 77,704 bytes.
+
+Globe: Porapak Apichodilok, https://commons.wikimedia.org/wiki/File:Person_holding_world_globe.jpg. The Commons page states CC0 for the Pexels photograph published before the Pexels licence change and includes a licence review. Asset `/card-media/7994114e3e5de1eb.jpg`, 960×640, 87,733 bytes.
+
+Digital desk: Jeff Sheldon, https://commons.wikimedia.org/wiki/File:Office_desk_with_computer_and_music_player_(Unsplash).jpg. The Commons page states CC0 for the2014 photograph imported before the Unsplash licence change. Asset `/card-media/b32fa7ceb8dea009.jpg`, 960×720, 102,437 bytes.
+
+The source pages and all three actual photographs were inspected independently during this change. Review timestamps and expiration remain explicit; no runtime scraping or external image requests are introduced.

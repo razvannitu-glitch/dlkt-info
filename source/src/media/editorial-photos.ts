@@ -1,0 +1,80 @@
+/** Independently reviewed neutral photographs. These illustrate reading, never an article event. */
+export type EditorialPhotoMotif='reading'|'world'|'digital-reading';
+export interface EditorialPhoto {
+ readonly kind:'editorial';readonly key:string;readonly motif:EditorialPhotoMotif;
+ readonly path:string;readonly assetUrl:string;readonly sourceUrl:string;readonly creditUrl:string;
+ readonly sha256:string;readonly bytes:number;readonly width:number;readonly height:number;readonly mimeType:'image/jpeg';
+ readonly alt:string;readonly caption:string;readonly credit:string;readonly license:'CC0';readonly licenseUrl:string;
+ readonly changeNote:string;readonly fit:'contain';readonly reviewedAt:string;readonly reviewBy:string;
+}
+export const EDITORIAL_PHOTOS:readonly EditorialPhoto[]=Object.freeze([
+ Object.freeze({
+  "kind": "editorial",
+  "key": "editorial-reading-book",
+  "motif": "reading",
+  "path": "/card-media/7a142335e5ac5fe8.jpg",
+  "assetUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b6/Open_book_%2826421751605%29.jpg/960px-Open_book_%2826421751605%29.jpg",
+  "sourceUrl": "https://commons.wikimedia.org/wiki/File:Open_book_(26421751605).jpg",
+  "creditUrl": "https://commons.wikimedia.org/wiki/File:Open_book_(26421751605).jpg",
+  "sha256": "7a142335e5ac5fe84cd4a4d9405aba5a80520a685baca49b89fee02a4f4e0436",
+  "bytes": 77704,
+  "width": 960,
+  "height": 640,
+  "mimeType": "image/jpeg",
+  "alt": "Illustrative photograph: An open book beside a cup and phone. Not the reported event.",
+  "caption": "Illustrative photograph: An open book beside a cup and phone.",
+  "credit": "freestocks.org",
+  "license": "CC0",
+  "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "changeNote": "Wikimedia Commons rendition; shown without cropping. General reading illustration, not a photograph of the reported event.",
+  "fit": "contain",
+  "reviewedAt": "2026-11-22T10:03:10.593Z",
+  "reviewBy": "2027-11-22T23:59:59.000Z"
+}),
+ Object.freeze({
+  "kind": "editorial",
+  "key": "editorial-world-globe",
+  "motif": "world",
+  "path": "/card-media/7994114e3e5de1eb.jpg",
+  "assetUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e2/Person_holding_world_globe.jpg/960px-Person_holding_world_globe.jpg",
+  "sourceUrl": "https://commons.wikimedia.org/wiki/File:Person_holding_world_globe.jpg",
+  "creditUrl": "https://commons.wikimedia.org/wiki/File:Person_holding_world_globe.jpg",
+  "sha256": "7994114e3e5de1ebb192e962a7602faaa501711f1b49613faaa64308f791b11d",
+  "bytes": 87733,
+  "width": 960,
+  "height": 640,
+  "mimeType": "image/jpeg",
+  "alt": "Illustrative photograph: A small globe held against a blurred landscape. Not the reported event.",
+  "caption": "Illustrative photograph: A small globe held against a blurred landscape.",
+  "credit": "Porapak Apichodilok",
+  "license": "CC0",
+  "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "changeNote": "Wikimedia Commons rendition; shown without cropping. General reading illustration, not a photograph of the reported event.",
+  "fit": "contain",
+  "reviewedAt": "2026-11-22T10:03:10.593Z",
+  "reviewBy": "2027-11-22T23:59:59.000Z"
+}),
+ Object.freeze({
+  "kind": "editorial",
+  "key": "editorial-digital-desk",
+  "motif": "digital-reading",
+  "path": "/card-media/b32fa7ceb8dea009.jpg",
+  "assetUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/85/Office_desk_with_computer_and_music_player_%28Unsplash%29.jpg/960px-Office_desk_with_computer_and_music_player_%28Unsplash%29.jpg",
+  "sourceUrl": "https://commons.wikimedia.org/wiki/File:Office_desk_with_computer_and_music_player_(Unsplash).jpg",
+  "creditUrl": "https://commons.wikimedia.org/wiki/File:Office_desk_with_computer_and_music_player_(Unsplash).jpg",
+  "sha256": "b32fa7ceb8dea009a6d13c70fbe712ca1b0986a9ed5f10d5762e02be8be151a1",
+  "bytes": 102437,
+  "width": 960,
+  "height": 720,
+  "mimeType": "image/jpeg",
+  "alt": "Illustrative photograph: A desk with a computer, speaker, notebooks and cup. Not the reported event.",
+  "caption": "Illustrative photograph: A desk with a computer, speaker, notebooks and cup.",
+  "credit": "Jeff Sheldon",
+  "license": "CC0",
+  "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "changeNote": "Wikimedia Commons rendition; shown without cropping. General reading illustration, not a photograph of the reported event.",
+  "fit": "contain",
+  "reviewedAt": "2026-11-22T10:03:10.593Z",
+  "reviewBy": "2027-11-22T23:59:59.000Z"
+})
+]);

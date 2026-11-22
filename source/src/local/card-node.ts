@@ -1,5 +1,5 @@
 import {localCardLabel,type LocalCard,type City} from './contracts.js';
-import {localReading} from './presentation.js';
+import {localReading,localCardCategory} from './presentation.js';
 import {localEventCalendar} from './event-calendar.js';
 import {weatherMotionNode} from '../glance/weather-motion.js';
 import {contextPhotoNode} from '../media/browser.js';
@@ -37,10 +37,8 @@ export function localCardNode(card:LocalCard,c:City,now=Date.now()):HTMLElement{
     body.append(calendar,feedback);
   }
   if(card.kind==='forecast'){const license=node('a','MET Norway · CC BY 4.0');license.href='https://creativecommons.org/licenses/by/4.0/';license.target='_blank';license.rel='noopener noreferrer';details.append(license);}
+  const category=localCardCategory(card);a.dataset.editorialCategory=category;
   a.append(head);
-  if(card.kind!=='forecast'){
-    const topic=card.kind==='event'?'culture':card.kind==='transport'||card.kind==='transport-notice'?'travel':card.kind==='utility-notice'?'housing':undefined;
-    const photo=contextPhotoNode({title:card.title,...(topic?{topic}:{})},now);if(photo)a.append(photo);
-  }
+  const photo=contextPhotoNode({title:reading.title,sourceUrl:card.sourceUrl,editorialCategory:category},now);if(photo)a.append(photo);
   a.append(body,details);return a;
  }

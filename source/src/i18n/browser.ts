@@ -28,7 +28,10 @@ export function applyInterfaceLanguage(root:ParentNode=document):void {
   applyAppearanceLabel();
   for(const brand of root.querySelectorAll<HTMLElement>('.brand-header,.brand-footer')){brand.lang='en';brand.dir='ltr';brand.setAttribute('translate','no');}
   for(const item of root.querySelectorAll<HTMLElement>('[data-i18n]')){
-    const key=item.dataset.i18n as MessageKey|undefined;if(key)item.textContent=translate(key);
+    const key=item.dataset.i18n as MessageKey|undefined;
+    if(key==='photoArchiveLabel'){
+      const year=item.dataset.i18nYear;if(year&&/^(?:19|20)\d{2}$/u.test(year))item.textContent=translate(key,{year});
+    }else if(key)item.textContent=translate(key);
   }
   for(const item of root.querySelectorAll<HTMLElement>('[data-i18n-label]')){
     const key=item.dataset.i18nLabel as MessageKey|undefined;if(key)item.setAttribute('aria-label',translate(key));

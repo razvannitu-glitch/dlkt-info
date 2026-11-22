@@ -70,11 +70,11 @@ for(const name of ['entry-browser','iceo']){
 }
 await import('./generate-legal-pages.mjs');
 
-for(const [name,target]of [['catalog','card-photo-catalog'],['reviewed-photos','reviewed-photos'],['context-photos','context-photos'],['browser','card-photo-browser']]){
- const js=readFileSync(`.build/src/media/${name}.js`,'utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'').replaceAll('../iceo/','./').replaceAll("'./catalog.js'","'./card-photo-catalog.js'");
+for(const [name,target]of [['catalog','card-photo-catalog'],['reviewed-photos','reviewed-photos'],['context-photos','context-photos'],['editorial-photos','editorial-photos'],['browser','card-photo-browser']]){
+ const js=readFileSync(`.build/src/media/${name}.js`,'utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'').replaceAll('../iceo/','./').replaceAll("'./catalog.js'","'./card-photo-catalog.js'").replaceAll("'../i18n/browser.js'","'./i18n-browser.js'");
  writeFileSync(`public/${target}.js`,js);
 }
-for(const name of ['iceo','daily-browser','shared-card-browser']){
+for(const name of ['iceo','daily-browser','shared-card-browser','edition-browser']){
  const js=readFileSync(`public/${name}.js`,'utf8').replaceAll("'../media/browser.js'","'./card-photo-browser.js'");writeFileSync(`public/${name}.js`,js);
 }
 
@@ -91,8 +91,8 @@ for(const [source,target] of [['browser','connections-browser'],['types','connec
 
 writeFileSync('public/data-guards.js',readFileSync('.build/src/data/guards.js','utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,''));
 
-for(const name of ['catalog','locale','browser','reading-messages']){
- const compiled=readFileSync(`.build/src/i18n/${name}.js`,'utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'').replaceAll('../iceo/','./').replaceAll("'./reading-messages.js'","'./i18n-reading-messages.js'").replaceAll("'./catalog.js'","'./i18n-catalog.js'").replaceAll("'./locale.js'","'./i18n-locale.js'");
+for(const name of ['catalog','locale','browser','reading-messages','media-messages']){
+ const compiled=readFileSync(`.build/src/i18n/${name}.js`,'utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'').replaceAll('../iceo/','./').replaceAll("'./reading-messages.js'","'./i18n-reading-messages.js'").replaceAll("'./media-messages.js'","'./i18n-media-messages.js'").replaceAll("'./catalog.js'","'./i18n-catalog.js'").replaceAll("'./locale.js'","'./i18n-locale.js'");
  writeFileSync(`public/i18n-${name}.js`,compiled);
 }
 for(const name of ['iceo','explore-browser','follow-browser','daily-browser']){

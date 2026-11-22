@@ -1,6 +1,8 @@
 import { validContextForCard } from './context.js';
 import { REVIEWED_PHOTOS } from './reviewed-photos.js';
 import { CONTEXT_PHOTOS } from './context-photos.js';
+import { EDITORIAL_PHOTOS } from './editorial-photos.js';
+import { editorialCategory } from './editorial-categories.js';
 const origins = new Set(['https://globalvoices.org', 'https://science.nasa.gov', 'https://assets.science.nasa.gov', 'https://commons.wikimedia.org', 'https://creativecommons.org', 'https://www.nasa.gov']);
 const safe = (value) => { try {
     const u = new URL(value);
@@ -238,7 +240,48 @@ export function contextPhotoFor(card, now = Date.now(), photos = CONTEXT_PHOTOS)
     }
     return selected;
 }
-/** Exact reviewed article photograph first; explicitly labelled topic context otherwise. */
+/** Editorial illustrations have their own finite rights review, separate from subject evidence. */
+export function usableEditorialPhoto(photo, now) {
+    return Number.isFinite(now) && Number.isFinite(Date.parse(photo.reviewedAt)) && Number.isFinite(Date.parse(photo.reviewBy))
+        && Date.parse(photo.reviewedAt) <= now && now <= Date.parse(photo.reviewBy)
+        && photo.kind === 'editorial' && ['reading', 'world', 'digital-reading'].includes(photo.motif) && photo.mimeType === 'image/jpeg'
+        && /^[a-f0-9]{64}$/u.test(photo.sha256) && photo.path === `/card-media/${photo.sha256.slice(0, 16)}.jpg`
+        && Number.isSafeInteger(photo.bytes) && photo.bytes > 1000 && photo.bytes <= 260000
+        && Number.isSafeInteger(photo.width) && photo.width >= 640 && photo.width <= 1000 && Number.isSafeInteger(photo.height) && photo.height >= 300 && photo.height <= 1000
+        && photo.alt.startsWith('Illustrative photograph: ') && photo.alt.endsWith('Not the reported event.') && photo.alt.length <= 300
+        && photo.caption.startsWith('Illustrative photograph: ') && photo.caption.length <= 300
+        && photo.credit.length > 0 && photo.credit.length <= 200 && photo.changeNote.length > 0 && photo.changeNote.length <= 200
+        && commonsUrl(photo.assetUrl, true) && commonsUrl(photo.creditUrl) && photo.sourceUrl === photo.creditUrl
+        && photo.license === 'CC0' && photo.licenseUrl === 'https://creativecommons.org/publicdomain/zero/1.0/' && photo.fit === 'contain';
+}
+function editorialMotif(card) {
+    const category = card.editorialCategory ?? (card.topic !== undefined && card.sourceIds !== undefined ? editorialCategory({ title: card.title, topic: card.topic, sourceIds: card.sourceIds }) : null);
+    if (category === null)
+        return null;
+    if (['world', 'public-affairs', 'environment', 'weather', 'travel', 'housing'].includes(category))
+        return 'world';
+    if (['technology', 'digital-life', 'business', 'money', 'work', 'gaming'].includes(category))
+        return 'digital-reading';
+    return 'reading';
+}
+/** General editorial representation only: no place, person or event inference and no card mutation. */
+export function editorialPhotoFor(card, now = Date.now(), photos = EDITORIAL_PHOTOS) {
+    const usable = photos.filter(photo => usableEditorialPhoto(photo, now));
+    if (usable.length === 0)
+        return null;
+    const motif = editorialMotif(card), matching = usable.filter(photo => photo.motif === motif), eligible = matching.length ? matching : usable;
+    const identity = photoIdentity(card);
+    let selected = null, score = -1;
+    for (const photo of eligible) {
+        const candidateScore = selectionScore(`${identity}\n${photo.key}`);
+        if (candidateScore > score || candidateScore === score && selected !== null && photo.key < selected.key) {
+            selected = photo;
+            score = candidateScore;
+        }
+    }
+    return selected;
+}
+/** Exact source photograph, strict subject context, then clearly marked neutral editorial imagery. */
 export function displayPhotoFor(card, now = Date.now()) {
-    return photoFor(card, now) ?? contextPhotoFor(card, now);
+    return photoFor(card, now) ?? contextPhotoFor(card, now) ?? editorialPhotoFor(card, now);
 }

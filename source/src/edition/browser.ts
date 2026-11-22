@@ -1,4 +1,6 @@
 import {cardGuideNode} from '../iceo/card-guide.js';
+import {photoNode} from '../media/browser.js';
+import {editorialCategory} from '../iceo/editorial-categories.js';
 import {cardCreditsNode} from '../iceo/credits.js';
 import type {ReaderSettings} from '../iceo/reader.js';
 import {safeLink} from '../iceo/card-validation.js';
@@ -35,6 +37,8 @@ export function setupEdition(readSettings:()=>ReaderSettings|null):void {
       for(const [index,c]of e.cards.entries()){
         const insight=artifact.insights[index];if(!insight)throw Error('EDITION_INVALID');
         const article=text('article','','info-card'),inner=text('div','','card-content');article.dataset.editionCard=c.id;article.dataset.contentState=insight.state;
+        const category=editorialCategory(c);if(category)article.dataset.editorialCategory=category;
+        const photograph=photoNode(c);if(photograph)article.append(photograph);
         inner.append(text('h3',c.title));const credit=cardCreditsNode(c);if(credit)inner.append(credit);inner.append(text('p',`${c.publisher} · ${c.dateLabel}: ${c.date}`,'card-date'));inner.append(cardGuideNode(c));
         if(c.summary!==undefined){
           const terms=text('a','Source terms');terms.href=safeLink(insight.termsUrl)??'#';terms.rel='noopener noreferrer';terms.target='_blank';

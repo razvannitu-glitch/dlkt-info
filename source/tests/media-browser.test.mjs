@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {photoNode,contextPhotoNode,integratePhotoHeadline,watchCardPhotos} from '../.build/src/media/browser.js';
 import {REVIEWED_PHOTOS} from '../.build/src/media/reviewed-photos.js';
 import {CONTEXT_PHOTOS} from '../.build/src/media/context-photos.js';
+import {EDITORIAL_PHOTOS} from '../.build/src/media/editorial-photos.js';
 
 // This DOM fixture tests node ownership/error recovery; visual layout is checked separately.
 class TextFixture {
@@ -79,6 +80,25 @@ test('visible photographic labels distinguish context, explicit archive years an
  dom(t);assert.equal(photoNode(cards[0],now).querySelector('.card-photo-label').textContent,'Archive photo · 2018');
  assert.equal(photoNode(cards[1],now).querySelector('.card-photo-label').textContent,'Source photo');
  assert.equal(photoNode(cards[2],now).querySelector('.card-photo-label').textContent,'Source collage');
- const figure=contextPhotoNode({title:'University of Miskolc library reading room'},now);assert.ok(figure);assert.equal(figure.dataset.photoKind,'context');assert.equal(figure.querySelector('.card-photo-label').textContent,'Context image');assert.ok(figure.querySelector('.photo-details').textContent.includes('Not the reported event'));
+ const figure=contextPhotoNode({title:'University of Miskolc library reading room'},now);assert.ok(figure);assert.equal(figure.dataset.photoKind,'context');assert.equal(figure.querySelector('.card-photo-label').textContent,'Context photo');assert.ok(figure.querySelector('.photo-details').textContent.includes('Not the reported event'));
  await Promise.resolve();
+});
+test('editorial figures expose translated disclosure hooks separately from the original English photographic description',async t=>{
+ dom(t);const checkedAt=Math.max(...EDITORIAL_PHOTOS.map(photo=>Date.parse(photo.reviewedAt)))+1000;
+ const figure=contextPhotoNode({title:'A public information update',editorialCategory:'world'},checkedAt),image=figure.querySelector('img');
+ assert.equal(figure.dataset.photoKind,'editorial');assert.equal(figure.querySelector('.card-photo-label').dataset.i18n,'photoEditorialLabel');
+ assert.equal(figure.querySelector('.card-photo-note').dataset.i18n,'photoEditorialNote');
+ assert.equal(figure.querySelector('.photo-details').querySelector('summary').dataset.i18n,'photoDetailsLabel');
+ assert.match(image.alt,/Illustrative photograph: .*Not the reported event\./u);assert.equal(image.lang,'en');assert.equal(image.translate,false);
+ assert.equal(figure.querySelector('.photo-details').querySelector('p').lang,'en');
+ await Promise.resolve();
+});
+test('an unavailable editorial fallback keeps the original heading and source with no recursive image substitutions',async t=>{
+ const make=dom(t),checkedAt=Math.max(...EDITORIAL_PHOTOS.map(photo=>Date.parse(photo.reviewedAt)))+1000;
+ const article=make('article'),heading=make('h3'),source=make('a'),figure=contextPhotoNode({title:'A public information update'},checkedAt);
+ heading.textContent='A public information update';source.href='https://example.org/source';source.textContent='Open source';article.append(figure,heading,source);integratePhotoHeadline(figure,heading);
+ const image=figure.querySelector('img'),initial=image.src;image.dispatchEvent(new Event('error'));await Promise.resolve();image.dispatchEvent(new Event('error'));await Promise.resolve();
+ assert.equal(figure.querySelector('h3'),heading);assert.equal(figure.parentElement,article);assert.equal(source.parentElement,article);
+ assert.equal(source.href,'https://example.org/source');assert.equal(image.src,initial);assert.equal(figure.querySelectorAll('img').length,1);
+ assert.equal(figure.classList.contains('photo-unavailable'),true);assert.equal(figure.querySelector('.card-photo-frame').hidden,true);
 });

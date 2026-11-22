@@ -874,8 +874,9 @@ function cardNode(view, index, total, saved, automaticInsights = true) {
         integratePhotoHeadline(photograph, title, node.querySelector(':scope > header') ?? undefined);
         const photoDetails = photograph.querySelector('.photo-details');
         if (photoDetails && evidence) {
-            const photoEvidence = make('div', 'card-photo-evidence');
-            photoEvidence.append(make('p', 'details-label', 'About this image'));
+            const photoEvidence = make('div', 'card-photo-evidence'), photoLabel = make('p', 'details-label', tr('photoDetailsLabel'));
+            photoLabel.dataset.i18n = 'photoDetailsLabel';
+            photoEvidence.append(photoLabel);
             for (const child of [...photoDetails.children])
                 if (child.tagName !== 'SUMMARY')
                     photoEvidence.append(child);
