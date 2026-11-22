@@ -9,6 +9,7 @@ export interface PhotoArticle {
 export interface ArticlePhotoMetadata {
  readonly articleUrl:string; readonly imageUrl:string; readonly basis:'article-jsonld'|'article-opengraph';
  readonly alt:string; readonly credit:string|null; readonly caption:string|null;
+ readonly expectedDimensions?:{readonly width:number;readonly height:number};
 }
 export const PHOTO_HTML_LIMIT=1_048_576;
 const object=(value:unknown):value is Record<string,unknown>=>value!==null&&typeof value==='object'&&!Array.isArray(value);
@@ -60,16 +61,29 @@ const matchesTitle=(value:unknown,article:PhotoArticle):boolean=>{
  const suffix=new RegExp('\\s+[–—|:-]\\s+'+article.publisher.replace(/[.*+?^{}$()|[\]\\]/gu,'\\$&')+'\\s*$','iu');
  return normalize(headline.replace(suffix,''))===normalize(article.title.replace(suffix,''));
 };
-/** Buletin may append a full second sentence to its canonical page's feed headline. */
-const matchesBoundArticleTitle=(value:unknown,article:PhotoArticle):boolean=>{
- if(matchesTitle(value,article))return true;
- if(photoPublisher(article.sourceUrl)!=='bucharest-buletin')return false;
- const headline=clean(value,600);if(headline===null)return false;
- const expected=normalize(article.title).replace(/[.!?]+$/u,''),actual=normalize(headline);
- return expected.length>=80&&actual.length>expected.length&&actual.length<=expected.length+160
-  &&expected.length*3>=actual.length*2&&actual.startsWith(expected)
-  &&/^[.!?] [\p{L}\p{N}]/u.test(actual.slice(expected.length));
-};
+
+type PhotoDimensions={readonly width:number;readonly height:number};
+function oversizedWordPressPreview(first:ArticlePhotoMetadata,article:PhotoArticle,dimensions:PhotoDimensions|undefined,declared:readonly string[]):ArticlePhotoMetadata {
+ const publisher=photoPublisher(article.sourceUrl);
+ if(!dimensions||!['bucharest-b365','bucharest-buletin'].includes(publisher??'')
+  ||dimensions.width<=8000&&dimensions.height<=8000&&dimensions.width*dimensions.height<=24000000)return first;
+ const original=new URL(first.imageUrl);
+ const parts=/^(.*?)(?:-([1-9]\d{1,4})x([1-9]\d{1,4}))?(\.(?:jpe?g|png|webp))$/u;
+ const identity=parts.exec(original.pathname);if(!identity)return first;
+ const ratio=dimensions.width/dimensions.height;
+ const choices:{url:string;width:number;height:number}[]=[];
+ for(const raw of declared.slice(0,20)){
+  const href=articleImageUrl(raw,article.sourceUrl);if(!href)continue;
+  const candidate=new URL(href),match=parts.exec(candidate.pathname);
+  if(candidate.origin!==original.origin||!match||match[1]!==identity[1]||match[4]!==identity[4]||!match[2]||!match[3])continue;
+  const width=Number(match[2]),height=Number(match[3]);
+  if(width<640||width>1600||height<120||height>2400||Math.abs(width/height-ratio)>ratio*0.02)continue;
+  choices.push({url:href,width,height});
+ }
+ const chosen=choices.sort((a,b)=>Math.abs(a.width-1200)-Math.abs(b.width-1200)||a.width-b.width)[0];
+ return chosen?{...first,imageUrl:chosen.url,expectedDimensions:{width:chosen.width,height:chosen.height}}:first;
+}
+
 const articleTypes=new Set(['NewsArticle','Article','ReportageNewsArticle','AnalysisNewsArticle','BlogPosting','TechArticle','ScholarlyArticle','LiveBlogPosting']);
 /** Read only explicitly article-bound metadata; recommendations and site logos are not candidates. */
 export function readArticlePhoto(html:string,article:PhotoArticle,finalUrl=article.sourceUrl):ArticlePhotoMetadata|null {
@@ -105,7 +119,7 @@ export function readArticlePhoto(html:string,article:PhotoArticle,finalUrl=artic
   const raw=DomUtils.textContent(script);if(raw.length>200000)continue;
   try{const value:unknown=JSON.parse(raw);documents.push(value);indexImages(value);}catch{/* A separate complete block may remain usable. */}
  }
- const images:ArticlePhotoMetadata[]=[];let nodes=0;
+ const images:ArticlePhotoMetadata[]=[],dimensions=new Map<string,PhotoDimensions>();let nodes=0;
  const inspect=(value:unknown,depth=0):void=>{
   if(depth>8||++nodes>250)return;
   if(Array.isArray(value)){for(const child of value.slice(0,100))inspect(child,depth+1);return;}
@@ -115,7 +129,7 @@ export function readArticlePhoto(html:string,article:PhotoArticle,finalUrl=artic
    const entity=value.mainEntityOfPage;
    const declared=[value.url,value['@id'],typeof entity==='string'?entity:undefined,object(entity)?entity['@id']:undefined,object(entity)?entity.url:undefined].filter(item=>item!==undefined);
    if(declared.length>0&&declared.every(item=>samePage(item,article.sourceUrl))
-    &&(matchesBoundArticleTitle(value.headline??value.name,article)||matchesTitle(value.alternativeHeadline,article))){
+    &&(matchesTitle(value.headline??value.name,article)||matchesTitle(value.alternativeHeadline,article))){
     const published=typeof value.datePublished==='string'?Date.parse(value.datePublished):NaN;
     const expected=Date.parse(article.publishedAt);
     if(Number.isFinite(published)&&Number.isFinite(expected)&&Math.abs(published-expected)>86400000)return;
@@ -128,6 +142,9 @@ export function readArticlePhoto(html:string,article:PhotoArticle,finalUrl=artic
      const caption=object(image)?clean(image.caption):null;
      const author=object(image)?image.creator??image.author:undefined;
      const credit=object(image)?clean(image.creditText,200)??clean(typeof author==='string'?author:object(author)?author.name:undefined,200):null;
+     if(object(image)&&typeof image.width==='number'&&typeof image.height==='number'
+      &&Number.isSafeInteger(image.width)&&Number.isSafeInteger(image.height)&&image.width>0&&image.height>0)
+      dimensions.set(imageUrl,{width:image.width,height:image.height});
      images.push({articleUrl:article.sourceUrl,imageUrl,basis:'article-jsonld',alt:caption??'',credit,caption});
     }
    }
@@ -143,7 +160,9 @@ export function readArticlePhoto(html:string,article:PhotoArticle,finalUrl=artic
    const score=(item:ArticlePhotoMetadata):number=>{const candidate=new URL(item.imageUrl);return([...candidate.searchParams.keys()].some(key=>key.startsWith('overlay'))?100:0)+(candidate.searchParams.has('height')?2:0)+(candidate.searchParams.get('fit')==='max'?0:1);};
    return images.filter(item=>{const candidate=new URL(item.imageUrl);return candidate.hostname===initial.hostname&&/^\/img\/media\/([^/]+)\//u.exec(candidate.pathname)?.[1]===identity;}).sort((a,b)=>score(a)-score(b))[0]??first;
   }
-  return first;
+  return oversizedWordPressPreview(first,article,dimensions.get(first.imageUrl),[
+   ...images.slice(1).map(item=>item.imageUrl),...(fields.get('og:image:secure_url')??[]),...(fields.get('og:image')??[]),
+  ]);
  }
  // A public OG image is publisher-selected preview metadata, never a CC licence or an event-date claim.
  if(bindings.length===0||!(fields.get('og:title')??[]).some(title=>matchesTitle(title,article)))return null;

@@ -112,6 +112,7 @@ export class ArticlePhotoService {
   if(!metadata)return null;
   const bytes=await this.imageBytes(metadata.imageUrl,article.sourceUrl,signal),raster=inspectPhotoRaster(bytes),checkedAt=this.clock();
   if(!raster||checkedAt>=article.validUntil)return null;
+  if(metadata.expectedDimensions&&(raster.width!==metadata.expectedDimensions.width||raster.height!==metadata.expectedDimensions.height))return null;
   return{...raster,bytes,sha256:createHash('sha256').update(bytes).digest('hex'),metadata,checkedAt,until:Math.min(article.validUntil,checkedAt+PHOTO_TTL)};
  }
 }

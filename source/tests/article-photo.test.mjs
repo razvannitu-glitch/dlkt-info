@@ -178,26 +178,41 @@ test('local photo resolution requires the registered city, exact feed revision a
  assert.equal(await resolvePhotoArticle(ref,{...deps,clock:()=>now+300001}),null);
 });
 
-test('Buletin canonical Article accepts an unchanged long feed headline with a second sentence',()=>{
- const local={...article,sourceUrl:'https://buletin.de/bucuresti/elevii-de-la-liceul-tehnologic-elie-radu-ar-putea-face-practica-la-doua-service-uri-auto-si-la-un-magazin-angro-proiectul-pe-masa-consilierilor-locali/',
-  publisher:'Buletin de București',title:'Elevii de la Liceul Tehnologic Elie Radu ar putea face practică la două service-uri auto și la un magazin angro'};
- const original='https://buletin.de/bucuresti/wp-content/uploads/2026/11/article-original.jpg';
- const node={'@type':'NewsArticle','@id':local.sourceUrl+'#article',headline:local.title+'. Proiectul, pe masa consilierilor locali',datePublished:local.publishedAt,image:original};
- const document=value=>'<link rel="canonical" href="'+local.sourceUrl+'"><script type="application/ld+json">'+JSON.stringify(value)+'</script>';
- assert.equal(readArticlePhoto(document(node),local)?.imageUrl,original);
- for(const other of [
-  {...node,'@id':local.sourceUrl+'another/'},
-  {...node,headline:local.title+' pentru alta scoala'},
-  {...node,headline:local.title.replace('Elie Radu','Alta Scoala')+'. Proiectul, pe masa consilierilor locali'},
-  {...node,headline:local.title+'. '+ 'A different sentence '.repeat(20)},
-  {...node,datePublished:'2025-11-22T12:00:00.000Z'}
- ])assert.equal(readArticlePhoto(document(other),local),null);
- assert.equal(readArticlePhoto(document({...node,headline:'Scoala. O alta stire'}),{...local,title:'Scoala'}),null);
- const onlyOg=html('',{url:local.sourceUrl,title:node.headline,image:original});
- assert.equal(readArticlePhoto(onlyOg,local),null,'A prefix in OG alone does not relax identity validation');
+const largeWpArticle={...article,sourceUrl:'https://buletin.de/bucuresti/elevii-de-la-liceul-tehnologic-elie-radu-ar-putea-face-practica-la-doua-service-uri-auto-si-la-un-magazin-angro-proiectul-pe-masa-consilierilor-locali/',
+ publisher:'Buletin de București',title:'Elevii de la Liceul Tehnologic Elie Radu ar putea face practică la două service-uri auto și la un magazin angro'};
+const largeWpOriginal='https://buletin.de/bucuresti/wp-content/uploads/2026/11/female-owner-checking-inventory-food-products-grocery-store-1.jpg';
+const largeWpPreview='https://buletin.de/bucuresti/wp-content/uploads/2026/11/female-owner-checking-inventory-food-products-grocery-store-1-1000x667.jpg';
+function largeWpHtml(preview=largeWpPreview,dimensions={width:7802,height:5204}){
+ return html('<script type="application/ld+json">'+JSON.stringify({'@type':'NewsArticle',url:largeWpArticle.sourceUrl,headline:largeWpArticle.title,datePublished:largeWpArticle.publishedAt,image:{'@type':'ImageObject',url:largeWpOriginal,...dimensions,caption:'Sursă foto: magnific.com'}})+'</script><meta property="og:image" content="'+preview+'">',{url:largeWpArticle.sourceUrl,title:largeWpArticle.title,image:largeWpOriginal});
+}
+test('oversized original uses only the publisher-declared same-photo WordPress preview',()=>{
+ const selected=readArticlePhoto(largeWpHtml(),largeWpArticle);
+ assert.equal(selected.imageUrl,largeWpPreview);assert.deepEqual(selected.expectedDimensions,{width:1000,height:667});
+ assert.equal(selected.caption,'Sursă foto: magnific.com');assert.equal(selected.basis,'article-jsonld');
+ const query=readArticlePhoto(largeWpHtml(largeWpPreview+'?cache=20261122'),largeWpArticle);
+ assert.equal(query.imageUrl,largeWpPreview+'?cache=20261122','Declared preview query is preserved, never constructed');
 });
-test('extended-headline allowance is confined to explicitly bound Buletin Articles',()=>{
- const other={...article,title:'A sufficiently long complete headline about a specific verified article which exceeds the eighty character threshold'};
- const document='<script type="application/ld+json">'+JSON.stringify({'@type':'NewsArticle',url:other.sourceUrl,headline:other.title+'. A second sentence.',datePublished:other.publishedAt,image})+'</script>';
- assert.equal(readArticlePhoto(document,other),null);
+test('WordPress preview choice cannot change identity, aspect, minimum quality or unknown dimensions',()=>{
+ for(const other of [
+  largeWpPreview.replace('store-1-','store-2-'),largeWpPreview.replace('/2026/11/','/2026/10/'),
+  largeWpPreview.replace('buletin.de','b365.ro'),largeWpPreview.replace('1000x667','150x100'),
+  largeWpPreview.replace('1000x667','1000x1000'),largeWpPreview.replace('.jpg','.png'),largeWpPreview.replace('store-1','STORE-1')
+ ])assert.equal(readArticlePhoto(largeWpHtml(other),largeWpArticle).imageUrl,largeWpOriginal);
+ assert.equal(readArticlePhoto(largeWpHtml(largeWpOriginal),largeWpArticle).imageUrl,largeWpOriginal,'No invented derivative');
+ for(const size of [{},{width:'7802',height:5204},{width:1600,height:1067}])
+  assert.equal(readArticlePhoto(largeWpHtml(largeWpPreview,size),largeWpArticle).imageUrl,largeWpOriginal);
+});
+test('downloaded preview dimensions must agree with the declared same-photo derivative',async()=>{
+ for(const [width,height,expected] of [[1000,667,true],[640,360,false]]){
+  const calls=[],fetcher=async(address)=>{
+   const href=String(address);calls.push(href);
+   if(href.endsWith('/robots.txt'))return new Response(null,{status:404});
+   if(href===largeWpArticle.sourceUrl)return new Response(largeWpHtml(),{headers:{'content-type':'text/html'}});
+   if(href===largeWpPreview)return new Response(png(width,height),{headers:{'content-type':'image/png'}});
+   throw Error('Unexpected URL '+href);
+  };
+  const service=new ArticlePhotoService(fetcher,()=>now);
+  assert.equal((await service.read(largeWpArticle))!==null,expected);
+  assert.ok(calls.includes(largeWpPreview));assert.ok(!calls.includes(largeWpOriginal));
+ }
 });
