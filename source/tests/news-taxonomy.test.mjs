@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {selectNewsStream} from '../.build/src/iceo/news-stream.js';
 import {readingCard} from '../.build/src/iceo/reader.js';
-import {classifyNewsHeadline,classifyEditorialCard} from '../.build/src/iceo/editorial-categories.js';
+import {classifyNewsHeadline,classifyEditorialCard,contradictedHeadlineHints} from '../.build/src/iceo/editorial-categories.js';
 import {NEWS_CATEGORIES,NEWS_TAXONOMY_VERSION,isNewsCategoryId,newsCategoryLabel,legacyCategoryToNewsCategory,classifyNewsSubject,classifyEvidenceCard,classifyLocalCard,newsCategory} from '../.build/src/iceo/news-taxonomy.js';
 
 const evidence=(title,overrides={})=>({title,sourceUrl:'https://www.theguardian.com/world/2026/nov/22/reported-story',sourceIds:['news-unclassified'],topic:'other',...overrides});
@@ -286,4 +286,13 @@ test('explicit Romanian prime-minister headlines classify as politics without a 
  }
  assert.equal(classifyEvidenceCard(evidence('Premier League announces its fixtures',{sourceIds:['news-unclassified']}))?.category,'15000000');
  assert.equal(classifyEvidenceCard(evidence('Compania si-a desemnat noul presedinte',{sourceIds:['news-unclassified']})),null);
+});
+
+test('West Bank does not erase independent economic evidence when another headline subject ranks first',()=>{
+ const title='West Bank transport investment expands',sourceUrl='https://www.france24.com/en/live-news/controlled-report';
+ assert.equal(classifyNewsHeadline(title,sourceUrl),'travel','existing headline subject priority stays unchanged');
+ assert.equal(contradictedHeadlineHints(title.toLowerCase()).includes('business'),false,'investment independently supports the existing business hint');
+ const original=Object.freeze(evidence(title,{sourceUrl,sourceIds:['news-business'],topic:'business'})),before=JSON.stringify(original);
+ assert.equal(classifyEditorialCard(original)?.category,'business');assert.equal(JSON.stringify(original),before);
+ assert.equal(contradictedHeadlineHints('west bank ipo announced').includes('business'),false,'explicit financial developments remain independent evidence');
 });
