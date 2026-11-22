@@ -104,6 +104,9 @@ const NEWS_SUBJECTS = [
     ['public-affairs', /\b(?:politics|political|elections?|parliament|congress|senate|president|prime minister|government|governor|mayor|republicans?|democrats?|conservatives?|liberals?|maga|(?:left|right)[ -]wing|courts? (?:rules?|rulings?|orders?|judgments?|decisions?|overturns?|upholds?|rejects?|blocks?|hears?)|judicial|judiciary|legislation|legislature|laws?|voters?|democracy|civil rights)\b/u],
 ];
 function matchesSubject(category, pattern, title) {
+    // West Bank names a place. Keep any independent banking or economic words in the headline.
+    if (category === 'business')
+        return pattern.test(title.replace(/\bwest bank\b/gu, ' '));
     if (category === 'weather')
         return pattern.test(weatherSubjectText(title));
     if (category === 'family')
@@ -351,8 +354,12 @@ function englishHeadlineSubject(title) {
     return NEWS_SUBJECTS.find(([category, pattern]) => matchesSubject(category, pattern, title))?.[0] ?? null;
 }
 /** Only explicit contrary subjects invalidate existing discovery provenance. */
-function contradictedHeadlineHints(title) {
+export function contradictedHeadlineHints(title) {
     const rejected = [];
+    // Do not let an earlier discovery label restore the same geographic bank false positive.
+    if (/\bwest bank\b/u.test(title) && englishHeadlineSubject(title) !== 'business'
+        && !NEWS_SUBJECTS.some(([category, pattern]) => category === 'business' && matchesSubject(category, pattern, title)))
+        rejected.push('business');
     if (hasUnsupportedWeatherDescriptor(title)
         && !NEWS_SUBJECTS.some(([category, pattern]) => category === 'weather' && matchesSubject(category, pattern, title)))
         rejected.push('weather');
