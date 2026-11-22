@@ -56,25 +56,26 @@ function localCorpus(value:unknown,now:number):value is NewsCorpusLocal {
  const city=findCity(value.city.id),snapshot=value.snapshot;
  if(!city||publicSnapshotDigest(city)!==publicSnapshotDigest(value.city)||newsFeedsFor(city).length===0
   ||!object(snapshot)||!exact(snapshot,['articles','sources'])||!Array.isArray(snapshot.articles)||snapshot.articles.length>5000||!Array.isArray(snapshot.sources))return false;
+ const articles:readonly unknown[]=snapshot.articles,health:readonly unknown[]=snapshot.sources;
  const ids=new Set<string>(),urls=new Set<string>();
- for(const article of snapshot.articles){
+ for(const article of articles){
   if(!object(article)||!fields(article,NEWS_KEYS,['summary','byline','licenseUrl'])||!validLocalNewsArticle(article,city,now)
    ||article.id!=='local-news:'+city.id+':'+article.sourceId+':'+createHash('sha256').update(article.url).digest('hex').slice(0,24)
    ||ids.has(article.id)||urls.has(article.url))return false;
   ids.add(article.id);urls.add(article.url);
  }
  const definitions=newsFeedsFor(city);
- if(snapshot.sources.length!==definitions.length||new Set(snapshot.sources.map(source=>object(source)?source.sourceId:null)).size!==snapshot.sources.length)return false;
- return snapshot.sources.every(source=>{
+ if(health.length!==definitions.length||new Set(health.map(source=>object(source)?source.sourceId:null)).size!==health.length)return false;
+ return health.every(source=>{
   if(!object(source)||!exact(source,['sourceId','publisher','feedUrl','termsUrl','state','checkedAt','count','rejected','error'])||typeof source.sourceId!=='string')return false;
   const definition=newsFeed(source.sourceId);
   if(!definition||!definitions.includes(definition)||source.publisher!==definition.publisher||source.feedUrl!==definition.endpoint||source.termsUrl!==definition.termsUrl
    ||!['ready','partial','unavailable'].includes(String(source.state))||!count(source.count,5000)||!count(source.rejected))return false;
-  const articles=snapshot.articles.filter(article=>object(article)&&article.sourceId===definition.id);
-  if(source.count!==articles.length)return false;
+  const matching=articles.filter(article=>object(article)&&article.sourceId===definition.id);
+  if(source.count!==matching.length)return false;
   if(source.state==='unavailable')return source.checkedAt===null&&source.count===0&&typeof source.error==='string'&&/^[A-Z][A-Z0-9_]{1,80}$/u.test(source.error);
   return source.error===null&&stamp(source.checkedAt)&&Date.parse(source.checkedAt)<=now+5000&&Date.parse(source.checkedAt)>now-300000
-   &&articles.every(article=>object(article)&&article.checkedAt===source.checkedAt)&&((source.state==='partial')===(Number(source.rejected)>0));
+   &&matching.every(article=>object(article)&&article.checkedAt===source.checkedAt)&&((source.state==='partial')===(Number(source.rejected)>0));
  });
 }
 /** Revalidate stored records at their fixed generation time. Request-time expiry is context-specific. */

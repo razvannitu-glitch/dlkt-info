@@ -55,6 +55,7 @@ async function json(response:Response,signal:AbortSignal):Promise<unknown> {
 export function createNewsCorpusStore(environment:Readonly<Record<string,string|undefined>>,fetcher:PersistenceFetch=fetch,clock:()=>number=Date.now):NewsCorpusStore|null {
  const configuration=readPersistenceConfiguration(environment),writer=environment.DLKT_INFO_SHARE_ARCHIVE_WRITE_KEY;
  if(configuration.state!=='ready'||typeof writer!=='string'||!WRITER.test(writer))return null;
+ const publishableKey=configuration.publishableKey,writerKey=writer;
  const base=new URL('/rest/v1/rpc/',configuration.url),epochs=new Map<string,NewsCorpusEpoch>();
  const pending=new Map<string,Promise<NewsCorpusEpoch|null>>();let latest:{epoch:string;until:number}|null=null;
  async function rpc(name:string,args:Readonly<Record<string,unknown>>):Promise<unknown> {
@@ -64,7 +65,7 @@ export function createNewsCorpusStore(environment:Readonly<Record<string,string|
    const timeout=new Promise<never>((_resolve,reject)=>{timer=setTimeout(()=>{controller.abort();reject(new NewsCorpusStoreError('NEWS_CORPUS_UNAVAILABLE'));},TIMEOUT_MS);});
    const pending=(async():Promise<unknown>=>{
     const response=await fetcher(new URL(name,base),{method:'POST',credentials:'omit',redirect:'error',cache:'no-store',signal:controller.signal,
-     headers:{apikey:configuration.publishableKey,Accept:'application/json','Content-Type':'application/json','x-dlkt-share-write':writer},body});
+     headers:{apikey:publishableKey,Accept:'application/json','Content-Type':'application/json','x-dlkt-share-write':writerKey},body});
     if(controller.signal.aborted){void response.body?.cancel().catch(()=>undefined);return fail();}return json(response,controller.signal);
    })();return await Promise.race([pending,timeout]);
   }catch{return fail();}finally{clearTimeout(timer);controller.abort();}
