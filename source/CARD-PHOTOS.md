@@ -1,3 +1,15 @@
+# Original article photographs — 22 November 2026
+
+This decision supersedes the editorial/context fallback decision below. News cards now request only the photograph associated with their exact original article. The previous book, globe and desk illustrations are not substitutes for missing source photographs.
+
+The shared browser and server renderers use the exact reviewed article photo where still valid; otherwise they request `/api/article-photo` with the current card ID and revision. Local news also supplies its registered city. The server resolves the source URL from current verified records; callers cannot supply an arbitrary URL. Failed or unavailable originals leave the existing title, text and actions intact, without assigning another image.
+
+Original publisher photo previews have their own metadata binding and bounded raster checks. They do not inherit the article author's name or a Creative Commons licence from the text. The publisher may itself use an archive or symbolic photo. See [ARTICLE-PHOTOS.md](ARTICLE-PHOTOS.md) for the contract, evidence and limits.
+
+The approved 16:9 photo frame, 16px insets, 10px radius, responsive layout, brand palette and language selection are unchanged.
+
+---
+
 # Card photographs
 
 ## Current reading-card coverage — 22 November 2026

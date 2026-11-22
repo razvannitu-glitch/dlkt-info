@@ -23,7 +23,7 @@ function url(value:unknown,base?:string):URL|null {
 export function photoPublisher(articleUrl:string):string|null {
  const parsed=url(articleUrl);if(!parsed||parsed.hash||parsed.href!==articleUrl||parsed.pathname==='/')return null;
  const local=newsSourceForUrl(articleUrl);if(local)return local.id;
- const reviewed=publisherForNewsUrl(articleUrl);if(reviewed)return reviewed.id;
+ const reviewed=publisherForNewsUrl(articleUrl);if(reviewed)return Object.hasOwn(ASSET_PATHS,reviewed.id)?reviewed.id:null;
  if(['www.nasa.gov','science.nasa.gov'].includes(parsed.hostname))return'nasa';
  return null;
 }
@@ -75,6 +75,26 @@ export function readArticlePhoto(html:string,article:PhotoArticle,finalUrl=artic
  for(const meta of metas){const key=(meta.attribs.property??meta.attribs.name??'').toLowerCase(),value=meta.attribs.content;if(value){const values=fields.get(key)??[];values.push(value);fields.set(key,values);}}
  const bindings=[...canonical.map(node=>node.attribs.href),...(fields.get('og:url')??[])];
  if(bindings.some(value=>!samePage(value,article.sourceUrl)))return null;
+ const expectedDate=Date.parse(article.publishedAt);
+ if((fields.get('article:published_time')??[]).some(value=>!Number.isFinite(Date.parse(value))||Number.isFinite(expectedDate)&&Math.abs(Date.parse(value)-expectedDate)>86400000))return null;
+ const documents:unknown[]=[],imageObjects=new Map<string,Record<string,unknown>>(),conflictingImages=new Set<string>();let indexed=0;
+ const imageId=(value:unknown):string|null=>{const parsed=url(value,article.sourceUrl);return parsed&&samePage(parsed.href,article.sourceUrl)&&parsed.hash?parsed.href:null;};
+ const indexImages=(value:unknown,depth=0):void=>{
+  if(depth>8||++indexed>500)return;
+  if(Array.isArray(value)){for(const child of value.slice(0,100))indexImages(child,depth+1);return;}
+  if(!object(value))return;
+  const types=Array.isArray(value['@type'])?value['@type']:[value['@type']],id=imageId(value['@id']);
+  if(id&&types.includes('ImageObject')){
+   if(imageObjects.has(id))conflictingImages.add(id);else imageObjects.set(id,value);
+  }
+  if(value['@graph']!==undefined)indexImages(value['@graph'],depth+1);
+  if(value.mainEntity!==undefined)indexImages(value.mainEntity,depth+1);
+ };
+ for(const script of DomUtils.getElementsByTagName('script',document,true).slice(0,150)){
+  if((script.attribs.type??'').toLowerCase()!=='application/ld+json'||!complete(script,true))continue;
+  const raw=DomUtils.textContent(script);if(raw.length>200000)continue;
+  try{const value:unknown=JSON.parse(raw);documents.push(value);indexImages(value);}catch{/* A separate complete block may remain usable. */}
+ }
  const images:ArticlePhotoMetadata[]=[];let nodes=0;
  const inspect=(value:unknown,depth=0):void=>{
   if(depth>8||++nodes>250)return;
@@ -90,7 +110,9 @@ export function readArticlePhoto(html:string,article:PhotoArticle,finalUrl=artic
     const expected=Date.parse(article.publishedAt);
     if(Number.isFinite(published)&&Number.isFinite(expected)&&Math.abs(published-expected)>86400000)return;
     const entries=Array.isArray(value.image)?value.image.slice(0,6):[value.image];
-    for(const image of entries){
+    for(const entry of entries){
+     const id=object(entry)?imageId(entry['@id']):typeof entry==='string'?imageId(entry):null;
+     const image=id&&!conflictingImages.has(id)?imageObjects.get(id)??entry:entry;
      const candidate=typeof image==='string'?image:object(image)?image.contentUrl??image.url:undefined;
      const imageUrl=articleImageUrl(candidate,article.sourceUrl);if(!imageUrl)continue;
      const caption=object(image)?clean(image.caption):null;
@@ -103,12 +125,16 @@ export function readArticlePhoto(html:string,article:PhotoArticle,finalUrl=artic
   if(value['@graph']!==undefined)inspect(value['@graph'],depth+1);
   if(value.mainEntity!==undefined)inspect(value.mainEntity,depth+1);
  };
- for(const script of DomUtils.getElementsByTagName('script',document,true).slice(0,150)){
-  if((script.attribs.type??'').toLowerCase()!=='application/ld+json'||!complete(script,true))continue;
-  const raw=DomUtils.textContent(script);if(raw.length>200000)continue;
-  try{inspect(JSON.parse(raw) as unknown);}catch{/* Another complete metadata block may be usable. */}
+ for(const value of documents)inspect(value);
+ if(images.length){
+  const first=images[0];if(!first)return null;
+  const initial=new URL(first.imageUrl),identity=/^\/img\/media\/([^/]+)\//u.exec(initial.pathname)?.[1];
+  if(initial.hostname==='i.guim.co.uk'&&identity){
+   const score=(item:ArticlePhotoMetadata):number=>{const candidate=new URL(item.imageUrl);return([...candidate.searchParams.keys()].some(key=>key.startsWith('overlay'))?100:0)+(candidate.searchParams.has('height')?2:0)+(candidate.searchParams.get('fit')==='max'?0:1);};
+   return images.filter(item=>{const candidate=new URL(item.imageUrl);return candidate.hostname===initial.hostname&&/^\/img\/media\/([^/]+)\//u.exec(candidate.pathname)?.[1]===identity;}).sort((a,b)=>score(a)-score(b))[0]??first;
+  }
+  return first;
  }
- if(images.length)return images[0]??null;
  // A public OG image is publisher-selected preview metadata, never a CC licence or an event-date claim.
  if(bindings.length===0||!(fields.get('og:title')??[]).some(title=>matchesTitle(title,article)))return null;
  if(!(fields.get('og:type')??[]).includes('article')&&!(fields.get('article:published_time')??[]).length)return null;

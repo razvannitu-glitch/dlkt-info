@@ -19,7 +19,6 @@ export interface ArticlePhotoDependencies {
 const dependencies:ArticlePhotoDependencies={global:publicIceoSnapshot,local:city=>localNewsService.snapshot(city),photos:articlePhotoService,clock:Date.now};
 /** Resolve server-side from a current, validated listing. No remote URL is accepted by this endpoint. */
 export async function resolvePhotoArticle(reference:ArticlePhotoReference,services:ArticlePhotoDependencies):Promise<PhotoArticle|null>{
- const now=services.clock();
  if(reference.cityId!==undefined){
   const city=findCity(reference.cityId);if(!city)return null;
   const snapshot=await services.local(city),completed=services.clock();

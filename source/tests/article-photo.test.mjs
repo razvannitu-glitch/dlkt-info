@@ -140,3 +140,26 @@ test('API never returns photo bytes bound to a different source article',async()
  try{assert.equal((await fetch('http://127.0.0.1:'+server.address().port+articlePhotoPath({id:card.id,revision:card.contentHash}))).status,404);}
  finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
 });
+
+test('Guardian variants keep the exact signed original-photo URL without a social overlay',()=>{
+ const overlay=image+'&overlay=guardian-logo',clean=image+'&fit=max&s=preserve-this-published-signature';
+ const node={'@type':'NewsArticle',url:article.sourceUrl,headline:article.title,image:[overlay,clean]};
+ const value=readArticlePhoto('<script type="application/ld+json">'+JSON.stringify(node)+'</script>',article);
+ assert.equal(value.imageUrl,clean);
+});
+test('contradictory publication metadata cannot bind a photograph to this revision',()=>{
+ assert.equal(readArticlePhoto(html('<meta property="article:published_time" content="2020-01-01T00:00:00Z">'),article),null);
+});
+
+test('WordPress Article references resolve only their own declared ImageObject',()=>{
+ const photoId=article.sourceUrl+'#primaryimage';
+ const graph={'@graph':[
+ {'@type':'WebSite','@id':article.sourceUrl+'#website',image:'https://evil.example/brand.jpg'},
+ {'@type':'ImageObject','@id':photoId,url:image,caption:'FOTO: Arhiva'},
+ {'@type':'NewsArticle','@id':article.sourceUrl+'#article',headline:article.title,image:{'@id':photoId}},
+ ]};
+ const value=readArticlePhoto('<script type="application/ld+json">'+JSON.stringify(graph)+'</script>',article);
+ assert.equal(value.imageUrl,image);assert.equal(value.caption,'FOTO: Arhiva');
+ graph['@graph'][2].image={'@id':'https://www.theguardian.com/different#primaryimage'};
+ assert.equal(readArticlePhoto('<script type="application/ld+json">'+JSON.stringify(graph)+'</script>',article),null);
+});
