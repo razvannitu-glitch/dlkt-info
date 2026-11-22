@@ -57,7 +57,8 @@ test('news-stream follow labels and feedback remain neutral through toggle, rend
  window.location.href='https://www.dlkt.ee/?lang=ro';assert.equal(getLocale(),'ro');controller.render();
  assert.equal(button.textContent,'✓ Urmaresti stiri conexe');assert.match(button.title,/Filtru asociat:/u);
  button.dispatchEvent(new Event('click'));await write;
- assert.equal(calls[1].category,'shopping');assert.equal(calls[1].followed,false);assert.equal(stored,null);
+ assert.equal(calls[1].category,'shopping');assert.equal(calls[1].followed,false);
+ assert.deepEqual(stored,{version:'dlkt-category-follow-1',revision:'11111111-1111-4111-8111-000000000002',entries:[]});
  assert.equal(button.textContent,'+ Urmareste stiri conexe');assert.equal(messages[1],'Urmarirea stirilor conexe a fost oprita in acest browser.');
  assert.ok(messages.every(message=>!message.includes(translatedCategory('shopping'))));
  const existing=document.createElement('article'),existingContent=document.createElement('div');existingContent.className='card-content';existing.append(existingContent);body.append(existing);
