@@ -4,7 +4,7 @@ import {photoNode,integratePhotoHeadline} from '../media/browser.js';
 import {setupExplore,type ExploreController} from '../explore/browser.js';
 import {contextForCard} from './context.js';
 import {nextDailyEditionDelay,selectContextualToday} from './contextual-today.js';
-import {LiveEdition,editionCardSignature,editionUpdateLabel,PUBLIC_EDITION_POLL_MS,publicEditionPollDelay} from './live-edition.js';
+import {LiveEdition,editionCardSignature,editionStorySignature,editionUpdateLabel,PUBLIC_EDITION_POLL_MS,publicEditionPollDelay} from './live-edition.js';
 import {appendPublicEdition,appendPublicContinuation,dailyEditionSummary,publicEditionState} from './home-edition.js';
 import {DiscoveryLoading,renderDiscoveryLoading,bindDiscoveryLoadingActions,type DiscoveryLoadingElements} from './loading.js';
 import {selectHomeLocal} from './home-local.js';
@@ -27,7 +27,7 @@ import {captureCheckpoint,compareCheckpoint,focusedSnapshot,compareFocusedCheckp
 import {DeviceMemory,memoryError,type DeviceSnapshot,type SavedCard} from './device-memory.js';
 import {safeLink,validCard} from './card-validation.js';
 import {attachInsight,pruneInsights} from './insight-browser.js';
-import { selectReadingCards, readingCard, type ReaderSettings, type ReadingCard } from './reader.js';
+import { selectReadingCards, savedReadingCards, type ReaderSettings, type ReadingCard } from './reader.js';
 import type { EvidenceCard, IceoSnapshot, SourceHealth, Topic } from './contracts.js';
 
 const TOPICS = PUBLIC_TOPICS;
@@ -162,9 +162,13 @@ function openReturnChanges():void{
 }
 function currentSavedUpdates():SavedUpdates{return selectSavedUpdates(deviceState.cards,snapshot,Date.now(),!lastLoadFailed&&!loading);}
 function openSavedCards(id?:string):void{
-  if(id){const index=deviceState.cards.findIndex(item=>item.id===id);if(index>=0&&Number(budget.value)<=index)budget.value=String(index+1);}
+  if(id){const index=savedReadingCards(deviceState.cards.map(item=>item.card),Date.now()).findIndex(view=>[view.card,...view.related].some(card=>card.id===id));if(index>=0&&Number(budget.value)<=index)budget.value=String(index+1);}
   changesView=false;savedView=true;editedFocus=true;render();
   document.dispatchEvent(new CustomEvent('dlkt:reader-selected'));heading.focus();heading.scrollIntoView({block:'start'});
+  if(id){
+    const target=[...cards.querySelectorAll<HTMLElement>('[data-card-id],[data-related-card-id]')].find(node=>node.dataset.cardId===id||node.dataset.relatedCardId===id);
+    if(target){const related=target.closest<HTMLDetailsElement>('details.related');if(related)related.open=true;target.tabIndex=-1;target.focus({preventScroll:true});target.scrollIntoView({block:'start'});}
+  }
   // Only the existing public snapshot is requested. Saved identities never leave the browser.
   if(!loading)void load();
 }
@@ -180,7 +184,7 @@ function savedSummary(model:SavedUpdates):string{
 }
 function annotateSavedUpdate(node:HTMLElement,item:SavedUpdate):void{
   node.dataset.savedUpdate=item.state;
-  const body=node.querySelector('.card-content');if(!body)return;
+  const body=node.querySelector('.card-content')??(node.dataset.relatedCardId?node:null);if(!body)return;
   const section=make('div','saved-update');
   if(item.changes.length){
     section.append(make('p','saved-copy-note','Listed details changed since you saved this card.'));
@@ -265,18 +269,28 @@ function renderComparison():void{
   briefing.setAttribute('aria-busy','false');memoryControls();
 }
 function savedCards():void{
+  const expanded=new Set([...cards.querySelectorAll<HTMLDetailsElement>('details.related[open]')].map(detail=>{const article=detail.closest<HTMLElement>('[data-card-id]');return article?.dataset.storyKey??article?.dataset.cardId;}));
+  const active=document.activeElement instanceof HTMLElement&&cards.contains(document.activeElement)?document.activeElement:null;
+  const focused=active?.closest<HTMLElement>('[data-related-card-id],[data-card-id]'),focusedId=focused?.dataset.relatedCardId??focused?.dataset.cardId,focusedSave=active?.dataset.saveCard;
   empty.querySelector('strong')?.replaceChildren(document.createTextNode('No saved cards.'));
   const entries=deviceState.cards;const s=settings();if(!s){feedback.textContent='Enter a positive whole number for the card budget.';return;}const limit=s.budget;
-  const shown=entries.slice(0,limit);
+  const groups=savedReadingCards(entries.map(entry=>entry.card),Date.now()),shown=groups.slice(0,limit),byId=new Map(entries.map(entry=>[entry.id,entry]));
   const updates=currentSavedUpdates();
-  cards.replaceChildren(...shown.map((entry,i)=>{const node=cardNode(readingCard({...entry.card,sourceState:'stale'},Date.now()),i,shown.length,entry);const update=updates.items.find(item=>item.saved.id===entry.id);if(update)annotateSavedUpdate(node,update);return node;}));
-  pruneInsights();heading.textContent='Saved in this browser';count.textContent=`${shown.length} of ${entries.length}`;
+  cards.replaceChildren(...shown.map((view,i)=>{
+    const entry=byId.get(view.card.id);if(!entry)throw Error('SAVED_STORY_ORIGINAL_MISSING');
+    const node=cardNode(view,i,shown.length,entry),update=updates.items.find(item=>item.saved.id===entry.id);if(update)annotateSavedUpdate(node,update);
+    for(const row of node.querySelectorAll<HTMLElement>('[data-related-card-id]')){const relatedUpdate=updates.items.find(item=>item.saved.id===row.dataset.relatedCardId);if(relatedUpdate)annotateSavedUpdate(row,relatedUpdate);}
+    return node;
+  }));
+  for(const article of cards.querySelectorAll<HTMLElement>('[data-card-id]')){const detail=article.querySelector<HTMLDetailsElement>('details.related');if(detail&&expanded.has(article.dataset.storyKey??article.dataset.cardId))detail.open=true;}
+  if(focusedId){const replacement=[...cards.querySelectorAll<HTMLElement>('[data-related-card-id],[data-card-id]')].find(node=>node.dataset.relatedCardId===focusedId||node.dataset.cardId===focusedId);if(replacement){const target=focusedSave?replacement.querySelector<HTMLElement>('[data-save-card]')??replacement:replacement;if(target===replacement)target.tabIndex=-1;target.focus({preventScroll:true});}}
+  pruneInsights();heading.textContent='Saved in this browser';count.textContent=`${shown.length} / ${groups.length}`;
   status.textContent=entries.length?savedSummary(updates):'Your saved copies, without the current topic filters. Open the original source for its current terms.';
   checked.textContent='Browser-only collection · no account sync';
   empty.hidden=shown.length>0;emptyCopy.textContent='Use Save here on a card to keep its title, date and original source in this browser.';
   finish.hidden=true;feedback.textContent='Clearing site data or ending a private-browsing session can remove this collection. Do not use it as your only archive.';
-  more.hidden=shown.length>=entries.length;
-  if(shown.length<entries.length){finish.hidden=false;finishCopy.textContent='More saved cards are available.';explore.hidden=true;}
+  more.hidden=shown.length>=groups.length;
+  if(shown.length<groups.length){finish.hidden=false;finishCopy.textContent='More saved cards are available.';explore.hidden=true;}
   briefing.setAttribute('aria-busy','false');memoryControls();
 }
 
@@ -351,6 +365,7 @@ function cardNode(view:ReadingCard,index:number,total:number,saved?:SavedCard,au
   const put=(selector:string,value:string):void=>{const el=node.querySelector<HTMLElement>(selector);if(el)el.textContent=value;};
   const photograph=photoNode(view.card);if(photograph)node.querySelector('header')?.after(photograph);
   const card=view.card,presentation=editorialCardPresentation(view,saved!==undefined);node.dataset.notice=view.noticeState;node.dataset.cardId=card.id;
+  if(view.storyKey)node.dataset.storyKey=view.storyKey;
   const originalText=(element:HTMLElement,record:EvidenceCard=card):void=>{element.dir='auto';element.lang=sourceLanguage(record)??'';element.setAttribute('translate','no');};
   const evidence=node.querySelector<HTMLElement>('.evidence');
   currentCardByNode.set(node,card);
@@ -400,8 +415,22 @@ function cardNode(view:ReadingCard,index:number,total:number,saved?:SavedCard,au
   put('.card-boundary',card.boundary);put('.card-attribution',card.attribution);
   put('.evidence summary',tr('sourceDetails'));
   const related=node.querySelector<HTMLDetailsElement>('.related');
-  if(related&&view.related.length){related.hidden=false;const summary=related.querySelector('summary');if(summary)summary.textContent='grouping' in view&&view.grouping==='matching-headlines'?`${view.related.length} matching publisher listing${view.related.length===1?'':'s'} · not independent confirmation`:`${view.related.length} other listed version${view.related.length===1?'':'s'}`;const list=related.querySelector('ul');
-    for(const item of view.related){const url=safeLink(item.sourceUrl);if(!url)continue;const row=make('li','');const a=make('a','',`${item.version??item.title} · ${formatted(item.date)}`);originalText(a,item);a.href=url;a.target='_blank';a.rel='noopener noreferrer';row.append(a);list?.append(row);}}
+  if(related&&view.related.length){
+    related.hidden=false;const summary=related.querySelector('summary'),publication=card.kind==='publication';
+    if(summary)summary.textContent=publication?tr('storyReports',{count:view.related.length}):`${view.related.length} other listed version${view.related.length===1?'':'s'}`;
+    if(publication)summary?.after(make('p','privacy-note',tr('storyReportsNote')));
+    const list=related.querySelector('ul');
+    for(const item of view.related){
+      const url=safeLink(item.sourceUrl);if(!url)continue;
+      const row=make('li',''),a=make('a','',`${item.publisher}: ${item.title}`);originalText(a,item);a.href=url;a.target='_blank';a.rel='noopener noreferrer';
+      row.dataset.relatedCardId=item.id;currentCardByNode.set(row,item);row.append(a,make('p','privacy-note',formatted(item.date)));
+      if(saved){const archived=deviceState.cards.find(entry=>entry.id===item.id);if(archived)row.append(make('p','saved-copy-note',`Saved here ${formatted(archived.savedAt)}. Original source check ${formatted(item.observedAt)}. This saved copy is retained.`));}
+      const credits=cardCreditsNode(item);if(credits)row.append(credits);
+      const saveRelated=make('button','text-button',tr('saveCard'));saveRelated.type='button';saveRelated.dataset.saveCard=item.id;
+      saveRelated.addEventListener('click',()=>{const exists=deviceState.cards.some(entry=>entry.id===item.id);void writeDevice(()=>exists?device.remove(item.id):device.save(currentCardByNode.get(row)??item),exists?'Card removed from this browser.':'Card saved in this browser only.');});
+      row.append(saveRelated);list?.append(row);
+    }
+  }
   const button=node.querySelector<HTMLButtonElement>('.share-source'),fallback=node.querySelector<HTMLInputElement>('.share-fallback');
   if(button&&fallback){const label=button.querySelector('.share-label');if(label)label.textContent=tr('shareCard');else button.textContent=tr('shareCard');button.setAttribute('aria-label',tr('shareCard'));button.title=tr('shareCard');fallback.setAttribute('aria-label','DLKT card link to copy');button.addEventListener('click',()=>{void shareCard(currentCardByNode.get(node)??card,{button,fallback,announce:message=>{announcement.textContent=message;toast(message);}});});}
   const sourceShare=make('button','text-button','Share original source');sourceShare.type='button';const sourceFallback=make('input','share-fallback');sourceFallback.type='text';sourceFallback.readOnly=true;sourceFallback.hidden=true;sourceFallback.setAttribute('aria-label','Original source link to copy');sourceShare.addEventListener('click',()=>{void shareSource(card,sourceShare,sourceFallback);});node.querySelector('.evidence')?.append(sourceShare,sourceFallback);
@@ -477,7 +506,7 @@ async function load(automatic=false):Promise<void>{
 
 /** Reuse unchanged article nodes, including focused controls and expanded source details. */
 function reconcileDiscovery(target:HTMLElement,next:HTMLElement):void {
-  const key=(node:HTMLElement):string=>node.dataset.cardId?`card:${node.dataset.cardId}`:node.dataset.homeLocalId?`local:${node.dataset.homeLocalId}`:node.id;
+  const key=(node:HTMLElement):string=>node.dataset.storyKey?`story:${node.dataset.storyKey}`:node.dataset.cardId?`card:${node.dataset.cardId}`:node.dataset.homeLocalId?`local:${node.dataset.homeLocalId}`:node.id;
   const current=new Map([...target.children].filter((node):node is HTMLElement=>node instanceof HTMLElement).map(node=>[key(node),node]));
   const desired=[...next.children].filter((node):node is HTMLElement=>node instanceof HTMLElement).map(node=>{
     const existing=current.get(key(node));
@@ -487,6 +516,8 @@ function reconcileDiscovery(target:HTMLElement,next:HTMLElement):void {
     existing.className=node.className;
     if(node.dataset.editionPart)existing.dataset.editionPart=node.dataset.editionPart;else delete existing.dataset.editionPart;
     const freshCard=currentCardByNode.get(node);if(freshCard)currentCardByNode.set(existing,freshCard);
+    const relatedChecks=new Map([...node.querySelectorAll<HTMLElement>('[data-related-card-id]')].map(row=>[row.dataset.relatedCardId,currentCardByNode.get(row)]));
+    for(const row of existing.querySelectorAll<HTMLElement>('[data-related-card-id]')){const current=relatedChecks.get(row.dataset.relatedCardId);if(current)currentCardByNode.set(row,current);}
     for(const selector of ['.card-index','.card-date','.contextual-reason','.world-card-place','[data-source-checked]']){
       const before=existing.querySelector(selector),after=node.querySelector(selector);if(before&&after)before.textContent=after.textContent;
     }
@@ -541,7 +572,7 @@ function renderDiscovery():void {
   host.replaceChildren();
   // Publication reading does not wait for city lookup. The existing selector owns eligibility.
   appendPublicEdition(host,today,(view,index,total)=>{
-    const node=cardNode(view,index,total,undefined,false);node.dataset.liveSignature=JSON.stringify([getLocale(),editionCardSignature(view.card)]);return node;
+    const node=cardNode(view,index,total,undefined,false);node.dataset.liveSignature=JSON.stringify([getLocale(),editionCardSignature(view.card),editionStorySignature(view)]);return node;
   },editionState);
   if(loadingPhase!=='hidden')host.querySelector('#home-edition-pending, #home-edition-unavailable')?.remove();
   // Local source records stay contiguous and distinct from the global daily top.
@@ -565,7 +596,7 @@ function renderDiscovery():void {
     host.append(details);
   }
   appendPublicContinuation(host,today,(view,index,total)=>{
-    const node=cardNode(view,index,total,undefined,false);node.dataset.liveSignature=JSON.stringify([getLocale(),editionCardSignature(view.card)]);return node;
+    const node=cardNode(view,index,total,undefined,false);node.dataset.liveSignature=JSON.stringify([getLocale(),editionCardSignature(view.card),editionStorySignature(view)]);return node;
   },continuationCount);
   const end=host.querySelector('#home-edition-end h2');if(end)end.textContent=tr('endOfTop');
   const continuation=host.querySelector<HTMLElement>('#home-more-button');if(continuation)continuation.textContent=tr('showMore',{count:Math.min(20,Math.max(0,today.more.length-continuationCount)),remaining:Math.max(0,today.more.length-continuationCount)});

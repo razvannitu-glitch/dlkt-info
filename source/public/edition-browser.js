@@ -95,6 +95,34 @@ export function setupEdition(readSettings) {
                     source.rel = 'noopener noreferrer';
                     source.target = '_blank';
                     inner.append(source);
+                    const group = e.storyGroups?.find(item => item.primaryId === c.id);
+                    if (group) {
+                        const details = text('details', ''), list = text('ul', '');
+                        details.append(text('summary', group.basis === 'software-versions' ? 'Other listed software versions' : 'Other original listings for this story; reports may differ and are not independent confirmations'));
+                        for (const related of group.related) {
+                            const item = text('li', ''), link = text('a', related.title);
+                            link.dir = 'auto';
+                            link.translate = false;
+                            link.href = safeLink(related.sourceUrl) ?? '#';
+                            link.rel = 'noopener noreferrer';
+                            link.target = '_blank';
+                            item.append(link);
+                            const credits = cardCreditsNode(related);
+                            if (credits)
+                                item.append(credits);
+                            item.append(text('p', `${related.publisher} · ${related.dateLabel}: ${related.date} · Source checked: ${related.observedAt}`));
+                            if (related.summary !== undefined) {
+                                const excerpt = text('p', related.summary);
+                                excerpt.dir = 'auto';
+                                excerpt.translate = false;
+                                item.append(text('p', 'Publisher excerpt from the source feed:'), excerpt);
+                            }
+                            item.append(text('p', related.attribution), text('p', related.boundary));
+                            list.append(item);
+                        }
+                        details.append(list);
+                        inner.append(details);
+                    }
                     article.append(inner);
                     content.append(article);
                 }

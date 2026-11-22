@@ -1,5 +1,6 @@
 import { getLocale, translate as tr, translatedCategory } from './i18n-browser.js';
 import { cardLink } from './shared-card-link.js';
+import { uniqueFollowStories } from './follow-stories.js';
 import { sourceLanguage } from './news-sources.js';
 import { nextCategoryFollowDelay, selectCategoryFollowReturn } from './category-follow.js';
 function element(tag, className, text) {
@@ -120,7 +121,7 @@ export class CategoryFollowing {
             return;
         }
         const pending = this.options.loading(), busy = this.options.busy();
-        const signature = JSON.stringify([getLocale(), this.invalid, pending, busy, model.state, model.excludedConflicts, model.items.map(item => [item.category, item.state, item.savedAt, item.canAcknowledge, item.excludedConflicts, item.newCount, item.updatedCount, item.cards.map(change => [change.card.id, change.card.contentHash, change.card.title, change.card.publisher, change.kind])])]);
+        const signature = JSON.stringify([getLocale(), this.invalid, pending, busy, model.state, model.excludedConflicts, model.items.map(item => [item.category, item.state, item.savedAt, item.canAcknowledge, item.excludedConflicts, item.newCount, item.updatedCount, item.cards.map(change => [change.storyKey, change.coverageOnly, change.kind, [change.card, ...change.related].map(record => [record.id, record.contentHash, record.title, record.publisher, record.date, record.sourceUrl])])])]);
         if (signature === this.signature)
             return;
         this.signature = signature;
@@ -160,6 +161,52 @@ export class CategoryFollowing {
             const key = model.state === 'stale' ? 'followStale' : model.state === 'baseline-required' && model.items.some(item => item.canAcknowledge) ? 'followBaseline' : 'followUnavailable';
             status.textContent = tr(key);
         }
+        const changedStories = uniqueFollowStories(model.items.flatMap(item => item.cards));
+        if (changedStories.length) {
+            const updates = element('details', 'follow-updates');
+            updates.dataset.followTopic = 'updates:all';
+            updates.open = expanded.has(updates.dataset.followTopic);
+            updates.append(element('summary', '', tr('followOpen')));
+            const list = element('ul', 'following-items');
+            // The validated snapshot bounds the list; each item opens the existing public card route.
+            for (const change of changedStories) {
+                const row = element('li', ''), link = element('a', '', change.card.title);
+                link.href = cardLink(change.card);
+                link.dir = 'auto';
+                link.lang = sourceLanguage(change.card) ?? '';
+                link.setAttribute('translate', 'no');
+                const source = element('span', 'follow-source', change.card.publisher);
+                source.dir = 'auto';
+                source.setAttribute('translate', 'no');
+                row.dataset.storyKey = change.storyKey;
+                row.append(element('span', 'follow-change', tr(change.coverageOnly ? 'storyCoverageAdded' : change.kind === 'listing-updated' ? 'followUpdated' : 'followNew')), link, source);
+                if (change.related.length) {
+                    const reports = element('details', 'related');
+                    reports.dataset.followTopic = 'story:' + change.storyKey;
+                    reports.open = expanded.has(reports.dataset.followTopic);
+                    reports.append(element('summary', '', tr('storyReports', { count: change.related.length })), element('p', 'privacy-note', tr('storyReportsNote')));
+                    const originals = element('ul', 'following-items');
+                    for (const record of change.related) {
+                        const original = element('li', ''), sourceLink = element('a', '', record.title);
+                        original.dataset.relatedCardId = record.id;
+                        sourceLink.href = cardLink(record);
+                        sourceLink.dir = 'auto';
+                        sourceLink.lang = sourceLanguage(record) ?? '';
+                        sourceLink.setAttribute('translate', 'no');
+                        const attribution = element('span', 'follow-source', record.publisher + ' · ' + date(record.date));
+                        attribution.dir = 'auto';
+                        attribution.setAttribute('translate', 'no');
+                        original.append(sourceLink, attribution);
+                        originals.append(original);
+                    }
+                    reports.append(originals);
+                    row.append(reports);
+                }
+                list.append(row);
+            }
+            updates.append(list);
+            this.host.append(updates);
+        }
         const topics = element('div', 'following-topics');
         for (const item of model.items) {
             const details = element('details', 'follow-topic');
@@ -174,28 +221,6 @@ export class CategoryFollowing {
             body.append(element('p', 'privacy-note', pending ? tr('followChecking') : itemMessage(item)));
             if (item.savedAt)
                 body.append(element('p', 'privacy-note', tr('followCheckSaved', { time: date(item.savedAt) })));
-            if (item.cards.length) {
-                const updates = element('details', 'follow-updates');
-                updates.dataset.followTopic = 'updates:' + item.category;
-                updates.open = expanded.has(updates.dataset.followTopic);
-                updates.append(element('summary', '', tr('followOpen')));
-                const list = element('ul', 'following-items');
-                // The validated snapshot bounds the list; each item opens the existing public card route.
-                for (const change of item.cards) {
-                    const row = element('li', ''), link = element('a', '', change.card.title);
-                    link.href = cardLink(change.card);
-                    link.dir = 'auto';
-                    link.lang = sourceLanguage(change.card) ?? '';
-                    link.setAttribute('translate', 'no');
-                    const source = element('span', 'follow-source', change.card.publisher);
-                    source.dir = 'auto';
-                    source.setAttribute('translate', 'no');
-                    row.append(element('span', 'follow-change', tr(change.kind === 'listing-updated' ? 'followUpdated' : 'followNew')), link, source);
-                    list.append(row);
-                }
-                updates.append(list);
-                body.append(updates);
-            }
             const actions = element('div', 'follow-actions'), save = element('button', 'secondary', tr('followAcknowledge')), remove = element('button', 'text-button', tr('unfollowCategory', { category: translatedCategory(item.category) }));
             save.type = 'button';
             save.disabled = busy || pending || !item.canAcknowledge;

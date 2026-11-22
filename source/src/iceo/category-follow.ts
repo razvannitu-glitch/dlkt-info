@@ -1,4 +1,5 @@
-import {COMPARISON_MAX_AGE_MS,captureCheckpoint,compareCheckpoint,focusedSnapshot,parseCheckpoint,type ComparedCard,type ComparisonCheckpoint,type ComparisonResult} from './comparison.js';
+import {COMPARISON_MAX_AGE_MS,captureCheckpoint,compareCheckpoint,focusedSnapshot,parseCheckpoint,type ComparisonCheckpoint,type ComparisonResult} from './comparison.js';
+import {followStoryContext,followedStoryChanges,uniqueFollowStories,type FollowStoryContext,type FollowStoryChange} from './follow-stories.js';
 import {EDITORIAL_CATEGORIES_VERSION,PUBLIC_EDITORIAL_CATEGORIES,editorialCategory,newsCategoryFromSourceId,type PublicEditorialCategory} from './editorial-categories.js';
 import {PUBLIC_TOPICS} from './topics.js';
 import {safeLink,validCard} from './card-validation.js';
@@ -30,11 +31,11 @@ export interface CategoryFollowReturnItem {
   readonly comparison:ComparisonResult|null;
   readonly newCount:number;
   readonly updatedCount:number;
-  readonly cards:readonly ComparedCard[];
+  readonly cards:readonly FollowStoryChange[];
   readonly canAcknowledge:boolean;
   readonly excludedConflicts:boolean;
 }
-export interface CategoryFollowHighlight extends ComparedCard {readonly category:PublicEditorialCategory}
+export interface CategoryFollowHighlight extends FollowStoryChange {readonly category:PublicEditorialCategory}
 export interface CategoryFollowReturn {
   readonly state:'empty'|'invalid'|CategoryFollowItemState;
   readonly items:readonly CategoryFollowReturnItem[];
@@ -165,7 +166,7 @@ export function acknowledgeCategoryFollow(value:CategoryFollowState,category:Pub
 function expired(source:SourceHealth,now:number):boolean {
   return source.state==='stale'||stamp(source.verifiedAt)&&Date.parse(source.verifiedAt)<=now&&now-Date.parse(source.verifiedAt)>COMPARISON_MAX_AGE_MS;
 }
-function categoryReturn(entry:CategoryFollowEntry,snapshot:IceoSnapshot|null,now:number,currentAvailable:boolean):CategoryFollowReturnItem {
+function categoryReturn(entry:CategoryFollowEntry,snapshot:IceoSnapshot|null,now:number,currentAvailable:boolean,stories:FollowStoryContext|null):CategoryFollowReturnItem {
   let canAcknowledge=false,projected:IceoSnapshot|null=null,currentConflictCount=0;
   if(snapshot&&currentAvailable)try{
     projected=categorySnapshot(snapshot,entry.category,entry.baseline);currentConflictCount=snapshot.conflictCount;
@@ -181,7 +182,8 @@ function categoryReturn(entry:CategoryFollowEntry,snapshot:IceoSnapshot|null,now
     const comparison:ComparisonResult=raw.state!=='unavailable'&&excludedConflicts
       ?{...raw,state:'partial',notes:[...raw.notes,'Conflicting records were excluded from a source snapshot. Their affected sources or categories are not identified; only retained validated listings are compared.']}:raw;
     const state=comparison.state==='unavailable'&&projected.sources.length>0&&projected.sources.every(source=>expired(source,now))?'stale':comparison.state;
-    const cards=[...comparison.cards].sort((left,right)=>right.card.date.localeCompare(left.card.date)||left.card.id.localeCompare(right.card.id));
+    if(comparison.state!=='unavailable'&&!stories)throw Error('CATEGORY_FOLLOW_STORY_CHECK_REQUIRED');
+    const cards=stories?followedStoryChanges(comparison.cards,stories):[];
     return{...base,state,comparison,cards,canAcknowledge,newCount:cards.filter(item=>item.kind==='not-in-saved-check').length,updatedCount:cards.filter(item=>item.kind==='listing-updated').length};
   }catch{return base;}
 }
@@ -192,13 +194,14 @@ export function selectCategoryFollowReturn(value:CategoryFollowState|null,snapsh
   const saved=value===null?null:parseCategoryFollows(value);
   if(value!==null&&!saved)return{...empty,state:'invalid'};
   if(!saved?.entries.length)return empty;
-  const items=saved.entries.map(entry=>categoryReturn(entry,snapshot,now,currentAvailable));
+  let stories:FollowStoryContext|null=null;
+  if(snapshot&&currentAvailable)try{stories=followStoryContext(retainedCatalog(snapshot),saved.entries.flatMap(entry=>entry.baseline?[entry.baseline]:[]),now);}catch{/* Invalid global evidence cannot become a usable story comparison. */}
+  const items=saved.entries.map(entry=>categoryReturn(entry,snapshot,now,currentAvailable,stories));
   const state:CategoryFollowReturn['state']=items.every(item=>item.state==='complete')?'complete'
     :items.some(item=>item.state==='complete'||item.state==='partial')?'partial'
       :items.every(item=>item.state==='baseline-required')?'baseline-required':items.every(item=>item.state==='stale')?'stale':'unavailable';
-  const highlights=items.flatMap(item=>item.cards.map(card=>({...card,category:item.category})))
-    .sort((left,right)=>right.card.date.localeCompare(left.card.date)||left.card.id.localeCompare(right.card.id)).slice(0,6);
-  return{state,items,newCount:items.reduce((sum,item)=>sum+item.newCount,0),updatedCount:items.reduce((sum,item)=>sum+item.updatedCount,0),highlights,excludedConflicts:items.some(item=>item.excludedConflicts)};
+  const unique=uniqueFollowStories(items.flatMap(item=>item.cards.map(card=>({...card,category:item.category}))));
+  return{state,items,newCount:unique.filter(item=>item.kind==='not-in-saved-check').length,updatedCount:unique.filter(item=>item.kind==='listing-updated').length,highlights:unique.slice(0,6),excludedConflicts:items.some(item=>item.excludedConflicts)};
 }
 
 /** A deadline for the existing render timer, never a new timer or source request. */

@@ -42,6 +42,9 @@ function representatives(candidates, keyOf, order) {
 function publisherKey(view) {
     return view.card.publisher.normalize('NFKC').trim().toLowerCase();
 }
+function storyKey(view) {
+    return view.storyKey ?? JSON.stringify(['article', view.card.identity]);
+}
 function coverage(first, candidates, now, limit) {
     const selectedTopics = PUBLIC_TOPICS.filter(topic => first.some(view => view.card.topic === topic));
     const availableTopics = PUBLIC_TOPICS.filter(topic => candidates.some(view => view.card.topic === topic));
@@ -68,9 +71,9 @@ export function selectContextualToday(records, context, now) {
     const priority = (view) => headlineSignalPriority(view.editorial.headlineSignals);
     const strength = (view) => JSON.stringify([view.editorial.developmentPriority, view.editorial.relevance.priority,
         view.editorial.classification === 'category-discovery' || view.card.sourceIds.includes('news-unclassified'), priority(view) === 2, featured(view), priority(view)]);
-    const used = new Set(), identities = new Set(), urls = new Set();
+    const used = new Set(), identities = new Set(), urls = new Set(), stories = new Set();
     const categories = new Map(), publishers = new Map();
-    const available = (view, firstCategory = false) => !used.has(view.card.id) && !identities.has(view.card.identity) && !urls.has(view.card.sourceUrl)
+    const available = (view, firstCategory = false) => !stories.has(storyKey(view)) && !used.has(view.card.id) && !identities.has(view.card.identity) && !urls.has(view.card.sourceUrl)
         && (view.category === undefined || view.editorial.globalEssential || (categories.get(view.category) ?? 0) < DAILY_EDITION_POLICY.perCategory)
         && (view.editorial.globalEssential || view.editorial.developmentPriority >= 2 && priority(view) === 2 || featured(view)
             || firstCategory && view.category !== undefined && !categories.has(view.category) || (publishers.get(publisherKey(view)) ?? 0) < DAILY_EDITION_POLICY.perPublisher);
@@ -78,6 +81,7 @@ export function selectContextualToday(records, context, now) {
         if (first.length >= limit || !available(view, firstCategory))
             return false;
         first.push(view);
+        stories.add(storyKey(view));
         for (const card of [view.card, ...view.related]) {
             used.add(card.id);
             identities.add(card.identity);
@@ -121,7 +125,7 @@ export function selectContextualToday(records, context, now) {
     // Diversity controls membership. Readers see importance and context order,
     // rather than a mechanical first-category/second-category sequence.
     first.sort(compareEditorialCards);
-    const more = candidates.filter(view => !used.has(view.card.id) && !identities.has(view.card.identity) && !urls.has(view.card.sourceUrl));
+    const more = candidates.filter(view => !stories.has(storyKey(view)) && !used.has(view.card.id) && !identities.has(view.card.identity) && !urls.has(view.card.sourceUrl));
     return Object.freeze({ first: Object.freeze(first), more: Object.freeze(more), daily: coverage(first, candidates, now, limit) });
 }
 /** The explicit local-only path retains the prior personal reader ordering and eligibility. */
@@ -141,13 +145,14 @@ function selectLocalToday(records, context, now, limit) {
         const category = editorialCategory(view.card);
         return category === null ? view : { ...view, category };
     });
-    const first = [], used = new Set(), identities = new Set(), urls = new Set(), topics = new Map(), publishers = new Map();
-    const available = (view) => !used.has(view.card.id) && !identities.has(view.card.identity) && !urls.has(view.card.sourceUrl)
+    const first = [], used = new Set(), identities = new Set(), urls = new Set(), stories = new Set(), topics = new Map(), publishers = new Map();
+    const available = (view) => !stories.has(storyKey(view)) && !used.has(view.card.id) && !identities.has(view.card.identity) && !urls.has(view.card.sourceUrl)
         && (topics.get(view.card.topic) ?? 0) < 3 && (publishers.get(publisherKey(view)) ?? 0) < DAILY_EDITION_POLICY.perPublisher;
     const take = (view) => {
         if (first.length >= limit || !available(view))
             return false;
         first.push(context.preferredTopics.includes(view.card.topic) ? { ...view, reason: `From your saved interests. ${view.reason}` } : view);
+        stories.add(storyKey(view));
         for (const card of [view.card, ...view.related]) {
             used.add(card.id);
             identities.add(card.identity);

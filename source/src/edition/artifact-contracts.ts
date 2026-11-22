@@ -3,6 +3,8 @@ import type {SourceInsight} from '../iceo/insight-contracts.js';
 import {validInsight} from '../iceo/insight-contracts.js';
 import {validCard} from '../iceo/card-validation.js';
 import {validSettings} from '../iceo/device-memory.js';
+import {groupStories} from '../iceo/story-grouping.js';
+import type {EvidenceCard} from '../iceo/contracts.js';
 export const ARTIFACT_VERSION='dlkt-info-edition-artifact-1' as const;
 export interface EditionArtifact {
   readonly version:typeof ARTIFACT_VERSION;
@@ -14,6 +16,37 @@ const obj=(v:unknown):v is Record<string,unknown>=>v!==null&&typeof v==='object'
 const instant=(v:unknown):v is string=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}T/u.test(v)&&Number.isFinite(Date.parse(v));
 const hash=(v:unknown):v is string=>typeof v==='string'&&/^[a-f0-9]{64}$/u.test(v);
 const count=(v:unknown):v is number=>Number.isSafeInteger(v)&&Number(v)>=0;
+function validStoryGroups(value:unknown,primaries:readonly EvidenceCard[]):boolean {
+  if(value===undefined)return true;
+  if(!Array.isArray(value)||value.length>primaries.length)return false;
+  const byId=new Map(primaries.map(card=>[card.id,card])),primaryIds=new Set<string>(),keys=new Set<string>(),records=[...primaries];
+  for(const group of value){
+    if(!obj(group)||Object.keys(group).some(key=>!['key','primaryId','basis','related'].includes(key))
+      ||typeof group.key!=='string'||!group.key.length||group.key.length>24000||keys.has(group.key)
+      ||typeof group.primaryId!=='string'||primaryIds.has(group.primaryId)
+      ||!['matching-headlines','shared-event','software-versions'].includes(String(group.basis))
+      ||!Array.isArray(group.related)||group.related.length===0||group.related.length>4999||!group.related.every(validCard))return false;
+    const primary=byId.get(group.primaryId);if(primary===undefined)return false;
+    const members=[primary,...group.related];
+    if(group.basis==='software-versions'){
+      const product=(card:EvidenceCard):string|null=>card.kind!=='software-release'?null:card.sourceIds.includes('nodejs')?'nodejs':card.sourceIds.includes('nextjs')?'nextjs':null;
+      const id=product(primary);
+      if(id===null||group.key!==JSON.stringify(['software-versions',id])||members.some(card=>product(card)!==id))return false;
+    }else{
+      if(members.some(card=>card.kind!=='publication'))return false;
+      const grouped=groupStories(members);
+      const result=grouped[0];
+      if(grouped.length!==1||result===undefined||result.key!==group.key||result.basis!==group.basis
+        ||result.card.id!==primary.id||result.related.length!==group.related.length)return false;
+    }
+    records.push(...group.related);if(records.length>5000)return false;
+    primaryIds.add(group.primaryId);keys.add(group.key);
+  }
+  if(groupStories(records.filter(card=>card.kind==='publication')).some(group=>[group.card,...group.related].filter(card=>byId.has(card.id)).length>1))return false;
+  return new Set(records.map(card=>card.id)).size===records.length
+    &&new Set(records.map(card=>card.identity)).size===records.length
+    &&new Set(records.map(card=>card.sourceUrl)).size===records.length;
+}
 /** Untrusted persisted/transported artifacts must be checked before rendering or sending. */
 export function validArtifact(v:unknown):v is EditionArtifact {
   if(!obj(v)||v.version!==ARTIFACT_VERSION||!hash(v.digest)||!obj(v.edition)||!Array.isArray(v.insights))return false;
@@ -27,6 +60,7 @@ export function validArtifact(v:unknown):v is EditionArtifact {
     ||!Array.isArray(e.sourceChecks)||e.sourceChecks.length>100||!e.sourceChecks.every(s=>obj(s)&&typeof s.id==='string'&&s.id.length<=80&&['verified','partial','stale','unavailable'].includes(String(s.state))&&(s.verifiedAt===null||instant(s.verifiedAt))))return false;
   if((e.state==='unavailable'||e.state==='empty')&&e.cards.length!==0)return false;
   if(e.state==='ready'&&e.cards.length===0)return false;
+  if(!validStoryGroups(e.storyGroups,e.cards))return false;
   const cards=e.cards,generatedAt=e.generatedAt;
   return v.insights.every((item,index)=>{
     const card=cards[index];

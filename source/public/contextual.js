@@ -1,13 +1,12 @@
 import { contextForCard } from './context.js';
 import { compareDailyUse } from './card-guide.js';
 import { COMPARISON_MAX_AGE_MS } from './comparison.js';
-import { normalizeFocus, readingCard, selectReadingCards } from './reader.js';
+import { readingCard, selectReadingCards } from './reader.js';
 import { PUBLIC_TOPICS, TOPIC_LABELS } from './topics.js';
+import { groupStories } from './story-grouping.js';
 const DAY = 86_400_000;
 const DEFAULT_PUBLICATION_WINDOW_MS = 14 * DAY;
-const HEADLINE_WINDOW_MS = 2 * DAY;
 const MAX_RECORDS = 5000;
-const stopWords = new Set(['a', 'an', 'and', 'as', 'at', 'be', 'been', 'by', 'for', 'from', 'in', 'into', 'is', 'it', 'its', 'of', 'on', 'or', 'that', 'the', 'their', 'this', 'to', 'was', 'were', 'will', 'with']);
 function publicationWindow(value) {
     if (value === null)
         return null;
@@ -26,73 +25,16 @@ function current(card, now, window) {
 function stableOrder(a, b) {
     return Date.parse(b.date) - Date.parse(a.date) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 }
-function geographyKey(card) {
-    const context = contextForCard(card);
-    // Unknown geography does not establish compatibility with a specific country.
-    return context.countries.length ? context.countries.map(c => c.code).sort().join(',') : `unknown:${context.basis}:${context.label}`;
-}
-function comparableHeadline(card) {
-    if (card.kind !== 'publication')
-        return null;
-    const title = normalizeFocus(card.title).replace(/[‘’]/gu, "'").replace(/[‐‑‒–—]/gu, '-');
-    const words = title.match(/[\p{L}\p{N}]+(?:'[\p{L}\p{N}]+)*/gu) ?? [];
-    const meaningful = new Set(words.filter(word => word.length > 2 && !stopWords.has(word)));
-    // An exact informative headline is only a grouping hint. Keep punctuation,
-    // negation and numbers, and leave generic announcements as separate listings.
-    return title.length >= 55 && words.length >= 8 && meaningful.size >= 7 ? title : null;
-}
-function comparableExcerpt(card) {
-    if (card.summary === undefined)
-        return null;
-    const excerpt = normalizeFocus(card.summary).replace(/[‘’]/gu, "'").replace(/[‐‑‒–—]/gu, '-');
-    const words = excerpt.match(/[\p{L}\p{N}]+(?:'[\p{L}\p{N}]+)*/gu) ?? [];
-    const meaningful = new Set(words.filter(word => word.length > 2 && !stopWords.has(word)));
-    return excerpt.length >= 80 && meaningful.size >= 12 ? excerpt : null;
-}
 /**
- * Conservative presentation grouping of matching publisher listings. Both
- * an informative headline and an informative excerpt must match exactly.
- * Related records retain their own text, source, date and attribution. This
- * does not assert one verified event, semantic equivalence or corroboration.
+ * Use the shared story identity after existing freshness/window gates. Every
+ * related record retains its own text, source, date and attribution; grouping
+ * does not establish agreement, verification or independent corroboration.
  */
 export function groupRelatedListings(records, now, publicationWindowMs) {
     if (!Number.isFinite(now) || records.length > MAX_RECORDS)
         throw Error('CONTEXTUAL_INPUT_INVALID');
-    const window = publicationWindow(publicationWindowMs), byId = new Map(), conflicts = new Set();
-    for (const card of records) {
-        if (!current(card, now, window) || conflicts.has(card.id))
-            continue;
-        const old = byId.get(card.id);
-        if (old && (old.identity !== card.identity || old.contentHash !== card.contentHash)) {
-            byId.delete(card.id);
-            conflicts.add(card.id);
-            continue;
-        }
-        if (!old || stableOrder(card, old) < 0)
-            byId.set(card.id, card);
-    }
-    const result = [];
-    const indexed = new Map();
-    for (const card of [...byId.values()].sort(stableOrder)) {
-        const headline = comparableHeadline(card), excerpt = comparableExcerpt(card);
-        const key = headline === null || excerpt === null ? null : `${headline}\n${excerpt}\n${geographyKey(card)}`;
-        const position = key === null ? undefined : indexed.get(key)?.find(index => {
-            const group = result[index];
-            return group !== undefined && Math.abs(Date.parse(group.card.date) - Date.parse(card.date)) <= HEADLINE_WINDOW_MS;
-        });
-        if (position !== undefined) {
-            result[position]?.related.push(card);
-            continue;
-        }
-        const index = result.length;
-        result.push({ card, related: [], key });
-        if (key !== null) {
-            const positions = indexed.get(key) ?? [];
-            positions.push(index);
-            indexed.set(key, positions);
-        }
-    }
-    return Object.freeze(result.map(group => Object.freeze({ card: group.card, related: Object.freeze(group.related), grouping: group.related.length ? 'matching-headlines' : 'single' })));
+    const window = publicationWindow(publicationWindowMs);
+    return Object.freeze(groupStories(records.filter(card => current(card, now, window)), stableOrder).map(group => Object.freeze({ card: group.card, related: group.related, storyKey: group.key, grouping: group.basis })));
 }
 function explanation(card, countryCode) {
     const context = contextForCard(card), match = countryCode === null ? undefined : context.countries.find(country => country.code === countryCode);
@@ -110,18 +52,23 @@ export function rankContextualCards(records, settings, now) {
         || settings.countryCode !== null && !/^[A-Za-z]{2}$/u.test(settings.countryCode))
         throw Error('CONTEXTUAL_SETTINGS_INVALID');
     const window = publicationWindow(settings.publicationWindowMs), countryCode = settings.countryCode?.toUpperCase() ?? null;
-    const live = records.filter(card => current(card, now, window));
+    // Quarantine conflicts before the legacy reader can collect duplicate IDs as
+    // related software/listing records or apply a narrower topic/text filter.
+    const live = groupRelatedListings(records, now, window).flatMap(group => [group.card, ...group.related]);
     // Reuse the established notice eligibility, query matching and software grouping.
     const selected = selectReadingCards(live, { topics: settings.topics, query: settings.query, budget: Math.max(1, live.length), mode: 'briefing' }, now);
     const views = new Map(selected.cards.map(view => [view.card.id, view]));
-    const groups = groupRelatedListings(selected.cards.map(view => view.card), now, window);
+    // Publication groups are ephemeral reader views; regroup all their originals.
+    // Software retains its separate product/version grouping below.
+    const selectedRecords = selected.cards.flatMap(view => view.card.kind === 'publication' ? [view.card, ...view.related] : [view.card]);
+    const groups = groupRelatedListings(selectedRecords, now, window);
     const remaining = groups.map(group => {
-        const base = views.get(group.card.id), related = [...group.related, ...(base?.related ?? [])];
+        const related = [...group.related, ...[group.card, ...group.related].flatMap(card => views.get(card.id)?.related ?? [])];
         const seen = new Set([group.card.id]);
         const allRelated = related.filter(card => { if (seen.has(card.id))
             return false; seen.add(card.id); return true; });
-        const grouping = group.related.length ? 'matching-headlines' : allRelated.length ? 'software-versions' : 'single';
-        return Object.freeze({ ...readingCard(group.card, now, allRelated), ...explanation(group.card, countryCode), grouping });
+        const grouping = group.related.length ? group.grouping : allRelated.length ? 'software-versions' : 'single';
+        return Object.freeze({ ...readingCard(group.card, now, allRelated), ...explanation(group.card, countryCode), grouping, storyKey: group.storyKey });
     }).sort((a, b) => Number(b.localMatch) - Number(a.localMatch) || compareDailyUse(a.card, b.card));
     const chosen = [], topics = new Set(), publishers = new Set();
     while (remaining.length && chosen.length < settings.budget) {

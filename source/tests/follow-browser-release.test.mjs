@@ -4,7 +4,7 @@ import {readFileSync,existsSync} from 'node:fs';
 import {parseDocument,DomUtils} from 'htmlparser2';
 const read=path=>readFileSync(path,'utf8');
 test('following ships the exact typed controller and pure model through resolvable public imports',()=>{
- for(const name of ['category-follow','editorial-subject-semantics','follow-browser']){
+ for(const name of ['story-grouping','follow-stories','category-follow','editorial-subject-semantics','follow-browser']){
   const expected=read(`.build/src/iceo/${name}.js`).replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'')
    .replaceAll("'../i18n/browser.js'","'./i18n-browser.js'").replaceAll("'../share/link.js'","'./shared-card-link.js'");
   const actual=read(`public/${name}.js`);assert.equal(actual,expected);

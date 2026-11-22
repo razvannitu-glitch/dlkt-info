@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {selectDiscoveryCards,nextDiscoveryDelay,DISCOVERY_TOPICS,DISCOVERY_BUDGET,DISCOVERY_SOURCE_MAX_AGE_MS} from '../.build/src/iceo/reader.js';
 const now=Date.parse('2026-11-16T12:00:00Z');
-const card=(topic,id,extra={})=>({id:id.toString(16).padStart(24,'0'),identity:`listing:${id}`,title:`Publication ${id}`,topic,kind:'publication',sourceUrl:'https://www.nasa.gov/test',publisher:topic,sourceIds:['source'],date:'2026-11-15T10:00:00Z',dateLabel:'Published',observedAt:'2026-11-16T12:00:00Z',contentHash:'a'.repeat(64),boundary:'Source listing',deadline:null,version:null,attribution:'Publisher',sourceState:'verified',...extra});
+const card=(topic,id,extra={})=>({id:id.toString(16).padStart(24,'0'),identity:`listing:${id}`,title:`Publication ${id}`,topic,kind:'publication',sourceUrl:`https://www.nasa.gov/controlled-${id}`,publisher:topic,sourceIds:['source'],date:'2026-11-15T10:00:00Z',dateLabel:'Published',observedAt:'2026-11-16T12:00:00Z',contentHash:'a'.repeat(64),boundary:'Source listing',deadline:null,version:null,attribution:'Publisher',sourceState:'verified',...extra});
 test('welcome mix gives every available topic a turn before repeating, regardless of source volume',()=>{
  const records=[...Array.from({length:35},(_,i)=>card('science',i)),...DISCOVERY_TOPICS.filter(t=>t!=='science').map((t,i)=>card(t,100+i))];const before=JSON.stringify(records);
  const selected=selectDiscoveryCards(records,now);assert.equal(selected.length,DISCOVERY_BUDGET);assert.deepEqual(selected.slice(0,DISCOVERY_TOPICS.length).map(v=>v.card.topic),DISCOVERY_TOPICS);assert.equal(new Set(selected.map(v=>v.card.id)).size,selected.length);assert.equal(JSON.stringify(records),before);

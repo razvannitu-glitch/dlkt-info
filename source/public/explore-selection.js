@@ -1,5 +1,5 @@
 import { PUBLIC_EDITORIAL_CATEGORIES, editorialCategory, classifyNewsHeadline } from './editorial-categories.js';
-import { rankEditorialCards } from './editorial-ranking.js';
+import { compareEditorialCards, rankEditorialCards } from './editorial-ranking.js';
 import { validCity } from './local-contracts.js';
 import { exploreGeography } from './explore-geography.js';
 /** Apply the existing public eligibility/conflict gates to the entire corpus, then explore it. */
@@ -11,33 +11,38 @@ export function selectExploreCards(records, context, now) {
         throw Error('EXPLORE_CONTEXT_INVALID');
     if (context.city !== null && code !== null && context.city.countryCode !== code)
         throw Error('EXPLORE_CITY_COUNTRY_MISMATCH');
-    const eligible = rankEditorialCards(records, now).flatMap(view => [view.card, ...view.related]);
+    const eligible = rankEditorialCards(records, now);
     const groups = { city: [], country: [], world: [] };
-    const evidence = new Map();
-    for (const card of eligible) {
-        if (context.category !== null) {
-            // Use the same existing classification/fallback as public ranking, before grouping:
-            // a differently classified representative must not hide a matching related listing.
-            const category = editorialCategory(card) ?? (card.sourceIds.includes('news-unclassified') ? null : classifyNewsHeadline(card.title, card.sourceUrl));
-            if (category !== context.category)
-                continue;
-        }
-        const geography = exploreGeography(card, context.city, code, aliases);
-        if (geography !== null) {
-            groups[geography.scope].push(card);
-            evidence.set(card.id, geography);
-        }
-    }
-    // Group after geographical filtering so a matching related listing is never lost behind
-    // a non-matching representative. National stories never become local/global filler.
-    const views = (scope) => Object.freeze(rankEditorialCards(groups[scope], now)
-        .filter(view => context.category === null || view.category === context.category)
-        .map(view => {
-        const geography = evidence.get(view.card.id);
-        if (geography === undefined)
+    const specificity = { city: 0, country: 1, world: 2 };
+    for (const view of eligible) {
+        const members = [view.card, ...view.related];
+        const matching = members.flatMap(card => {
+            if (context.category !== null) {
+                // A related member may satisfy a category that the global representative does not.
+                const category = editorialCategory(card) ?? (card.sourceIds.includes('news-unclassified') ? null : classifyNewsHeadline(card.title, card.sourceUrl));
+                if (category !== context.category)
+                    return [];
+            }
+            const geography = exploreGeography(card, context.city, code, aliases);
+            return geography === null ? [] : [{ card, geography }];
+        }).sort((a, b) => specificity[a.geography.scope] - specificity[b.geography.scope]);
+        const match = matching[0];
+        if (match === undefined)
+            continue;
+        // Group identity comes from the whole eligible corpus. Choose one genuinely
+        // matching original, at its strongest supported scope, without cloning the
+        // same event into city/country/world buckets or discarding other sources.
+        const primary = match.card.id === view.card.id ? view : rankEditorialCards([match.card], now)[0];
+        if (primary === undefined)
             throw Error('EXPLORE_EVIDENCE_MISSING');
-        return Object.freeze({ ...view, explore: geography });
-    }));
+        const related = Object.freeze(members.filter(card => card.id !== match.card.id));
+        const groupedReason = primary === view ? '' : view.grouping === 'shared-event'
+            ? ' Related coverage of the same identified story is grouped; reports may differ and are not independent confirmations.'
+            : related.length ? ' Matching listings are grouped; they are not independent confirmations.' : '';
+        groups[match.geography.scope].push(Object.freeze({ ...primary, storyKey: view.storyKey ?? JSON.stringify(['article', view.card.identity]),
+            grouping: view.grouping, related, editorialReason: primary.editorialReason + groupedReason, explore: match.geography }));
+    }
+    const views = (scope) => Object.freeze(groups[scope].sort(compareEditorialCards));
     const local = views('city'), national = views('country'), world = views('world'), cards = Object.freeze([...local, ...national, ...world]);
-    return Object.freeze({ cards, local, national, world, eligibleCount: eligible.length, matchedCount: cards.length });
+    return Object.freeze({ cards, local, national, world, eligibleCount: eligible.reduce((count, view) => count + 1 + view.related.length, 0), matchedCount: cards.length });
 }

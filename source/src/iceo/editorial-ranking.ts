@@ -5,6 +5,7 @@ import type {ContextualReadingCard} from './contextual.js';
 import {readingCard,normalizeFocus} from './reader.js';
 import {editorialRelevance,validateEditorialContext,type EditorialReaderContext,type EditorialRelevance} from './editorial-relevance.js';
 import {classifyEditorialCard,classifyNewsHeadline,editorialHeadlineSignals,headlineSignalPriority,EDITORIAL_CATEGORY_LABELS,type EditorialClassification,type EditorialHeadlineSignal,type PublicEditorialCategory} from './editorial-categories.js';
+import {groupStories} from './story-grouping.js';
 
 export type EditorialSignal='publisher-frontpage'|EditorialHeadlineSignal;
 type HeadlineSignal=Exclude<EditorialSignal,'publisher-frontpage'>;
@@ -29,7 +30,6 @@ export interface RankedEditorialCard extends EditorialReadingCard {
 }
 
 const WINDOW_MS=86_400_000;
-const STOP_WORDS=new Set(['a','an','and','as','at','be','been','by','for','from','in','into','is','it','its','of','on','or','that','the','their','this','to','was','were','will','with']);
 
 interface DevelopmentPriority {readonly priority:0|1|2|3;readonly globalEssential:boolean;readonly reason:string}
 /** Headline evidence is an editorial hint, never independent corroboration or a measured impact score. */
@@ -75,32 +75,6 @@ function current(card:EvidenceCard,now:number):boolean {
     &&Number.isFinite(observed)&&observed<=now+300_000&&now-observed<COMPARISON_MAX_AGE_MS;
 }
 
-function headlineKey(card:EvidenceCard):string|null {
-  const title=normalizeFocus(card.title).replace(/[‘’]/gu,"'").replace(/[‐‑‒–—]/gu,'-');
-  const words=title.match(/[\p{L}\p{N}]+(?:'[\p{L}\p{N}]+)*/gu)??[];
-  if(title.length<55||words.length<8||new Set(words.filter(word=>word.length>2&&!STOP_WORDS.has(word))).size<7)return null;
-  const geography=contextForCard(card),countries=geography.countries.map(country=>country.code).sort().join(',');
-  // Matching headlines are only a conservative grouping hint. Differing
-  // publisher excerpts, negations, numbers and explicit countries stay separate.
-  const excerpt=card.summary===undefined?'':normalizeFocus(card.summary);
-  return JSON.stringify([title,excerpt,countries]);
-}
-
-/** Exact reported launch revenue is one claim even when title aliases differ.
- * Whole-headline matching excludes estimates, denials and additional events;
- * amount/currency/subject remain part of the identity, never a ranking bonus.
- */
-function launchRevenueKey(card:EvidenceCard):string|null {
-  const title=normalizeFocus(card.title).replace(/\b(?:grand theft auto|gta)\s*(?:6|vi)\b/gu,'grand theft auto 6');
-  const match=/^(?:[\p{L}\p{N} &'’.-]{2,50} says )?(.{3,100}?) (?:earned|made|grossed|generated) (us\$|\$|usd)\s*(\d+(?:\.\d+)?) (billion|million|bn|m) (?:on launch day|in (?:its |the )?first day|in (?:its |the )?first 24 hours)\.?$/u.exec(title);
-  if(!match||/\b(?:not|never|no|estimated?|projected|expected|denied|disputed|false|falsely|wrongly|incorrectly|allegedly|unconfirmed)\b/u.test(title))return null;
-  const subject=match[1]??'',amount=Number(match[3]),unit=match[4];
-  if(!Number.isFinite(amount)||amount<=0)return null;
-  const currency=match[2]==='$'?'unspecified-dollar':'USD';
-  const countries=contextForCard(card).countries.map(country=>country.code).sort().join(',');
-  return JSON.stringify([subject,currency,amount,unit==='billion'||unit==='bn'?'billion':'million',countries,card.summary===undefined?'':normalizeFocus(card.summary)]);
-}
-
 /** Isolate contradictory identities before ranking; never make another category from a conflict. */
 function consistentCards(records:readonly EvidenceCard[]):readonly EvidenceCard[] {
   const ids=new Map<string,Set<string>>(),identities=new Map<string,Set<string>>(),urls=new Map<string,Set<string>>();
@@ -143,18 +117,17 @@ export function rankEditorialCards(records:readonly EvidenceCard[],now:number,co
         developmentPriority:development.priority,globalEssential:development.globalEssential,developmentReason:development.reason,relevance})}));
   }
   views.sort(order);
-  const groups:{view:RankedEditorialCard;related:EvidenceCard[]}[]=[],byIdentity=new Map<string,number>(),byUrl=new Map<string,number>(),byHeadline=new Map<string,number>(),byLaunchRevenue=new Map<string,number>();
-  for(const view of views){
-    const key=headlineKey(view.card),revenue=launchRevenueKey(view.card),position=byIdentity.get(view.card.identity)??byUrl.get(view.card.sourceUrl)??(key===null?undefined:byHeadline.get(key))??(revenue===null?undefined:byLaunchRevenue.get(revenue));
-    if(position!==undefined){
-      const group=groups[position];
-      if(group&&view.card.id!==group.view.card.id&&!group.related.some(card=>card.id===view.card.id))group.related.push(view.card);
-      continue;
-    }
-    const index=groups.length;groups.push({view,related:[]});byIdentity.set(view.card.identity,index);byUrl.set(view.card.sourceUrl,index);
-    if(key!==null)byHeadline.set(key,index);
-    if(revenue!==null)byLaunchRevenue.set(revenue,index);
-  }
-  return Object.freeze(groups.map(({view,related})=>related.length?Object.freeze({...view,related:Object.freeze(related),grouping:'matching-headlines' as const,
-    editorialReason:view.editorialReason+' Matching listings are grouped; they are not independent confirmations.'}):view));
+  const byId=new Map(views.map(view=>[view.card.id,view]));
+  const groups=groupStories(views.map(view=>view.card),(a,b)=>{
+    const left=byId.get(a.id),right=byId.get(b.id);
+    if(left===undefined||right===undefined)throw Error('EDITORIAL_GROUP_MEMBER_MISSING');
+    return order(left,right);
+  });
+  return Object.freeze(groups.map(group=>{
+    const view=byId.get(group.card.id);
+    if(view===undefined)throw Error('EDITORIAL_GROUP_MEMBER_MISSING');
+    const reason=group.basis==='shared-event'?' Related coverage of the same identified story is grouped; reports may differ and are not independent confirmations.'
+      :group.related.length?' Matching listings are grouped; they are not independent confirmations.':'';
+    return Object.freeze({...view,storyKey:group.key,related:group.related,grouping:group.basis,editorialReason:view.editorialReason+reason});
+  }).sort(order));
 }

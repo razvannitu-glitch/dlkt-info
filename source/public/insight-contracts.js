@@ -1,3 +1,4 @@
+import { NEWS_CATEGORY_SOURCES, NEWS_UNCLASSIFIED_SOURCE, publisherForNewsUrl } from './news-sources.js';
 export const INSIGHT_VERSION = 'iceo-source-insight-1';
 /** Only reviewed first-party formats; no destination is supplied by the visitor. */
 export function insightSupported(card) {
@@ -30,7 +31,15 @@ export function validInsight(value, card) {
         return false;
     const allowedTerms = ['https://www.ecb.europa.eu/services/using-our-site/disclaimer/html/index.en.html', 'https://github.com/nodejs/node/blob/main/LICENSE', 'https://github.com/vercel/next.js/blob/canary/license.md'];
     allowedTerms.push('https://www.nasa.gov/nasa-brand-center/', 'https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits', 'https://www.fda.gov/about-fda/about-website/website-policies', 'https://www.gov.uk/help/terms-conditions', 'https://globalvoices.org/about/global-voices-attribution-policy/', 'https://www.eff.org/copyright', 'https://www.ncsc.gov.uk/section/about-this-website/terms-and-conditions');
-    if (!allowedTerms.includes(value.termsUrl))
+    // Discovery terms describe the existing metadata index, never a publisher
+    // republication licence. They can accompany only an empty, unsupported
+    // headline listing from a known discovery source; no passage path is widened.
+    const discoveryMetadata = value.termsUrl === 'https://www.gdeltproject.org/about.html'
+        && value.state === 'unsupported' && value.reason === 'FORMAT_NOT_REVIEWED'
+        && value.points.length === 0 && value.availablePoints === 0 && value.documentHash === null && value.introduction === ''
+        && card.kind === 'publication' && card.summary === undefined && publisherForNewsUrl(card.sourceUrl) !== null
+        && [...NEWS_CATEGORY_SOURCES, NEWS_UNCLASSIFIED_SOURCE].some(source => card.sourceIds.includes(source.id) && source.termsUrl === value.termsUrl);
+    if (!allowedTerms.includes(value.termsUrl) && !discoveryMetadata)
         return false;
     if (value.state === 'ready' && (value.points.length === 0 || typeof value.documentHash !== 'string' || !/^[a-f0-9]{64}$/u.test(value.documentHash)))
         return false;

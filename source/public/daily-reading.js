@@ -7,6 +7,7 @@ export function planDailyReading(selection) {
     const previous = selection.items.filter(i => i.local === null && i.change === 'same');
     const changed = selection.items.filter(i => i.topic !== null && i.change === 'different').length;
     const added = selection.items.filter(i => i.topic !== null && i.change === 'added').length;
+    const coverage = selection.items.filter(i => i.topic !== null && i.change === 'coverage').length;
     let summary = 'Your first selection. Save it to compare with your next edition.';
     if (selection.previousAt) {
         const parts = [];
@@ -14,6 +15,8 @@ export function planDailyReading(selection) {
             parts.push(`${changed} topic card${changed === 1 ? ' has' : 's have'} changed since the previous source check.`);
         if (added)
             parts.push(`${added} topic card${added === 1 ? ' was' : 's were'} not in the previous source check; check publication dates, as these may be older.`);
+        if (coverage)
+            parts.push(`${coverage} existing stor${coverage === 1 ? 'y has' : 'ies have'} additional publisher coverage; these are not new stories or independent confirmations.`);
         if (previous.length)
             parts.push(`${previous.length} unchanged topic card${previous.length === 1 ? ' is' : 's are'} available below.`);
         if (!parts.length)

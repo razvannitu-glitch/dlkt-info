@@ -1,3 +1,5 @@
+import { translate as tr } from './i18n-browser.js';
+import { sourceLanguage } from './news-sources.js';
 import { contextForCard } from './context.js';
 import { photoNode } from './card-photo-browser.js';
 import { cardGuideNode } from './card-guide.js';
@@ -12,7 +14,7 @@ import { attachInsight, pruneInsights } from './insight-browser.js';
 import { safeLocale } from './reader.js';
 import { object, validCity, currentLocalSnapshot, localCardLabel, localCoverageNotes } from './local-contracts.js';
 import { DAILY_VERSION, DAILY_TOPICS, validProfile, profileKey, localDay, validZone, validTopicSnapshot } from './daily-contracts.js';
-import { selectDaily } from './daily-selection.js';
+import { selectDaily, feedbackMatches } from './daily-selection.js';
 import { DAILY_INTERESTS, DAILY_LENGTHS, RECOMMENDED_DAILY_TOPICS, interestState, toggleInterest } from './daily-interests.js';
 const get = (id) => { const n = document.getElementById(id); if (!n)
     throw Error('DAILY_ELEMENT_MISSING'); return n; };
@@ -135,10 +137,12 @@ else {
     get('daily-options').open = true;
     status.textContent = 'Choose what belongs in your briefing. Preview it before saving.';
 } }
-function descriptor(item) { return item.change === 'different' ? 'Listing changed since the previous source check' : item.change === 'added' ? 'New to the source check for this briefing · not necessarily newly published' : item.change === 'same' ? 'Previously included · checked again' : item.change === 'available' ? 'Available from your interests · not a new update' : 'From your selection'; }
+function descriptor(item) { return item.change === 'coverage' ? tr('storyCoverageAdded') : item.change === 'different' ? 'Listing changed since the previous source check' : item.change === 'added' ? 'New to the source check for this briefing · not necessarily newly published' : item.change === 'same' ? 'Previously included · checked again' : item.change === 'available' ? 'Available from your interests · not a new update' : 'From your selection'; }
 function renderItem(item) {
     const a = make('article', '', 'info-card daily-card');
     a.dataset.dailyId = item.id;
+    if (item.topic?.storyKey)
+        a.dataset.storyKey = item.topic.storyKey;
     const head = make('header');
     head.append(make('span', item.local ? localCardLabel(item.local) : item.topic?.label ?? 'Selected source', 'card-topic'));
     const body = make('div', '', 'card-content');
@@ -215,11 +219,10 @@ function renderItem(item) {
         a.dataset.coverage = coverage.basis;
         details.append(make('p', `Publisher coverage: ${coverage.label}`, 'card-boundary'), make('p', coverage.boundary, 'card-boundary'));
         if (item.topic.related.length) {
-            const related = make('details', '', 'related');
-            const matching = 'grouping' in item.topic && item.topic.grouping === 'matching-headlines';
-            related.append(make('summary', matching ? 'Matching publisher listings' : 'Other listed versions'));
-            if (matching)
-                related.append(make('p', 'Matching wording is grouped for reading. This is not independent confirmation.', 'privacy-note'));
+            const related = make('details', '', 'related'), publication = item.topic.card.kind === 'publication';
+            related.append(make('summary', publication ? tr('storyReports', { count: item.topic.related.length }) : 'Other listed versions'));
+            if (publication)
+                related.append(make('p', tr('storyReportsNote'), 'privacy-note'));
             for (const entry of item.topic.related) {
                 const url = safeLink(entry.sourceUrl);
                 if (!url)
@@ -228,14 +231,21 @@ function renderItem(item) {
                 link.href = url;
                 link.target = '_blank';
                 link.rel = 'noopener noreferrer';
-                related.append(link);
+                link.dir = 'auto';
+                link.lang = sourceLanguage(entry) ?? '';
+                link.setAttribute('translate', 'no');
+                link.dataset.relatedCardId = entry.id;
+                related.append(link, make('p', date(entry.date), 'card-date'));
+                const credits = cardCreditsNode(entry);
+                if (credits)
+                    related.append(credits);
             }
             details.append(related);
         }
     }
     body.append(make('div', '', 'card-reading'));
     const actions = make('div', '', 'card-actions');
-    const useful = make('button', feedback.some(f => f.id === item.id && f.signature === item.signature && f.action === 'useful') ? 'Marked useful' : 'Useful', 'secondary');
+    const useful = make('button', feedback.some(f => feedbackMatches(item, f) && f.action === 'useful') ? 'Marked useful' : 'Useful', 'secondary');
     useful.type = 'button';
     useful.dataset.dailyFeedback = 'useful';
     useful.setAttribute('aria-pressed', String(useful.textContent === 'Marked useful'));
@@ -320,7 +330,7 @@ function render() {
     status.textContent = notes.join(' ') || 'Prepared from the sources you selected. Publication dates remain visible on each card.';
     const changes = get('daily-changes');
     changes.replaceChildren();
-    const diffs = selection.items.filter(i => i.change === 'different' || i.change === 'added');
+    const diffs = selection.items.filter(i => i.change === 'different' || i.change === 'added' || i.change === 'coverage');
     changes.hidden = !selection.previousAt;
     if (selection.previousAt) {
         changes.append(make('summary', 'Since the previous complete source check'), make('p', `Prepared ${date(selection.previousAt, true)}. Compares eligible source listings and matching forecast hours, not your reading history. Older saved editions may only include the previously selected listings. Missing entries do not mean an incident ended.`, 'privacy-note'));
@@ -329,7 +339,7 @@ function render() {
         if (!selection.localChanges.length && !diffs.length)
             changes.append(make('p', 'No differences in the comparable items. New forecast time windows are not revisions.', 'privacy-note'));
         else if (diffs.length)
-            changes.append(make('p', `${diffs.length} included listing${diffs.length === 1 ? ' differs' : 's differ'} from that source check. See the label and source details on each card.`, 'privacy-note'));
+            changes.append(make('p', `${diffs.length} included item${diffs.length === 1 ? ' has' : 's have'} new information or additional reporting since that source check. See the label and source details on each card.`, 'privacy-note'));
     }
     get('daily-end-copy').textContent = live.length ? `That is your current selection.${selection.hidden ? ` ${selection.hidden} topic card${selection.hidden === 1 ? ' is' : 's are'} hidden for today.` : ''}` : 'No matching cards are available now. Change your selection or check again; nothing is added as filler.';
     get('daily-save-note').textContent = !sharedPreview && saved && profileKey(saved.profile) === profileKey(profile) ? 'Saved only in this browser. Rechecked when opened or refreshed, not in the background. Complete prepared editions are remembered for the next comparison.' : 'Preview only. Save this briefing to open it next time in this browser. No account or scheduled delivery is activated.';
@@ -432,16 +442,16 @@ async function rate(item, action) {
     busy = true;
     controls();
     const previous = [...feedback];
-    const exists = feedback.some(f => f.id === item.id && f.signature === item.signature && f.action === action);
+    const exists = feedback.some(f => feedbackMatches(item, f) && f.action === action);
     const today = localDay(Date.now(), profile.timezone);
-    feedback = feedback.filter(f => !(f.id === item.id && f.action === action) && (f.action === 'useful' || f.day === today));
+    feedback = feedback.filter(f => !((f.id === item.id || feedbackMatches(item, f)) && f.action === action) && (f.action === 'useful' || f.day === today));
     if (!exists)
         feedback.push({ id: item.id, signature: item.signature, action, day: today, timezone: profile.timezone });
     feedback = feedback.slice(-2000);
     if (!sharedPreview && saved && profileKey(saved.profile) === profileKey(profile) && !await persist({ version: DAILY_VERSION, profile: saved.profile, edition: saved.edition, feedback }))
         feedback = previous;
     else
-        announce(action === 'not-today' ? 'Hidden until the next date in your selected time zone. A materially changed listing can appear sooner.' : 'Usefulness noted. This is explicit feedback, not a claim that you read every card.');
+        announce(action === 'not-today' ? 'This topic is hidden until the next date in your selected time zone, including additional coverage.' : 'Usefulness noted. This is explicit feedback, not a claim that you read every card.');
     selection = selectDaily(profile, topics, local, baseline, feedback, Date.now());
     busy = false;
     render();

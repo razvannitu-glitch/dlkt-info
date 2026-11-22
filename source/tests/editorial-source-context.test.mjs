@@ -33,7 +33,7 @@ test('useful provenance leaves original titles, qualifications and publisher exc
  assert.equal(view.headline,original.title);assert.equal(view.visibleContext,summary);assert.equal(JSON.stringify(original),before);
 });
 test('every new action, provenance label, error and return state has an explicit locale with identical parameters',()=>{
- assert.equal(READING_MESSAGE_KEYS.length,31);
+ assert.equal(READING_MESSAGE_KEYS.length,34);
  for(const {code} of LOCALES)for(const key of READING_MESSAGE_KEYS){
   assert.ok(MESSAGES[code][key].trim(),code+':'+key);
   assert.deepEqual(messageParameters(MESSAGES[code][key]),messageParameters(MESSAGES.en[key]),code+':'+key);

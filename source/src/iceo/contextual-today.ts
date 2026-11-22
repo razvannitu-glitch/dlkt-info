@@ -72,6 +72,9 @@ function representatives<T extends ContextualReadingCard,K extends string>(candi
 function publisherKey(view:ContextualReadingCard):string {
   return view.card.publisher.normalize('NFKC').trim().toLowerCase();
 }
+function storyKey(view:ContextualReadingCard):string {
+  return view.storyKey??JSON.stringify(['article',view.card.identity]);
+}
 
 function coverage(first:readonly EditorialReadingCard[],candidates:readonly EditorialReadingCard[],now:number,limit:20|30|40):DailyEditionCoverage {
   const selectedTopics=PUBLIC_TOPICS.filter(topic=>first.some(view=>view.card.topic===topic));
@@ -97,15 +100,16 @@ export function selectContextualToday(records:readonly EvidenceCard[],context:To
   const priority=(view:RankedEditorialCard):number=>headlineSignalPriority(view.editorial.headlineSignals);
   const strength=(view:RankedEditorialCard):string=>JSON.stringify([view.editorial.developmentPriority,view.editorial.relevance.priority,
     view.editorial.classification==='category-discovery'||view.card.sourceIds.includes('news-unclassified'),priority(view)===2,featured(view),priority(view)]);
-  const used=new Set<string>(),identities=new Set<string>(),urls=new Set<string>();
+  const used=new Set<string>(),identities=new Set<string>(),urls=new Set<string>(),stories=new Set<string>();
   const categories=new Map<PublicEditorialCategory,number>(),publishers=new Map<string,number>();
-  const available=(view:RankedEditorialCard,firstCategory=false):boolean=>!used.has(view.card.id)&&!identities.has(view.card.identity)&&!urls.has(view.card.sourceUrl)
+  const available=(view:RankedEditorialCard,firstCategory=false):boolean=>!stories.has(storyKey(view))&&!used.has(view.card.id)&&!identities.has(view.card.identity)&&!urls.has(view.card.sourceUrl)
     &&(view.category===undefined||view.editorial.globalEssential||(categories.get(view.category)??0)<DAILY_EDITION_POLICY.perCategory)
     &&(view.editorial.globalEssential||view.editorial.developmentPriority>=2&&priority(view)===2||featured(view)
       ||firstCategory&&view.category!==undefined&&!categories.has(view.category)||(publishers.get(publisherKey(view))??0)<DAILY_EDITION_POLICY.perPublisher);
   const take=(view:RankedEditorialCard,firstCategory=false):boolean=>{
     if(first.length>=limit||!available(view,firstCategory))return false;
     first.push(view);
+    stories.add(storyKey(view));
     for(const card of [view.card,...view.related]){used.add(card.id);identities.add(card.identity);urls.add(card.sourceUrl);}
     if(view.category!==undefined)categories.set(view.category,(categories.get(view.category)??0)+1);
     publishers.set(publisherKey(view),(publishers.get(publisherKey(view))??0)+1);
@@ -131,7 +135,7 @@ export function selectContextualToday(records:readonly EvidenceCard[],context:To
   // Diversity controls membership. Readers see importance and context order,
   // rather than a mechanical first-category/second-category sequence.
   first.sort(compareEditorialCards);
-  const more=candidates.filter(view=>!used.has(view.card.id)&&!identities.has(view.card.identity)&&!urls.has(view.card.sourceUrl));
+  const more=candidates.filter(view=>!stories.has(storyKey(view))&&!used.has(view.card.id)&&!identities.has(view.card.identity)&&!urls.has(view.card.sourceUrl));
   return Object.freeze({first:Object.freeze(first),more:Object.freeze(more),daily:coverage(first,candidates,now,limit)});
 }
 
@@ -150,12 +154,13 @@ function selectLocalToday(records:readonly EvidenceCard[],context:TodayContext,n
       const category=editorialCategory(view.card);
       return category===null?view:{...view,category};
     });
-  const first:EditorialReadingCard[]=[],used=new Set<string>(),identities=new Set<string>(),urls=new Set<string>(),topics=new Map<Topic,number>(),publishers=new Map<string,number>();
-  const available=(view:EditorialReadingCard):boolean=>!used.has(view.card.id)&&!identities.has(view.card.identity)&&!urls.has(view.card.sourceUrl)
+  const first:EditorialReadingCard[]=[],used=new Set<string>(),identities=new Set<string>(),urls=new Set<string>(),stories=new Set<string>(),topics=new Map<Topic,number>(),publishers=new Map<string,number>();
+  const available=(view:EditorialReadingCard):boolean=>!stories.has(storyKey(view))&&!used.has(view.card.id)&&!identities.has(view.card.identity)&&!urls.has(view.card.sourceUrl)
     &&(topics.get(view.card.topic)??0)<3&&(publishers.get(publisherKey(view))??0)<DAILY_EDITION_POLICY.perPublisher;
   const take=(view:EditorialReadingCard):boolean=>{
     if(first.length>=limit||!available(view))return false;
     first.push(context.preferredTopics.includes(view.card.topic)?{...view,reason:`From your saved interests. ${view.reason}`}:view);
+    stories.add(storyKey(view));
     for(const card of [view.card,...view.related]){used.add(card.id);identities.add(card.identity);urls.add(card.sourceUrl);}
     topics.set(view.card.topic,(topics.get(view.card.topic)??0)+1);publishers.set(publisherKey(view),(publishers.get(publisherKey(view))??0)+1);return true;
   };

@@ -1,6 +1,7 @@
 import { compareDailyUse } from './card-guide.js';
 import { PUBLIC_TOPICS } from './topics.js';
 import { COMPARISON_MAX_AGE_MS } from './comparison.js';
+import { groupStories } from './story-grouping.js';
 /** Presentation rules use explicit source metadata, never inferred document contents. */
 export const READER_VERSION = 'iceo-reader-1';
 const TOPICS = PUBLIC_TOPICS;
@@ -83,6 +84,33 @@ export function readingCard(card, now, related = []) {
     }
     return Object.freeze({ card, related: Object.freeze([...related]), heading, context, label, dateLabel, shortened, noticeState });
 }
+/** Saved originals are an archive, not a current feed: grouping never erases a copy. */
+export function savedReadingCards(records, now) {
+    if (!Number.isFinite(now) || records.length > 5000)
+        throw Error('SAVED_READING_INPUT_INVALID');
+    const positions = new Map();
+    records.forEach((card, index) => { if (!positions.has(card))
+        positions.set(card, index); });
+    const groups = groupStories(records, (a, b) => (positions.get(a) ?? 0) - (positions.get(b) ?? 0));
+    const included = new Map(), views = [];
+    const archived = (card) => Object.freeze({ ...card, sourceState: 'stale' });
+    for (const group of groups) {
+        for (const card of [group.card, ...group.related])
+            included.set(card, (included.get(card) ?? 0) + 1);
+        views.push({ position: positions.get(group.card) ?? 0, view: Object.freeze({ ...readingCard(archived(group.card), now, group.related.map(archived)), storyKey: group.key, grouping: group.basis }) });
+    }
+    // Conflicting or repeated archive entries are not evidence to merge, but they
+    // remain the reader's saved originals. Keep each excluded occurrence visible.
+    records.forEach((card, index) => {
+        const count = included.get(card) ?? 0;
+        if (count > 0) {
+            included.set(card, count - 1);
+            return;
+        }
+        views.push({ position: index, view: Object.freeze({ ...readingCard(archived(card), now), label: 'Separate saved copy', grouping: 'single' }) });
+    });
+    return Object.freeze(views.sort((a, b) => a.position - b.position).map(item => item.view));
+}
 /** Explicit query first, then metadata eligibility, product grouping and publisher diversity. */
 export function selectReadingCards(records, settings, now) {
     if (!Number.isSafeInteger(settings.budget) || settings.budget <= 0 || !Number.isFinite(now)
@@ -106,35 +134,43 @@ export function selectReadingCards(records, settings, now) {
         }
         return true;
     }).sort((a, b) => Date.parse(b.date) - Date.parse(a.date) || a.id.localeCompare(b.id));
+    const publications = groupStories(filtered.filter(card => card.kind === 'publication'));
     const groups = new Map();
-    for (const card of filtered) {
+    for (const card of filtered.filter(card => card.kind !== 'publication')) {
         const product = card.kind === 'software-release' ? (card.sourceIds.includes('nodejs') ? 'nodejs' : card.sourceIds.includes('nextjs') ? 'nextjs' : null) : null;
         const key = settings.mode === 'briefing' && product !== null ? `software:${product}` : card.id;
         const current = groups.get(key);
         if (current) {
             current.push(card);
-            groupedVersions++;
+            if (settings.mode === 'briefing' && product !== null)
+                groupedVersions++;
         }
         else
             groups.set(key, [card]);
     }
-    const remaining = [...groups.values()];
-    const chosen = [];
+    const remaining = publications.map(group => Object.freeze({ ...readingCard(group.card, now, group.related), storyKey: group.key, grouping: group.basis }));
+    for (const group of groups.values()) {
+        const first = group[0];
+        if (first === undefined)
+            continue;
+        remaining.push(Object.freeze({ ...readingCard(first, now, group.slice(1)), grouping: group.length > 1 && first.kind === 'software-release' ? 'software-versions' : 'single' }));
+    }
+    remaining.sort((a, b) => Date.parse(b.card.date) - Date.parse(a.card.date) || a.card.id.localeCompare(b.card.id));
+    const availableGroups = remaining.length, chosen = [];
     let used = new Set();
     while (remaining.length > 0 && chosen.length < settings.budget) {
-        let position = settings.mode === 'records' ? 0 : remaining.findIndex(group => group[0] !== undefined && !used.has(group[0].publisher));
+        let position = settings.mode === 'records' ? 0 : remaining.findIndex(view => !used.has(view.card.publisher));
         if (position < 0) {
             used = new Set();
             position = 0;
         }
-        const group = remaining.splice(position, 1)[0];
-        const first = group?.[0];
-        if (!group || !first)
+        const view = remaining.splice(position, 1)[0];
+        if (view === undefined)
             continue;
-        used.add(first.publisher);
-        chosen.push(readingCard(first, now, group.slice(1)));
+        used.add(view.card.publisher);
+        chosen.push(view);
     }
-    return Object.freeze({ cards: Object.freeze(chosen), matchingRecords: matches.length, availableGroups: groups.size, excludedNotices, excludedStale, groupedVersions });
+    return Object.freeze({ cards: Object.freeze(chosen), matchingRecords: matches.length, availableGroups, excludedNotices, excludedStale, groupedVersions });
 }
 /** A malformed operating-system locale must not break the reading experience. */
 export function safeLocale(value) { try {
