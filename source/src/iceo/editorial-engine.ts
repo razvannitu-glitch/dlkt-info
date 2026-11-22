@@ -24,7 +24,7 @@ export async function collectEditorialSnapshot(
     const newsFetch=environment.VERCEL==='1'?newsBackoffFetch(boundedFetch,clock):boundedFetch;
     return discoverNews(newsFetch,now,candidates,async pool=>{
       if(store?.writable)await store.write(pool,clock());
-    },{retainedCards:previousSnapshot?.cards});
+    },previousSnapshot?{retainedCards:previousSnapshot.cards}:{});
   })();
   const [base,discovered]=await Promise.all([official,news]);
   signal?.throwIfAborted();

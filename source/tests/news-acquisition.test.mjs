@@ -153,3 +153,31 @@ test('allowed clock skew does not orphan retained homepage provenance',async()=>
   const featured=results.find(result=>result.health.id==='editorial-frontpage').health;
   assert.equal(results.flatMap(result=>result.cards).length,1);assert.equal(featured.state,'partial');assert.equal(featured.verifiedAt,prior.observedAt);
 });
+
+test('Digi24 joins only its bound Article local date with the same explicit head publication offset',()=>{
+  const row=readPublisherNewsCandidates(rss(index('digi24-ro-news'),{language:null}),index('digi24-ro-news'),now)[0];
+  const metadataNow=Date.parse('2026-11-22T18:00:00.000Z'),local='2026-11-22 19:35:37',explicit='2026-11-22T19:35:37+02:00';
+  const document=({bound=true,canonical=row.sourceUrl,headline=row.title,localDate=local,published=explicit,extra='',bodyMeta=false,modifiedOnly=false}={})=>{
+    const meta='<meta name="'+(modifiedOnly?'article:modified_time':'publish-date')+'" content="'+published+'">';
+    return '<html><head><link rel="canonical" href="'+canonical+'">'+(!bodyMeta?meta:'')+extra+
+      '<script type="application/ld+json">'+JSON.stringify({'@type':'NewsArticle',...(bound?{url:row.sourceUrl}:{}),headline,datePublished:localDate})+
+      '</script></head><body>'+(bodyMeta?meta:'')+'</body></html>';
+  };
+  const accepted=readNewsArticleMetadata(document(),row,row.sourceUrl,metadataNow);
+  assert.equal(accepted.date,'2026-11-22T17:35:37.000Z');assert.equal(accepted.title,row.title);assert.equal(accepted.sourceUrl,row.sourceUrl);
+  for(const changes of [
+    {bound:false},{canonical:'https://www.digi24.ro/stiri/another-article-456'},
+    {headline:'Guvernul NU anunta noi masuri pentru cetateni'},
+    {published:'2026-11-22T19:35:37'},{published:'not-a-date'},{published:'2026-11-22T19:35:38+02:00'},
+    {localDate:'2026-11-22 19:35:38'},{bodyMeta:true},{modifiedOnly:true},
+    {extra:'<meta name="publish-date" content="2026-11-22T19:36:37+02:00">'},
+  ])assert.equal(readNewsArticleMetadata(document(changes),row,row.sourceUrl,metadataNow),null,JSON.stringify(changes));
+  const canonicalTag='<link rel="canonical" href="'+row.sourceUrl+'">';
+  assert.equal(readNewsArticleMetadata(document().replace(canonicalTag,''),row,row.sourceUrl,metadataNow),null,'an inferred final URL does not replace explicit canonical evidence for this fallback');
+  assert.equal(readNewsArticleMetadata(document().replace(canonicalTag,'').replace('<body>','<body>'+canonicalTag),row,row.sourceUrl,metadataNow),null,'body markup cannot bind the publication date');
+  const conflict='<script type="application/ld+json">'+JSON.stringify({'@type':'NewsArticle',url:row.sourceUrl,headline:row.title,datePublished:'2026-11-22 19:36:37'})+'</script>';
+  assert.equal(readNewsArticleMetadata(document({extra:conflict}),row,row.sourceUrl,metadataNow),null,'contradictory local publication declarations remain rejected');
+  const other={...row,publisher:'HotNews.ro',sourceUrl:'https://hotnews.ro/controlled-source-123'};
+  const borrowed=document().replaceAll(row.sourceUrl,other.sourceUrl);
+  assert.equal(readNewsArticleMetadata(borrowed,other,other.sourceUrl,metadataNow),null,'publisher-specific metadata must not relax other origins');
+});

@@ -241,6 +241,7 @@ export function readNewsArticleMetadata(html:string,candidate:NewsCandidate,fina
     const raw=html.slice(node.startIndex,node.endIndex+1);return script?/<\/script\s*>$/iu.test(raw):raw.endsWith('>');
   };
   const meta=DomUtils.getElementsByTagName('meta',document,true).filter(node=>completeTag(node)),links=DomUtils.getElementsByTagName('link',document,true).filter(node=>completeTag(node));
+  const inHead=(node:typeof meta[number]):boolean=>{let parent=node.parent;while(parent){if(parent.type==='tag'&&parent.name==='head')return true;parent=parent.parent;}return false;};
   let canonical=canonicalNewsUrl(finalUrl);if(!canonical)return null;
   const canonicalLinks=links.filter(node=>(node.attribs.rel??'').toLowerCase().split(/\s+/u).includes('canonical')).map(node=>node.attribs.href).filter((value):value is string=>typeof value==='string');
   if(canonicalLinks.length>1&&new Set(canonicalLinks).size>1)return null;
@@ -248,6 +249,7 @@ export function readNewsArticleMetadata(html:string,candidate:NewsCandidate,fina
     try{const declared=canonicalNewsUrl(new URL(canonicalLinks[0],finalUrl).href);if(!declared||publisherForNewsUrl(declared)?.id!==publisher.id)return null;canonical=declared;}catch{return null;}
   }
   const titles:string[]=[],dates:string[]=[],boundAlternativeTitles:string[]=[];
+  const digi24Bindings:{readonly headline:string;readonly localDate:string}[]=[];
   const titleKey=(value:string):string=>value.normalize('NFKC').toLowerCase(),candidateTitle=titleText(candidate.title);
   const add=(headline:unknown,date:unknown,alternativeHeadline?:unknown):void=>{
     const title=titleText(headline),stamp=publicationDate(date),alternative=titleText(alternativeHeadline);
@@ -273,6 +275,15 @@ export function readNewsArticleMetadata(html:string,candidate:NewsCandidate,fina
       for(const binding of declared){try{if(canonicalNewsUrl(new URL(binding,finalUrl).href)!==canonical)same=false;}catch{same=false;}}
       const explicitBinding=declared.length>0&&(entity===undefined||typeof entity==='string'||object(entity))
         &&bindings.every(binding=>binding===undefined||typeof binding==='string'&&binding.length>0&&!/[\u0000-\u0020\u007f<>\\]/u.test(binding));
+      // Digi24's reviewed page binds an Article with local date text and
+      // publishes its explicit offset separately in head meta[name=publish-date].
+      // Keep the two declarations bound; never infer a timezone from the publisher.
+      if(same&&explicitBinding&&publisher.id==='digi24'&&canonicalLinks.length===1
+        &&links.some(node=>inHead(node)&&(node.attribs.rel??'').toLowerCase().split(/\s+/u).includes('canonical'))&&canonicalNewsUrl(candidate.sourceUrl)===canonical
+        &&typeof value.datePublished==='string'&&/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/u.test(value.datePublished)){
+        const headline=titleText(value.headline);
+        if(headline&&matchingNewsHeadline(candidate.title,headline,publisher.label,'ro'))digi24Bindings.push({headline,localDate:value.datePublished});
+      }
       if(same)add(value.headline??value.name,value.datePublished,
         explicitBinding&&typeof value.headline==='string'&&canonicalNewsUrl(candidate.sourceUrl)===canonical?value.alternativeHeadline:undefined);
     }
@@ -286,6 +297,14 @@ export function readNewsArticleMetadata(html:string,candidate:NewsCandidate,fina
   }
   const fields=new Map<string,string[]>();
   for(const node of meta){const key=(node.attribs.property??node.attribs.name??'').toLowerCase(),value=node.attribs.content;if(value){const previous=fields.get(key)??[];previous.push(value);fields.set(key,previous);}}
+  if(digi24Bindings.length){
+    const explicit=meta.filter(node=>node.attribs.name?.toLowerCase()==='publish-date'&&inHead(node)).map(node=>node.attribs.content);
+    const parsed=explicit.map(publicationDate);
+    if(explicit.length&&(parsed.some(value=>value===null)||new Set(parsed).size!==1||new Set(digi24Bindings.map(value=>value.localDate)).size!==1))return null;
+    for(const binding of digi24Bindings)for(const raw of explicit){
+      if(typeof raw==='string'&&raw.slice(0,19).replace('T',' ')===binding.localDate)add(binding.headline,raw);
+    }
+  }
   const ogTitles=fields.get('og:title')??[],boundTitleKeys=new Set(boundAlternativeTitles.map(titleKey));
   for(const headline of ogTitles)for(const date of fields.get('article:published_time')??[]){
     const title=titleText(headline),stamp=publicationDate(date);

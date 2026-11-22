@@ -167,10 +167,10 @@ export function createNewsCandidateStore(environment: Readonly<Record<string, st
       if(requestBytes>MAX_BYTES)throw new NewsCandidateStoreError('NEWS_CANDIDATE_INVALID');
       const budget:RequestBudget={deadline:Date.now()+2_500,remainingBytes:MAX_BYTES};
       let acceptedCount=0;
-      for(let index=0;index<bodies.length;index++){
+      for(const [index,body] of bodies.entries()){
         const value=await request('rpc/dlkt_info_upsert_news_candidates',{method:'POST',
           headers:{apikey:configuration.publishableKey,Accept:'application/json','Content-Type':'application/json','x-dlkt-share-write':writerKey},
-          body:bodies[index],
+          body,
         },budget);
         const size=Math.min(NEWS_CANDIDATE_BATCH_LIMIT,rows.length-index*NEWS_CANDIDATE_BATCH_LIMIT);
         if(!exactObject(value,['accepted'])||!Number.isInteger(value.accepted)||typeof value.accepted!=='number'

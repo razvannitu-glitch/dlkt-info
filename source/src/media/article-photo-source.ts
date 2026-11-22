@@ -33,6 +33,7 @@ const ASSET_PATHS:Readonly<Record<string,Readonly<Record<string,readonly string[
  'bucharest-buletin':{'buletin.de':['/bucuresti/wp-content/uploads/','/wp-content/uploads/']},
  // Exact article metadata and same-origin upload path verified by primary probe45051739949.
  'hotnews':{'hotnews.ro':['/wp-content/uploads/']},
+ 'digi24':{'s.iw.ro':['/gateway/g/']},
  'guardian':{'i.guim.co.uk':['/img/media/'],'media.guim.co.uk':['/']},
  'bbc':{'ichef.bbci.co.uk':['/news/','/ace/','/images/ic/'],'ichef.bbci.co.uk.edgesuite.net':['/news/']},
  'the-hindu':{'th-i.thgim.com':['/public/','/incoming/'],'www.thehindu.com':['/incoming/','/news/','/sport/']},

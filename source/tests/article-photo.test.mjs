@@ -232,3 +232,21 @@ test('HotNews original photos keep the exact article binding, illustration capti
    assert.equal(articleImageUrl(rejected,sourceUrl),null);
  assert.equal(readArticlePhoto(document,{...record,title:'Unrelated report'}),null);
 });
+
+test('Digi24 accepts only the exact original article photo on its reviewed raster gateway',()=>{
+ const sourceUrl='https://www.digi24.ro/stiri/externe/mesajul-sefului-serviciilor-de-informatii-americane-despre-putin-dupa-ce-trump-l-a-numit-prieten-4048107';
+ const photo='https://s.iw.ro/gateway/g/ZmlsZVNvdXJjZT1odHRwJTNBJTJGJTJG/c3RvcmFnZTA4dHJhbnNjb2Rlci5yY3Mt/cmRzLnJvJTJGc3RvcmFnZSUyRjIwMjYl/MkYxMSUyRjIyJTJGMzA4MTg4OV8zMDgx/ODg5X01XRTVOMkl4Wm1Oa1lUUmxaRFps/Tm1RMU9XRmlaVEppWkFfdGh1bWJfLmpw/ZyZ3PTc4MCZoPTQ0MCZoYXNoPWRiZDFh/OGFkM2RiZDBmZDkyZjAxNGNlNTNjM2JhOWNi.thumb.jpg';
+ const record={...article,sourceUrl,publisher:'Digi24',title:'Controlled Digi24 report',publishedAt:'2026-11-22T19:35:37+02:00'};
+ const metadata={'@type':'NewsArticle',url:sourceUrl,headline:record.title,datePublished:record.publishedAt,image:photo};
+ const document='<html><head><link rel="canonical" href="'+sourceUrl+'"><meta name="publish-date" content="'+record.publishedAt+'"><script type="application/ld+json">'+JSON.stringify(metadata)+'</script></head></html>';
+ const result=readArticlePhoto(document,record);
+ assert.equal(result.imageUrl,photo);assert.equal(result.articleUrl,sourceUrl);assert.equal(result.basis,'article-jsonld');
+ assert.equal(result.credit,null);assert.equal(result.license,undefined);
+ assert.equal(readArticlePhoto(document,{...record,title:'Another report'}),null);
+ assert.equal(readArticlePhoto(document,record,sourceUrl+'-other'),null);
+ for(const rejected of [
+  photo.replace('s.iw.ro','s.iw.ro.attacker.invalid'),photo.replace('/gateway/g/','/private/'),photo.replace('.jpg','.svg'),
+  photo+'?url=https://127.0.0.1/private',photo.replace('https:','http:'),'https://127.0.0.1/gateway/g/image.jpg'
+ ])assert.equal(articleImageUrl(rejected,sourceUrl),null);
+ assert.equal(articleImageUrl(photo,article.sourceUrl),null,'Gateway does not become available to another publisher');
+});
