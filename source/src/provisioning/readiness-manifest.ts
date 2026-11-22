@@ -1,9 +1,9 @@
 export const DATABASE_READINESS_VERSION = 'dlkt-info-database-readiness-2' as const;
-export const SCHEMA_MANIFEST_VERSION = 'dlkt-info-schema-manifest-6' as const;
+export const SCHEMA_MANIFEST_VERSION = 'dlkt-info-schema-manifest-7' as const;
 export const DATABASE_READINESS_RPC = 'dlkt_info_read_database_readiness' as const;
-export const DATABASE_READINESS_MIGRATION = '20261121080311_dlkt_info_continuous_refresh' as const;
+export const DATABASE_READINESS_MIGRATION = '20261122174603_dlkt_info_news_coverage' as const;
 // SHA-256 of UTF-8 serializeSchemaManifest(); object/array order is part of this versioned contract.
-export const EXPECTED_SCHEMA_FINGERPRINT = '481dee0bc8f4c8807fff49856c8aebf399ae637ffbde42a9e3d61ea9340bf240' as const;
+export const EXPECTED_SCHEMA_FINGERPRINT = '453dbf1779705cff24a46781bbdae8871db5d24af5c3b16a1c85d65af4fc19db' as const;
 export const EXPECTED_SCHEMA_COUNTS = Object.freeze({
   "relations": 32,
   "functions": 58,
@@ -1126,6 +1126,18 @@ export const EXPECTED_SCHEMA_MANIFEST = Object.freeze({
       "origins": [
         "https://www.nytimes.com",
         "https://nytimes.com"
+      ]
+    },
+    {
+      "label": "Digi24",
+      "origins": [
+        "https://www.digi24.ro"
+      ]
+    },
+    {
+      "label": "HotNews.ro",
+      "origins": [
+        "https://hotnews.ro"
       ]
     }
   ],

@@ -4,8 +4,8 @@ import { after, before, test } from 'node:test';
 import { readFile, readdir } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 
-const FINGERPRINT = '481dee0bc8f4c8807fff49856c8aebf399ae637ffbde42a9e3d61ea9340bf240';
-const REVISION = '20261121080311_dlkt_info_continuous_refresh';
+const FINGERPRINT = '453dbf1779705cff24a46781bbdae8871db5d24af5c3b16a1c85d65af4fc19db';
+const REVISION = '20261122174603_dlkt_info_news_coverage';
 const REPAIR_REVISION = '20261119142617_dlkt_info_public_acl_attestation';
 let db;
 let beforeRepair;

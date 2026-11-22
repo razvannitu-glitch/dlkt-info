@@ -26,7 +26,7 @@ files.push(
   'PERSONAL-ACTION-LAYER.md', 'ACTION-INBOX-FOLLOW-UP.md', 'DELIVERY-NOTIFICATION-CONTROL.md',
   'UNIFIED-COMPANION-SHELL.md', 'FIRST-RUN-ACTIVATION.md', 'ACTIVATION-ACCOUNT-HANDOFF.md',
   'PROVISIONING-CONTROL-PLANE.md', 'DATABASE-READINESS-ATTESTATION.md', 'LIVE-OFFICIAL-SNAPSHOT.md', 'DELTA-FIRST-RELEASE-BASELINE.md', 'ORIGIN-SAFE-CACHE-BOUNDARY.md', 'REAL-COMPANION-BRIDGE.md', 'OPERATIONAL-DELTA-LEDGER.md',
-  'ICEO-PUBLIC-PREVIEW.md', 'READER-VALUE.md', 'SOURCE-INSIGHTS.md', 'DEVICE-MEMORY.md', 'SOURCE-COMPARISON.md', 'ACCOUNT-EDITION-BRIDGE.md', 'VERIFIED-EDITIONS.md', 'MINIMAL-READER.md', 'LOCAL-BRIEFING.md', 'CLEAR-ENTRY.md', 'PERSONAL-EDITION.md', 'CLEAR-RETURN.md', 'STABLE-SELECTION.md', 'DIRECT-CARDS.md', 'PALMA-DAILY.md', 'PALMA-DAILY-ACCEPTANCE.json', 'READABLE-LOCAL.md', 'PALMA-VISIBLE-INFORMATION-ACCEPTANCE.json', 'CITY-SOURCES.json', 'DAILY-SOURCE-EXPANSION.md', 'DAILY-INTERESTS-ACCEPTANCE.md', 'TODAY-GLANCE-ACCEPTANCE.md', 'TODAY-GLANCE-SOURCES.md', 'NEWS-TICKER-ACCEPTANCE.md', 'TICKER-REPAIR-ACCEPTANCE.md', 'MOBILE-TICKER-ACCEPTANCE.md', 'FOOTER-LEGAL-ACCEPTANCE.md', 'FOOTER-LEGAL-SOURCES.md', 'MINIMAL-UI-ACCEPTANCE.md', 'KATE-IDENTITY.md', 'DAILY-CARD-MIX.md', 'ORGANIZATIONS.md', 'TODAY-GENERAL.md', 'PRACTICAL-TODAY.md', 'CONSUMER-SHARE.md', 'MOBILE-SHARE.md', 'RETURN-BRIEF.md', 'CARD-PHOTOS.md', 'CARD-PHOTOS-SOURCES.md', 'LOCAL-FIRST.md', 'CONTEXTUAL-EDITION.md', 'HOMEPAGE-CARDS.md', 'CITY-EDITION.md', 'INFO-WALLET.md', 'vercel.public.json', 'package-lock.json', 'package.json', 'tsconfig.build.json', 'tsconfig.json', 'vercel.json', 'verify-release.mjs',
+  'ICEO-PUBLIC-PREVIEW.md', 'NEWS-TAXONOMY.md', 'READER-VALUE.md', 'SOURCE-INSIGHTS.md', 'DEVICE-MEMORY.md', 'SOURCE-COMPARISON.md', 'ACCOUNT-EDITION-BRIDGE.md', 'VERIFIED-EDITIONS.md', 'MINIMAL-READER.md', 'LOCAL-BRIEFING.md', 'CLEAR-ENTRY.md', 'PERSONAL-EDITION.md', 'CLEAR-RETURN.md', 'STABLE-SELECTION.md', 'DIRECT-CARDS.md', 'PALMA-DAILY.md', 'PALMA-DAILY-ACCEPTANCE.json', 'READABLE-LOCAL.md', 'PALMA-VISIBLE-INFORMATION-ACCEPTANCE.json', 'CITY-SOURCES.json', 'DAILY-SOURCE-EXPANSION.md', 'DAILY-INTERESTS-ACCEPTANCE.md', 'TODAY-GLANCE-ACCEPTANCE.md', 'TODAY-GLANCE-SOURCES.md', 'NEWS-TICKER-ACCEPTANCE.md', 'TICKER-REPAIR-ACCEPTANCE.md', 'MOBILE-TICKER-ACCEPTANCE.md', 'FOOTER-LEGAL-ACCEPTANCE.md', 'FOOTER-LEGAL-SOURCES.md', 'MINIMAL-UI-ACCEPTANCE.md', 'KATE-IDENTITY.md', 'DAILY-CARD-MIX.md', 'ORGANIZATIONS.md', 'TODAY-GENERAL.md', 'PRACTICAL-TODAY.md', 'CONSUMER-SHARE.md', 'MOBILE-SHARE.md', 'RETURN-BRIEF.md', 'CARD-PHOTOS.md', 'CARD-PHOTOS-SOURCES.md', 'LOCAL-FIRST.md', 'CONTEXTUAL-EDITION.md', 'HOMEPAGE-CARDS.md', 'CITY-EDITION.md', 'INFO-WALLET.md', 'vercel.public.json', 'package-lock.json', 'package.json', 'tsconfig.build.json', 'tsconfig.json', 'vercel.json', 'verify-release.mjs',
 );
 files.sort();
 const hashes = Object.fromEntries(files.map((file) => [
@@ -72,7 +72,7 @@ const manifest = {
   provisioningControlVersion: 'dlkt-info-provisioning-control-2',
   systemIdentityVersion: 'dlkt-info-system-identity-1',
   databaseReadinessVersion: 'dlkt-info-database-readiness-2',
-  schemaManifestVersion: 'dlkt-info-schema-manifest-6',
+  schemaManifestVersion: 'dlkt-info-schema-manifest-7',
   persistenceVersion: 'dlkt-info-persistence-2',
   identityVersion: 'dlkt-info-identity-1',
   serviceVersion: 'dlkt-info-service-1',
@@ -93,8 +93,8 @@ const manifest = {
   companionEntitiesMigration: '20261112221500_dlkt_info_companion_entities',
   activationHandoffMigration: '20261112233000_dlkt_info_activation_account_handoff',
   provisioningIdentityMigration: '20261113115256_dlkt_info_provisioning_identity_guard',
-  databaseReadinessMigration: '20261121080311_dlkt_info_continuous_refresh',
-  expectedSchemaFingerprint: '481dee0bc8f4c8807fff49856c8aebf399ae637ffbde42a9e3d61ea9340bf240',
+  databaseReadinessMigration: '20261122174603_dlkt_info_news_coverage',
+  expectedSchemaFingerprint: '453dbf1779705cff24a46781bbdae8871db5d24af5c3b16a1c85d65af4fc19db',
   reviewPublicationMode: 'human-review-private-no-auto-publication',
   revision: 'iceo-primary-mesh-1',
   createdAt: new Date().toISOString(),
