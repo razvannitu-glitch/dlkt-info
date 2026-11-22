@@ -5,6 +5,7 @@ import {createHash, randomUUID} from 'node:crypto';
 import {PGlite} from '@electric-sql/pglite';
 import {cardContent} from '../../.build/src/iceo/card-validation.js';
 import {ICEO_SOURCES} from '../../.build/src/iceo/registry.js';
+import {NEWS_PUBLISHERS} from '../../.build/src/iceo/news-sources.js';
 import {EXPECTED_SCHEMA_FINGERPRINT, DATABASE_READINESS_MIGRATION} from '../../.build/src/provisioning/readiness-manifest.js';
 
 const key='test-only-continuous-refresh-writer-key-12345678901234567890';
@@ -157,4 +158,32 @@ test('readiness preserves exact catalog and catches refresh table, column, PUBLI
   await drift('grant execute on function public.dlkt_info_claim_public_refresh(uuid,jsonb) to public','publicRpcPermissions');
   await drift('grant execute on function public.dlkt_info_read_public_snapshot() to anon with grant option','publicRpcPermissions');
   await drift("alter function public.dlkt_info_publish_public_snapshot(uuid,bigint,jsonb,text) set search_path=public",'searchPath');
+});
+
+test('national news origins preserve every reviewed family and reject spoofed or mismatched publishers',async()=>{
+  assert.equal(NEWS_PUBLISHERS.length,72);
+  for(const publisher of NEWS_PUBLISHERS)for(const origin of publisher.origins){
+    const value=(await db.query('select dlkt_info_private.valid_news_candidate_publisher($1,$2) allowed',[publisher.label,origin+'/news/reviewed-origin-check'])).rows[0].allowed;
+    assert.equal(value,true,origin+' must remain valid');
+  }
+  const invalid=[
+    ['Digi24','https://www.digi24.ro.attacker.invalid/stiri/item'],
+    ['Digi24','https://digi24.ro/stiri/item'],
+    ['Digi24','http://www.digi24.ro/stiri/item'],
+    ['HotNews.ro','https://www.digi24.ro/stiri/item'],
+    ['Digi24','https://www.digi24.ro/'],
+    ['Digi24','https://www.digi24.ro/account/item'],
+    ['Digi24','https://www.digi24.ro/stiri/../item'],
+    ['Digi24','https://www.digi24.ro/stiri/item?utm_source=tracking'],
+    ['HotNews.ro','https://hotnews.ro/item#fragment'],
+  ];
+  for(const [publisher,url] of invalid)assert.equal(
+    (await db.query('select dlkt_info_private.valid_news_candidate_publisher($1,$2) allowed',[publisher,url])).rows[0].allowed,false,url);
+  assert.equal((await readiness()).ready,true);
+});
+test('publisher allowlist remains private and the expanded origins do not bypass writer authentication',async()=>{
+  await assert.rejects(asRole('anon',()=>db.query("select dlkt_info_private.valid_news_candidate_publisher('Digi24','https://www.digi24.ro/stiri/item')")),{code:'42501'});
+  await headers({});
+  const candidate={sourceUrl:'https://www.digi24.ro/stiri/test-item',title:'Controlled original title',publisher:'Digi24',indexedAt:new Date().toISOString(),category:'world'};
+  await assert.rejects(asRole('anon',()=>db.query('select public.dlkt_info_upsert_news_candidates($1::jsonb)',[JSON.stringify([candidate])])),{code:'42501'});
 });

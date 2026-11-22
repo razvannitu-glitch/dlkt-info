@@ -215,3 +215,15 @@ test('official source abort stops network work without caching cancellation or c
 });
 
 test('controlled snapshot conforms to the complete public boundary',()=>assert.equal(validDailySnapshot(snapshot(),START),true));
+
+test('a claimed refresh passes only a digest-valid unexpired prior catalog to bounded collection',async()=>{
+  const ledger=new Ledger();ledger.seed();ledger.now=START+CONTINUOUS_REFRESH_INTERVAL_MS;
+  let previous;
+  const service=new ContinuousSnapshotService(ledger,async(_signal,prior)=>{previous=prior;return snapshot(ledger.now);},null,()=>ledger.now);
+  await service.refresh(manual);assert.deepEqual(previous,snapshot(START));
+  assert.equal(previous.cards[0].observedAt,iso(START));assert.equal(previous.cards[0].contentHash,snapshot(START).cards[0].contentHash);
+  const invalid=new Ledger();invalid.seed();invalid.envelope.digest='0'.repeat(64);invalid.now=START+CONTINUOUS_REFRESH_INTERVAL_MS;
+  let invalidPrevious='unset';
+  await new ContinuousSnapshotService(invalid,async(_signal,prior)=>{invalidPrevious=prior;return snapshot(invalid.now);},null,()=>invalid.now).refresh(manual);
+  assert.equal(invalidPrevious,undefined);
+});

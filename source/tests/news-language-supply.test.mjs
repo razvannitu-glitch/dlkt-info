@@ -14,23 +14,23 @@ function candidate(language,index,title=titles[language]){
   const sourceUrl='https://www.dw.com/'+language+'/fixture-'+String(index).padStart(4,'0')+'/a-'+(10000000+index);
   return {sourceUrl,title,publisher:'DW',indexedAt:new Date(now).toISOString(),category:classifyNewsHeadline(title,sourceUrl)};
 }
-const english=()=>Array.from({length:800},(_,index)=>candidate('en',index));
+const english=(amount=800)=>Array.from({length:amount},(_,index)=>candidate('en',index));
 const escape=value=>value.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
 const gal=(rows,at=now)=>'<rss><channel><title>GDELT Article List RSS Feed</title><link>'+NEWS_INDEX_URL+'</link><lastBuildDate>'+new Date(at).toUTCString()+'</lastBuildDate>'+rows.map(row=>'<item><title>'+escape(row.title)+'</title><link>'+escape(row.sourceUrl)+'</link></item>').join('')+'</channel></rss>';
 const html=row=>'<html><head><link rel="canonical" href="'+row.sourceUrl+'"><script type="application/ld+json">'+JSON.stringify({'@type':'NewsArticle',url:row.sourceUrl,headline:row.title,datePublished:published})+'</script></head><body>Excluded publisher body</body></html>';
 const response=(body,type)=>new Response(body,{headers:{'content-type':type}});
 const options={publisherIndexes:false,frontpageHighlights:false};
 
-test('rare Arabic and Romanian editions survive an800-item English supply at the500-candidate cut',()=>{
-  const arabic=candidate('ar',800),romanian=candidate('ro',801),rows=[...english(),arabic,romanian];
+test('rare Arabic and Romanian editions survive a6000-item English supply at the5000-candidate transport pool',()=>{
+  const arabic=candidate('ar',6000),romanian=candidate('ro',6001),rows=[...english(6000),arabic,romanian];
   assert.ok(rows.every(row=>row.category==='technology'),'one shared category prevents a category queue from rescuing either edition');
   assert.ok(headlineDiscoveryPriority(rows[0].title,'technology')>headlineDiscoveryPriority(romanian.title,'technology'));
   const pool=mergeNewsCandidates(rows,now);
-  assert.equal(pool.length,500);
+  assert.equal(pool.length,5000);
   assert.ok(pool.some(row=>row.sourceUrl===arabic.sourceUrl));
   assert.ok(pool.some(row=>row.sourceUrl===romanian.sourceUrl));
   assert.deepEqual(new Set(pool.slice(0,3).map(row=>sourceLanguage(row))),new Set(['en','ar','ro']));
-  assert.equal(new Set(pool.map(row=>row.sourceUrl)).size,500);
+  assert.equal(new Set(pool.map(row=>row.sourceUrl)).size,5000);
   assert.ok(pool.every(row=>Object.keys(row).sort().join('|')==='category|indexedAt|publisher|sourceUrl|title'));
 });
 

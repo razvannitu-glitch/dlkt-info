@@ -216,3 +216,19 @@ test('downloaded preview dimensions must agree with the declared same-photo deri
   assert.ok(calls.includes(largeWpPreview));assert.ok(!calls.includes(largeWpOriginal));
  }
 });
+
+test('HotNews original photos keep the exact article binding, illustration caption and upload-origin boundary',()=>{
+ const sourceUrl='https://hotnews.ro/o-nava-ruseasca-a-fost-lovita-de-o-drona-intr-un-port-la-marea-mediterana-2411119';
+ const photo='https://hotnews.ro/wp-content/uploads/2026/11/profimedia-1153180822.jpg';
+ const record={...article,sourceUrl,publisher:'HotNews.ro',title:'Controlled HotNews report'};
+ const metadata={'@type':'NewsArticle',url:sourceUrl,headline:record.title,datePublished:record.publishedAt,
+   image:{'@type':'ImageObject',contentUrl:photo,creditText:'Photo-specific credit',caption:'Illustrative image supplied with this article'}};
+ const document='<link rel="canonical" href="'+sourceUrl+'"><script type="application/ld+json">'+JSON.stringify(metadata)+'</script>';
+ const result=readArticlePhoto(document,record);
+ assert.equal(result.imageUrl,photo);assert.equal(result.articleUrl,sourceUrl);
+ assert.equal(result.caption,'Illustrative image supplied with this article');assert.equal(result.credit,'Photo-specific credit');
+ assert.equal(result.license,undefined);
+ for(const rejected of ['https://hotnews.ro.attacker.invalid/wp-content/uploads/image.jpg','https://hotnews.ro/private/image.jpg','https://hotnews.ro/wp-content/uploads/image.svg','https://127.0.0.1/wp-content/uploads/image.jpg'])
+   assert.equal(articleImageUrl(rejected,sourceUrl),null);
+ assert.equal(readArticlePhoto(document,{...record,title:'Unrelated report'}),null);
+});

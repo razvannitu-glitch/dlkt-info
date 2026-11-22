@@ -17,7 +17,7 @@ const unclassified=()=>candidate({sourceUrl:'https://www.bbc.com/news/articles/q
 test('public candidate cache reads bounded current metadata without writer/account credentials',async()=>{
   let call;const store=createNewsCandidateStore(environment,async(input,init)=>{call={url:new URL(input),init};return json([row()]);});
   assert.equal(store.writable,true);assert.deepEqual(await store.read(now),{candidates:[candidate()],rejected:0});
-  assert.equal(call.url.pathname,'/rest/v1/dlkt_info_news_candidates');assert.equal(call.url.searchParams.get('limit'),'400');
+  assert.equal(call.url.pathname,'/rest/v1/dlkt_info_news_candidates');assert.equal(call.url.searchParams.get('limit'),'500');
   assert.deepEqual(call.url.searchParams.getAll('indexed_at'),['gte.2026-11-19T12:00:00.000Z','lte.2026-11-20T12:05:00.000Z']);
   assert.equal(call.url.searchParams.get('select'),'source_url,title,publisher,indexed_at,category');
   assert.equal(call.init.headers['x-dlkt-share-write'],undefined);assert.equal(call.init.headers.Authorization,undefined);
@@ -38,22 +38,22 @@ test('matching duplicate rows are deduplicated and Postgres UTC timestamps are v
   assert.deepEqual(await store.read(now),{candidates:[candidate()],rejected:0});
 });
 
-test('one bounded diversity follow-up recovers family and uncategorized subjects behind500 newer gaming candidates',async()=>{
-  const family=candidate({sourceUrl:'https://www.parents.com/parenting-child-care-news',publisher:'Parents',title:'Parents share new child care guidance',
-    category:'family',indexedAt:new Date(now-120_000).toISOString()});
-  const niche=unclassified(),records=[...Array.from({length:500},(_,n)=>row(candidate({sourceUrl:`https://www.ign.com/articles/gta-6-${n}`}))),row(family),row(niche)];
-  const calls=[];let fetched=0;
+test('bounded pages recover every available category and older rows within the same category',async()=>{
+  const family=candidate({sourceUrl:'https://www.parents.com/parenting-child-care-news',publisher:'Parents',title:'Parents share new child care guidance',category:'family',indexedAt:new Date(now-120_000).toISOString()});
+  const niche=unclassified(),records=[...Array.from({length:1100},(_,n)=>row(candidate({sourceUrl:'https://www.ign.com/articles/gta-6-'+n}))),row(family),row(niche)];
+  const calls=[];
   const store=createNewsCandidateStore(environment,async(input,init)=>{
-    const url=new URL(input);calls.push({url,init});const limit=Number(url.searchParams.get('limit'));
-    const excluded=/category\.not\.in\.\(([^)]+)\)/u.exec(url.searchParams.get('or')??'')?.[1].split(',');
-    const selected=records.filter(value=>!excluded||value.category===null||!excluded.includes(value.category)).slice(0,limit);fetched+=selected.length;return json(selected);
+    const url=new URL(input);calls.push({url,init});
+    const offset=Number(url.searchParams.get('offset')),limit=Number(url.searchParams.get('limit'));
+    return json(records.slice(offset,offset+limit));
   });
-  const result=await store.read(now);assert.equal(calls.length,2);assert.equal(fetched,402);assert.equal(result.candidates.length,402);
-  assert.ok(result.candidates.some(value=>value.sourceUrl===family.sourceUrl));assert.equal(result.rejected,0);
+  const result=await store.read(now);assert.equal(calls.length,3);assert.equal(result.candidates.length,1102);assert.equal(result.rejected,0);
+  assert.ok(result.candidates.some(value=>value.sourceUrl===family.sourceUrl));
   assert.ok(result.candidates.some(value=>value.sourceUrl===niche.sourceUrl&&value.category===null));
-  assert.equal(calls[0].url.searchParams.get('limit'),'400');assert.equal(calls[1].url.searchParams.get('limit'),'100');
-  assert.equal(calls[1].url.searchParams.get('category'),null);assert.equal(calls[1].url.searchParams.get('or'),'(category.not.in.(gaming),category.is.null)');
-  for(const {init} of calls){assert.equal(init.headers['x-dlkt-share-write'],undefined);assert.equal(init.headers.Authorization,undefined);assert.equal(init.credentials,'omit');}
+  assert.ok(result.candidates.some(value=>value.sourceUrl.endsWith('gta-6-1099')),'same-category older rows must not vanish behind a diversity-only query');
+  assert.deepEqual(calls.map(({url})=>url.searchParams.get('offset')),['0','500','1000']);
+  for(const {url,init} of calls){assert.equal(url.searchParams.get('limit'),'500');assert.equal(url.searchParams.get('category'),null);assert.equal(url.searchParams.get('or'),null);
+    assert.equal(init.headers['x-dlkt-share-write'],undefined);assert.equal(init.headers.Authorization,undefined);assert.equal(init.credentials,'omit');}
 });
 
 test('explicit null category survives a write and a new cold public read without changing its fields',async()=>{
@@ -65,32 +65,32 @@ test('explicit null category survives a write and a new cold public read without
   for(const category of ['uncategorized','beekeeping','world',undefined])await assert.rejects(writer.write([{...niche,category}],now),{code:'NEWS_CANDIDATE_INVALID'});
 });
 
-test('a first page of uncategorized subjects uses remaining capacity for any other observed category',async()=>{
+test('a first page of uncategorized subjects does not prevent later pages in the same category',async()=>{
   let count=0;const calls=[];
-  const first=Array.from({length:400},(_,n)=>row({...unclassified(),sourceUrl:`https://www.bbc.com/news/articles/beekeeping-${n}`}));
+  const first=Array.from({length:500},(_,n)=>row({...unclassified(),sourceUrl:'https://www.bbc.com/news/articles/beekeeping-'+n}));
   const store=createNewsCandidateStore(environment,async(input)=>{calls.push(new URL(input));return json(++count===1?first:[row()]);});
-  const result=await store.read(now);assert.equal(result.candidates.length,401);assert.equal(result.rejected,0);
-  assert.equal(calls[1].searchParams.get('category'),'not.is.null');assert.equal(calls[1].searchParams.get('or'),null);
+  const result=await store.read(now);assert.equal(result.candidates.length,501);assert.equal(result.rejected,0);
+  assert.equal(calls[1].searchParams.get('offset'),'500');assert.equal(calls[1].searchParams.get('category'),null);assert.equal(calls[1].searchParams.get('or'),null);
 });
 
-test('category follow-up shares byte budget and preserves first response with an explicit partial result',async()=>{
-  const first=Array.from({length:400},(_,n)=>row(candidate({sourceUrl:`https://www.ign.com/articles/gta-6-${n}`})));
+test('all cache pages share a byte budget and preserve earlier responses with explicit partial state',async()=>{
+  const first=Array.from({length:500},(_,n)=>row(candidate({sourceUrl:'https://www.ign.com/articles/gta-6-'+n})));
   const firstJson=JSON.stringify(first);let requests=0;
   const second='[]'+' '.repeat(2_097_152-Buffer.byteLength(firstJson)+1);
   assert.ok(Buffer.byteLength(second)<2_097_152);
   const store=createNewsCandidateStore(environment,async()=>{requests++;return new Response(requests===1?firstJson:second,{headers:{'content-type':'application/json'}});});
-  const result=await store.read(now);assert.equal(requests,2);assert.equal(result.candidates.length,400);assert.equal(result.partial,true);
+  const result=await store.read(now);assert.equal(requests,2);assert.equal(result.candidates.length,500);assert.equal(result.partial,true);
 });
 
-test('two category requests share one2.5second deadline even if follow-up ignores abort',async()=>{
-  const first=Array.from({length:400},(_,n)=>row(candidate({sourceUrl:`https://www.ign.com/articles/gta-6-${n}`})));
+test('all cache pages share one2.5second deadline even if a later page ignores abort',async()=>{
+  const first=Array.from({length:500},(_,n)=>row(candidate({sourceUrl:'https://www.ign.com/articles/gta-6-'+n})));
   let requests=0;let signal;const began=Date.now();
   const store=createNewsCandidateStore(environment,async(_input,init)=>{
     requests++;if(requests===1){await new Promise(resolve=>setTimeout(resolve,1000));return json(first);}
     signal=init.signal;return new Promise(()=>{});
   });
-  const result=await store.read(now);assert.equal(requests,2);assert.equal(result.candidates.length,400);assert.equal(result.partial,true);
-  assert.equal(signal.aborted,true);assert.ok(Date.now()-began<3_200,'follow-up must not receive a second2.5second budget');
+  const result=await store.read(now);assert.equal(requests,2);assert.equal(result.candidates.length,500);assert.equal(result.partial,true);
+  assert.equal(signal.aborted,true);assert.ok(Date.now()-began<3_200,'pages must not receive separate deadlines');
 });
 
 test('write sends only strict public discovery candidates through the purpose-bound RPC',async()=>{
@@ -111,7 +111,7 @@ test('private fields, bad provenance, future/stale discovery, malformed clocks a
     candidate({publishedAt:new Date(now).toISOString()})];
   for(const value of invalid)await assert.rejects(store.write([value],now),{code:'NEWS_CANDIDATE_INVALID'});
   await assert.rejects(store.write([candidate(),candidate({title:'GTA 6 delayed'})],now),{code:'NEWS_CANDIDATE_INVALID'});
-  await assert.rejects(store.write(Array.from({length:501},()=>candidate()),now),{code:'NEWS_CANDIDATE_INVALID'});
+  await assert.rejects(store.write(Array.from({length:5001},()=>candidate()),now),{code:'NEWS_CANDIDATE_INVALID'});
   await assert.rejects(store.read(Number.NaN),{code:'NEWS_CANDIDATE_INVALID'});
   await assert.rejects(store.write([candidate()],Number.POSITIVE_INFINITY),{code:'NEWS_CANDIDATE_INVALID'});
   assert.equal(requests,0);
@@ -218,4 +218,30 @@ test('candidate SQL draft validates authorization, public-only ACLs, exact paylo
     assert.equal(functions.length,3);assert.ok(functions.every(fn=>fn.proconfig.includes('search_path=""')));
     assert.equal(functions.find(fn=>fn.proname==='dlkt_info_upsert_news_candidates').prosecdef,true);
   } finally {await db.close();}
+});
+
+test('larger candidate pools use exact500-row RPC batches without broadening database authority',async()=>{
+  const input=Array.from({length:1201},(_,index)=>candidate({sourceUrl:'https://www.ign.com/articles/gta-6-'+index})),calls=[];
+  const store=createNewsCandidateStore(environment,async(url,init)=>{
+    const values=JSON.parse(init.body).p_candidates;calls.push({url:new URL(url),init,values});return json({accepted:values.length});
+  });
+  assert.equal(await store.write(input,now),1201);assert.deepEqual(calls.map(call=>call.values.length),[500,500,201]);
+  assert.deepEqual(calls.flatMap(call=>call.values),input);
+  for(const call of calls){assert.equal(call.url.pathname,'/rest/v1/rpc/dlkt_info_upsert_news_candidates');assert.equal(call.init.headers.Authorization,undefined);assert.equal(call.init.credentials,'omit');}
+});
+
+test('a bounded full table read declares partial capacity rather than total worldwide coverage',async()=>{
+  let calls=0;
+  const store=createNewsCandidateStore(environment,async(input)=>{
+    calls++;const offset=Number(new URL(input).searchParams.get('offset'));
+    return json(Array.from({length:500},(_,i)=>row(candidate({sourceUrl:'https://www.ign.com/articles/gta-6-'+(offset+i)}))));
+  });
+  const result=await store.read(now);assert.equal(calls,10);assert.equal(result.candidates.length,5000);assert.equal(result.partial,true);
+});
+
+test('batch validation completes before writes and a failed later response cannot claim complete persistence',async()=>{
+  const input=Array.from({length:501},(_,index)=>candidate({sourceUrl:'https://www.ign.com/articles/gta-6-'+index}));let calls=0;
+  const store=createNewsCandidateStore(environment,async()=>{calls++;return calls===1?json({accepted:500}):new Response('',{status:503});});
+  await assert.rejects(store.write([...input,{...candidate(),private:'secret'}],now),{code:'NEWS_CANDIDATE_INVALID'});assert.equal(calls,0);
+  await assert.rejects(store.write(input,now),{code:'NEWS_CANDIDATE_STORE_UNAVAILABLE'});assert.equal(calls,2);
 });

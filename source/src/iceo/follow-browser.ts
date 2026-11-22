@@ -8,6 +8,17 @@ import type {DeviceMemory} from './device-memory.js';
 import type {PublicEditorialCategory} from './editorial-categories.js';
 import type {IceoSnapshot} from './contracts.js';
 
+export type FollowPresentation='category'|'related';
+
+function relatedLabel(followed:boolean,removing=false):string {
+ const ro=getLocale()==='ro';
+ return removing?(ro?'Nu mai urmari stiri conexe':'Unfollow related coverage'):followed?(ro?'Urmaresti stiri conexe':'Following related coverage'):(ro?'Urmareste stiri conexe':'Follow related coverage');
+}
+function relatedScope(category:PublicEditorialCategory):string {
+ const filter=translatedCategory(category);
+ return getLocale()==='ro'?`Filtru asociat: ${filter}. Actiunea urmareste stiri conexe prin filtrul existent, nu toate articolele categoriei afisate.`:`Associated filter: ${filter}. This follows related coverage through the existing filter, not every article in the displayed category.`;
+}
+
 interface FollowingOptions {
  readonly device:DeviceMemory;
  readonly snapshot:()=>IceoSnapshot|null;
@@ -52,12 +63,12 @@ export class CategoryFollowing {
  }
  nextDelay(now:number):number|null{return nextCategoryFollowDelay(this.state,this.options.snapshot(),now);}
  private follows(category:PublicEditorialCategory):boolean{return this.state?.entries.some(entry=>entry.category===category)??false;}
- private async toggle(category:PublicEditorialCategory,desired?:boolean):Promise<void>{
+ private async toggle(category:PublicEditorialCategory,desired?:boolean,presentation:FollowPresentation='category'):Promise<void>{
   if(this.options.busy()||!this.loaded)return;
   if(this.invalid){try{await this.read();}catch{await this.options.write(async()=>{throw Error('CATEGORY_FOLLOW_STORAGE_INVALID');},'',undefined,true);return;}}
   const followed=desired??!this.follows(category),expected=this.state?.revision??null;
   const snapshot=this.options.available()?this.options.snapshot():null;
-  const message=tr(followed?'followSaved':'followRemoved',{category:translatedCategory(category)});
+  const message=presentation==='related'?(getLocale()==='ro'?(followed?'Stirile conexe sunt urmarite in acest browser.':'Urmarirea stirilor conexe a fost oprita in acest browser.'):(followed?'Related coverage is followed in this browser.':'Related coverage is no longer followed in this browser.')):tr(followed?'followSaved':'followRemoved',{category:translatedCategory(category)});
   await this.options.write(async()=>{this.state=await this.options.device.setCategoryFollow(category,followed,snapshot,expected);this.readGeneration++;this.invalid=false;},message,undefined,true);
  }
  private async acknowledge(category:PublicEditorialCategory):Promise<void>{
@@ -65,17 +76,17 @@ export class CategoryFollowing {
   if(this.options.busy()||!this.options.available()||!snapshot||!revision||this.invalid)return;
   await this.options.write(async()=>{this.state=await this.options.device.acknowledgeCategoryFollow(category,snapshot,revision);this.readGeneration++;},tr('followAcknowledged',{category:translatedCategory(category)}),undefined,true);
  }
- attach(article:HTMLElement,category:PublicEditorialCategory):void{
+ attach(article:HTMLElement,category:PublicEditorialCategory,presentation:FollowPresentation='category'):void{
   const content=article.querySelector('.card-content');if(!content)return;
   const row=element('div','card-follow');
-  const button=element('button','follow-category');button.type='button';button.dataset.followCategory=category;
-  button.addEventListener('click',()=>{void this.toggle(category);});
+  const button=element('button','follow-category');button.type='button';button.dataset.followCategory=category;button.dataset.followPresentation=presentation;
+  button.addEventListener('click',()=>{void this.toggle(category,undefined,presentation);});
   row.append(button,element('span','follow-scope',tr('browserOnly')));content.append(row);this.updateButton(button,category);
  }
  private updateButton(button:HTMLButtonElement,category:PublicEditorialCategory):void {
-  const followed=this.follows(category),label=tr(followed?'followingCategory':'followCategory',{category:translatedCategory(category)});
+  const followed=this.follows(category),related=button.dataset.followPresentation==='related',label=related?relatedLabel(followed):tr(followed?'followingCategory':'followCategory',{category:translatedCategory(category)});
   button.textContent=(followed?'✓ ':'+ ')+label;button.setAttribute('aria-pressed',String(followed));
-  button.setAttribute('aria-label',label);button.title=tr(followed?'unfollowCategory':'followCategory',{category:translatedCategory(category)})+' · '+tr('browserOnly');
+  button.setAttribute('aria-label',label+(related?'. '+relatedScope(category):''));button.title=(related?relatedLabel(followed,followed)+'. '+relatedScope(category):tr(followed?'unfollowCategory':'followCategory',{category:translatedCategory(category)}))+' · '+tr('browserOnly');
   button.disabled=this.options.busy()||!this.loaded;
  }
  render():void {

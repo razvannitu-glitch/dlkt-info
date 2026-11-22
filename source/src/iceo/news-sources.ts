@@ -78,6 +78,9 @@ export const NEWS_PUBLISHERS:readonly NewsPublisher[]=Object.freeze([
   publisher('cna','CNA','www.channelnewsasia.com','channelnewsasia.com'),
   publisher('straits-times','The Straits Times','www.straitstimes.com','straitstimes.com'),
   publisher('nytimes','The New York Times','www.nytimes.com','nytimes.com'),
+  // Exact primary feed origins checked 2026-11-22; discovery does not grant republication rights.
+  publisher('digi24','Digi24','www.digi24.ro'),
+  publisher('hotnews','HotNews.ro','hotnews.ro'),
 ]);
 const byOrigin=new Map(NEWS_PUBLISHERS.flatMap(value=>value.origins.map(origin=>[origin,value] as const)));
 export function publisherForNewsUrl(value:string):NewsPublisher|null{
@@ -102,8 +105,18 @@ interface PublicationScope {readonly publisherId:string;readonly countryCode:str
 const publication=(publisherId:string,countryCode:string,countryName:string,coverage:string,...editions:readonly (readonly [string,NewsSourceLanguage])[]):PublicationScope=>Object.freeze({publisherId,countryCode,countryName,coverage,editions:Object.freeze(editions.map(([path,language])=>Object.freeze({path,language})))});
 /** Publication provenance only. A publisher's country or edition never establishes a story's location. */
 export const NEWS_PUBLICATION_SCOPES:readonly PublicationScope[]=Object.freeze([
+  // Romanian primary editions: exact publisher RSS channel identities verified 2026-11-22.
+  publication('digi24','RO','Romania','Romania and global reporting',['/stiri/','ro']),
+  publication('hotnews','RO','Romania','Romania and global reporting',['/','ro']),
   publication('ap','US','United States','Global reporting',['/article/','en']),
   publication('bbc','GB','United Kingdom','Global reporting',['/news/','en'],['/sport/','en'],['/japanese/','ja']),
+  // Existing direct news indexes and their primary English editions checked 2026-11-22:
+  // theverge.com, pcgamer.com, livescience.com, parents.com and edweek.org.
+  publication('the-verge','US','United States','Technology and global reporting',['/','en']),
+  publication('pcgamer','GB','United Kingdom','Gaming reporting',['/','en']),
+  publication('live-science','US','United States','Science reporting',['/','en']),
+  publication('parents','US','United States','Parenting and family reporting',['/','en']),
+  publication('edweek','US','United States','United States education reporting',['/','en']),
   publication('guardian','GB','United Kingdom','Global reporting',['/','en']),
   publication('france24','FR','France','Global reporting',['/fr/','fr'],['/en/','en'],['/es/','es'],['/ar/','ar']),
   // Edition paths/hreflang labels checked in DW's official language navigation2026-11-21.
@@ -155,8 +168,15 @@ export interface NewsDiscoveryIndex {
   readonly id:string;readonly publisherId:string;readonly url:string;
   readonly format?:'rss';readonly language?:NewsSourceLanguage;
   readonly feedTitle?:string;readonly feedHome?:string;readonly articlePath?:string;
+  /** Only an explicitly reviewed feed may omit its channel language; conflicting values still fail closed. */
+  readonly allowMissingLanguage?:true;
 }
 export const NEWS_DISCOVERY_INDEXES:readonly NewsDiscoveryIndex[]=Object.freeze(([
+  // Primary receipt: GitHub Actions run 45050736033, job 137295063381, 2026-11-22 17:40 UTC.
+  // Both robots policies allowed these exact public endpoints. Digi24 omits channel language;
+  // the reviewed Romanian website edition supplies that provenance, not automatic text detection.
+  {id:'digi24-ro-news',publisherId:'digi24',url:'https://www.digi24.ro/rss',format:'rss',language:'ro',feedTitle:'Digi24',feedHome:'https://www.digi24.ro/',articlePath:'/stiri/',allowMissingLanguage:true},
+  {id:'hotnews-ro-news',publisherId:'hotnews',url:'https://hotnews.ro/feed',format:'rss',language:'ro',feedTitle:'HotNews.ro',feedHome:'https://hotnews.ro',articlePath:'/'},
   {id:'guardian-news',publisherId:'guardian',url:'https://www.theguardian.com/sitemaps/news.xml'},
   {id:'ap-news',publisherId:'ap',url:'https://apnews.com/news-sitemap-content.xml'},
   {id:'bbc-news',publisherId:'bbc',url:'https://www.bbc.com/sitemaps/https-sitemap-com-news-1.xml'},

@@ -5,7 +5,9 @@ import {setupExplore,type ExploreController} from '../explore/browser.js';
 import {contextForCard} from './context.js';
 import {nextDailyEditionDelay,selectContextualToday} from './contextual-today.js';
 import {LiveEdition,editionCardSignature,editionStorySignature,editionUpdateLabel,PUBLIC_EDITION_POLL_MS,publicEditionPollDelay} from './live-edition.js';
-import {appendPublicEdition,appendPublicContinuation,dailyEditionSummary,publicEditionState} from './home-edition.js';
+import {publicEditionState} from './home-edition.js';
+import {selectNewsStream,newsStreamPage,observeNewsStream,NEWS_PAGE_SIZE,type NewsStreamFilter} from './news-stream.js';
+import {NEWS_CATEGORIES,newsCategoryLabel,isNewsCategoryId} from './news-taxonomy.js';
 import {DiscoveryLoading,renderDiscoveryLoading,bindDiscoveryLoadingActions,type DiscoveryLoadingElements} from './loading.js';
 import {selectHomeLanguage} from './home-local.js';
 import {localCardNode} from '../local/card-node.js';
@@ -20,7 +22,7 @@ import {organizationSetupFromHash,organizationReadingSettings} from '../organiza
 import {cardCreditsNode} from './credits.js';
 import {PUBLIC_TOPICS,TOPIC_LABELS} from './topics.js';
 import {PUBLIC_EDITORIAL_CATEGORIES,EDITORIAL_CATEGORY_LABELS,editorialCategory as categoryForCard,type PublicEditorialCategory} from './editorial-categories.js';
-import {CategoryFollowing} from './follow-browser.js';
+import {CategoryFollowing,type FollowPresentation} from './follow-browser.js';
 import {shareCard} from '../share/actions.js';
 import {setupEdition} from '../edition/browser.js';
 import {captureCheckpoint,compareCheckpoint,focusedSnapshot,compareFocusedCheckpoint,type ComparisonCheckpoint,type ComparedCard,type MetadataField} from './comparison.js';
@@ -66,7 +68,8 @@ let lastPublicCheckAttempt=0;
 const PUBLIC_REFRESH_MS=PUBLIC_EDITION_POLL_MS;
 let publicRefreshFailures=0,publicEtag:string|null=null,automaticPublicLoad=false,applyPublicUpdate=false;
 const liveEdition=new LiveEdition();
-let continuationCount=0,continuationContext='';
+let continuationCount=NEWS_PAGE_SIZE,continuationContext='',newsAvailable=0;
+let newsFilter:NewsStreamFilter='all',stopNewsObserver:()=>void=()=>{};
 let lastLocalLanguageRefresh=0;
 const currentCardByNode=new WeakMap<HTMLElement,EvidenceCard>();
 function schedulePublicRefresh():void {
@@ -359,7 +362,7 @@ async function shareSource(card:EvidenceCard,button:HTMLButtonElement,fallback:H
     announcement.textContent='Copy the original source link from the selected field.';
   }
 }
-function cardNode(view:ReadingCard,index:number,total:number,saved?:SavedCard,automaticInsights=true):HTMLElement{
+function cardNode(view:ReadingCard,index:number,total:number,saved?:SavedCard,automaticInsights=true,followPresentation:FollowPresentation='category'):HTMLElement{
   const fragment=template.content.cloneNode(true) as DocumentFragment;
   const node=fragment.querySelector<HTMLElement>('article');if(!node)throw new Error('READER_TEMPLATE_INVALID');
   node.classList.add('editorial-card');
@@ -440,7 +443,7 @@ function cardNode(view:ReadingCard,index:number,total:number,saved?:SavedCard,au
     const exists=deviceState.cards.some(entry=>entry.id===card.id);
     void writeDevice(()=>exists?device.remove(card.id):device.save(currentCardByNode.get(node)??card),exists?'Card removed from this browser.':'Card saved in this browser only.');
   });}
-  if(editorialCategory&&!unclassified)following.attach(node,editorialCategory);
+  if(editorialCategory&&!unclassified)following.attach(node,editorialCategory,followPresentation);
   if(saved){
     const note=make('p','saved-copy-note',`Saved here ${formatted(saved.savedAt)}. Original source check ${formatted(card.observedAt)}. This saved copy is retained; current comparisons appear separately when available.`);
     evidence?.append(note);
@@ -512,7 +515,7 @@ function reconcileDiscovery(target:HTMLElement,next:HTMLElement):void {
   const desired=[...next.children].filter((node):node is HTMLElement=>node instanceof HTMLElement).map(node=>{
     const existing=current.get(key(node));
     if(!existing||!key(node))return node;
-    const same=node.dataset.cardId?existing.dataset.liveSignature===node.dataset.liveSignature:existing.textContent===node.textContent&&existing.dataset.weatherRevision===node.dataset.weatherRevision;
+    const same=node.dataset.liveSignature!==undefined?existing.dataset.liveSignature===node.dataset.liveSignature:existing.textContent===node.textContent&&existing.dataset.weatherRevision===node.dataset.weatherRevision;
     if(!same)return node;
     existing.className=node.className;
     if(node.dataset.editionPart)existing.dataset.editionPart=node.dataset.editionPart;else delete existing.dataset.editionPart;
@@ -529,7 +532,7 @@ function reconcileDiscovery(target:HTMLElement,next:HTMLElement):void {
   target.dataset.editionState=next.dataset.editionState??'';target.dataset.dailyCoverage=next.dataset.dailyCoverage??'';
 }
 function renderDiscovery():void {
-  clearTimeout(discoveryExpiry);
+  clearTimeout(discoveryExpiry);stopNewsObserver();
   worldExplorer?.update();
   renderReturnBrief();
   const section=required<HTMLElement>('#discovery'),target=required<HTMLElement>('#discovery-cards'),host=document.createElement('div'),note=required<HTMLElement>('#discovery-status'),button=required<HTMLButtonElement>('#discovery-refresh');
@@ -545,21 +548,21 @@ function renderDiscovery():void {
   const city=contextualCity&&contextualLocation!=='estimated'?{id:contextualCity.id,name:contextualCity.name,countryCode:contextualCity.countryCode,confirmed:true as const}:undefined;
   const interests=visitInterests??savedInterests;
   const context={countryCode:contextualCity?.countryCode??null,preferredTopics:interests,...(city?{city}:{})};
-  const language=getLocale();
+  const language=getLocale(),globalContext={countryCode:null,preferredTopics:[]};
   const local=selectHomeLanguage(contextualLocal,contextualCity,now,language);
   const awaitingLocal=contextualLocationPending||contextualCity!==null&&contextualLocalState==='loading';
-  const candidate=snapshot?selectContextualToday(selectNewsLanguage(snapshot.cards,language),context,now):{first:[],more:[]};
+  const candidate=snapshot?selectContextualToday(selectNewsLanguage(snapshot.cards,language),globalContext,now):{first:[],more:[]};
   const contextKey=JSON.stringify([language,context.countryCode,city?.id??null,[...interests].sort()]);
-  if(continuationContext!==contextKey){continuationContext=contextKey;continuationCount=0;}
+  if(continuationContext!==contextKey){continuationContext=contextKey;continuationCount=NEWS_PAGE_SIZE;}
   const live=liveEdition.present(candidate,contextKey,now,applyPublicUpdate);applyPublicUpdate=false;
-  const today=live.selection,topCount=today.first.length+local.topNews.length;
-  if(topCount===0)continuationCount=Math.max(continuationCount,20);
+  const today=live.selection,stream=selectNewsStream(today,local.cards,now,newsFilter),visible=newsStreamPage(stream,continuationCount);
+  const topCount=stream.filtered.length,localNewsCount=stream.items.filter(item=>item.kind==='local').length;newsAvailable=topCount;
   target.dataset.newsLanguage=language;
   button.textContent=live.changes.total?(getLocale()==='en'?'Show updates':tr('refresh')+' · '+new Intl.NumberFormat(getLocale()).format(live.changes.total)):tr('refresh');
   button.setAttribute('aria-label',getLocale()==='en'?(live.changes.total?`Show updates: ${editionUpdateLabel(live.changes)}`:'Refresh daily top'):button.textContent);
   const globalEditionState=publicEditionState(today,{snapshotState:snapshot?.state??null,loading:loading||!initialCheckStarted,failed:lastLoadFailed});
-  const editionState=topCount>0?'ready':awaitingLocal?'pending':globalEditionState;
-  const loadingPhase=discoveryLoading.phase({pending:editionState==='pending',unavailable:editionState==='unavailable',firstCount:topCount,moreCount:today.more.length});
+  const editionState=stream.total>0?(topCount>0?'ready':'empty'):awaitingLocal?'pending':globalEditionState;
+  const loadingPhase=discoveryLoading.phase({pending:editionState==='pending',unavailable:editionState==='unavailable',firstCount:visible.length,moreCount:Math.max(0,topCount-visible.length)});
   section.dataset.loading=loadingPhase;
   renderDiscoveryLoading(discoveryLoadingElements,loadingPhase);
   discoveryLoadingElements.hint.textContent=tr('originalContentNote');
@@ -570,7 +573,7 @@ function renderDiscovery():void {
     discoveryLoadingElements.status.textContent=tr(editionState==='unavailable'?'storiesUnavailable':'checkingSources');
   }
   const suppressLocalPending=(loadingPhase==='initial'||loadingPhase==='slow')&&!local.supporting.length;
-  required<HTMLElement>('#today-heading').textContent=tr('todayTop');
+  required<HTMLElement>('#today-heading').textContent=language==='ro'?'Stiri':'News';
   required<HTMLElement>('#home-location').textContent=contextualCity
     ?`${contextualCity.name} · ${countryLabel(contextualCity.countryCode,contextualCity.country)}${contextualLocation==='estimated'?' · approximate':''}`
     :contextualLocationPending?tr('lookupLoading'):tr('chooseCity');
@@ -580,41 +583,64 @@ function renderDiscovery():void {
   if(delays.length&&document.visibilityState==='visible')discoveryExpiry=setTimeout(renderDiscovery,Math.min(...delays));
   host.replaceChildren();
   const languageNote=make('div','discovery-section-label');languageNote.id='home-news-language';
-  languageNote.append(make('p','privacy-note',tr('sourceLanguage',{language:languageLabel(language)})+' · '+tr('matchingStories',{count:topCount+today.more.length})));
+  languageNote.append(make('p','privacy-note',tr('sourceLanguage',{language:languageLabel(language)})+' · '+tr('matchingStories',{count:stream.total})));
   if(language!=='en'){
     const english=make('button','text-button','English');english.type='button';english.lang='en';
     english.addEventListener('click',()=>{const picker=required<HTMLSelectElement>('#reader-language');picker.value='en';picker.dispatchEvent(new Event('change',{bubbles:true}));});
     languageNote.append(english);
   }
   host.append(languageNote);
-  // These are the existing checked city records, never synthetic global EvidenceCards.
-  for(const item of local.topNews){
-    if(!contextualCity)break;
-    const node=localCardNode(item,contextualCity,now);node.dataset.homeLocalId=item.id;node.dataset.cityId=contextualCity.id;node.dataset.editionPart='first';
-    const title=node.querySelector<HTMLElement>('h3');if(title){title.lang=language;title.dir='auto';title.setAttribute('translate','no');}
-    const category=node.dataset.editorialCategory;
-    if(category&&(PUBLIC_EDITORIAL_CATEGORIES as readonly string[]).includes(category)){const label=node.querySelector('.card-topic');if(label)label.textContent=translatedCategory(category as PublicEditorialCategory);}
-    const link=node.querySelector('.card-content > .source-link');if(link)link.textContent=tr('openSource');
-    const details=node.querySelector('.evidence > summary');if(details)details.textContent=tr('sourceDetails');
+  const filterBox=make('div','discovery-section-label');filterBox.id='home-news-filter';
+  const filterLabel=make('label','',language==='ro'?'Categoria stirilor':'News category');filterLabel.htmlFor='home-news-category';
+  const picker=make('select','');picker.id='home-news-category';picker.setAttribute('aria-label',filterLabel.textContent??'News category');
+  const addOption=(value:string,label:string,count:number):void=>{const option=make('option','',label+' · '+new Intl.NumberFormat(language).format(count));option.value=value;picker.append(option);};
+  addOption('all',language==='ro'?'Toate categoriile':'All categories',stream.total);
+  for(const category of NEWS_CATEGORIES)addOption(category.id,newsCategoryLabel(category.id,language),stream.counts[category.id]??0);
+  addOption('other',tr('otherTopics'),stream.counts.other??0);picker.value=newsFilter;
+  const totals=make('p','privacy-note',language==='ro'?`${visible.length} afisate din ${topCount} in selectie · ${stream.total} stiri disponibile in total`:`${visible.length} shown of ${topCount} in this selection · ${stream.total} available articles in total`);
+  totals.setAttribute('role','status');totals.setAttribute('aria-live','polite');filterBox.append(filterLabel,picker,totals);host.append(filterBox);
+  host.dataset.editionState=editionState;host.dataset.dailyCoverage='connected-sources';
+  for(const [index,item] of visible.entries()){
+    if(stream.highlighted>0&&(index===0||index===stream.highlighted)){
+      const label=make('div','discovery-section-label');label.id=index===0?'home-global-heading':'home-all-news-heading';
+      label.append(make('h2','',index===0?(language==='ro'?'Selectia globala':'Global selection'):(language==='ro'?'Toate stirile':'All news')));host.append(label);
+    }
+    let node:HTMLElement;
+    if(item.kind==='global'){
+      node=cardNode(item.view,index,topCount,undefined,false,'related');node.dataset.liveSignature=JSON.stringify([language,editionCardSignature(item.view.card),editionStorySignature(item.view)]);
+    }else{
+      if(!contextualCity)continue;
+      node=localCardNode(item.card,contextualCity,now);node.dataset.homeLocalId=item.card.id;node.dataset.cityId=contextualCity.id;
+      node.dataset.liveSignature=JSON.stringify([language,item.card]);
+      const title=node.querySelector<HTMLElement>('h3');if(title){title.lang=language;title.dir='auto';title.setAttribute('translate','no');}
+      const link=node.querySelector('.card-content > .source-link');if(link)link.textContent=tr('openSource');
+      const details=node.querySelector('.evidence > summary');if(details)details.textContent=tr('sourceDetails');
+    }
+    node.dataset.editionPart='stream';node.dataset.newsStreamKey=item.key;node.dataset.newsCategory=item.category??'other';
+    const label=node.querySelector('.card-topic');if(label)label.textContent=item.category?newsCategoryLabel(item.category,language):tr('otherTopics');
+    if(visible.length%2===1&&index===visible.length-1)node.classList.add('today-last');
     host.append(node);
   }
-  // Publication reading uses the language projection, with unchanged evidence eligibility.
-  if(today.first.length||!local.topNews.length)appendPublicEdition(host,today,(view,index,total)=>{
-    const node=cardNode(view,index+local.topNews.length,total+local.topNews.length,undefined,false);node.dataset.liveSignature=JSON.stringify([language,editionCardSignature(view.card),editionStorySignature(view)]);return node;
-  },editionState);
-  else {host.dataset.editionState=editionState;host.dataset.dailyCoverage='partial-categories';}
-  const firstNodes=[...host.querySelectorAll<HTMLElement>('article[data-edition-part="first"]')];
-  for(const node of firstNodes)node.classList.remove('today-last');
-  if(firstNodes.length%2===1)firstNodes.at(-1)?.classList.add('today-last');
-  if(loadingPhase!=='hidden')host.querySelector('#home-edition-pending, #home-edition-unavailable')?.remove();
-  // Local source records stay contiguous and distinct from the global daily top.
+  if(!visible.length&&loadingPhase==='hidden'){
+    const message=make('p','discovery-section-label privacy-note',editionState==='unavailable'?tr('storiesUnavailable'):language==='ro'?'Nu sunt articole verificate pentru aceasta categorie si limba. Acoperirea surselor este partiala.':'No checked articles match this category and language. Source coverage is partial.');
+    message.id='home-edition-'+editionState;host.append(message);
+  }
+  const streamEnd=make('div','finish discovery-section-label');streamEnd.id='home-more-controls';
+  if(visible.length<topCount){
+    const next=make('button','secondary',tr('showMore',{count:Math.min(NEWS_PAGE_SIZE,topCount-visible.length),remaining:topCount-visible.length}));
+    next.type='button';next.id='home-more-button';next.dataset.publicMore='true';streamEnd.append(next);
+  }else if(visible.length){
+    streamEnd.append(make('p','privacy-note',language==='ro'?'Ai ajuns la toate articolele disponibile in aceasta selectie. Sursele conectate au acoperire partiala.':'You have reached all available articles in this selection. Connected sources provide partial coverage.'));
+  }
+  host.append(streamEnd);
+  // Operational city information remains separate from the news stream.
   if(!suppressLocalPending&&(contextualCity||contextualLocationPending)){
     const label=make('div','discovery-section-label');label.id='home-local-heading';
     label.append(make('h2','',contextualCity?tr('todayLocalTitle',{city:contextualCity.name}):tr('navMyCity')));
     host.append(label);
   }
   for(const item of local.supporting){if(!contextualCity)break;const node=localCardNode(item,contextualCity,now);node.dataset.homeLocalId=item.id;node.dataset.cityId=contextualCity.id;host.append(node);}
-  if(!suppressLocalPending&&!local.supporting.length&&!local.topNews.length&&(contextualCity||contextualLocationPending)){
+  if(!suppressLocalPending&&!local.supporting.length&&!localNewsCount&&(contextualCity||contextualLocationPending)){
     const state=make('div','discovery-section-label');state.id='home-local-state';state.setAttribute('role','status');
     const expired=contextualLocalState==='loaded'&&contextualLocal!==null&&now-Date.parse(contextualLocal.checkedAt)>=300_000;
     state.append(make('p','privacy-note',awaitingLocal?'Checking local updates…':expired?'The local check has expired. Refresh to see current local information.':contextualLocalState==='unavailable'?'Local information could not be checked. Refresh to try again.':'No current local cards match this reading language. Check connected sources or choose another language.'));
@@ -627,21 +653,18 @@ function renderDiscovery():void {
     details.append(make('p','privacy-note','City-level coverage only; your address and neighbourhood are not known. Only connected sources are included.'));
     host.append(details);
   }
-  appendPublicContinuation(host,today,(view,index,total)=>{
-    const node=cardNode(view,index,total,undefined,false);node.dataset.liveSignature=JSON.stringify([getLocale(),editionCardSignature(view.card),editionStorySignature(view)]);return node;
-  },continuationCount);
-  const end=host.querySelector('#home-edition-end h2');if(end)end.textContent=tr('endOfTop');
-  const continuation=host.querySelector<HTMLElement>('#home-more-button');if(continuation)continuation.textContent=tr('showMore',{count:Math.min(20,Math.max(0,today.more.length-continuationCount)),remaining:Math.max(0,today.more.length-continuationCount)});
   reconcileDiscovery(target,host);pruneInsights();
-  const publicationState=local.topNews.length?`${topCount} current reports in the selected language, including ${local.topNews.length} local reports. Original sources and dates are retained. `+(today.first.length+today.more.length?dailyEditionSummary(today):'No other current publications match this reading language.'):editionState==='unavailable'?'Publications could not be checked. Refresh to try again.':today.first.length+today.more.length?dailyEditionSummary(today):editionState==='pending'?'Checking connected publications…':'No current publications meet this selection.';
+  const sentinel=target.querySelector<HTMLElement>('#home-more-button');
+  if(sentinel)stopNewsObserver=observeNewsStream(sentinel,()=>showNewsPage(false));
+  const publicationState=stream.total?`${stream.total} unique articles in the selected language are available from connected sources. ${topCount} match the category filter; ${visible.length} are shown. Articles keep their original titles, publication dates and sources.`:editionState==='unavailable'?'Publications could not be checked. Refresh to try again.':editionState==='pending'?'Checking connected publications…':'No current publications meet this language selection.';
   const sourceState=loading&&!automaticPublicLoad?' Checking for updates…':lastLoadFailed&&snapshot?' Refresh unavailable; retained source checks are not newly verified.':snapshot?.state==='partial'?' Some source coverage is incomplete.':'';
-  const localState=(local.topNews.length?` ${local.topNews.length} current local reports are included above.`:'')+(awaitingLocal?' Local information is being checked.':local.supporting.length?` ${local.supporting.length} supporting local records are available below.`:contextualCity?' Local coverage is shown below.':'');
+  const localState=(localNewsCount?` ${localNewsCount} local reports are included in the stream.`:'')+(awaitingLocal?' Local information is being checked.':local.supporting.length?` ${local.supporting.length} supporting local records are available below.`:contextualCity?' Local coverage is shown below.':'');
   const updates=live.changes.total?` ${editionUpdateLabel(live.changes)}. Select Show updates when you are ready; your reading position stays stable.`:'';
   const noteText=(snapshot?`${formatted(snapshot.generatedAt,true)} · Source check ${formatted(snapshot.generatedAt)}. `:'')+publicationState+sourceState+localState+updates;
   if(loadingPhase==='hidden'){
     const checkedTime=snapshot?new Intl.DateTimeFormat(getLocale(),{hour:'2-digit',minute:'2-digit'}).format(new Date(snapshot.generatedAt)):null;
-    const compact=getLocale()==='en'?compactEditionStatus({state:editionState,count:topCount,continuation:today.more.length,checkedTime,refreshing:loading&&!automaticPublicLoad,refreshFailed:lastLoadFailed&&snapshot!==null,partial:true,updates:live.changes.total})
-      :editionState==='unavailable'?tr('storiesUnavailable'):editionState==='pending'&&!topCount&&!today.more.length?tr('loadingStories')
+    const compact=getLocale()==='en'?compactEditionStatus({state:editionState,count:topCount,continuation:0,checkedTime,refreshing:loading&&!automaticPublicLoad,refreshFailed:lastLoadFailed&&snapshot!==null,partial:true,updates:live.changes.total})
+      :editionState==='unavailable'?tr('storiesUnavailable'):editionState==='pending'&&!topCount?tr('loadingStories')
       :[tr('matchingStories',{count:topCount}),checkedTime?tr('checkedAt',{time:checkedTime}):'',lastLoadFailed&&snapshot?tr('refreshUnavailable'):loading&&!automaticPublicLoad?tr('checkingUpdates'):'',tr('partialCoverage')].filter(Boolean).join(' · ');
     if(note.textContent!==compact)note.textContent=compact;
   }
@@ -651,23 +674,35 @@ function renderDiscovery():void {
   if(detailCopy.textContent!==noteText+locationDetail)detailCopy.textContent=noteText+locationDetail;
   let languages=editionDetails.querySelector<HTMLElement>('#edition-language-coverage');
   if(!languages){languages=make('div','');languages.id='edition-language-coverage';editionDetails.append(languages);}
-  const eligible=snapshot?selectContextualToday(snapshot.cards,context,now):{first:[],more:[]};
+  const eligible=snapshot?selectContextualToday(snapshot.cards,globalContext,now):{first:[],more:[]};
   const supply=newsLanguageCoverage([...eligible.first,...eligible.more].flatMap(view=>[view.card,...view.related]));
   languages.replaceChildren(make('p','privacy-note',tr('navSources')+' · '+new Intl.NumberFormat(language).format(supply.publishers)+' · '+tr('partialCoverage')));
   for(const item of supply.languages)languages.append(make('p','privacy-note',languageLabel(item.language)+' · '+tr('matchingStories',{count:item.count})));
   if(supply.unknownLanguage)languages.append(make('p','privacy-note',tr('sourceLanguage',{language:'—'})+' · '+tr('matchingStories',{count:supply.unknownLanguage})));
-  if(local.topNews.length)languages.append(make('p','privacy-note',tr('todayLocalTitle',{city:contextualCity?.name??''})+' · '+tr('matchingStories',{count:local.topNews.length})));
+  if(localNewsCount)languages.append(make('p','privacy-note',tr('todayLocalTitle',{city:contextualCity?.name??''})+' · '+tr('matchingStories',{count:localNewsCount})));
 
   const anchor=anchors.find(item=>item.node.isConnected);if(anchor){const offset=anchor.node.getBoundingClientRect().top-anchor.top;if(Math.abs(offset)>1)window.scrollBy(0,offset);}
   memoryControls();
 }
+function showNewsPage(focus:boolean):void {
+  if(document.visibilityState!=='visible'||document.body.dataset.entryView!=='start'||continuationCount>=newsAvailable)return;
+  const target=required<HTMLElement>('#discovery-cards'),before=new Set([...target.querySelectorAll<HTMLElement>('[data-news-stream-key]')].map(node=>node.dataset.newsStreamKey));
+  continuationCount+=NEWS_PAGE_SIZE;renderDiscovery();
+  if(focus){
+    const added=[...target.querySelectorAll<HTMLElement>('[data-news-stream-key]')].find(node=>!before.has(node.dataset.newsStreamKey));
+    const title=added?.querySelector<HTMLElement>('h3');if(title){title.tabIndex=-1;title.focus({preventScroll:true});}
+    announcement.textContent=getLocale()==='ro'?'Mai multe stiri sunt disponibile mai jos.':'More current reports are available below.';
+  }
+}
 required<HTMLElement>('#discovery-cards').addEventListener('click',event=>{
-  if(!(event.target instanceof Element)||!event.target.closest('[data-public-more]'))return;
-  const before=new Set([...required<HTMLElement>('#discovery-cards').querySelectorAll<HTMLElement>('article[data-edition-part="more"]')].map(node=>node.dataset.cardId));
-  continuationCount+=20;renderDiscovery();
-  const added=[...required<HTMLElement>('#discovery-cards').querySelectorAll<HTMLElement>('article[data-edition-part="more"]')].find(node=>!before.has(node.dataset.cardId));
-  const title=added?.querySelector<HTMLElement>('h3');if(title){title.tabIndex=-1;title.focus({preventScroll:true});}
-  announcement.textContent='More current reports are available below.';
+  if(event.target instanceof Element&&event.target.closest('[data-public-more]'))showNewsPage(true);
+});
+required<HTMLElement>('#discovery-cards').addEventListener('change',event=>{
+  if(!(event.target instanceof HTMLSelectElement)||event.target.id!=='home-news-category')return;
+  const value=event.target.value;if(value!=='all'&&value!=='other'&&!isNewsCategoryId(value))return;
+  const restoreFocus=document.activeElement===event.target;
+  newsFilter=value;continuationCount=NEWS_PAGE_SIZE;renderDiscovery();
+  if(restoreFocus)required<HTMLSelectElement>('#home-news-category').focus({preventScroll:true});
 });
 // Automatic location and saved choices inform this page without choosing a view or writing memory.
 document.addEventListener('dlkt:city-selected',event=>{

@@ -245,7 +245,7 @@ interface ContinuousReadEntry {readonly version:'iceo-continuous-read-1';readonl
 export class ContinuousSnapshotService {
   private pendingRead: Promise<PublicIceoRead>|undefined;
   private memory: {readonly at:number;readonly result:PublicIceoRead}|undefined;
-  constructor(private readonly ledger:RefreshLedger,private readonly collect:(signal:AbortSignal)=>Promise<IceoSnapshot>,
+  constructor(private readonly ledger:RefreshLedger,private readonly collect:(signal:AbortSignal,previousSnapshot?:IceoSnapshot)=>Promise<IceoSnapshot>,
     private readonly cache:DailyCacheStore|null=null,private readonly clock:()=>number=Date.now,
     private readonly deadlineMs:number=CONTINUOUS_REFRESH_DEADLINE_MS){}
 
@@ -294,7 +294,13 @@ export class ContinuousSnapshotService {
     try{
       if(!Number.isFinite(expires)||expires<=started)throw new Error('CONTINUOUS_LEASE_EXPIRED');
       const timeout=new Promise<never>((_resolve,reject)=>{timer=setTimeout(()=>{failure='timeout';const error=new Error('CONTINUOUS_REFRESH_TIMEOUT');reject(error);controller.abort(error);},Math.max(1,Math.min(this.deadlineMs,expires-started-3_000)));});
-      const snapshot=await Promise.race([this.collect(controller.signal),timeout]);clearTimeout(timer);controller.abort();
+      const acquire=async():Promise<IceoSnapshot>=>{
+        let previous:IceoSnapshot|undefined;
+        try{const prior=await this.ledger.read();if(validSharedEnvelope(prior)&&validDailySnapshot(prior.snapshot,this.clock())&&publicSnapshotDigest(prior.snapshot)===prior.digest)previous=prior.snapshot;}
+        catch{/* An unavailable prior catalog must not block fresh source collection. */}
+        controller.signal.throwIfAborted();return this.collect(controller.signal,previous);
+      };
+      const snapshot=await Promise.race([acquire(),timeout]);clearTimeout(timer);controller.abort();
       failure='invalid-snapshot';
       if(!validDailySnapshot(snapshot,this.clock())||snapshot.state==='unavailable'
         ||Date.parse(snapshot.generatedAt)<started-5_000||Date.parse(snapshot.generatedAt)>this.clock()+5_000

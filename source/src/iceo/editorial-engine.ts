@@ -1,5 +1,5 @@
 import type {IceoSnapshot, SourceResult} from './contracts.js';
-import {iceoEngine, reconcile} from './engine.js';
+import {iceoEngine, reconcile,fitPublicSnapshot} from './engine.js';
 import {discoverNews, type NewsCandidate} from './news-discovery.js';
 import {createNewsCandidateStore} from './news-store.js';
 import {newsBackoffFetch} from './news-backoff.js';
@@ -11,6 +11,7 @@ export async function collectEditorialSnapshot(
   officialLoad:(()=>Promise<IceoSnapshot>)|undefined=undefined,
   environment:Readonly<Record<string,string|undefined>>=process.env,
   signal?:AbortSignal,
+  previousSnapshot?:IceoSnapshot,
 ):Promise<IceoSnapshot>{
   signal?.throwIfAborted();
   const boundedFetch:typeof fetch=signal?((input,init)=>{signal.throwIfAborted();return fetcher(input,{...init,signal:init?.signal?AbortSignal.any([signal,init.signal]):signal});}):fetcher;
@@ -23,20 +24,20 @@ export async function collectEditorialSnapshot(
     const newsFetch=environment.VERCEL==='1'?newsBackoffFetch(boundedFetch,clock):boundedFetch;
     return discoverNews(newsFetch,now,candidates,async pool=>{
       if(store?.writable)await store.write(pool,clock());
-    });
+    },{retainedCards:previousSnapshot?.cards});
   })();
   const [base,discovered]=await Promise.all([official,news]);
   signal?.throwIfAborted();
   const records:SourceResult[]=base.sources.map(health=>({health,cards:base.cards.filter(card=>card.sourceIds.includes(health.id))}));
   const combined=reconcile([...records,...discovered]);
   const conflicts=combined.conflictCount+base.conflictCount;
-  return Object.freeze({...combined,mode:'current-source-records',conflictCount:conflicts,state:conflicts>0&&combined.state==='ready'?'partial':combined.state});
+  return fitPublicSnapshot(Object.freeze({...combined,mode:'current-source-records',conflictCount:conflicts,state:conflicts>0&&combined.state==='ready'?'partial':combined.state}));
 }
 
 let pending:Promise<IceoSnapshot>|undefined;
 /** Collector entry point for the authenticated durable lease holder, never the public read path. */
-export function publicEditorialSnapshot(signal?:AbortSignal):Promise<IceoSnapshot>{
+export function publicEditorialSnapshot(signal?:AbortSignal,previousSnapshot?:IceoSnapshot):Promise<IceoSnapshot>{
   signal?.throwIfAborted();
-  pending??=collectEditorialSnapshot(fetch,Date.now,undefined,process.env,signal).finally(()=>{pending=undefined;});
+  pending??=collectEditorialSnapshot(fetch,Date.now,undefined,process.env,signal,previousSnapshot).finally(()=>{pending=undefined;});
   return pending;
 }
