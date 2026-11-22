@@ -25,7 +25,7 @@ test('subject metadata is bounded, canonical, unique and tied to this article',(
  const invalid=[{...subject(),articleUrl:'https://www.theguardian.com/other'}, {...subject(),basis:'title-guess'},
   subject([],[]),subject(['Economy','Economy']),subject(['Sport','Economy']),subject([' Economy']),
   subject(['a'.repeat(81)]),subject(Array.from({length:9},(_,i)=>String(i))),subject([],Array.from({length:13},(_,i)=>String(i).padStart(2,'0'))),
-  subject(['<script>']),subject(['Economy\\nNews']),{...subject(),private:'hidden'}];
+  subject(['<script>']),...([0,9,10,13,127].map(code=>subject(['ab'+String.fromCharCode(code)+'cd']))),subject(['Two  spaces']),{...subject(),private:'hidden'}];
  for(const metadata of invalid){assert.equal(validArticleSubject(metadata,url),false);assert.equal(validCard(evidence(metadata)),false);}
  assert.equal(validCard({...evidence(),kind:'legal-document'}),false);
 });
@@ -40,4 +40,10 @@ test('ambiguous or unrelated metadata retains the existing headline fallback',()
   const result=classifyEvidenceCard(evidence(metadata));assert.equal(result?.category,'13000000');assert.notEqual(result?.basis,'publisher-metadata');
  }
  const unknown={...evidence(subject(['__proto__'])),title:'A reported development'};assert.equal(classifyEvidenceCard(unknown),null);
+});
+
+test('verified publisher business labels preserve the explicit care-delivery exception',()=>{
+ const card={...evidence(subject(['Business'])),title:'Retail medicine expands in neighbourhoods'};
+ assert.deepEqual(classifyEvidenceCard(card),{category:'07000000',basis:'headline'});
+ assert.equal(classifyEvidenceCard({...card,title:'Retail medicine company reports annual profits and revenue growth'})?.category,'04000000');
 });

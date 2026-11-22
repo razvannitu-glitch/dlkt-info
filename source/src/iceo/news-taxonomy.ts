@@ -141,6 +141,8 @@ function headlineCategory(title:string):NewsCategoryId|null {
  return direct?.[0]??(INDUSTRY.test(title)?'04000000':null);
 }
 
+const retailCare=(title:string):boolean=>/\bretail medicine\b/u.test(title)&&!FINANCIAL.test(title);
+
 /** DLKT classification, not an IPTC-provided classifier. No summaries, place names or invented tags. */
 export function classifyNewsSubject(title:string,sourceUrl:string):NewsClassification|null{
  if(!title.trim()||title.length>4000||/[\u0000-\u001f\u007f]/u.test(title))return null;
@@ -148,7 +150,7 @@ export function classifyNewsSubject(title:string,sourceUrl:string):NewsClassific
  if(url.protocol!=='https:'||url.username||url.password||url.port)return null;
  const normalized=fold(title),section=sectionCategory(url);
  // This care-delivery subject is explicit even when a publisher files it on a broad business desk.
- if(/\bretail medicine\b/u.test(normalized)&&!FINANCIAL.test(normalized))return result('07000000','headline');
+ if(retailCare(normalized))return result('07000000','headline');
  if(section!==null)return result(section,'publisher-section');
  const direct=headlineCategory(normalized);
  if(direct!==null)return result(direct,'headline');
@@ -182,6 +184,7 @@ function publisherSubject(card:EvidenceInput):NewsClassification|null {
  return category?result(category,'publisher-metadata'):null;
 }
 export function classifyEvidenceCard(card:EvidenceInput):NewsClassification|null{
+ if(retailCare(fold(card.title)))return result('07000000','headline');
  const provided=publisherSubject(card);if(provided)return provided;
  const subject=classifyNewsSubject(card.title,card.sourceUrl);
  if(subject)return subject;
