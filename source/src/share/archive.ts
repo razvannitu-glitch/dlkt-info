@@ -10,7 +10,7 @@ export const SHARE_ARCHIVE_VERSION = 'dlkt-share-archive-1' as const;
 export const MAX_ARCHIVE_CARD_BYTES = 32_768;
 const FRESHNESS_MS = 3_600_000;
 const CLOCK_TOLERANCE_MS = 300_000;
-const CARD_FIELDS = new Set(['id','identity','title','topic','kind','sourceUrl','publisher','sourceIds','date','dateLabel','observedAt','contentHash','boundary','deadline','version','attribution','sourceState','summary','byline','licenseUrl','context']);
+const CARD_FIELDS = new Set(['id','identity','title','topic','kind','sourceUrl','publisher','sourceIds','date','dateLabel','observedAt','contentHash','boundary','deadline','version','attribution','sourceState','summary','byline','licenseUrl','context','articleSubject']);
 const digest = (value: unknown): string => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
 /** An immutable record of a previous source check. Reading it does not recheck the source. */

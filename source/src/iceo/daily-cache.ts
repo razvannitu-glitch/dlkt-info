@@ -81,7 +81,7 @@ const topic = (value: unknown): value is Topic => (PUBLIC_TOPICS as readonly unk
 
 const HEALTH_KEYS = ['id', 'label', 'publisher', 'topic', 'state', 'checkedAt', 'verifiedAt', 'count', 'rejected', 'error', 'retryAt', 'scope', 'termsUrl', 'windowed'];
 const CARD_REQUIRED = ['id', 'identity', 'title', 'topic', 'kind', 'sourceUrl', 'publisher', 'sourceIds', 'date', 'dateLabel', 'observedAt', 'contentHash', 'boundary', 'deadline', 'version', 'attribution', 'sourceState'];
-const CARD_OPTIONAL = ['summary', 'byline', 'licenseUrl', 'context'];
+const CARD_OPTIONAL = ['summary', 'byline', 'licenseUrl', 'context', 'articleSubject'];
 const SNAPSHOT_KEYS = ['version', 'product', 'productVersion', 'mode', 'generatedAt', 'state', 'sources', 'cards', 'conflictCount', 'duplicateCount', 'deltaAvailable', 'scheduledDelivery', 'accountPersistence', 'coverage'];
 
 function validHealth(value: unknown): value is SourceHealth {

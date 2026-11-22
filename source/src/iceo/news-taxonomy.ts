@@ -1,4 +1,5 @@
 import type {EvidenceCard} from './contracts.js';
+import {validArticleSubject} from './article-subject.js';
 import type {LocalCard} from '../local/contracts.js';
 import {classifyNewsHeadline,newsCategoryFromSourceId,contradictedHeadlineHints} from './editorial-categories.js';
 
@@ -33,7 +34,7 @@ export interface NewsCategoryDefinition {
  readonly id:NewsCategoryId; readonly qcode:`medtop:${NewsCategoryId}`; readonly uri:string;
  readonly iptcLabel:string; readonly label:string; readonly labelRo:string;
 }
-export const NEWS_TAXONOMY_VERSION='iptc-media-topics-top-level-2026-10-16-dlkt-2' as const;
+export const NEWS_TAXONOMY_VERSION='iptc-media-topics-top-level-2026-10-16-dlkt-3' as const;
 export const NEWS_CATEGORIES:readonly NewsCategoryDefinition[]=Object.freeze(DEFINITIONS.map(([id,iptcLabel,label,labelRo])=>
  Object.freeze({id,qcode:('medtop:'+id) as `medtop:${NewsCategoryId}`,uri:'http://cv.iptc.org/newscodes/mediatopic/'+id,iptcLabel,label,labelRo})));
 const ids:ReadonlySet<string>=new Set(NEWS_CATEGORIES.map(category=>category.id));
@@ -44,7 +45,7 @@ export function newsCategoryLabel(id:NewsCategoryId,locale='en'):string{
 }
 export interface NewsClassification {
  readonly category:NewsCategoryId;
- readonly basis:'publisher-section'|'headline'|'legacy-topic'|'record-kind';
+ readonly basis:'publisher-metadata'|'publisher-section'|'headline'|'legacy-topic'|'record-kind';
 }
 const result=(category:NewsCategoryId,basis:NewsClassification['basis']):NewsClassification=>Object.freeze({category,basis});
 
@@ -162,9 +163,26 @@ export function classifyNewsSubject(title:string,sourceUrl:string):NewsClassific
  const category=legacyCategoryToNewsCategory(legacy);
  return category===null?null:result(category,'headline');
 }
-type EvidenceInput=Pick<EvidenceCard,'title'|'sourceUrl'|'sourceIds'|'topic'>;
+type EvidenceInput=Pick<EvidenceCard,'title'|'sourceUrl'|'sourceIds'|'topic'|'articleSubject'>;
 type LocalInput=Pick<LocalCard,'title'|'sourceUrl'|'kind'|'news'>;
+function publisherSubject(card:EvidenceInput):NewsClassification|null {
+ const metadata=card.articleSubject;
+ if(!validArticleSubject(metadata,card.sourceUrl))return null;
+ const mapped=(values:readonly string[]):Set<NewsCategoryId>=>new Set(values.flatMap(term=>{
+  const normalized=fold(term),key=normalized.replaceAll(' ','-');
+  const definition=NEWS_CATEGORIES.find(category=>[category.iptcLabel,category.label,category.labelRo,category.qcode,category.uri].some(label=>fold(label)===normalized));
+  const category=definition?.id??(Object.hasOwn(SECTIONS,key)?SECTIONS[key]:undefined);
+  return category?[category]:[];
+ }));
+ const sections=mapped(metadata.sections),keywords=mapped(metadata.keywords);
+ // A precise section takes precedence over broad keywords. Conflicting sections are not collapsed into one label.
+ if(sections.size>1)return null;
+ const choices=sections.size?sections:keywords;
+ const category=choices.size===1?[...choices][0]:undefined;
+ return category?result(category,'publisher-metadata'):null;
+}
 export function classifyEvidenceCard(card:EvidenceInput):NewsClassification|null{
+ const provided=publisherSubject(card);if(provided)return provided;
  const subject=classifyNewsSubject(card.title,card.sourceUrl);
  if(subject)return subject;
  if(card.sourceIds.includes('news-unclassified'))return null;

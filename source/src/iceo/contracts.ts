@@ -27,6 +27,14 @@ export interface ArticleContext {
   readonly label: string;
   readonly boundary: string;
 }
+/** Publisher-supplied subject terms from the same canonical-bound Article node. */
+export interface ArticleSubjectMetadata {
+  readonly basis:'publisher-jsonld';
+  readonly articleUrl:string;
+  readonly sections:readonly string[];
+  readonly keywords:readonly string[];
+}
+
 export interface EvidenceCard {
   readonly id: string; readonly identity: string; readonly title: string;
   readonly topic: Topic; readonly kind: 'publication' | 'legal-document' | 'software-release' | 'procurement-notice';
@@ -39,6 +47,7 @@ export interface EvidenceCard {
   readonly summary?: string;
   readonly byline?:string; readonly licenseUrl?:string;
   readonly context?:ArticleContext;
+  readonly articleSubject?:ArticleSubjectMetadata;
 }
 export interface Extraction {
   readonly cards: readonly EvidenceCard[]; readonly rejected: number;
