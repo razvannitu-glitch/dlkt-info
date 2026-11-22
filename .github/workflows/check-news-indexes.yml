@@ -1,0 +1,20 @@
+name: Check candidate news indexes
+on:
+  push:
+    branches: ['codex/check-news-indexes-20261122']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run build
+      - run: node scripts/check-candidate-news-indexes.mjs
