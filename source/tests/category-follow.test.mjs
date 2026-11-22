@@ -163,3 +163,70 @@ test('highlights are deterministic and bounded while full scoped counts remain a
   assert.deepEqual(result.highlights.map(item=>item.card.id),cards.slice(0,6).map(item=>item.id));
   assert.throws(()=>captureCategoryFollowBaseline({...snapshot(),conflictCount:1},'gaming',now,rev(2)));
 });
+
+test('quarantined global conflicts permit only an explicit partial retained-catalog comparison without rewriting source health',()=>{
+  const raw=freeze({...snapshot(),state:'partial',conflictCount:1}),before=JSON.stringify(raw),state=followed('gaming',raw);
+  assert.ok(state.entries[0].baseline);assert.equal(state.entries[0].baselineConflictCount,1);
+  assert.equal(state.entries[0].baseline.sources[0].partial,false,'Global exclusions are not falsely attributed to this source');
+  const result=selectCategoryFollowReturn(state,raw,now,true);
+  assert.equal(result.state,'partial');assert.equal(result.excludedConflicts,true);assert.equal(result.items[0].excludedConflicts,true);
+  assert.equal(result.items[0].comparison.state,'partial');assert.equal(result.items[0].canAcknowledge,true);
+  assert.match(result.items[0].comparison.notes.at(-1),/affected sources or categories are not identified/u);
+  assert.equal(JSON.stringify(raw),before);assert.equal(raw.sources[0].state,'verified');assert.equal(raw.sources[0].rejected,0);
+  const fromClean=selectCategoryFollowReturn(followed(),raw,now,true);assert.equal(fromClean.state,'partial');assert.equal(fromClean.items[0].comparison.state,'partial');
+});
+
+test('the baseline exclusion limit survives clean refreshes and conflicted ACK until an explicit clean ACK',()=>{
+  const partial={...snapshot(),state:'partial',conflictCount:2},state=followed('gaming',partial),before=JSON.stringify(state);
+  const clean=selectCategoryFollowReturn(state,snapshot(),now,true);assert.equal(clean.state,'partial');assert.equal(clean.excludedConflicts,true);assert.equal(JSON.stringify(state),before);
+  const again=acknowledgeCategoryFollow(state,'gaming',partial,now,rev(2));assert.equal(again.entries[0].baselineConflictCount,2);assert.equal(selectCategoryFollowReturn(again,snapshot(),now,true).state,'partial');
+  const accepted=acknowledgeCategoryFollow(again,'gaming',snapshot(),now,rev(3));assert.equal(accepted.entries[0].baselineConflictCount,0);
+  const result=selectCategoryFollowReturn(accepted,snapshot(),now,true);assert.equal(result.state,'complete');assert.equal(result.excludedConflicts,false);
+});
+
+test('legacy missing exclusion counts mean zero but every present invalid value is rejected',()=>{
+  const state=followed(),legacy=structuredClone(state);delete legacy.entries[0].baselineConflictCount;
+  assert.equal(parseCategoryFollows(legacy).entries[0].baselineConflictCount,0);assert.equal(Object.hasOwn(legacy.entries[0],'baselineConflictCount'),false);
+  for(const value of [undefined,null,'1',-1,0.5,NaN,Infinity,Number.MAX_SAFE_INTEGER+1]){
+    assert.equal(parseCategoryFollows({...state,entries:[{...state.entries[0],baselineConflictCount:value}]}),null,String(value));
+  }
+  const absent=followed('gaming',null);assert.equal(parseCategoryFollows({...absent,entries:[{...absent.entries[0],baselineConflictCount:1}]}),null);
+});
+
+test('conflict adaptation rejects invalid whole-catalog identities, counts and provenance even outside the selected category',()=>{
+  const gaming=card('gaming'),other=card('culture',2),clean=snapshot([gaming,other]),raw={...clean,state:'partial',conflictCount:1};
+  const invalid=[
+    {...raw,state:'ready'}, {...raw,state:'unavailable'}, {...raw,conflictCount:-1}, {...raw,conflictCount:1.5},
+    {...raw,cards:[gaming,{...other,id:gaming.id}]},
+    {...raw,cards:[gaming,{...other,identity:gaming.identity}]},
+    {...raw,cards:[gaming,{...other,sourceUrl:'javascript:alert(1)'}]},
+    {...raw,sources:raw.sources.map(source=>source.id==='news-culture'?{...source,count:99}:source)},
+    {...raw,sources:raw.sources.map(source=>source.id==='news-culture'?{...source,topic:'not-a-topic'}:source)},
+    {...raw,sources:raw.sources.map(source=>source.id==='news-culture'?{...source,topic:'food'}:source)},
+    {...raw,sources:raw.sources.map(source=>source.id==='news-culture'?{...source,count:0}:source),cards:[gaming,{...other,sourceIds:['unregistered-source']}]},
+  ];
+  for(const value of invalid){
+    assert.throws(()=>captureCategoryFollowBaseline(value,'gaming',now,rev(2)),/SOURCE_CHECK_REQUIRED/u);
+    assert.equal(selectCategoryFollowReturn(followed(),value,now,true).state,'unavailable');
+  }
+  const unrelatedFailed={...raw,sources:raw.sources.map(source=>source.id==='news-culture'?{...source,state:'unavailable',verifiedAt:null,error:'OFFLINE'}:source)};
+  const partial=followed('gaming',unrelatedFailed);assert.ok(partial.entries[0].baseline);assert.equal(selectCategoryFollowReturn(partial,unrelatedFailed,now,true).state,'partial');
+});
+
+test('excluded conflicts never promote stale, unavailable, invalid or missing-baseline checks to usable partial results',()=>{
+  const raw={...snapshot(),state:'partial',conflictCount:1},state=followed('gaming',raw);
+  assert.equal(selectCategoryFollowReturn(state,raw,now,false).state,'unavailable');
+  assert.equal(selectCategoryFollowReturn(state,raw,now+COMPARISON_MAX_AGE_MS+1,true).state,'stale');
+  assert.equal(selectCategoryFollowReturn({...state,revision:'invalid'},raw,now,true).state,'invalid');
+  const absent=selectCategoryFollowReturn(followed('gaming',null),raw,now,true);assert.equal(absent.state,'baseline-required');assert.equal(absent.excludedConflicts,true);
+  const future={...raw,sources:raw.sources.map(source=>({...source,verifiedAt:new Date(now+300001).toISOString()}))};
+  assert.equal(selectCategoryFollowReturn(state,future,now,true).state,'unavailable');
+  assert.throws(()=>acknowledgeCategoryFollow(state,'gaming',future,now,rev(2)),/SOURCE_CHECK_REQUIRED/u);
+});
+
+test('mixed stale and unavailable categories remain unavailable when no comparison is usable',()=>{
+  const cards=[card('gaming'),card('education',2)],current=snapshot(cards),gaming=followed('gaming',current),both=changeCategoryFollow(gaming,'education',true,current,now,rev(2)).state;
+  const failed={...current,state:'partial',conflictCount:1,sources:current.sources.map(source=>source.id==='news-education'?{...source,state:'unavailable',verifiedAt:null,error:'OFFLINE'}:source)};
+  const result=selectCategoryFollowReturn(both,failed,now+COMPARISON_MAX_AGE_MS+1,true);
+  assert.deepEqual(result.items.map(item=>item.state),['stale','unavailable']);assert.equal(result.state,'unavailable');assert.equal(result.newCount+result.updatedCount,0);assert.equal(result.excludedConflicts,true);
+});

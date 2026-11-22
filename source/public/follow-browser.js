@@ -12,13 +12,13 @@ function element(tag, className, text) {
 function date(value) { return new Intl.DateTimeFormat(getLocale(), { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)); }
 function itemMessage(item) {
     if (item.state === 'baseline-required')
-        return tr('followBaseline');
+        return tr(item.canAcknowledge ? 'followBaseline' : 'followUnavailable');
     if (item.state === 'unavailable')
         return tr('followUnavailable');
     if (item.state === 'stale')
         return tr('followStale');
     const changes = item.newCount + item.updatedCount;
-    return (changes || item.state === 'partial' ? tr('followSummary', { new: item.newCount, updated: item.updatedCount }) : tr('followNoChanges')) + (item.state === 'partial' ? ' ' + tr('followPartial') : '');
+    return (changes || item.state === 'partial' ? tr('followSummary', { new: item.newCount, updated: item.updatedCount }) : tr('followNoChanges')) + (item.state === 'partial' ? ' ' + tr(item.excludedConflicts ? 'followExcludedConflicts' : 'followPartial') : '');
 }
 /** One local preference controller. It neither fetches sources nor starts a timer. */
 export class CategoryFollowing {
@@ -120,7 +120,7 @@ export class CategoryFollowing {
             return;
         }
         const pending = this.options.loading(), busy = this.options.busy();
-        const signature = JSON.stringify([getLocale(), this.invalid, pending, busy, model.state, model.items.map(item => [item.category, item.state, item.savedAt, item.canAcknowledge, item.newCount, item.updatedCount, item.cards.map(change => [change.card.id, change.card.contentHash, change.card.title, change.card.publisher, change.kind])])]);
+        const signature = JSON.stringify([getLocale(), this.invalid, pending, busy, model.state, model.excludedConflicts, model.items.map(item => [item.category, item.state, item.savedAt, item.canAcknowledge, item.excludedConflicts, item.newCount, item.updatedCount, item.cards.map(change => [change.card.id, change.card.contentHash, change.card.title, change.card.publisher, change.kind])])]);
         if (signature === this.signature)
             return;
         this.signature = signature;
@@ -155,9 +155,9 @@ export class CategoryFollowing {
         else if (model.state === 'complete')
             status.textContent = model.newCount + model.updatedCount ? tr('followSummary', { new: model.newCount, updated: model.updatedCount }) : tr('followNoChanges');
         else if (model.state === 'partial')
-            status.textContent = tr('followSummary', { new: model.newCount, updated: model.updatedCount }) + ' · ' + tr('followPartial');
+            status.textContent = tr('followSummary', { new: model.newCount, updated: model.updatedCount }) + ' · ' + tr(model.excludedConflicts ? 'followExcludedConflicts' : 'followPartial');
         else {
-            const key = model.state === 'stale' ? 'followStale' : model.state === 'baseline-required' ? 'followBaseline' : 'followUnavailable';
+            const key = model.state === 'stale' ? 'followStale' : model.state === 'baseline-required' && model.items.some(item => item.canAcknowledge) ? 'followBaseline' : 'followUnavailable';
             status.textContent = tr(key);
         }
         const topics = element('div', 'following-topics');

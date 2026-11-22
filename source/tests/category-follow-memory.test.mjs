@@ -169,3 +169,20 @@ test('acknowledgement changes only the chosen baseline and rejects stale concurr
   const future={...changed,sources:changed.sources.map(item=>({...item,verifiedAt:new Date(now+300001).toISOString()}))};
   await assert.rejects(memory.acknowledgeCategoryFollow('gaming',future,next.revision),/SOURCE_CHECK_REQUIRED/u);assert.deepEqual(await memory.readCategoryFollows(),next);
 });
+
+test('conflict exclusion counts persist through committed follow, reload and ACK without passive clearing',async()=>{
+  const fixture=databaseFixture(),memory=fixture.memory(),partial={...snapshot(),state:'partial',conflictCount:1};
+  const state=await memory.setCategoryFollow('gaming',true,partial,null);assert.equal(state.entries[0].baselineConflictCount,1);
+  const loaded=await fixture.memory().readCategoryFollows();assert.equal(loaded.entries[0].baselineConflictCount,1);
+  const writes=fixture.committedWrites.length;assert.equal(selectCategoryFollowReturn(loaded,snapshot(),now,true).state,'partial');assert.equal(fixture.committedWrites.length,writes);
+  const partialAck=await memory.acknowledgeCategoryFollow('gaming',partial,state.revision);assert.equal(partialAck.entries[0].baselineConflictCount,1);
+  const cleanAck=await memory.acknowledgeCategoryFollow('gaming',snapshot(),partialAck.revision);assert.equal(cleanAck.entries[0].baselineConflictCount,0);assert.equal(selectCategoryFollowReturn(cleanAck,snapshot(),now,true).state,'complete');
+});
+
+test('legacy exclusion-field normalization is read-only and invalid persisted counts never overwrite the previous baseline',async()=>{
+  const fixture=databaseFixture(),memory=fixture.memory(),state=await memory.setCategoryFollow('gaming',true,snapshot(),null);
+  const legacy=structuredClone(state);delete legacy.entries[0].baselineConflictCount;fixture.data.meta.set(CATEGORY_FOLLOW_KEY,legacy);
+  const writes=fixture.committedWrites.length;assert.equal((await memory.readCategoryFollows()).entries[0].baselineConflictCount,0);assert.equal(Object.hasOwn(fixture.data.meta.get(CATEGORY_FOLLOW_KEY).entries[0],'baselineConflictCount'),false);assert.equal(fixture.committedWrites.length,writes);
+  fixture.data.meta.set(CATEGORY_FOLLOW_KEY,{...state,entries:[{...state.entries[0],baselineConflictCount:'1'}]});
+  await assert.rejects(memory.readCategoryFollows(),/CATEGORY_FOLLOW_STORAGE_INVALID/u);await assert.rejects(memory.acknowledgeCategoryFollow('gaming',snapshot(),state.revision),/CATEGORY_FOLLOW_STORAGE_INVALID/u);assert.equal(fixture.committedWrites.length,writes);
+});

@@ -22,11 +22,11 @@ function element<K extends keyof HTMLElementTagNameMap>(tag:K,className:string,t
 }
 function date(value:string):string{return new Intl.DateTimeFormat(getLocale(),{dateStyle:'medium',timeStyle:'short'}).format(new Date(value));}
 function itemMessage(item:CategoryFollowReturnItem):string {
- if(item.state==='baseline-required')return tr('followBaseline');
+ if(item.state==='baseline-required')return tr(item.canAcknowledge?'followBaseline':'followUnavailable');
  if(item.state==='unavailable')return tr('followUnavailable');
  if(item.state==='stale')return tr('followStale');
  const changes=item.newCount+item.updatedCount;
- return (changes||item.state==='partial'?tr('followSummary',{new:item.newCount,updated:item.updatedCount}):tr('followNoChanges'))+(item.state==='partial'?' '+tr('followPartial'):'');
+ return (changes||item.state==='partial'?tr('followSummary',{new:item.newCount,updated:item.updatedCount}):tr('followNoChanges'))+(item.state==='partial'?' '+tr(item.excludedConflicts?'followExcludedConflicts':'followPartial'):'');
 }
 
 /** One local preference controller. It neither fetches sources nor starts a timer. */
@@ -86,7 +86,7 @@ export class CategoryFollowing {
   this.host.hidden=!this.invalid&&!model.items.length;
   if(this.host.hidden){this.signature='';this.host.replaceChildren();return;}
   const pending=this.options.loading(),busy=this.options.busy();
-  const signature=JSON.stringify([getLocale(),this.invalid,pending,busy,model.state,model.items.map(item=>[item.category,item.state,item.savedAt,item.canAcknowledge,item.newCount,item.updatedCount,item.cards.map(change=>[change.card.id,change.card.contentHash,change.card.title,change.card.publisher,change.kind])])]);
+  const signature=JSON.stringify([getLocale(),this.invalid,pending,busy,model.state,model.excludedConflicts,model.items.map(item=>[item.category,item.state,item.savedAt,item.canAcknowledge,item.excludedConflicts,item.newCount,item.updatedCount,item.cards.map(change=>[change.card.id,change.card.contentHash,change.card.title,change.card.publisher,change.kind])])]);
   if(signature===this.signature)return;this.signature=signature;
   const expanded=new Set([...this.host.querySelectorAll<HTMLDetailsElement>('details[open][data-follow-topic]')].map(node=>node.dataset.followTopic));
   const active=document.activeElement instanceof HTMLElement&&this.host.contains(document.activeElement)?document.activeElement.dataset.followAction:null;
@@ -97,8 +97,8 @@ export class CategoryFollowing {
   if(this.invalid){status.textContent=tr('followInvalid');const settings=element('button','secondary',tr('navPersonalise'));settings.type='button';settings.dataset.followAction='personalise';settings.addEventListener('click',()=>this.options.personalise());this.host.append(settings);return;}
   if(pending)status.textContent=tr('followChecking');
   else if(model.state==='complete')status.textContent=model.newCount+model.updatedCount?tr('followSummary',{new:model.newCount,updated:model.updatedCount}):tr('followNoChanges');
-  else if(model.state==='partial')status.textContent=tr('followSummary',{new:model.newCount,updated:model.updatedCount})+' · '+tr('followPartial');
-  else {const key:MessageKey=model.state==='stale'?'followStale':model.state==='baseline-required'?'followBaseline':'followUnavailable';status.textContent=tr(key);}
+  else if(model.state==='partial')status.textContent=tr('followSummary',{new:model.newCount,updated:model.updatedCount})+' · '+tr(model.excludedConflicts?'followExcludedConflicts':'followPartial');
+  else {const key:MessageKey=model.state==='stale'?'followStale':model.state==='baseline-required'&&model.items.some(item=>item.canAcknowledge)?'followBaseline':'followUnavailable';status.textContent=tr(key);}
   const topics=element('div','following-topics');
   for(const item of model.items){
    const details=element('details','follow-topic');details.dataset.followTopic=item.category;details.open=expanded.has(item.category);
