@@ -7,12 +7,11 @@
 html:not([lang=en]) :is(.world-explore-heading h1,.world-results-heading h2,.world-empty h3,#today-heading,.discovery-section-label h2){letter-spacing:normal;overflow-wrap:anywhere}
 html[dir=rtl] :is(.world-city-results button,.world-explore-top .text-button,.info-card .card-content,.info-card .evidence,.site-header #header-navigation .text-button){text-align:start}
 html[dir=rtl] .world-explore-top .text-button{padding-inline-start:0;padding-inline-end:14px}
-html[dir=rtl] .site-header .header-tools{padding-left:0;padding-inline-start:16px;border-left:0;border-inline-start:1px solid var(--line)}
 html[dir=rtl] .site-header #header-menu{margin-left:0;margin-inline-start:auto}
 html[dir=rtl] .reader-language select{padding:8px 12px 8px 30px}
 html[dir=rtl] .world-city-results button{align-items:flex-start}
 html[dir=rtl] :is(.brand-header,.brand-footer){direction:ltr;unicode-bidi:isolate}
 html[dir=rtl] .card-title-link{letter-spacing:normal}
-@media(max-width:1024px){html[dir=rtl] .site-header .header-tools{padding-inline-start:0;border-inline-start:0}.reader-language-bar{padding-inline:20px}html[dir=rtl] .site-header #header-navigation .text-button:after{margin-right:0;margin-inline-end:3px;transform:rotate(-135deg)}}
+@media(max-width:1152px){.reader-language-bar{padding-inline:20px}html[dir=rtl] .site-header #header-navigation .text-button:after{margin-right:0;margin-inline-end:3px;transform:rotate(-135deg)}}
 @media(max-width:600px){.reader-language-bar{padding-inline:16px}.reader-language select{max-width:180px}.world-launch{flex-wrap:wrap}.world-explore-top{flex-wrap:wrap}.world-search-field{min-width:0}}
 @media(prefers-reduced-motion:reduce){.reader-language select{transition:none}}

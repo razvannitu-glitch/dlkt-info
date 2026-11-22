@@ -31,7 +31,7 @@ const READY_PROVISIONING = Object.freeze({
   identityVerified: true,
   readinessState: 'verified',
   schemaVerified: true,
-  schemaFingerprint: 'ef03f90d229d089f8871c64b996994c79c65d0e1e3a0f8e2b0bb08dc2d6f6dec',
+  schemaFingerprint: 'fc6df8a25190ef8c4b4f906873a3015b7aa805e21ce1a44f9117b8eefeed3b91',
   activationReceipt: 'a'.repeat(64),
   capabilities: Object.freeze({
     identity: true,

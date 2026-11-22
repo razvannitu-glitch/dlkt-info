@@ -1,6 +1,8 @@
 import {ACCOUNT_VERSION, ACCOUNT_MAX_BYTES, parseAccountState, parseAccountValue, isObject, type AccountState, type AccountValue} from './contracts.js';
 import {DeviceMemory} from '../iceo/device-memory.js';
 import {safeLink} from '../iceo/card-validation.js';
+import {DAILY_TOPICS} from '../daily/contracts.js';
+import {WALLET_PROFILE_MAX_BYTES, parseWalletProfile, parseWalletSnapshot, type WalletProfile, type WalletProfileState} from '../wallet/contracts.js';
 
 function el<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -15,6 +17,18 @@ const otpInput = el<HTMLInputElement>('account-otp');
 const panel = el('account-data');
 const signOut = el<HTMLButtonElement>('account-signout');
 const device = new DeviceMemory();
+const profilePanel = el('account-profile');
+const profileForm = el<HTMLFormElement>('account-profile-form');
+const profileName = el<HTMLInputElement>('account-profile-name');
+const profileLocale = el<HTMLInputElement>('account-profile-locale');
+const profileTimezone = el<HTMLInputElement>('account-profile-timezone');
+const profileInterests = new Map<string, HTMLInputElement>();
+for (const topic of DAILY_TOPICS) {
+  const label = document.createElement('label');
+  const input = document.createElement('input'); input.type = 'checkbox'; input.value = topic;
+  label.append(input, text('span', topic.charAt(0).toUpperCase() + topic.slice(1).replaceAll('-', ' ')));
+  el('account-profile-interests').append(label); profileInterests.set(topic, input);
+}
 type ReturnIntent = 'wallet' | null;
 // An exact enum, never a URL supplied by the caller. Extra or encoded queries fail closed.
 const returnIntent: ReturnIntent = window.location.search === '?returnTo=wallet' && window.location.hash === '' ? 'wallet' : null;
@@ -22,10 +36,12 @@ type Session = {readonly status: 'unavailable'; readonly userId: null}
   | {readonly status: 'signed-out'; readonly userId: null}
   | {readonly status: 'signed-in'; readonly userId: string};
 type Operation = {readonly generation: number; readonly controller: AbortController};
-type ActionKind = 'load' | 'request-code' | 'verify-code' | 'prepare-import' | 'upload' | 'restore' | 'delete' | 'sign-out';
-type Pending = {readonly kind: 'upload'; readonly ownerId: string; readonly copy: AccountState | null; readonly value: AccountValue}
-  | {readonly kind: 'restore' | 'delete'; readonly ownerId: string; readonly copy: AccountState};
+type ActionKind = 'load' | 'request-code' | 'verify-code' | 'prepare-import' | 'upload' | 'restore' | 'delete' | 'sign-out' | 'save-profile';
+type ProfileView = {readonly status: 'unavailable'} | {readonly status: 'ready'; readonly profile: WalletProfileState | null};
+type Pending = {readonly kind: 'upload'; readonly ownerId: string; readonly copy: AccountState | null; readonly value: AccountValue; readonly profile: ProfileView}
+  | {readonly kind: 'restore' | 'delete'; readonly ownerId: string; readonly copy: AccountState; readonly profile: ProfileView};
 let state: AccountState | null = null;
+let profileView: ProfileView = {status: 'unavailable'};
 let ownerId: string | null = null;
 let sessionStatus: Session['status'] | 'unknown' = 'unknown';
 let pending: Pending | null = null;
@@ -56,7 +72,8 @@ function normalizedEmail(value: string): string { return value.normalize('NFKC')
 function setEmail(value: string): void { emailInput.value = value; displayedEmail = normalizedEmail(value); }
 function setBusy(value: boolean): void {
   busy = value;
-  for (const element of [panel, login, code]) element.setAttribute('aria-busy', String(value));
+  for (const element of [panel, login, code, profileForm]) element.setAttribute('aria-busy', String(value));
+  for (const input of profileInterests.values()) input.disabled = value;
   document.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input, button').forEach(control => { control.disabled = value; });
 }
 function closeConfirmation(): void {
@@ -67,6 +84,10 @@ function closeConfirmation(): void {
 /** Only the acknowledged email challenge survives an email-app round trip in page memory. */
 function clearPrivate(): void {
   state = null; ownerId = null; sessionStatus = 'unknown';
+  profileView = {status: 'unavailable'}; profilePanel.hidden = true; profileForm.hidden = true;
+  profileName.value = ''; profileLocale.value = ''; profileTimezone.value = '';
+  for (const input of profileInterests.values()) input.checked = false;
+  el('account-profile-summary').replaceChildren(); el('account-profile-message').textContent = '';
   panel.hidden = true; signOut.hidden = true; login.hidden = true; code.hidden = true;
   el('account-summary').replaceChildren(); el('account-saved').replaceChildren();
   closeConfirmation(); setEmail(''); otpInput.value = '';
@@ -120,19 +141,19 @@ async function readResponse(response: Response, signal: AbortSignal, maximum: nu
     reader.releaseLock();
   }
 }
-async function request(path: '/api/account' | '/api/account-session', method: 'GET' | 'POST' | 'PUT' | 'DELETE', signal: AbortSignal, body?: unknown): Promise<unknown> {
+async function request(path: '/api/account' | '/api/account-session' | '/api/wallet', method: 'GET' | 'POST' | 'PUT' | 'DELETE', signal: AbortSignal, body?: unknown): Promise<unknown> {
   const timeout = new AbortController(); const abort = (): void => timeout.abort();
   signal.addEventListener('abort', abort, {once: true}); if (signal.aborted) timeout.abort();
   const timer = window.setTimeout(abort, 25_000);
   try {
     const response = await abortable(fetch(path, {
       method, credentials: 'same-origin',
-      headers: {Accept: 'application/json', 'Content-Type': 'application/json', 'X-DLKT-Info-Request': path === '/api/account' ? 'account-v1' : 'identity-v1'},
+      headers: {Accept: 'application/json', 'Content-Type': 'application/json', 'X-DLKT-Info-Request': path === '/api/account' ? 'account-v1' : path === '/api/wallet' ? 'wallet-v1' : 'identity-v1'},
       ...(body === undefined ? {} : {body: JSON.stringify(body)}),
       cache: 'no-store', redirect: 'error', signal: timeout.signal,
     }), timeout.signal);
     if (!response.ok) { void response.body?.cancel().catch(() => undefined); throw new AccountRequestError(response.status); }
-    return await readResponse(response, timeout.signal, path === '/api/account' ? ACCOUNT_MAX_BYTES + 65_536 : 16_384);
+    return await readResponse(response, timeout.signal, path === '/api/account' ? ACCOUNT_MAX_BYTES + 65_536 : path === '/api/wallet' ? WALLET_PROFILE_MAX_BYTES + 16_384 : 16_384);
   } finally { window.clearTimeout(timer); signal.removeEventListener('abort', abort); }
 }
 
@@ -183,13 +204,52 @@ function renderCopy(): void {
     paragraph.append(link); list.append(paragraph);
   }
 }
+
+function newProfile(): WalletProfile {
+  const defaults = new Intl.DateTimeFormat().resolvedOptions();
+  return parseWalletProfile({displayName: null, locale: defaults.locale, timezone: defaults.timeZone,
+    briefingTime: '08:00', interests: [], personalPriority: 'balanced'});
+}
+function renderProfile(): void {
+  profilePanel.hidden = false;
+  const summary = el('account-profile-summary'); summary.replaceChildren();
+  if (profileView.status !== 'ready') {
+    profileForm.hidden = true;
+    el('account-profile-message').textContent = 'Profile preferences could not be loaded. Reload your account to retry. Your saved reader copy remains available.';
+    return;
+  }
+  const saved = profileView.profile;
+  const value = saved?.value ?? newProfile();
+  profileName.value = value.displayName ?? ''; profileLocale.value = value.locale; profileTimezone.value = value.timezone;
+  for (const [topic, input] of profileInterests) input.checked = value.interests.some(interest => interest === topic);
+  summary.append(text('p', saved ? `Profile updated: ${saved.updatedAt}.` : 'No profile has been saved in this account. These starting values are saved only when you choose Save profile.'));
+  el('account-profile-message').textContent = '';
+  profileForm.hidden = false;
+}
+async function readProfile(operation: Operation, id: string): Promise<ProfileView> {
+  let snapshot: ReturnType<typeof parseWalletSnapshot>;
+  try {
+    snapshot = parseWalletSnapshot(await request('/api/wallet', 'GET', operation.controller.signal));
+  } catch (error) {
+    requireCurrent(operation);
+    if (error instanceof AccountRequestError && (error.statusCode === 401 || error.statusCode === 403)) throw error;
+    return {status: 'unavailable'};
+  }
+  requireCurrent(operation);
+  if (snapshot.account === 'signed-out') throw new Error('ACCOUNT_SESSION_CHANGED');
+  if (snapshot.account !== 'signed-in') return {status: 'unavailable'};
+  // The optional profile carries private data; verify its owner again before exposing it.
+  if (snapshot.profile !== null) await requireOwner(operation, id);
+  return {status: 'ready', profile: snapshot.profile};
+}
+
 function showSignedOut(email = challengeEmail ?? ''): void {
   sessionStatus = 'signed-out'; login.hidden = false; code.hidden = challengeEmail === null; setEmail(email);
 }
-function showAccount(id: string, copy: AccountState | null): void {
-  challengeEmail = null; ownerId = id; state = copy; sessionStatus = 'signed-in';
+function showAccount(id: string, copy: AccountState | null, profile: ProfileView): void {
+  challengeEmail = null; ownerId = id; state = copy; profileView = profile; sessionStatus = 'signed-in';
   setEmail(''); otpInput.value = '';
-  login.hidden = true; code.hidden = true; panel.hidden = false; signOut.hidden = false; renderCopy();
+  login.hidden = true; code.hidden = true; panel.hidden = false; signOut.hidden = false; renderCopy(); renderProfile();
 }
 async function showSession(session: Session, operation: Operation): Promise<void> {
   requireCurrent(operation);
@@ -209,7 +269,8 @@ async function showSession(session: Session, operation: Operation): Promise<void
     window.location.replace('/wallet'); return;
   }
   const copy = parseCopy(await request('/api/account', 'GET', operation.controller.signal));
-  requireCurrent(operation); showAccount(session.userId, copy);
+  const profile = await readProfile(operation, session.userId);
+  requireCurrent(operation); showAccount(session.userId, copy, profile);
   message.textContent = 'Signed in. Local data is not uploaded automatically.';
 }
 function failure(error: unknown, kind: ActionKind): void {
@@ -223,7 +284,9 @@ function failure(error: unknown, kind: ActionKind): void {
   } else if (error instanceof Error && error.message === 'ACCOUNT_SESSION_CHANGED') {
     challengeEmail = null; message.textContent = 'Your session changed. Check account before making another change. Private details and pending actions have been cleared.';
   } else if (error instanceof AccountRequestError && error.statusCode === 409) {
-    message.textContent = 'This account copy changed on another device. Check account to reload it before making another change.';
+    message.textContent = kind === 'save-profile' ? 'This profile changed on another device. Reload your account before saving again.' : 'This account copy changed on another device. Check account to reload it before making another change.';
+  } else if (kind === 'save-profile') {
+    message.textContent = 'The profile change could not be confirmed. Reload your account before retrying. Private details and pending changes have been cleared.';
   } else if (kind === 'sign-out') {
     challengeEmail = null; message.textContent = 'Sign-out could not be confirmed. Private details have been cleared from this page. Check account to verify your session.';
   } else if (kind === 'upload' || kind === 'restore' || kind === 'delete') {
@@ -326,27 +389,27 @@ el('account-check').addEventListener('click', () => { if (!busy) void refresh();
 el('account-reload').addEventListener('click', () => { if (!busy && sessionStatus === 'signed-in') void refresh(); });
 el('account-upload').addEventListener('click', () => {
   if (busy || sessionStatus !== 'signed-in' || !ownerId) return;
-  const id = ownerId; const copy = state;
+  const id = ownerId; const copy = state; const profile = profileView;
   void perform('prepare-import', 'Checking the browser copy before confirmation.', async operation => {
     await requireOwner(operation, id);
     const local = await device.read(); requireCurrent(operation);
     const checkpoint = await device.readCheckpoint(); requireCurrent(operation);
     if (local.rejected) throw new Error('ACCOUNT_LOCAL_COPY_INVALID');
     const value = parseAccountValue({focus: local.focus, cards: local.cards, checkpoint});
-    showAccount(id, copy); pending = {kind: 'upload', ownerId: id, copy, value};
+    showAccount(id, copy, profile); pending = {kind: 'upload', ownerId: id, copy, value, profile};
     el('account-confirm-copy').textContent = `Replace the account reader copy with ${value.cards.length} saved cards, ${value.focus ? 'your remembered focus' : 'no remembered focus'} and ${value.checkpoint ? 'your saved comparison' : 'no comparison'} from this browser? Existing account data will be replaced; browser data stays intact.`;
     el('account-confirmation').hidden = false; message.textContent = 'Review the replacement before confirming. Nothing has been imported.';
   });
 });
 el('account-restore').addEventListener('click', () => {
   if (busy || !foreground() || sessionStatus !== 'signed-in' || !ownerId || !state) return;
-  pending = {kind: 'restore', ownerId, copy: state};
+  pending = {kind: 'restore', ownerId, copy: state, profile: profileView};
   el('account-confirm-copy').textContent = 'Replace this browser’s remembered focus, saved cards and comparison check with the account copy? Other site data will not be changed.';
   el('account-confirmation').hidden = false;
 });
 el('account-delete').addEventListener('click', () => {
   if (busy || !foreground() || sessionStatus !== 'signed-in' || !ownerId || !state) return;
-  pending = {kind: 'delete', ownerId, copy: state};
+  pending = {kind: 'delete', ownerId, copy: state, profile: profileView};
   el('account-confirm-copy').textContent = 'Delete only the reader copy from this account? This does not delete your sign-in account or local browser copies.';
   el('account-confirmation').hidden = false;
 });
@@ -362,9 +425,9 @@ el('account-confirm').addEventListener('click', () => {
         {expectedRevision: choice.copy?.revision ?? null, value: choice.value}));
       requireCurrent(operation);
       if (!result || JSON.stringify(result.value) !== JSON.stringify(choice.value)) throw new Error('ACCOUNT_WRITE_NOT_CONFIRMED');
-      showAccount(choice.ownerId, result); message.textContent = 'Reader copy saved to the account. The local browser copy is unchanged.';
+      showAccount(choice.ownerId, result, choice.profile); message.textContent = 'Reader copy saved to the account. The local browser copy is unchanged.';
     } else if (choice.kind === 'restore') {
-      await device.restorePersonal(choice.copy.value, operation.controller.signal); requireCurrent(operation); showAccount(choice.ownerId, choice.copy);
+      await device.restorePersonal(choice.copy.value, operation.controller.signal); requireCurrent(operation); showAccount(choice.ownerId, choice.copy, choice.profile);
       message.textContent = 'Account copy restored in this browser. Return to the briefing to use it.';
       try { const channel = new BroadcastChannel('dlkt-info-device-changes-v1'); channel.postMessage('changed'); channel.close(); }
       catch { /* The explicitly confirmed local transaction has already committed. */ }
@@ -372,10 +435,38 @@ el('account-confirm').addEventListener('click', () => {
       const result = parseCopy(await request('/api/account', 'DELETE', operation.controller.signal, {expectedRevision: choice.copy.revision}));
       requireCurrent(operation);
       if (result !== null) throw new Error('ACCOUNT_DELETE_NOT_CONFIRMED');
-      showAccount(choice.ownerId, null); message.textContent = 'Account reader copy deleted. Local browser data is unchanged.';
+      showAccount(choice.ownerId, null, choice.profile); message.textContent = 'Account reader copy deleted. Local browser data is unchanged.';
     }
   });
 });
+
+profileForm.addEventListener('submit', event => {
+  event.preventDefault();
+  if (busy || !foreground() || sessionStatus !== 'signed-in' || !ownerId || profileView.status !== 'ready') return;
+  const id = ownerId, copy = state, prior = profileView.profile;
+  let value: WalletProfile;
+  try {
+    const base = prior?.value ?? newProfile();
+    value = parseWalletProfile({...base, displayName: profileName.value.trim() || null,
+      locale: profileLocale.value.trim(), timezone: profileTimezone.value.trim(),
+      interests: [...profileInterests].filter(([, input]) => input.checked).map(([topic]) => topic)});
+  } catch {
+    el('account-profile-message').textContent = 'Check the name, language tag, timezone and interests before saving.';
+    return;
+  }
+  void perform('save-profile', 'Checking your session before saving the profile.', async operation => {
+    await requireOwner(operation, id);
+    const snapshot = parseWalletSnapshot(await request('/api/wallet', 'PUT', operation.controller.signal,
+      {expectedRevision: prior?.revision ?? null, value}));
+    requireCurrent(operation);
+    if (snapshot.account !== 'signed-in' || snapshot.profile === null
+      || JSON.stringify(snapshot.profile.value) !== JSON.stringify(value)) throw new Error('ACCOUNT_PROFILE_WRITE_NOT_CONFIRMED');
+    await requireOwner(operation, id);
+    showAccount(id, copy, {status: 'ready', profile: snapshot.profile});
+    message.textContent = 'Profile saved to your account. Your saved reader copy and this browser’s reading preferences are unchanged.';
+  });
+});
+
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) invalidate('Private details are hidden. Return to check your account.');
   else { focused = document.hasFocus(); void refresh(); }

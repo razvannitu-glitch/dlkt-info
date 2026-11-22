@@ -4,6 +4,7 @@ import {createHash} from 'node:crypto';
 import {NewsContinuation,continuationItems} from '../.build/src/iceo/news-continuation.js';
 import {NEWS_CATEGORIES} from '../.build/src/iceo/news-taxonomy.js';
 import {cardContent} from '../.build/src/iceo/card-validation.js';
+import {findCity} from '../.build/src/local/cities.js';
 const now=Date.parse('2026-11-22T20:00:00.000Z'),iso=new Date(now).toISOString();
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const context={language:'en',cityId:null,filter:'all'};
@@ -18,8 +19,8 @@ function item(index){
 }
 function page(offset=0,total=60,overrides={}){
  const counts=Object.fromEntries(['other',...NEWS_CATEGORIES.map(c=>c.id)].map(id=>[id,id==='04000000'?total:0]));
- return {version:'dlkt-news-page-1',epoch:'101',revision:3,generatedAt:iso,startedAt:iso,expiresAt:new Date(now+900000).toISOString(),
-  language:'en',cityId:null,filter:'all',items:Array.from({length:Math.min(20,total-offset)},(_,i)=>item(offset+i)),total,filteredTotal:total,counts,
+ return {version:'dlkt-news-page-2',epoch:'101',revision:3,generatedAt:iso,startedAt:iso,expiresAt:new Date(now+900000).toISOString(),
+  language:'en',cityId:null,countryCode:null,coverage:{national:0,local:0,international:total},filter:'all',items:Array.from({length:Math.min(20,total-offset)},(_,i)=>item(offset+i)),total,filteredTotal:total,counts,
   nextCursor:offset+20<total?cursor(offset+20):null,...overrides};
 }
 const response=value=>new Response(JSON.stringify(value),{status:200,headers:{'content-type':'application/json'}});
@@ -97,4 +98,34 @@ test('oversized and private-field responses are rejected before any card is rend
   const model=new NewsContinuation(async()=>result,()=>now);await model.start(context);
   assert.equal(model.view().error,'invalid');assert.equal(model.view().items.length,0);
  }
+});
+
+test('a country change starts a new edition and cannot reuse country coverage or a previous cursor',async()=>{
+ const london=findCity('2643743'),torino=findCity('3165524');assert.ok(london);assert.ok(torino);
+ const requests=[];const model=new NewsContinuation(async url=>{
+  requests.push(new URL(url,'https://www.dlkt.ee'));
+  const city=requests.at(-1).searchParams.get('city');
+  return response(page(0,20,{cityId:city,countryCode:city===london.id?'GB':'IT',coverage:{national:city===london.id?20:0,local:0,international:city===london.id?0:20}}));
+ },()=>now);
+ await model.start({...context,cityId:london.id,city:london});
+ assert.equal(model.view().error,null);assert.equal(model.view().page.coverage.national,20);
+ await model.start({...context,cityId:torino.id,city:torino});
+ assert.equal(model.view().error,null);assert.equal(model.view().page.countryCode,'IT');
+ assert.equal(model.view().page.coverage.national,0);assert.equal(requests.length,2);
+ assert.equal(requests[1].searchParams.has('cursor'),false);
+});
+test('country and full-edition coverage are immutable across continuation pages',async()=>{
+ const london=findCity('2643743');assert.ok(london);
+ const valid=offset=>page(offset,40,{cityId:london.id,countryCode:'GB',coverage:{national:40,local:0,international:0}});
+ for(const bad of [
+  {...valid(20),countryCode:'US'},
+  {...valid(20),coverage:{national:20,local:0,international:20}}
+ ]){
+  let calls=0;const model=new NewsContinuation(async()=>response(calls++===0?valid(0):bad),()=>now);
+  await model.start({...context,cityId:london.id,city:london});const prefix=[...model.view().items];
+  assert.equal(model.view().error,null);await model.next();
+  assert.equal(model.view().error,'invalid');assert.deepEqual(model.view().items,prefix);
+ }
+ const noCity=new NewsContinuation(async()=>response(valid(0)),()=>now);
+ await noCity.start({...context,cityId:london.id});assert.equal(noCity.view().error,'invalid');
 });

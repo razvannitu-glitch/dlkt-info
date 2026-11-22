@@ -3,9 +3,11 @@ import { createHash } from 'node:crypto';
 import { after, before, test } from 'node:test';
 import { readFile, readdir } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
+import {NEWS_DISCOVERY_INDEXES,NEWS_PUBLISHERS} from '../../.build/src/iceo/news-sources.js';
+import {NewsDiagnosticsBuilder,validNewsDiagnostics} from '../../.build/src/iceo/news-diagnostics.js';
 
-const FINGERPRINT = 'ef03f90d229d089f8871c64b996994c79c65d0e1e3a0f8e2b0bb08dc2d6f6dec';
-const REVISION = '20261122200813_dlkt_info_news_corpus';
+const FINGERPRINT = 'fc6df8a25190ef8c4b4f906873a3015b7aa805e21ce1a44f9117b8eefeed3b91';
+const REVISION = '20261122211000_dlkt_info_country_editions';
 const REPAIR_REVISION = '20261119142617_dlkt_info_public_acl_attestation';
 let db;
 let beforeRepair;
@@ -234,3 +236,36 @@ for (const [name, sql] of [
     await drift(sql, 'privateTables');
   });
 }
+
+test('national source SQL keeps exact reviewed origin parity without adding publisher aliases', async () => {
+  assert.equal(NEWS_PUBLISHERS.length,73);
+  for(const publisher of NEWS_PUBLISHERS)for(const origin of publisher.origins){
+    assert.equal((await db.query('select dlkt_info_private.valid_news_candidate_publisher($1,$2) ok',[publisher.label,origin+'/news/checked-national-origin'])).rows[0].ok,true,origin);
+  }
+  for(const [publisher,url] of [
+    ['la Repubblica','https://repubblica.it/politica/story'],
+    ['la Repubblica','https://video.repubblica.it/politica/story'],
+    ['la Repubblica','https://www.repubblica.it.attacker.invalid/politica/story'],
+    ['Digi24','https://www.repubblica.it/politica/story'],
+    ['la Repubblica','https://www.repubblica.it/'],
+    ['la Repubblica','https://www.repubblica.it/politica/story?utm_source=feed'],
+    ['la Repubblica','https://user@www.repubblica.it/politica/story'],
+  ])assert.equal((await db.query('select dlkt_info_private.valid_news_candidate_publisher($1,$2) ok',[publisher,url])).rows[0].ok,false,url);
+  await db.exec('set role anon');
+  try{await assert.rejects(db.query("select dlkt_info_private.valid_news_candidate_publisher('la Repubblica','https://www.repubblica.it/politica/story')"),/permission denied/u);}
+  finally{await db.exec('reset role');}
+});
+
+test('private diagnostics validate all reviewed indexes including Italian identity with TS and SQL parity', async () => {
+  const now=Date.parse('2026-11-22T21:05:04.970Z'),builder=new NewsDiagnosticsBuilder(now);
+  builder.index(null,true,null);for(const index of NEWS_DISCOVERY_INDEXES)builder.index(index,true,null);
+  const diagnostics=builder.finish();assert.equal(diagnostics.indexes.length,28);assert.ok(validNewsDiagnostics(diagnostics,now));
+  const valid=async value=>(await db.query('select dlkt_info_private.valid_news_diagnostics($1::jsonb,$2::timestamptz) ok',[JSON.stringify(value),new Date(now).toISOString()])).rows[0].ok;
+  assert.equal(await valid(diagnostics),true);
+  for(const change of [row=>{row.language='en';},row=>{row.publisherId='digi24';},row=>{row.extra=true;}]){
+    const forged=structuredClone(diagnostics),italian=forged.indexes.find(row=>row.indexId==='repubblica-it-news');assert.ok(italian);change(italian);
+    assert.equal(validNewsDiagnostics(forged,now),false);assert.equal(await valid(forged),false);
+  }
+  const duplicate=structuredClone(diagnostics);duplicate.indexes.push({...duplicate.indexes[0]});
+  assert.equal(validNewsDiagnostics(duplicate,now),false);assert.equal(await valid(duplicate),false);
+});

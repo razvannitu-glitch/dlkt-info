@@ -1,9 +1,9 @@
 export const DATABASE_READINESS_VERSION = 'dlkt-info-database-readiness-2' as const;
-export const SCHEMA_MANIFEST_VERSION = 'dlkt-info-schema-manifest-8' as const;
+export const SCHEMA_MANIFEST_VERSION = 'dlkt-info-schema-manifest-9' as const;
 export const DATABASE_READINESS_RPC = 'dlkt_info_read_database_readiness' as const;
-export const DATABASE_READINESS_MIGRATION = '20261122200813_dlkt_info_news_corpus' as const;
+export const DATABASE_READINESS_MIGRATION = '20261122211000_dlkt_info_country_editions' as const;
 // SHA-256 of UTF-8 serializeSchemaManifest(); object/array order is part of this versioned contract.
-export const EXPECTED_SCHEMA_FINGERPRINT = 'ef03f90d229d089f8871c64b996994c79c65d0e1e3a0f8e2b0bb08dc2d6f6dec' as const;
+export const EXPECTED_SCHEMA_FINGERPRINT = 'fc6df8a25190ef8c4b4f906873a3015b7aa805e21ce1a44f9117b8eefeed3b91' as const;
 export const EXPECTED_SCHEMA_COUNTS = Object.freeze({
   "relations": 33,
   "functions": 67,
@@ -1177,6 +1177,12 @@ export const EXPECTED_SCHEMA_MANIFEST = Object.freeze({
       "origins": [
         "https://hotnews.ro"
       ]
+    },
+    {
+      "label": "la Repubblica",
+      "origins": [
+        "https://www.repubblica.it"
+      ]
     }
   ],
   "publicEditorialTopics": {
@@ -1657,9 +1663,9 @@ export const EXPECTED_SCHEMA_MANIFEST = Object.freeze({
       "rightsReviewRequired": true
     },
     "page": {
-      "version": "dlkt-news-page-1",
+      "version": "dlkt-news-page-2",
       "maximumItems": 20,
-      "orderVersion": "iptc17-rounds-started-20261122",
+      "orderVersion": "iptc17-country-rounds-20261122",
       "signedCursor": "HMAC with separate domain derived from existing writer key",
       "pins": [
         "epoch",
@@ -1667,6 +1673,7 @@ export const EXPECTED_SCHEMA_MANIFEST = Object.freeze({
         "startedAt",
         "language",
         "city",
+        "country",
         "filter",
         "orderVersion",
         "offset",

@@ -2,7 +2,7 @@ import {LOCALES,resolveLocale,localeFromPreference,localeUrl,t,categoryLabel,typ
 import {PUBLIC_EDITORIAL_CATEGORIES,type PublicEditorialCategory} from '../iceo/editorial-categories.js';
 
 const LANGUAGE_STORAGE_KEY='dlkt-reader-language-v1';
-type LanguageState={manualLocale:Locale|null;countryCode:string|null};
+type LanguageState={manualLocale:Locale|null;countryCode:string|null;selectedHomeCountry:boolean};
 const languageStates=new WeakMap<Document,LanguageState>();
 
 /** Reader preference and automatic country context never rewrite a profile or a source record. */
@@ -11,13 +11,13 @@ export function getLocale():Locale {
   return resolveLocale(typeof window==='undefined'?null:window.location.href,typeof navigator==='undefined'?[]:navigator.languages??[navigator.language],state);
 }
 
-/** Only the existing automatic location hint may set the default; explored/saved cities cannot. */
-function detectedCountry(event:Event):string|null {
+/** A current home-city choice sets the default; restored cities and Explore filters do not. */
+function detectedCountry(event:Event):Readonly<{countryCode:string;selected:boolean}>|null {
   if(!(event instanceof CustomEvent)||!event.detail||typeof event.detail!=='object'||Array.isArray(event.detail))return null;
   const detail=event.detail as Record<string,unknown>;
-  if(detail.estimated!==true||detail.restored!==false||!detail.city||typeof detail.city!=='object'||Array.isArray(detail.city))return null;
+  if(typeof detail.estimated!=='boolean'||detail.restored!==false||!detail.city||typeof detail.city!=='object'||Array.isArray(detail.city))return null;
   const city=detail.city as Record<string,unknown>;
-  return typeof city.countryCode==='string'&&/^[A-Z]{2}$/u.test(city.countryCode)?city.countryCode:null;
+  return typeof city.countryCode==='string'&&/^[A-Z]{2}$/u.test(city.countryCode)?{countryCode:city.countryCode,selected:detail.estimated===false}:null;
 }
 /** A country-only hint remains usable when the location service cannot match a city. */
 function detectedCountryHint(event:Event):string|null {
@@ -75,7 +75,7 @@ export function setupLanguage():void {
   }
   let manualLocale:Locale|null=null;
   try{manualLocale=localeFromPreference(window.localStorage.getItem(LANGUAGE_STORAGE_KEY));}catch{/* Unavailable storage leaves the picker usable. */}
-  const state:LanguageState={manualLocale,countryCode:null};languageStates.set(document,state);
+  const state:LanguageState={manualLocale,countryCode:null,selectedHomeCountry:false};languageStates.set(document,state);
   let applied:Locale|null=null;
   const apply=():void=>{
     const locale=getLocale(),definition=LOCALES.find(value=>value.code===locale);
@@ -94,8 +94,15 @@ export function setupLanguage():void {
     if(country===null||state.countryCode===country)return;
     state.countryCode=country;apply();
   };
-  document.addEventListener('dlkt:city-selected',event=>applyCountry(detectedCountry(event)));
-  document.addEventListener('dlkt:country-detected',event=>applyCountry(detectedCountryHint(event)));
+  document.addEventListener('dlkt:city-selected',event=>{
+    const country=detectedCountry(event);if(!country)return;
+    if(country.selected)state.selectedHomeCountry=true;
+    else if(state.selectedHomeCountry)return;
+    applyCountry(country.countryCode);
+  });
+  document.addEventListener('dlkt:country-detected',event=>{
+    if(!state.selectedHomeCountry)applyCountry(detectedCountryHint(event));
+  });
   window.addEventListener('popstate',apply);
   window.addEventListener('languagechange',apply);
   // Entry controllers may update contextual labels, but never the source content.

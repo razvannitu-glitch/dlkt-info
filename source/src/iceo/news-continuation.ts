@@ -9,7 +9,7 @@ export interface NewsContinuationView {
  readonly page:NewsPage|null;readonly items:readonly NewsPageItem[];readonly loading:boolean;
  readonly error:'unavailable'|'invalid'|'expired'|null;readonly initialized:boolean;
 }
-const contextKey=(context:NewsContinuationContext):string=>JSON.stringify([context.language,context.cityId,context.filter]);
+const contextKey=(context:NewsContinuationContext):string=>JSON.stringify([context.language,context.cityId,context.city?.countryCode??null,context.filter]);
 const MAX_PAGE_BYTES=1_048_576;
 async function jsonBody(response:Response,signal:AbortSignal):Promise<unknown>{
  if(!(response.headers.get('content-type')??'').toLowerCase().includes('application/json'))throw Error('NEWS_PAGE_INVALID');
@@ -67,11 +67,12 @@ export class NewsContinuation {
     if(!response.ok){await response.body?.cancel();throw Error('NEWS_PAGE_UNAVAILABLE');}
     const value=await jsonBody(response,controller.signal);
     if(generation!==this.generation)return;
-    if(!validNewsPage(value,this.clock(),context.city)||value.language!==context.language||value.cityId!==context.cityId||value.filter!==context.filter)throw Error('NEWS_PAGE_INVALID');
+    if(!validNewsPage(value,this.clock(),context.city)||value.language!==context.language||value.cityId!==context.cityId||value.countryCode!==(context.city?.countryCode??null)||value.filter!==context.filter)throw Error('NEWS_PAGE_INVALID');
     if(Date.parse(value.expiresAt)<=this.clock()){this.error='expired';return;}
     const prior=this.page;
     if(prior&&(value.epoch!==prior.epoch||value.revision!==prior.revision||value.generatedAt!==prior.generatedAt||value.startedAt!==prior.startedAt
-      ||value.expiresAt!==prior.expiresAt||value.total!==prior.total||value.filteredTotal!==prior.filteredTotal
+      ||value.expiresAt!==prior.expiresAt||value.total!==prior.total||value.filteredTotal!==prior.filteredTotal||value.countryCode!==prior.countryCode
+      ||value.coverage.national!==prior.coverage.national||value.coverage.local!==prior.coverage.local||value.coverage.international!==prior.coverage.international
       ||Object.keys(prior.counts).some(key=>value.counts[key]!==prior.counts[key])))throw Error('NEWS_PAGE_INVALID');
     if(value.nextCursor!==null&&(value.nextCursor===cursor||value.items.length===0))throw Error('NEWS_PAGE_INVALID');
     const ids=new Set<string>(),identities=new Set<string>(),urls=new Set<string>(),keys=new Set<string>();

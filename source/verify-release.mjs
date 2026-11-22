@@ -57,15 +57,15 @@ if (manifest.product !== 'dlkt-info'
   || manifest.provisioningControlVersion !== 'dlkt-info-provisioning-control-2'
   || manifest.systemIdentityVersion !== 'dlkt-info-system-identity-1'
   || manifest.databaseReadinessVersion !== 'dlkt-info-database-readiness-2'
-  || manifest.schemaManifestVersion !== 'dlkt-info-schema-manifest-8'
+  || manifest.schemaManifestVersion !== 'dlkt-info-schema-manifest-9'
   || manifest.provisioningIdentityMigration !== '20261113115256_dlkt_info_provisioning_identity_guard'
-  || manifest.databaseReadinessMigration !== '20261122200813_dlkt_info_news_corpus'
-  || manifest.expectedSchemaFingerprint !== 'ef03f90d229d089f8871c64b996994c79c65d0e1e3a0f8e2b0bb08dc2d6f6dec'
+  || manifest.databaseReadinessMigration !== '20261122211000_dlkt_info_country_editions'
+  || manifest.expectedSchemaFingerprint !== 'fc6df8a25190ef8c4b4f906873a3015b7aa805e21ce1a44f9117b8eefeed3b91'
   || manifest.revision !== 'iceo-primary-mesh-1'
   || manifest.iceoVersion !== 'iceo-primary-mesh-1'
   || manifest.publicSourceCount !== 51
   || manifest.publicPublisherCount !== 25
-  || manifest.reviewedNewsPublisherFamilies !== 72
+  || manifest.reviewedNewsPublisherFamilies !== 73
   || manifest.publicEditorialCategoryCount !== 20
   || manifest.publicDailyTarget !== 30 || manifest.publicDailyMaximum !== 40
   || manifest.publicDailyRefreshSchedule !== '*/2 * * * *'
@@ -915,8 +915,8 @@ for (const fragment of [
 ]) if (!databaseReadinessMigration.includes(fragment)) throw new Error(`RELEASE_DATABASE_READINESS_MIGRATION:${fragment}`);
 for (const fragment of [
   "DATABASE_READINESS_VERSION = 'dlkt-info-database-readiness-2'",
-  "SCHEMA_MANIFEST_VERSION = 'dlkt-info-schema-manifest-8'",
-  "EXPECTED_SCHEMA_FINGERPRINT = 'ef03f90d229d089f8871c64b996994c79c65d0e1e3a0f8e2b0bb08dc2d6f6dec'",
+  "SCHEMA_MANIFEST_VERSION = 'dlkt-info-schema-manifest-9'",
+  "EXPECTED_SCHEMA_FINGERPRINT = 'fc6df8a25190ef8c4b4f906873a3015b7aa805e21ce1a44f9117b8eefeed3b91'",
   '"relations": 33', '"functions": 67', '"rls": 21', '"policies": 29', '"triggers": 34',
 ]) if (!provisioningReadinessManifest.includes(fragment)) throw new Error(`RELEASE_SCHEMA_MANIFEST:${fragment}`);
 for (const fragment of [

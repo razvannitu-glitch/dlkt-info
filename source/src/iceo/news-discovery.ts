@@ -214,13 +214,18 @@ export function matchingNewsHeadline(a:string,b:string,publisherLabel?:string,la
   // Additional reviewed editions have no token/negation rules here. Preserve
   // access for their exact original titles without claiming semantic equivalence.
   const same=():boolean=>a.normalize('NFKC').toLowerCase()===b.normalize('NFKC').toLowerCase();
-  if(language&&!(['en','fr','es','ar','de','pt-BR','pt-002'] as readonly string[]).includes(language))return same();
+  if(language&&!(['en','fr','es','ar','de','it','pt-BR','pt-002'] as readonly string[]).includes(language))return same();
   // CJK has no reliable word boundaries here. Require the same normalized title,
   // rather than letting token overlap erase a negation in a Japanese clause.
   if(/[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u.test(a+b))return same();
   const x=tokens(a),y=tokens(b);if(x.size<3||y.size<3)return a.normalize('NFKC').toLowerCase()===b.normalize('NFKC').toLowerCase();
   const shared=[...x].filter(word=>y.has(word)).length;
-  const critical=(v:string):string=>[...(v.normalize('NFKC').toLowerCase().replace(/(\p{Script=Arabic})\p{M}+/gu,'$1').match(/(?<![\p{L}\p{N}])(?:not|never|no|without|pas|jamais|sans|aucun|aucune|ni|sin|nunca|jam[aá]s|ning[uú]n|ninguna|tampoco|nicht|ohne|nie|keinerlei|kein(?:e|en|em|er|es)?|n[aã]o|sem|nenhum|nenhuma|لا|ولا|ليس|ليست|لم|ولم|لن|ولن|دون|بدون|غير|وغير)(?![\p{L}\p{N}])|\p{Nd}+(?:[.,٫٬]\p{Nd}+)*/gu)??[])].sort().join('|');
+  const critical=(v:string):string=>{
+    const normalized=v.normalize('NFKC').toLowerCase().replace(/(\p{Script=Arabic})\p{M}+/gu,'$1');
+    const protectedTerms=[...(normalized.match(/(?<![\p{L}\p{N}])(?:not|never|no|without|pas|jamais|sans|aucun|aucune|ni|sin|nunca|jam[aá]s|ning[uú]n|ninguna|tampoco|nicht|ohne|nie|keinerlei|kein(?:e|en|em|er|es)?|n[aã]o|sem|nenhum|nenhuma|لا|ولا|ليس|ليست|لم|ولم|لن|ولن|دون|بدون|غير|وغير)(?![\p{L}\p{N}])|\p{Nd}+(?:[.,٫٬]\p{Nd}+)*/gu)??[])];
+    if(language==='it')protectedTerms.push(...(normalized.match(/(?<![\p{L}\p{N}])(?:non|mai|senza|nessun(?:o|a)?|neppure|nemmeno|neanche|mica|n[éè])(?![\p{L}\p{N}])/gu)??[]));
+    return protectedTerms.sort().join('|');
+  };
   return shared/Math.min(x.size,y.size)>=0.7&&shared/Math.max(x.size,y.size)>=0.55&&critical(a)===critical(b);
 }
 function publicationDate(raw:unknown):string|null{

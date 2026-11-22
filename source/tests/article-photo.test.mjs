@@ -250,3 +250,55 @@ test('Digi24 accepts only the exact original article photo on its reviewed raste
  ])assert.equal(articleImageUrl(rejected,sourceUrl),null);
  assert.equal(articleImageUrl(photo,article.sourceUrl),null,'Gateway does not become available to another publisher');
 });
+
+const repubblicaPhotos=[
+ {sourceUrl:'https://www.repubblica.it/esteri/2026/11/22/news/trump_kim_i_tentativi_del_presidente_usa_di_incontrare_il_leader_nordcoreano-425742784/',
+  title:'Telefonate respinte e una lettera cestinata. Tutti i rifiuti di Kim-Jong a Trump',publishedAt:'2026-11-22T20:53:48Z',
+  imageUrl:'https://www.repstatic.it/content/nazionale/img/2026/11/22/215338120-6a5df074-0659-417b-acbe-fbbae984504b.jpg'},
+ {sourceUrl:'https://www.repubblica.it/politica/2026/11/22/news/beppe_grillo_fazio_m5s_conte_di_battista_di_maio-425742775/',
+  title:'Grillo da Fazio: “Se mi ridanno il simbolo 5S, lo darò a minori di 25 anni. Pronto ad aiutare Dibba”',publishedAt:'2026-11-22T20:47:54Z',
+  imageUrl:'https://www.repstatic.it/content/nazionale/img/2026/11/22/214743530-850103cf-b9b7-42c2-beb0-1692d0bae645.jpg'},
+];
+// Metadata-only primary receipt: Actions45070034177/job137354713875. No reuse licence is inferred.
+const repubblicaDocument=(row,patch={})=>'<html><head><link rel="canonical" href="'+row.sourceUrl+'"><meta property="og:url" content="'+row.sourceUrl+'"><meta property="og:image" content="'+row.imageUrl+'"><script type="application/ld+json">'+JSON.stringify({
+ '@type':'NewsArticle',mainEntityOfPage:{'@type':'webpage','@id':row.sourceUrl},headline:row.title,datePublished:row.publishedAt,
+ image:{'@type':'ImageObject',url:row.imageUrl,width:1600,height:900},...patch,
+})+'</script></head><body></body></html>';
+
+test('la Repubblica uses only the image explicitly bound to each original article on the reviewed CDN path',()=>{
+ const imageIds=new Set();
+ for(const row of repubblicaPhotos){
+  const record={...article,...row,publisher:'la Repubblica',validUntil:Date.parse('2026-11-22T21:10:04.970Z')};
+  const before=JSON.stringify(record),result=readArticlePhoto(repubblicaDocument(row),record);
+  assert.equal(articleImageUrl(row.imageUrl,row.sourceUrl),row.imageUrl);
+  assert.equal(result.imageUrl,row.imageUrl);assert.equal(result.articleUrl,row.sourceUrl);assert.equal(result.basis,'article-jsonld');
+  assert.equal(result.credit,null);assert.equal(result.caption,null);assert.equal(result.license,undefined);assert.equal(result.licenseUrl,undefined);
+  imageIds.add(result.imageUrl);assert.equal(JSON.stringify(record),before);
+  assert.equal(readArticlePhoto(repubblicaDocument(row,{mainEntityOfPage:undefined}),record),null,'an unbound Article cannot admit its photo');
+  assert.equal(readArticlePhoto(repubblicaDocument(row,{mainEntityOfPage:{'@id':row.sourceUrl+'other'}}),record),null);
+  assert.equal(readArticlePhoto(repubblicaDocument(row,{headline:'Unrelated article'}),record),null);
+  assert.equal(readArticlePhoto(repubblicaDocument(row,{datePublished:'2026-11-20T20:00:00Z'}),record),null);
+  assert.equal(readArticlePhoto(repubblicaDocument(row),record,row.sourceUrl+'other'),null);
+ }
+ assert.equal(imageIds.size,2,'separate originals retain their separate image identities');
+ const revised=repubblicaPhotos[1];
+ assert.equal(readArticlePhoto(repubblicaDocument(revised),{...article,...revised,publisher:'la Repubblica',title:revised.title.replace('lo darò','lo dò')}),null,'photo matching stays exact; the collector supplies the verified original headline');
+});
+
+test('la Repubblica CDN admission rejects host, path, raster and cross-publisher substitutions',()=>{
+ const row=repubblicaPhotos[0],photo=row.imageUrl;
+ for(const rejected of [
+  photo.replace('www.repstatic.it','repstatic.it'),photo.replace('www.repstatic.it','www.repstatic.it.attacker.invalid'),
+  photo.replace('/content/nazionale/img/','/private/'),photo.replace('/content/nazionale/img/','/content/other/img/'),
+  photo.replace('.jpg','.svg'),photo.replace('https:','http:'),photo+'#fragment',photo+'?url=https://127.0.0.1/private',
+  photo.replace('https://','https://user:pass@'),photo.replace('www.repstatic.it','www.repstatic.it:444'),
+  'https://127.0.0.1/content/nazionale/img/photo.jpg','https://www.repstatic.it/content/nazionale/img/default-image.jpg',
+  'https://www.repstatic.it/content/nazionale/img/%2e%2e/private.jpg',
+ ])assert.equal(articleImageUrl(rejected,row.sourceUrl),null,rejected);
+ assert.equal(articleImageUrl(photo,article.sourceUrl),null,'The Guardian cannot use the Repubblica CDN rule');
+ assert.equal(articleImageUrl(photo,'https://hotnews.ro/repubblica-story'),null);
+ assert.equal(articleImageUrl(image,row.sourceUrl),null,'Repubblica cannot use another publisher CDN');
+ assert.equal(articleImageUrl(photo,row.sourceUrl.replace('www.repubblica.it','repubblica.it')),null,'article origin stays the reviewed www origin');
+ const wrong=repubblicaDocument(row).replace('<link rel="canonical" href="'+row.sourceUrl+'">','<link rel="canonical" href="https://www.repubblica.it/other">');
+ assert.equal(readArticlePhoto(wrong,{...article,...row,publisher:'la Repubblica'}),null);
+});

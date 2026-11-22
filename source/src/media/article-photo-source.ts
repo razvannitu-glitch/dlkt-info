@@ -34,6 +34,8 @@ const ASSET_PATHS:Readonly<Record<string,Readonly<Record<string,readonly string[
  // Exact article metadata and same-origin upload path verified by primary probe45051739949.
  'hotnews':{'hotnews.ro':['/wp-content/uploads/']},
  'digi24':{'s.iw.ro':['/gateway/g/']},
+ // Primary metadata receipt45070034177: both originals bind this exact publisher CDN upload path.
+ 'repubblica':{'www.repstatic.it':['/content/nazionale/img/']},
  'guardian':{'i.guim.co.uk':['/img/media/'],'media.guim.co.uk':['/']},
  'bbc':{'ichef.bbci.co.uk':['/news/','/ace/','/images/ic/'],'ichef.bbci.co.uk.edgesuite.net':['/news/']},
  'the-hindu':{'th-i.thgim.com':['/public/','/incoming/'],'www.thehindu.com':['/incoming/','/news/','/sport/']},

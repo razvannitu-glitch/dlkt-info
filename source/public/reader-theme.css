@@ -13,9 +13,9 @@ html[data-reader-theme=prism]{
 html[data-reader-theme=night]{
  --reader-page:#14181C;--reader-surface:#20262C;--reader-panel:#26342F;
  --reader-ink:#F4F3EF;--reader-muted:#BAC4C5;--reader-rule:#48555B;--reader-edge:#798A8B;
- --reader-action:#F66061;--reader-action-ink:#15181C;--reader-action-hover:#FFA4A1;--reader-action-hover-ink:#15181C;
+ --reader-action:#F66061;--reader-action-ink:#15181C;--reader-action-hover:#F0EDE5;--reader-action-hover-ink:#121416;
  --reader-selected:#BEEBDD;--reader-selected-ink:#142C25;--reader-selected-edge:#BEEBDD;
- --reader-secondary-hover:#BEEBDD;--reader-secondary-hover-ink:#142C25;
+ --reader-secondary-hover:#F66061;--reader-secondary-hover-ink:#121416;
  --reader-link:#BEEBDD;--reader-focus:#FDE6C2;
  --reader-photo-dark:#14181C;--reader-photo-light:#F4F3EF;--reader-photo-link:#BEEBDD;--reader-photo-focus:#FDE6C2;
  color-scheme:dark;
@@ -356,3 +356,9 @@ html[data-reader-theme=prism] :is(#discovery-cards,#home-local-cards,#world-card
  --reader-photo-dark:#142D44;--reader-photo-light:#F0EDE5;--reader-photo-link:#F0EDE5;--reader-photo-focus:#F66061;
  --card-tone-accent:#B7C4C3;--card-tone-badge:#F66061;--card-tone-badge-ink:#121416;
 }
+
+/* Selected controls use the primary pair, including night mode's pink-to-paper state. */
+@media(hover:hover) and (pointer:fine){
+ html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(button[aria-pressed=true],button[aria-expanded=true],.site-header #header-navigation .text-button[aria-current=page]):not(:disabled):not([aria-disabled=true]):hover{background:var(--reader-action-hover)!important;color:var(--reader-action-hover-ink)!important;border-color:var(--reader-action)!important}
+}
+html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(.world-city-results button,.daily-interest,.daily-lengths button,.glance-tile):not(:disabled):focus-visible :is(span,small){color:inherit}

@@ -8,8 +8,8 @@ const URL = `https://${REF}.supabase.co`;
 const KEY = `sb_publishable_${'a'.repeat(32)}`;
 const INSTANCE = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const OTHER_INSTANCE = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
-const FINGERPRINT = 'ef03f90d229d089f8871c64b996994c79c65d0e1e3a0f8e2b0bb08dc2d6f6dec';
-const READINESS_MIGRATION = '20261122200813_dlkt_info_news_corpus';
+const FINGERPRINT = 'fc6df8a25190ef8c4b4f906873a3015b7aa805e21ce1a44f9117b8eefeed3b91';
+const READINESS_MIGRATION = '20261122211000_dlkt_info_country_editions';
 const RECEIPT = createHash('sha256').update(`${INSTANCE}:${FINGERPRINT}:${READINESS_MIGRATION}`).digest('hex');
 const READY_ENV = Object.freeze({
   DLKT_INFO_SUPABASE_PROJECT_REF: REF,
@@ -111,7 +111,7 @@ test('manifest v6 fingerprint is reproducible from its exact versioned serializa
   } = await import('../.build/src/provisioning/readiness-manifest.js');
   assert.equal(DATABASE_READINESS_VERSION, 'dlkt-info-database-readiness-2');
   assert.equal(DATABASE_READINESS_MIGRATION, READINESS_MIGRATION);
-  assert.equal(SCHEMA_MANIFEST_VERSION, 'dlkt-info-schema-manifest-8');
+  assert.equal(SCHEMA_MANIFEST_VERSION, 'dlkt-info-schema-manifest-9');
   const bytes = JSON.stringify({ version: SCHEMA_MANIFEST_VERSION, manifest: EXPECTED_SCHEMA_MANIFEST });
   assert.equal(serializeSchemaManifest(), bytes);
   assert.equal(createHash('sha256').update(bytes, 'utf8').digest('hex'), FINGERPRINT);

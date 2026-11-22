@@ -81,6 +81,8 @@ export const NEWS_PUBLISHERS:readonly NewsPublisher[]=Object.freeze([
   // Exact primary feed origins checked 2026-11-22; discovery does not grant republication rights.
   publisher('digi24','Digi24','www.digi24.ro'),
   publisher('hotnews','HotNews.ro','hotnews.ro'),
+  // Official RSS/blog distribution page and two original articles checked 2026-11-22.
+  publisher('repubblica','la Repubblica','www.repubblica.it'),
 ]);
 const byOrigin=new Map(NEWS_PUBLISHERS.flatMap(value=>value.origins.map(origin=>[origin,value] as const)));
 export function publisherForNewsUrl(value:string):NewsPublisher|null{
@@ -89,7 +91,7 @@ export function publisherForNewsUrl(value:string):NewsPublisher|null{
 }
 /** Reviewed publisher-edition tags, not a claim to detect every article's language. */
 export const NEWS_SOURCE_LANGUAGES=Object.freeze([
-  'en','fr','ja','es','ar','de','pt-BR','pt-002','sq','am','bn','bs','bg','zh-Hans','zh-Hant','hr',
+  'en','fr','ja','es','ar','de','it','pt-BR','pt-002','sq','am','bn','bs','bg','zh-Hans','zh-Hant','hr',
   'fa-AF','el','ha','hi','id','sw','mk','ps','fa-IR','pl','ro','ru','sr','tr','uk','ur',
 ] as const);
 export type NewsSourceLanguage=typeof NEWS_SOURCE_LANGUAGES[number];
@@ -108,6 +110,7 @@ export const NEWS_PUBLICATION_SCOPES:readonly PublicationScope[]=Object.freeze([
   // Romanian primary editions: exact publisher RSS channel identities verified 2026-11-22.
   publication('digi24','RO','Romania','Romania and global reporting',['/stiri/','ro']),
   publication('hotnews','RO','Romania','Romania and global reporting',['/','ro']),
+  publication('repubblica','IT','Italy','Italy and global reporting',['/','it']),
   publication('ap','US','United States','Global reporting',['/article/','en']),
   publication('bbc','GB','United Kingdom','Global reporting',['/news/','en'],['/sport/','en'],['/japanese/','ja']),
   // Existing direct news indexes and their primary English editions checked 2026-11-22:
@@ -152,6 +155,11 @@ export function sourcePublicationContext(value:string|{readonly sourceUrl:string
   return Object.freeze({language,publisherCountryCode:scope.countryCode,publisherCountryName:scope.countryName,coverage:scope.coverage,basis:'reviewed-publisher'});
 }
 export function sourceLanguage(value:string|{readonly sourceUrl:string}):NewsSourceLanguage|null{return sourcePublicationContext(value)?.language??null;}
+/** Reviewed edition provenance only. This never establishes an article's event location or city coverage. */
+export function sourceEditionCountryCode(value:string|{readonly sourceUrl:string}):string|null{
+  const context=sourcePublicationContext(value);
+  return context?.language?context.publisherCountryCode:null;
+}
 /** Strip only known tracking fields; preserve URL parameters that identify the article. */
 export function canonicalNewsUrl(value:string):string|null{
   if(!publisherForNewsUrl(value))return null;
@@ -177,6 +185,10 @@ export const NEWS_DISCOVERY_INDEXES:readonly NewsDiscoveryIndex[]=Object.freeze(
   // the reviewed Romanian website edition supplies that provenance, not automatic text detection.
   {id:'digi24-ro-news',publisherId:'digi24',url:'https://www.digi24.ro/rss',format:'rss',language:'ro',feedTitle:'Digi24',feedHome:'https://www.digi24.ro/',articlePath:'/stiri/',allowMissingLanguage:true},
   {id:'hotnews-ro-news',publisherId:'hotnews',url:'https://hotnews.ro/feed',format:'rss',language:'ro',feedTitle:'HotNews.ro',feedHome:'https://hotnews.ro',articlePath:'/'},
+  // Primary receipt: Actions 45070034177 / job 137354713875. Channel identity is exact;
+  // bare channel home is metadata only, not an additional article origin.
+  // Distribution guidance: https://www.repubblica.it/static/servizi/rss/
+  {id:'repubblica-it-news',publisherId:'repubblica',url:'https://www.repubblica.it/rss/homepage/rss2.0.xml',format:'rss',language:'it',feedTitle:'Repubblica.it',feedHome:'https://repubblica.it',articlePath:'/'},
   {id:'guardian-news',publisherId:'guardian',url:'https://www.theguardian.com/sitemaps/news.xml'},
   {id:'ap-news',publisherId:'ap',url:'https://apnews.com/news-sitemap-content.xml'},
   {id:'bbc-news',publisherId:'bbc',url:'https://www.bbc.com/sitemaps/https-sitemap-com-news-1.xml'},

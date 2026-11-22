@@ -30,6 +30,7 @@ function readRules(file){
   }));
 }
 const themeRules=readRules('public/reader-theme.css');
+const headerRules=readRules('public/header.css');
 const cardRules=readRules('public/editorial-cards.css');
 const readerRules=readRules('public/iceo.css');
 const exploreRules=readRules('public/explore.css');
@@ -48,9 +49,9 @@ function variables(theme){
   return Object.assign({},declarations(themeRules,`html[data-reader-theme=${theme}]`),declarations(themeRules,scope));
 }
 function resolve(value,vars,visited=[]){
-  return value.replace(/var\((--[\w-]+)\)/gu,(_match,key)=>{
-    assert.ok(Object.hasOwn(vars,key),`Unknown color token ${key}`);assert.ok(!visited.includes(key),`Cyclic token ${key}`);
-    return resolve(vars[key],vars,[...visited,key]);
+  return value.replace(/var\((--[\w-]+)(?:,([^()]+))?\)/gu,(_match,key,fallback)=>{
+    assert.ok(Object.hasOwn(vars,key)||fallback!==undefined,`Unknown color token ${key}`);assert.ok(!visited.includes(key),`Cyclic token ${key}`);
+    return resolve(Object.hasOwn(vars,key)?vars[key]:fallback,vars,[...visited,key]);
   });
 }
 function color(value,vars){
@@ -109,6 +110,10 @@ for(const theme of ['prism','night']){
     for(const [label,selector]of states){
       check.add(label,color(property(themeRules,selector,'color'),vars),color(property(themeRules,selector,'background'),vars),4.5);
     }
+    for(const [label,selector]of [
+      ['keyboard secondary',':root :is(button,a.primary,a.secondary,a.focus-button,a.text-button,a.source-link,.more-menu a,.reader-more>summary,.footer-link,.legal-toc a):not(:disabled):not([aria-disabled=true]):focus-visible'],
+      ['keyboard primary',':root :is(.primary,.focus-button,.entry-field>button,.source-link,button[aria-pressed=true],button[aria-expanded=true],[aria-current=page]):not(:disabled):not([aria-disabled=true]):focus-visible'],
+    ])check.add(label,color(property(headerRules,selector,'color'),vars),color(property(headerRules,selector,'background'),vars),4.5);
     check.report();
   });
 

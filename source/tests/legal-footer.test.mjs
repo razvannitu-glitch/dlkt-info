@@ -9,7 +9,7 @@ import {NEWS_PUBLISHERS} from '../.build/src/iceo/news-sources.js';
 function elements(html){const nodes=[];function walk(n){if(n.type==='tag')nodes.push(n);for(const c of n.children??[])walk(c);}walk(parseDocument(html));return nodes;}
 test('all legal documents ship the exact shared renderer with a unique reading structure',()=>{
  assert.equal(LEGAL_DOCUMENTS.length,9);assert.equal(new Set(LEGAL_DOCUMENTS.map(d=>d.slug)).size,9);
- for(const doc of LEGAL_DOCUMENTS){const html=readFileSync(`public/${doc.slug}.html`,'utf8');assert.equal(html,renderLegalDocument(doc));const nodes=elements(html);assert.equal(nodes.filter(n=>n.name==='h1').length,1,doc.slug);const ids=nodes.map(n=>n.attribs.id).filter(Boolean);assert.equal(new Set(ids).size,ids.length,doc.slug);assert.ok(html.includes(footerHtml()));assert.ok(html.includes('Updated '+(['about','accessibility','disclaimer'].includes(doc.slug)?'21 November 2026':['sources','cookies','privacy'].includes(doc.slug)?'22 November 2026':'16 November 2026')),doc.slug);}
+ for(const doc of LEGAL_DOCUMENTS){const html=readFileSync(`public/${doc.slug}.html`,'utf8');assert.equal(html,renderLegalDocument(doc));const nodes=elements(html);assert.equal(nodes.filter(n=>n.name==='h1').length,1,doc.slug);const ids=nodes.map(n=>n.attribs.id).filter(Boolean);assert.equal(new Set(ids).size,ids.length,doc.slug);assert.ok(html.includes(footerHtml()));assert.ok(html.includes('Updated '+'22 November 2026'),doc.slug);}
 });
 test('footer and document links resolve to shipped pages and actual section anchors',()=>{
  const pages=new Map(LEGAL_DOCUMENTS.map(d=>['/'+d.slug,renderLegalDocument(d)]));pages.set('/',readFileSync('public/iceo.html','utf8'));pages.set('/organizations',readFileSync('public/organizations.html','utf8'));pages.set('/wallet',readFileSync('public/wallet.html','utf8'));pages.set('/account',readFileSync('public/account.html','utf8'));
@@ -53,9 +53,9 @@ test('account notices separate conditional sign-in, private storage and separate
  assert.match(cookies,/Secure, HttpOnly and SameSite=Lax.*Path=\/ and no Domain attribute/u);
  assert.match(cookies,/not a guarantee that the server will accept the session/u);
  assert.match(cookies,/does not sign out every other device or delete saved account data/u);
- assert.match(footerHtml(),/Account and connection availability is shown in Info Wallet/u);
- assert.match(footerHtml(),/External accounts require your authorization/u);
- assert.match(footerHtml(),/Background personal delivery is not activated/u);
+ assert.match(section('about','wallet'),/Info Wallet shows the current availability of account sign-in, private profile saving and optional email or social connections/u);
+ assert.match(section('about','wallet'),/An available connection requires your separate authorization/u);
+ assert.match(section('about','control'),/scheduled briefing emails and background alerts are not activated/u);
  const connections=section('privacy','connections');
  assert.match(connections,/encrypted server-side before storage in Supabase/u);
  assert.match(connections,/not returned to page JavaScript or saved in browser storage/u);
@@ -90,7 +90,7 @@ test('Sources describes the complete language-filtered stream and exact-article 
  assert.match(top,/when only one remains, all its remaining articles stay available/u);
  assert.match(top,/category order stays stable for the displayed edition while more cards load/u);
  assert.match(top,/category filter shows a projection of that same order/u);
- assert.match(top,/does not use your city, country context or saved interests/u);
+ assert.match(top,/selected country gives available national-edition articles priority within each category/u);
  assert.match(top,/English remains an explicit option/u);assert.match(top,/does not translate other-language articles/u);
  assert.match(top,/every eligible, unique article/u);assert.match(top,/next group of up to twenty automatically/u);assert.match(top,/button remains available for manual loading/u);
  assert.match(top,/Other topics/u);assert.match(top,/original observation timestamps and content hashes/u);
@@ -102,4 +102,26 @@ test('Sources describes the complete language-filtered stream and exact-article 
  assert.match(publishers,/does not mean every publisher was available in the latest check/u);
  const visible=doc.sections.flatMap(value=>value.paragraphs).join(' ');
  assert.doesNotMatch(visible,/up to six eligible primary reports|opening Global selection|After the opening selection|monitors twenty editorial categories|standard target of thirty|maximum of forty|At most eight press reports|Other cards use a separately reviewed contextual photograph|does not republish article bodies or photographs/u);
+});
+
+test('the compact footer preserves accessible operator and legal information without a second platform',()=>{
+ const footer=footerHtml();assert.doesNotMatch(footer,/world\.dlkt\.ee|DLKT World|Registry|17335744|Estonia/iu);
+ assert.match(footer,/© 2026 DLKT Group OÜ/u);
+ for(const route of ['company','terms','privacy','cookies','disclaimer','sources'])assert.ok(footer.includes('href="/'+route+'"'));
+ const doc=slug=>renderLegalDocument(LEGAL_DOCUMENTS.find(value=>value.slug===slug));
+ assert.match(doc('company'),/17335744/u);assert.match(doc('company'),/Sepapaja tn 6/u);
+ assert.match(doc('terms'),/platform at www\.dlkt\.ee/u);
+ for(const value of LEGAL_DOCUMENTS)assert.doesNotMatch(renderLegalDocument(value),/info\.dlkt\.ee|world\.dlkt\.ee|DLKT World/u);
+});
+test('country, account, subscription and analytics notices describe the enabled release',()=>{
+ const section=(slug,id)=>LEGAL_DOCUMENTS.find(d=>d.slug===slug).sections.find(s=>s.id===id).paragraphs.join(' ');
+ assert.match(section('sources','country-coverage'),/publisher editions.*not a count of independently verified events/iu);
+ assert.match(section('sources','country-coverage'),/missing|shortfall/u);
+ assert.match(section('sources','country-coverage'),/One connected national publisher does not constitute complete coverage/u);
+ assert.match(section('privacy','wallet'),/My profile and Info Wallet use the same optional private preference record/u);
+ assert.match(section('privacy','wallet'),/preserves the fields it does not edit/u);
+ assert.match(section('privacy','audience-measurement'),/does not activate a visitor-analytics collector/u);
+ assert.match(section('terms','operator'),/does not start a subscription or a trial/u);
+ assert.match(section('terms','operator'),/before an explicit purchase/u);
+ assert.doesNotMatch(section('accessibility','features'),/starts moving automatically/u);
 });

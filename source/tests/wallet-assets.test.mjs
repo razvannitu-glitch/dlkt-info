@@ -21,12 +21,12 @@ test('deployed Wallet import graph is closed inside browser-safe public assets',
  assert.ok(!seen.has('wallet-gmail.js'));assert.ok(!seen.has('wallet-store.js'));
 });
 
-test('Info Wallet preserves the approved header stylesheet and original Kate identity assets',()=>{
+test('Info Wallet preserves the authorized shared frame and original Kate identity assets',()=>{
  const baseline=JSON.parse(readFileSync('RELEASE-0.9.42.json','utf8'));
  for(const file of ['public/iceo.css','public/header.css','public/kate-head.png','public/favicon-kate-fb7b2e60.png']){
-  // Header redesign authorized 20 November; identical card selectors now include the separate local host, authorized 22 November 2026. Original artwork keeps its earlier pin.
-  const expected=file==='public/iceo.css'?'ca44cec850985e847f47f01dee10fabe28009ad113ca37936c41153a99401728':file==='public/header.css'?'3438c5339e50762e5409d9a84b9e3220ab3f1a531a28fd3df8725fcf247fde4c':baseline.files[file];
-  // Explore only extends existing card selectors; the header adds approved head sizing and the matching compact breakpoint.
+  // Shared header/footer redesign authorized 22 November 2026. Unchanged reader-card geometry and original artwork retain their earlier pins.
+  const expected=file==='public/iceo.css'?'ca44cec850985e847f47f01dee10fabe28009ad113ca37936c41153a99401728':file==='public/header.css'?'34562dee9dca59331b698aa42ef103083ddf49803c7a303f2bab77c8c10f254b':baseline.files[file];
+  // The shared frame is pinned as raw bytes; only the existing reader-card normalizations remain.
   let content=file==='public/iceo.css'?readFileSync(file,'utf8').replaceAll('#discovery-cards,#world-cards,','#discovery-cards,'):readFileSync(file);
   if(file==='public/iceo.css'){
    // Uniform 16:9 photo frames with balanced 16px side insets authorized 22 November 2026. All other bytes remain pinned.
@@ -40,14 +40,10 @@ test('Info Wallet preserves the approved header stylesheet and original Kate ide
    }
   }
   if(file==='public/header.css'){
-   const sizing='/* The original 180px head has 6px transparent edges; 64px balances the full visible wordmark and tagline. */\n.site-header a.brand.brand-header{grid-template-columns:64px max-content}\n.site-header .brand-header .kate-mark{grid-row:1/-1;width:64px;height:64px;align-self:end}\n';
-   const header=content.toString();assert.equal(header.split(sizing).length,2,'Exactly one header-only sizing override');
-   const compact='@media(max-width:1152px){';
-   assert.equal(header.split(compact).length,2,'Exactly one approved compact breakpoint');
+   assert.equal(content.toString().split('@media(max-width:1152px){').length,2,'Exactly one compact navigation breakpoint');
    assert.equal(readFileSync('src/entry/header.ts','utf8').split("matchMedia('(max-width: 1152px)')").length,2,'Header disclosure matches the stylesheet breakpoint');
-   content=header.replace(sizing,'').replace(compact,'@media(max-width:1024px){');
   }
-  // Reverting only those approved changes must reproduce every original byte, including footer and navigation.
+  // Reader normalization preserves its earlier pin; the new shared frame and unchanged Kate assets are exact.
   assert.equal(createHash('sha256').update(content).digest('hex'),expected,file);
  }
 });

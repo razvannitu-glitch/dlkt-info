@@ -188,17 +188,40 @@ test('a manual preference survives a fresh controller and location detection aft
   assert.equal(stored.get('unrelated-setting'),'keep-me');assert.equal(reloaded.historyCalls.length,0);assert.deepEqual(reloaded.sideEffects,[]);
 });
 
-test('only automatic current-location events affect defaults; explored, restored and malformed cities do not',t=>{
-  const h=harness(t,'https://www.dlkt.ee/');
-  h.country('RO',{estimated:false,restored:false});
+test('a current home-city selection changes the implicit language; restored and malformed cities do not',t=>{
+  const h=harness(t,'https://www.dlkt.ee/?explore=1&country=JP#reading');
   h.country('RO',{estimated:true,restored:true});
   for(const detail of [null,[],{},'RO',{city:null,estimated:true,restored:false},{city:{countryCode:'ro'},estimated:true,restored:false},{city:{countryCode:'RO'},estimated:'true',restored:false}]){
     h.doc.dispatchEvent(new CustomEventFixture('dlkt:city-selected',{detail}));
   }
   assert.equal(h.doc.documentElement.lang,'en');assert.deepEqual(h.localeEvents,['en']);
   h.country('RO');assert.equal(h.doc.documentElement.lang,'ro');
-  h.country('JP',{estimated:false,restored:false});assert.equal(h.doc.documentElement.lang,'ro');
+  h.country('IT',{estimated:false,restored:false});
+  assert.equal(h.doc.documentElement.lang,'it');assert.equal(h.picker.value,'it');
+  assert.equal(h.win.location.searchParams.get('country'),'JP');assert.equal(h.win.location.hash,'#reading');
+  assert.equal(h.win.location.searchParams.has('lang'),false);assert.equal(h.historyCalls.length,0);
+  assert.deepEqual(h.localeEvents,['en','ro','it']);assert.deepEqual(h.storageCalls,[['get',preferenceKey]]);
   assert.equal(h.stored.size,0);assert.deepEqual(h.sideEffects,[]);
+});
+
+test('late automatic country or city hints cannot undo the explicitly selected home country',t=>{
+  const h=harness(t,'https://www.dlkt.ee/');
+  h.country('IT',{estimated:false,restored:false});
+  h.doc.dispatchEvent(new CustomEventFixture('dlkt:country-detected',{detail:{countryCode:'RO',estimated:true}}));
+  h.country('US');h.country('DE',{estimated:false,restored:true});
+  assert.equal(h.doc.documentElement.lang,'it');assert.deepEqual(h.localeEvents,['en','it']);
+  h.country('FR',{estimated:false,restored:false});assert.equal(h.doc.documentElement.lang,'fr');
+  h.country('US');assert.equal(h.doc.documentElement.lang,'fr');
+  assert.equal(h.historyCalls.length,0);assert.equal(h.stored.size,0);assert.deepEqual(h.sideEffects,[]);
+});
+
+test('a manual English preference or explicit URL wins over a new Italian home-city selection',t=>{
+  const first=harness(t,'https://www.dlkt.ee/?lang=en',{languages:['ro-RO']});
+  first.country('IT',{estimated:false,restored:false});assert.equal(first.doc.documentElement.lang,'en');
+  assert.equal(first.stored.size,0);assert.deepEqual(first.sideEffects,[]);first.cleanup();
+  const saved=harness(t,'https://www.dlkt.ee/',{stored:new Map([[preferenceKey,'en']]),languages:['ro-RO']});
+  saved.country('IT',{estimated:false,restored:false});assert.equal(saved.doc.documentElement.lang,'en');
+  assert.deepEqual(saved.storageCalls,[['get',preferenceKey]]);assert.deepEqual(saved.sideEffects,[]);
 });
 
 test('multilingual countries use eligible browser choices and unsupported countries fall back to English',t=>{

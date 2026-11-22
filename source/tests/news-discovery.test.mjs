@@ -17,8 +17,8 @@ const xmlResponse=body=>new Response(body,{headers:{'content-type':'application/
 const htmlResponse=body=>new Response(body,{headers:{'content-type':'text/html'}});
 const rowsByCategory=amount=>PUBLIC_EDITORIAL_CATEGORIES.flatMap(category=>Array.from({length:amount},(_,i)=>candidate(category,i)));
 
-test('catalog has20 organizational category sources, an unclassified source and72 exact publisher families',()=>{
- assert.equal(NEWS_SOURCES.length,22);assert.equal(NEWS_CATEGORY_SOURCES.length,20);assert.equal(NEWS_PUBLISHERS.length,72);assert.equal(new Set(NEWS_SOURCES.map(s=>s.id)).size,22);
+test('catalog has20 organizational category sources, an unclassified source and73 exact publisher families',()=>{
+ assert.equal(NEWS_SOURCES.length,22);assert.equal(NEWS_CATEGORY_SOURCES.length,20);assert.equal(NEWS_PUBLISHERS.length,73);assert.equal(new Set(NEWS_SOURCES.map(s=>s.id)).size,22);
  assert.equal(NEWS_UNCLASSIFIED_SOURCE.id,'news-unclassified');assert.equal(NEWS_UNCLASSIFIED_SOURCE.topic,'other');
  assert.ok(NEWS_CATEGORY_SOURCES.every(s=>s.adapter==='news-index'&&s.endpoint===NEWS_INDEX_URL));assert.equal(NEWS_FEATURED_SOURCE.id,'editorial-frontpage');
  for(const source of ['https://www.rte.ie/news/story','https://blogs.nvidia.com/blog/story','https://www.reuters.com/world/story'])assert.ok(publisherForNewsUrl(source));

@@ -14,7 +14,7 @@ for(const [name,target] of [['news-page-contracts','news-page-contracts'],['news
 for(const [source,target] of [['account/contracts','account-contracts'],['account/browser','account-browser'],['edition/browser','edition-browser'],['edition/artifact-contracts','edition-artifact'],['edition/render','edition-render']]){
  let compiled=readFileSync(`.build/src/${source}.js`,'utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'');
  compiled=compiled.replaceAll('../iceo/','./').replaceAll("'./artifact-contracts.js'","'./edition-artifact.js'").replaceAll("'./render.js'","'./edition-render.js'");
- if(source==='account/browser')compiled=compiled.replaceAll("'./contracts.js'","'./account-contracts.js'");
+ if(source==='account/browser')compiled=compiled.replaceAll("'./contracts.js'","'./account-contracts.js'").replaceAll("'../daily/contracts.js'","'./daily-contracts.js'").replaceAll("'../wallet/contracts.js'","'./wallet-contracts.js'");
  writeFileSync(`public/${target}.js`,compiled);
 }
 const main=readFileSync('public/iceo.js','utf8').replaceAll("'../edition/browser.js'","'./edition-browser.js'").replaceAll("'../local/contracts.js'","'./local-contracts.js'").replaceAll("'../local/card-node.js'","'./local-card-node.js'").replaceAll("'../local/presentation.js'","'./local-presentation.js'").replaceAll("'../explore/browser.js'","'./explore-browser.js'");writeFileSync('public/iceo.js',main);
