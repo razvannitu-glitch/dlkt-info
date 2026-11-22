@@ -193,7 +193,7 @@ begin
   or p_article->>'geographyBasis'<>'article-place-reference' or jsonb_typeof(p_article->'geoAnchors') is distinct from 'array'
   or jsonb_array_length(p_article->'geoAnchors') not between 1 and 6 then return false; end if;
  if p_article ? 'summary' and (jsonb_typeof(p_article->'summary') is distinct from 'string' or length(p_article->>'summary') not between 1 and allowed or p_article->>'summary' ~ '[<>[:cntrl:]]') then return false; end if;
- if length(p_article->>'title')+case when p_article ? 'summary' then length(p_article->>'summary')+1 else 0 end>allowed then return false; end if;
+ if length(p_article->>'title')+(case when p_article ? 'summary' then length(p_article->>'summary')+1 else 0 end)>allowed then return false; end if;
  foreach field in array array['publishedAt','checkedAt','validUntil'] loop
   if p_article->>field !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$'
    or to_char((p_article->>field)::timestamptz at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')<>p_article->>field then return false; end if;
