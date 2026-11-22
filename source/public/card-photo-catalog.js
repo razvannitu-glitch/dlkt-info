@@ -281,7 +281,7 @@ export function editorialPhotoFor(card, now = Date.now(), photos = EDITORIAL_PHO
     }
     return selected;
 }
-/** Exact source photograph, strict subject context, then clearly marked neutral editorial imagery. */
+/** Only the exact reviewed article photograph; contextual and editorial catalogs are never fallbacks. */
 export function displayPhotoFor(card, now = Date.now()) {
-    return photoFor(card, now) ?? contextPhotoFor(card, now) ?? editorialPhotoFor(card, now);
+    return photoFor(card, now);
 }

@@ -279,7 +279,7 @@ function renderItem(item) {
     }
     body.append(actions);
     a.append(head);
-    const photograph = item.topic ? photoNode(item.topic.card) : item.local ? contextPhotoNode({ title: headline, sourceUrl: item.local.sourceUrl, ...(category ? { editorialCategory: category } : {}) }) : null;
+    const photograph = item.topic ? photoNode(item.topic.card) : item.local ? contextPhotoNode({ title: headline, sourceUrl: item.local.sourceUrl, ...(category ? { editorialCategory: category } : {}) }, Date.now(), item.local.kind === 'local-news' && item.local.news ? { id: item.local.news.id, revision: item.local.news.documentHash, cityId: item.local.news.cityId } : undefined) : null;
     if (photograph)
         a.append(photograph);
     a.append(body, details);
