@@ -227,6 +227,105 @@ function documentaryNarrativeAnchor(card, title) {
         return null;
     return { key: key('documentary-narrative', subject, narrative, 'new-documentary'), basis: 'shared-event', strong: false };
 }
+// A dated result is an identified draw, not all reporting about a lottery.
+// Dates are printed in the original headline; publication time is never a substitute.
+const DRAW_MONTH_NAMES = [
+    [1, 'january ianuarie janvier enero janeiro gennaio januar'], [2, 'february februarie fevrier febrero fevereiro febbraio februar'],
+    [3, 'march martie mars marzo marco marz'], [4, 'april aprilie avril abril aprile'],
+    [5, 'may mai mayo maio maggio'], [6, 'june iunie juin junio junho giugno juni'],
+    [7, 'july iulie juillet julio julho luglio juli'], [8, 'august aout agosto'],
+    [9, 'september septembrie septembre septiembre setembro settembre'], [10, 'october octombrie octobre octubre outubro ottobre oktober'],
+    [11, 'november noiembrie novembre noviembre novembro'], [12, 'december decembrie decembre diciembre dezembro dicembre dezember'],
+];
+const DRAW_MONTHS = new Map(DRAW_MONTH_NAMES.flatMap(([month, names]) => names.split(' ').map(name => [name, month])));
+const DRAW_MONTH_PATTERN = [...DRAW_MONTHS.keys()].join('|');
+function drawDate(year, month, day) {
+    if (!Number.isSafeInteger(year) || year < 1900 || year > 2099 || !Number.isSafeInteger(month) || month < 1 || month > 12 || !Number.isSafeInteger(day) || day < 1 || day > 31)
+        return null;
+    const value = new Date(Date.UTC(year, month - 1, day));
+    return value.getUTCFullYear() === year && value.getUTCMonth() === month - 1 && value.getUTCDate() === day ? value.toISOString().slice(0, 10) : null;
+}
+function explicitDrawDate(title) {
+    const values = [];
+    const add = (match, date) => { const index = match.index ?? -1; values.push({ date, index, end: index + match[0].length }); };
+    for (const match of title.matchAll(/\b((?:19|20)\d{2})-(\d{2})-(\d{2})\b/gu))
+        add(match, drawDate(Number(match[1]), Number(match[2]), Number(match[3])));
+    for (const match of title.matchAll(/\b(\d{1,2})\.(\d{1,2})\.((?:19|20)\d{2})\b/gu))
+        add(match, drawDate(Number(match[3]), Number(match[2]), Number(match[1])));
+    for (const match of title.matchAll(new RegExp('\\b(\\d{1,2})\\.?\\s+(' + DRAW_MONTH_PATTERN + ')\\s+((?:19|20)\\d{2})\\b', 'gu')))
+        add(match, drawDate(Number(match[3]), DRAW_MONTHS.get(match[2] ?? '') ?? 0, Number(match[1])));
+    for (const match of title.matchAll(new RegExp('\\b(' + DRAW_MONTH_PATTERN + ')\\s+(\\d{1,2}),?\\s+((?:19|20)\\d{2})\\b', 'gu')))
+        add(match, drawDate(Number(match[3]), DRAW_MONTHS.get(match[1] ?? '') ?? 0, Number(match[2])));
+    const value = values[0];
+    return values.length === 1 && value?.date !== null && value !== undefined && value.index >= 0 ? { date: value.date, index: value.index, end: value.end } : null;
+}
+const DRAW_DATE_CONNECTORS = new Set('for on of the du del de do da des am vom din draw tirage extragerea estrazione ziehung sunday monday tuesday wednesday thursday friday saturday dimanche lundi mardi mercredi jeudi vendredi samedi duminica luni marti miercuri joi vineri sambata'.split(' '));
+/** The full date must follow the results/game phrase, not an update date later in a story. */
+function drawDateFollows(title, prefixLength, printed) {
+    if (printed.index < prefixLength)
+        return false;
+    const between = title.slice(prefixLength, printed.index);
+    if (between.length > 70 || /[^\p{L}\s,:-]/u.test(between))
+        return false;
+    const words = between.replace(/[,:-]/gu, ' ').trim().split(/\s+/u).filter(Boolean);
+    return words.length <= 6 && words.every(word => DRAW_DATE_CONNECTORS.has(word));
+}
+/** This reviewed Romanian results series identifies the operator even when the title omits it.
+ * Its printed URL date must equal the headline date; host, path and identity are exact.
+ * Evidence: HotNews /rezultatele-loto-6-din-49-din-22-noiembrie-2026-2410659.
+ */
+function reviewedRomanianDrawSeries(card, date) {
+    if (card.identity !== card.sourceUrl)
+        return false;
+    try {
+        const url = new URL(card.sourceUrl);
+        if (url.protocol !== 'https:' || url.hostname !== 'hotnews.ro' || url.port || url.username || url.password || url.search || url.hash)
+            return false;
+        const match = /^\/rezultatele-loto-6-din-49-din-(\d{1,2})-([a-z]+)-((?:19|20)\d{2})-\d{5,12}\/?$/u.exec(url.pathname);
+        return match !== null && drawDate(Number(match[3]), DRAW_MONTHS.get(match[2] ?? '') ?? 0, Number(match[1])) === date;
+    }
+    catch {
+        return false;
+    }
+}
+function lotteryDrawAnchor(card, title) {
+    const printed = explicitDrawDate(title);
+    if (printed === null)
+        return null;
+    const date = printed.date;
+    const games = [
+        /\beuro\s?millions\b/u.test(title) ? 'euromillions' : null,
+        /\beuro\s?jackpot\b/u.test(title) ? 'eurojackpot' : null,
+        /\bmega\s?millions\b/u.test(title) ? 'mega-millions' : null,
+    ].filter((value) => value !== null);
+    if (games.length > 1)
+        return null;
+    if (games.length === 1) {
+        const result = '(?:results?|resultats?|resultados?|risultati|ergebnisse|rezultate(?:le)?)';
+        const game = '(?:euro\\s?millions|euro\\s?jackpot|mega\\s?millions)';
+        const lead = new RegExp('^(?:' + game + '\\s+' + result + '|' + result + '(?:\\s+(?:for|de|del|do|da|du|des|von|la))?\\s+' + game + ')\\b', 'u').exec(title);
+        // Whole-headline recognition deliberately rejects arbitrary tails: previews,
+        // special draws, corrections and comparisons cannot borrow a standard draw key.
+        if (!lead || !drawDateFollows(title, lead[0].length, printed) || !/^[\s.!]*$/u.test(title.slice(printed.end)))
+            return null;
+        return { key: key('lottery-draw', games[0], date, 'standard'), basis: 'shared-event', strong: true };
+    }
+    const lead = /^rezultate(?:le)?(?:\s+la)?\s+loto\b/u.exec(title);
+    if (!lead || !drawDateFollows(title, lead[0].length, printed) || contextForCard(card).countries.some(country => country.code !== 'RO'))
+        return null;
+    // These complete, reviewed result templates identify the operator and daily
+    // aggregate draw. Unknown suffixes or another named game/operator stay separate.
+    const reviewedSeries = reviewedRomanianDrawSeries(card, date);
+    const rawSuffix = title.slice(printed.end).replace(/^[\s.:-]+|[\s.!]+$/gu, '');
+    // The reviewed publisher's HTML headline may include this exact site-name suffix.
+    const suffix = reviewedSeries ? rawSuffix.replace(/\s+-\s+hotnews\.ro$/u, '') : rawSuffix;
+    const operator = suffix === 'loteria romana' || suffix === 'numerele extrase si premiile puse in joc de loteria romana';
+    if (!operator && suffix !== '' && suffix !== 'numerele castigatoare la extragerea de azi')
+        return null;
+    if (!operator && !reviewedSeries)
+        return null;
+    return { key: key('lottery-draw', 'ro-lottery-results', date, 'standard'), basis: 'shared-event', strong: true };
+}
 function anchor(card) {
     if (card.kind !== 'publication' || !card.title.trim() || card.title.length > 4000 || !Number.isFinite(Date.parse(card.date)))
         return null;
@@ -237,6 +336,9 @@ function anchor(card) {
     if (documentary)
         return documentary;
     if (!EXPLANATORY.test(title)) {
+        const draw = lotteryDrawAnchor(card, title);
+        if (draw)
+            return draw;
         const vulnerability = [...new Set([...title.matchAll(/\bcve-(\d{4})-(\d{4,7})\b/gu)].map(match => `${match[1]}-${match[2]}`))];
         if (vulnerability.length === 1)
             return { key: key('vulnerability', vulnerability[0]), basis: 'shared-event', strong: true };
