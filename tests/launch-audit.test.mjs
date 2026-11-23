@@ -53,6 +53,6 @@ test('missing brand assets or responsive safeguards fail prelaunch audit',()=>{
  const candidate=fixture();candidate.css='body{color:black}';
  assert.ok(assessLaunchSurface(candidate).failures.includes('responsive-structure'));
  assert.ok(assessLaunchSurface(candidate).failures.includes('keyboard-and-motion'));
- candidate.css=css;candidate.html=candidate.html.replace('Daily Life. Key Things.','Daily Random Words');
+ candidate.css=css;candidate.html=candidate.html.replaceAll('Daily Life. Key Things.','Daily Random Words');
  assert.ok(assessLaunchSurface(candidate).failures.includes('document-identity'));
 });
