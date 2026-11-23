@@ -302,3 +302,14 @@ test('the reviewed operatorless results series binds exact HTTPS origin, path, i
  assert.equal(groupStories([expected,drawReport(552,romanianDrawTitle,hotnewsDrawUrl,{identity:'https://unrelated.example/article'})]).length,2);
  assert.equal(groupStories([expected,drawReport(553,romanianDrawTitle.replace('22 noiembrie','21 noiembrie'),hotnewsDrawUrl)]).length,2);
 });
+
+test('the reviewed HotNews result accepts its own exact HTML title suffix without changing the displayed title',()=>{
+ const one=drawReport(560,romanianDrawTitle+' - HotNews.ro',hotnewsDrawUrl),two=drawReport(561,digiDrawTitle,digiDrawUrl);
+ const before=JSON.stringify([one,two]),group=groupStories([one,two]);assert.equal(group.length,1);assert.equal(group[0].basis,'shared-event');
+ assert.equal(JSON.stringify([one,two]),before);assert.ok(all(group[0]).some(card=>card.title.endsWith(' - HotNews.ro')));
+ for(const [title,url]of [
+  [romanianDrawTitle+' - Other.ro',hotnewsDrawUrl],
+  [romanianDrawTitle+' - HotNews.ro','https://unreviewed.example/lottery-results'],
+  [romanianDrawTitle+' si Loteria Moldovei - HotNews.ro',hotnewsDrawUrl],
+ ])assert.equal(groupStories([two,drawReport(562,title,url)]).length,2);
+});

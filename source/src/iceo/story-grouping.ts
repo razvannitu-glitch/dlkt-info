@@ -267,10 +267,13 @@ function lotteryDrawAnchor(card:EvidenceCard,title:string):ThreadAnchor|null {
  if(!lead||!drawDateFollows(title,lead[0].length,printed)||contextForCard(card).countries.some(country=>country.code!=='RO'))return null;
  // These complete, reviewed result templates identify the operator and daily
  // aggregate draw. Unknown suffixes or another named game/operator stay separate.
- const suffix=title.slice(printed.end).replace(/^[\s.:-]+|[\s.!]+$/gu,'');
+ const reviewedSeries=reviewedRomanianDrawSeries(card,date);
+ const rawSuffix=title.slice(printed.end).replace(/^[\s.:-]+|[\s.!]+$/gu,'');
+ // The reviewed publisher's HTML headline may include this exact site-name suffix.
+ const suffix=reviewedSeries?rawSuffix.replace(/\s+-\s+hotnews\.ro$/u,''):rawSuffix;
  const operator=suffix==='loteria romana'||suffix==='numerele extrase si premiile puse in joc de loteria romana';
  if(!operator&&suffix!==''&&suffix!=='numerele castigatoare la extragerea de azi')return null;
- if(!operator&&!reviewedRomanianDrawSeries(card,date))return null;
+ if(!operator&&!reviewedSeries)return null;
  return {key:key('lottery-draw','ro-lottery-results',date,'standard'),basis:'shared-event',strong:true};
 }
 

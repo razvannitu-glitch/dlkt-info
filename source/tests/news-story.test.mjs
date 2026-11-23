@@ -188,7 +188,7 @@ test('source transport is anonymous, abortable, byte-bounded and reports expired
 
 test('the observed Romanian draw is one feed card with both source originals before pagination',async()=>{
  const records=[
-  report(2300,'Rezultatele LOTO duminică, 22 noiembrie 2026. Numerele câștigătoare la extragerea de azi',{language:'ro',publisher:'HotNews.ro',sourceUrl:'https://hotnews.ro/rezultatele-loto-6-din-49-din-22-noiembrie-2026-2410659'}),
+  report(2300,'Rezultatele LOTO duminică, 22 noiembrie 2026. Numerele câștigătoare la extragerea de azi - HotNews.ro',{language:'ro',publisher:'HotNews.ro',sourceUrl:'https://hotnews.ro/rezultatele-loto-6-din-49-din-22-noiembrie-2026-2410659'}),
   report(2301,'Rezultate LOTO - Duminică, 22 noiembrie 2026. Numerele extrase și premiile puse în joc de Loteria Română',{language:'ro',publisher:'Digi24',sourceUrl:'https://www.digi24.ro/stiri/actualitate/social/rezultate-loto-duminica-22-noiembrie-2026-premii-atractive-la-6-49-joker-si-noroc-4046517'}),
  ];
  const before=JSON.stringify(records),page=await service(records).read(query({language:'ro'}));

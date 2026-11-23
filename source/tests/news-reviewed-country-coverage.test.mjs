@@ -22,6 +22,19 @@ const cases=[
  ['fda-food','US','Food recall lists packaged salad contamination warning'],
  ['beehive-news','NZ','New Zealand government announces regional school attendance programme'],
 ];
+// Exact contexts already emitted by extraction; publisher country provenance must not rewrite them.
+const originalPublisherContexts=new Map([
+ ['sanews',[{code:'ZA',name:'South Africa'}],'South Africa · government publisher scope'],
+ ['cbs-news',[{code:'NL',name:'Netherlands'}],'Netherlands · statistics publisher scope'],
+ ['noaa-news',[],'Weather, ocean and climate · NOAA scope'],
+ ['nist-news',[],'Science, technology and standards · NIST scope'],
+ ['nsf-news',[],'Science and research · NSF scope'],
+ ['fed-news',[{code:'US',name:'United States'}],'United States · Federal Reserve scope'],
+ ['ftc-consumer',[{code:'US',name:'United States'}],'United States · consumer protection scope'],
+ ['fda-food',[{code:'US',name:'United States'}],'United States · food safety scope'],
+ ['beehive-news',[{code:'NZ',name:'New Zealand'}],'New Zealand · government publisher scope'],
+].map(([id,countries,label])=>[id,{countries,basis:'publisher-scope',label,
+ boundary:'This is the declared scope of the publisher source, not an article-specific affected location or a statement that it applies to you.'}]));
 const source=id=>{const found=DAILY_FEEDS.find(value=>value.id===id);assert.ok(found?.feed,id);return found;};
 const escape=value=>value.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
 const country=code=>{const found=listCountries().find(value=>value.code===code);assert.ok(found,code);return found;};
@@ -70,7 +83,9 @@ test('feed extraction retains government attribution, exact source identity, dat
  for(const [index,[id,code]] of cases.entries()){
   const card=cards[index],reviewed=source(id),context=sourcePublicationContext(card);
   assert.deepEqual(card.sourceIds,[id]);assert.equal(context.publisherCountryCode,code);assert.equal(context.language,'en');
-  assert.equal(context.basis,'reviewed-publisher');assert.equal(context.city,undefined);assert.equal(card.context,undefined);
+  assert.equal(context.basis,'reviewed-publisher');assert.equal(context.city,undefined);
+  assert.deepEqual(card.context,originalPublisherContexts.get(id),'retains the exact source scope without fabricated article or city evidence');
+  assert.equal(card.cityId,undefined);
   assert.equal(card.date,new Date(NOW-10000).toISOString());assert.equal(card.dateLabel,'Published');
   assert.equal(card.attribution,reviewed.attribution);assert.equal(card.boundary,reviewed.feed.boundary);
   assert.equal(card.photo,undefined);assert.equal(card.image,undefined);assert.ok(validNewsGlobalCard(card,NOW));
@@ -125,7 +140,9 @@ test('all cities in New Zealand and the Netherlands receive their eligible natio
   assert.equal(new Set(page.items.map(item=>item.card.id)).size,10);
   for(const original of originals){
    const item=page.items.find(value=>value.card.id===original.id);assert.equal(item.card,original);
-   assert.equal(item.kind,'global');assert.equal(item.card.context,undefined,'publisher country never fabricates city evidence');
+   assert.equal(item.kind,'global');
+   assert.deepEqual(item.card.context,originalPublisherContexts.get(original.sourceIds[0]),'national classification preserves the original source scope');
+   assert.equal(item.card.cityId,undefined,'publisher country never fabricates city evidence');
   }
   const wrongLanguage=await service.read({language:'it',cityId:selectedCity.id,filter:'all',cursor:null});
   assert.equal(wrongLanguage.total,0);assert.deepEqual(wrongLanguage.coverage,{national:0,local:0,international:0});
