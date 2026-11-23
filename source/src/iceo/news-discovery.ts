@@ -12,7 +12,7 @@ import {consistentCards} from './evidence-consistency.js';
 import {collectFrontpageHighlights} from './news-frontpages.js';
 import {NewsDiagnosticsBuilder,type NewsDiagnostics} from './news-diagnostics.js';
 import {EDITORIAL_CATEGORY_TOPICS,classifyNewsHeadline,headlineDiscoveryPriority,type PublicEditorialCategory} from './editorial-categories.js';
-import {NEWS_INDEX_URL,NEWS_PUBLISHERS,NEWS_CATEGORY_SOURCES,NEWS_UNCLASSIFIED_SOURCE,NEWS_FEATURED_SOURCE,NEWS_DISCOVERY_INDEXES,NEWS_SOURCES,canonicalNewsUrl,publisherForNewsUrl,sourcePublicationContext,sourceLanguage,type NewsDiscoveryIndex,type NewsSourceLanguage} from './news-sources.js';
+import {NEWS_INDEX_URL,NEWS_PUBLISHERS,NEWS_CATEGORY_SOURCES,NEWS_UNCLASSIFIED_SOURCE,NEWS_FEATURED_SOURCE,NEWS_DISCOVERY_INDEXES,NEWS_SOURCES,canonicalNewsUrl,publisherForNewsUrl,publisherComparisonHeadline,sourcePublicationContext,sourceLanguage,type NewsDiscoveryIndex,type NewsSourceLanguage} from './news-sources.js';
 
 /** Untrusted discovery metadata. indexedAt is never a publisher publication date. */
 export interface NewsCandidate {readonly sourceUrl:string;readonly title:string;readonly publisher:string;readonly indexedAt:string;readonly category:PublicEditorialCategory|null}
@@ -28,8 +28,9 @@ const headlineIdentity=(title:string):string=>title.normalize('NFKC').toLowerCas
 
 /** Only this exact reviewed publisher's separated suffix is decoration. */
 function publisherHeadline(title:string,publisher:string):string{
- const normalized=headlineIdentity(title),label=headlineIdentity(publisher);
- if(!NEWS_PUBLISHERS.some(value=>value.label===publisher))return normalized;
+ const boundPublisher=NEWS_PUBLISHERS.find(value=>value.label===publisher);
+ const normalized=headlineIdentity(boundPublisher?publisherComparisonHeadline(title,boundPublisher.id):title),label=headlineIdentity(publisher);
+ if(!boundPublisher)return normalized;
  for(const separator of [' – ',' — ',' | ',' : ',' - ']){
   const suffix=separator+label;if(normalized.endsWith(suffix))return normalized.slice(0,-suffix.length).trim();
  }
@@ -415,10 +416,12 @@ export function readPublisherNewsCandidates(xml:string,index:NewsDiscoveryIndex,
 }
 function tokens(text:string):Set<string>{return new Set(text.normalize('NFKC').toLowerCase().match(/[\p{L}\p{N}]+/gu)?.filter(word=>word.length>1&&!['the','and','with','for','from','this','that','into','of','to','in','on','at','by','an','as','is','a'].includes(word))??[]);}
 export function matchingNewsHeadline(a:string,b:string,publisherLabel?:string,language?:NewsSourceLanguage|null):boolean{
-  if(publisherLabel&&NEWS_PUBLISHERS.some(row=>row.label===publisherLabel)){
+  const boundPublisher=publisherLabel?NEWS_PUBLISHERS.find(row=>row.label===publisherLabel):undefined;
+  if(boundPublisher){
+    a=publisherComparisonHeadline(a,boundPublisher.id);b=publisherComparisonHeadline(b,boundPublisher.id);
     // Remove only an explicitly separated suffix for this bound publisher.
     // This preserves meaningful numbers while accepting the actual brand "France 24".
-    const suffix=new RegExp(`\\s+[–—|:-]\\s+${publisherLabel.replace(/[.*+?^${}()|[\]\\]/gu,'\\$&')}\\s*$`,'iu');
+    const suffix=new RegExp(`\\s+[–—|:-]\\s+${boundPublisher.label.replace(/[.*+?^${}()|[\]\\]/gu,'\\$&')}\\s*$`,'iu');
     a=a.replace(suffix,'');b=b.replace(suffix,'');
   }
   // Additional reviewed editions have no token/negation rules here. Preserve

@@ -60,18 +60,18 @@ test('the compiled news renderer passes the validated edition zone before the ci
  assert.ok(renderStart>=0&&renderEnd>renderStart);
  const call=source.slice(renderStart,renderEnd).match(/node = cardNode\([^;]+;/u)?.[0];
  assert.ok(call);
- assert.match(source,/function cardNode\([^)]*publicationTimeZone = 'UTC'\)/u);
- for(const [page,city,expected]of [
+ assert.match(source,/function cardNode\([^)]*publicationTimeZone = 'UTC', showOriginalLanguage = false\)/u);
+ for(const newsSourceScope of ['all','edition'])for(const [page,city,expected]of [
   [{day:{timeZone:'Europe/Rome'}},{timezone:'America/New_York'},'Europe/Rome'],
   [{day:null},{timezone:'Europe/Bucharest'},'Europe/Bucharest'],
   [null,{timezone:'America/New_York'},'America/New_York'],
   [{day:null},null,'UTC'],
  ]){
   const view={card:{id:'original-publication'}},calls=[];
-  const context={server:{page},contextualCity:city,item:{view},index:3,topCount:40,node:null,
+  const context={server:{page},contextualCity:city,newsSourceScope,item:{view},index:3,topCount:40,node:null,
    cardNode:(...args)=>{calls.push(args);return {dataset:{}};}};
   runInNewContext(call,context);
   assert.equal(calls.length,1);assert.strictEqual(calls[0][0],view);
-  assert.deepEqual(calls[0].slice(1),[3,40,undefined,false,'related',expected]);
+  assert.deepEqual(calls[0].slice(1),[3,40,undefined,false,'related',expected,newsSourceScope==='all']);
  }
 });

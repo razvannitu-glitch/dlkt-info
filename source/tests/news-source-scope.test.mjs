@@ -7,10 +7,19 @@ import {NEWS_CATEGORIES,newsCategory} from '../.build/src/iceo/news-taxonomy.js'
 import {newsDayWindow} from '../.build/src/iceo/news-day.js';
 import {findCity} from '../.build/src/local/cities.js';
 import {newsCard} from '../.build/src/local/service.js';
-import {NOW,iso,article,local} from './fixtures/news-corpus.mjs';
+import {NOW,iso,article,local,hash} from './fixtures/news-corpus.mjs';
+import {cardContent} from '../.build/src/iceo/card-validation.js';
 
 const TIME=NOW+1000;
-const global=(id,language='en',options={})=>({kind:'global',card:article(id,{language,...options})});
+const global=(id,language='en',options={})=>{
+ const card=article(id,{language,...options});
+ if(language==='it'){
+  const url='https://www.repubblica.it/politica/2026/11/22/news/national-fixture-425742775/';
+  Object.assign(card,{sourceUrl:url,identity:url,id:hash(url).slice(0,24),publisher:'la Repubblica',title:'Il governo presenta la proposta al Parlamento',attribution:'Controlled Italian publisher fixture.'});
+  card.contentHash=hash(cardContent(card));
+ }
+ return {kind:'global',card};
+};
 function pageFor(originals,{language='ro',sourceScope,city,period='recent'}={}){
  const items=originals.map(source=>({...source,key:(source.kind==='global'?'article:':'local:')+source.card.id,category:newsCategory(source.card)}));
  const counts=Object.fromEntries(['other',...NEWS_CATEGORIES.map(category=>category.id)].map(id=>[id,0]));
