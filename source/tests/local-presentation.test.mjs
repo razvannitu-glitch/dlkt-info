@@ -87,3 +87,22 @@ test('directory rendering does not create an image request even when the browser
  directoryDom(t,true);const place=BUCHAREST_REFERENCES[0],article=renderLocalPlace(place,city,null,photoNow),heading=article.querySelector('h3'),source=article.querySelector('.source-link');await Promise.resolve();
  assert.equal(article.querySelectorAll('img').length,0);assert.equal(article.querySelector('figure'),null);assert.equal(article.querySelector('h3'),heading);assert.equal(heading.textContent,place.name);assert.equal(article.querySelector('.source-link'),source);assert.equal(source.href,place.sourceUrl);
 });
+
+test('Romanian rendering uses measured weather numbers and source-backed CMTEB sector context',()=>{
+ const roCity=findCity('683506'),stamp=new Date(now).toISOString();
+ const weather={...event,kind:'forecast',id:'weather:'+roCity.id+':x',text:'Hourly forecast temperatures 2.3–3.9 °C. Total precipitation 0.8 mm over the six hourly periods. Highest hourly wind-speed forecast 17.6 km/h (not gusts).',validFrom:stamp,validTo:new Date(now+21600000).toISOString()};
+ const before=JSON.stringify(weather);
+ const ro=localReading(weather,roCity,now,'ro');
+ assert.equal(ro.title,'Vremea in Bucuresti');
+ assert.match(ro.paragraphs.join(' '),/2.3 si 3.9 °C/);
+ assert.match(ro.paragraphs.join(' '),/0.8 mm/);
+ assert.match(ro.paragraphs.join(' '),/17.6 km\/h/);
+ assert.doesNotMatch(ro.paragraphs.join(' '),/Hourly forecast/);
+ assert.equal(JSON.stringify(weather),before);
+ const cmteb={...event,kind:'utility-notice',id:'bucharest:cmteb:overview',context:{...event.context,place:'Bucharest · sectors 1, 4, 6'}};
+ const local=localReading(cmteb,roCity,now,'ro');
+ assert.equal(local.title,'Situatia incalzirii si apei calde in Bucuresti');
+ assert.match(local.paragraphs.join(' '),/1, 4, 6/);
+ assert.match(local.nextStep,/CMTEB/);
+ assert.equal(localReading(weather,roCity,now).title,'Weather in Bucharest');
+});

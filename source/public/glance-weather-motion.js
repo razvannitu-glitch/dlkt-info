@@ -1,4 +1,5 @@
 import { validWeatherSymbol, validWeatherSymbols } from './local-contracts.js';
+import { getLocale } from './i18n-browser.js';
 const UNKNOWN = Object.freeze({ condition: 'unknown', light: 'unspecified', label: 'Condition unavailable', precipitation: null });
 /** Map the publisher's exact code. No weather is inferred from prose, precipitation totals or a local clock. */
 export function weatherVisual(symbol) {
@@ -31,6 +32,13 @@ export function weatherPresentation(card, now) {
     const nextAt = nextTimes.length ? Math.min(...nextTimes) : null;
     return current ? { ...weatherVisual(current.symbol), state: 'current', symbol: current.symbol, nextAt } : missing('unavailable', nextAt);
 }
+/** The pure weather projection is available even in SSR/test environments without a URL. */
+const motionLocale = () => { try {
+    return getLocale();
+}
+catch {
+    return 'en';
+} };
 const NS = 'http://www.w3.org/2000/svg';
 function svgElement(name, attributes = {}) {
     const node = document.createElementNS(NS, name);
@@ -102,7 +110,7 @@ function syncAll() {
             mounted.delete(element);
             continue;
         }
-        const view = weatherPresentation(entry.card, now), key = JSON.stringify([view.state, view.symbol]);
+        const view = weatherPresentation(entry.card, now), key = JSON.stringify([view.state, view.symbol, motionLocale()]);
         if (entry.key !== key) {
             renderMotion(element, view);
             entry.key = key;
@@ -124,6 +132,7 @@ function initialize() {
     reduced = matchMedia('(prefers-reduced-motion: reduce)');
     reduced.addEventListener('change', schedule);
     document.addEventListener('visibilitychange', schedule);
+    document.addEventListener('dlkt:language-changed', schedule);
     window.addEventListener('pageshow', schedule);
     window.addEventListener('pagehide', () => { clearTimeout(timer); for (const element of mounted.keys())
         element.dataset.active = 'false'; });
@@ -134,10 +143,13 @@ function initialize() {
 function renderMotion(element, view) {
     const copy = document.createElement('span');
     copy.className = 'weather-motion-copy';
+    const ro = motionLocale() === 'ro';
     const caption = document.createElement('small');
-    caption.textContent = view.state === 'current' ? 'Forecast this hour' : 'Forecast condition';
+    caption.textContent = ro ? (view.state === 'current' ? 'Prognoza pentru aceasta ora' : 'Starea prognozei') : (view.state === 'current' ? 'Forecast this hour' : 'Forecast condition');
+    const romanian = { clear: 'Senin', fair: 'Mai mult senin', 'partly-cloudy': 'Partial noros', cloudy: 'Innorat', fog: 'Ceata', rain: 'Ploaie', snow: 'Ninsoare', sleet: 'Lapovita', thunder: 'Furtuna', unknown: 'Conditie indisponibila' };
+    const roLabel = view.state === 'expired' ? 'Prognoza expirata' : view.state === 'unavailable' ? 'Conditie indisponibila' : romanian[view.condition] + (view.light === 'night' ? ' · Noaptea' : '');
     const label = document.createElement('strong');
-    label.textContent = view.label;
+    label.textContent = ro ? roLabel : view.label;
     copy.append(caption, label);
     element.replaceChildren(graphic(view), copy);
     element.dataset.condition = view.condition;
@@ -148,7 +160,7 @@ function renderMotion(element, view) {
 }
 export function updateWeatherMotion(element, card, now = Date.now()) {
     initialize();
-    const view = weatherPresentation(card, now), key = JSON.stringify([view.state, view.symbol]), previous = mounted.get(element);
+    const view = weatherPresentation(card, now), key = JSON.stringify([view.state, view.symbol, motionLocale()]), previous = mounted.get(element);
     if (previous?.key !== key)
         renderMotion(element, view);
     mounted.set(element, { card, key });

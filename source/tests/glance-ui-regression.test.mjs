@@ -27,3 +27,14 @@ test('mobile header preserves 44px utility touch targets', () => {
   assert.match(header, /#today-glance #glance-city\s*\{[^}]*min-height:\s*44px/s);
   assert.match(header, /#today-glance \.glance-utilities \.text-button\s*\{[^}]*min-height:\s*44px/s);
 });
+
+test('date, city, checked weather and ECB reference share the same toolbar',()=>{
+ const html=readFileSync(new URL('../public/iceo.html',import.meta.url),'utf8');
+ const heading=html.slice(html.indexOf('<div class="glance-heading">'),html.indexOf('<!-- Reserved for a future source-explicit urgency contract'));
+ for(const id of ['glance-date','glance-city','glance-weather-quick','glance-forex-quick','reader-language'])assert.ok(heading.includes('id="'+id+'"'),id);
+ assert.match(header,/grid-template-areas:'date city utilities actions'/);
+ assert.match(header,/grid-template-areas:'date utilities utilities' 'city city actions'/);
+ assert.doesNotMatch(header,/\.glance-utilities\{[^}]*border-top:1px/s);
+ assert.match(browser,/calendar\.dataset\.compactDate/);
+ assert.match(browser,/forexQuick\.setAttribute\('aria-label'/);
+});

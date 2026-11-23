@@ -41,7 +41,22 @@ function eventTime(at, city, now, from) {
     return `${date} ${from ? 'from' : 'at'} ${clock(at, city)} (${city.name} time)`;
 }
 /** Presentation never changes the source record, its timing, saved signature or evidence. */
-export function localReading(card, city, now) {
+export function localReading(card, city, now, locale = 'en') {
+    if (locale === 'ro' && card.kind === 'forecast') {
+        const cityName = city.id === '683506' ? 'Bucuresti' : city.name;
+        const measure = /^Hourly forecast temperatures ([-0-9.]+)–([-0-9.]+) °C\. Total precipitation ([-0-9.]+) mm over the six hourly periods\. Highest hourly wind-speed forecast ([-0-9.]+) km\/h \(not gusts\)\.$/u.exec(card.text);
+        const summary = measure ? `Temperaturi prognozate intre ${measure[1]} si ${measure[2]} °C. Precipitatii estimate: ${measure[3]} mm in sase ore. Viteza maxima orara a vantului: ${measure[4]} km/h (fara rafale).` : card.text;
+        const date = new Intl.DateTimeFormat('ro-RO', { timeZone: city.timezone, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+        return { title: 'Vremea in ' + cityName, paragraphs: [summary], period: date.format(new Date(card.validFrom)) + ' – ' + date.format(new Date(card.validTo)) + ' (ora locala)', nextStep: null };
+    }
+    if (locale === 'ro' && card.kind === 'utility-notice' && city.id === '683506') {
+        const overview = card.id === 'bucharest:cmteb:overview', sectors = overview ? /sectors ([1-6](?:, [1-6])*)$/u.exec(card.context?.place ?? '')?.[1] : undefined;
+        const sector = overview ? sectors : card.id.startsWith('bucharest:cmteb:sector-') ? card.id.slice(-1) : undefined;
+        if (sector)
+            return { title: (overview ? 'Situatia incalzirii si apei calde in ' : 'Termoficare si apa calda in ') +(city.id === '683506' ? 'Bucuresti' : city.name),
+                paragraphs: [`Lista oficiala CMTEB include interventii sau intreruperi ale incalzirii ori apei calde pentru sectorul sau sectoarele ${sector}. Consulta documentul operatorului pentru strazile afectate si orele estimate.`],
+                period: null, nextStep: 'Verifica strada si imobilul in lista oficiala CMTEB.' };
+    }
     if (card.kind === 'local-news' && card.news) {
         const published = new Intl.DateTimeFormat('en-GB', { timeZone: city.timezone, day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(card.news.publishedAt));
         return { title: card.title, paragraphs: card.news.summary ? [card.news.summary] : [], period: 'Published ' + published + ' (' + city.name + ' time)', nextStep: null };

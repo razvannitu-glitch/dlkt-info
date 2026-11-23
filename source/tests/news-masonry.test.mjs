@@ -164,7 +164,7 @@ test('the English shortcut leaves keyboard focus in the visible toolbar after se
  runInNewContext(source.slice(start,end),context);action();assert.equal(changes,1);assert.equal(focuses,1);
 });
 
-test('compiled inline rendering preserves22-plus1 cadence, append prefixes and unseen facts across contexts without inserting expired slots',()=>{
+test('compiled inline rendering preserves 11-plus-1 cadence, append prefixes and unseen facts without expired slots',()=>{
  const source=readFileSync('.build/src/iceo/browser.js','utf8'),renderStart=source.indexOf('function renderDiscovery()');
  const start=source.indexOf('const inlinePage = server.page;',renderStart),end=source.indexOf('if (!visible.length && loadingPhase',start);
  assert.ok(renderStart>=0&&start>renderStart&&end>start);
@@ -190,6 +190,7 @@ test('compiled inline rendering preserves22-plus1 cadence, append prefixes and u
    pageItemByKey:new Map(originals.map(item=>[item.key,{kind:item.kind,key:item.key,category:item.category,card:originalCard(item)}])),
    newsStorySourcesNode(){throw Error('Ungrouped originals must not create a source-group disclosure');},
    KNOWLEDGE_CARDS:catalog,selectInlineKnowledge,interleaveKnowledge,
+   writeKnowledgeSeen:seen=>{assert.ok(seen instanceof Set);return true;},
    knowledgeCardNode:(card,scope)=>({fixtureKind:'knowledge',card,scope,dataset:{}}),
    cardNode:view=>newsNode(view.card),localCardNode:card=>newsNode(card),
    editionCardSignature:card=>card.id,editionStorySignature:view=>view.card.id,newsCategoryLabel:category=>category,tr:key=>key,
@@ -202,32 +203,33 @@ test('compiled inline rendering preserves22-plus1 cadence, append prefixes and u
    return nodes;
   }};
  }
- const h=harness();let previous=h.render(20);const selected=h.context.inlineKnowledgeSelection;
- assert.ok(selected.length>=3);assert.equal(facts(previous).length,0);assert.equal(h.context.inlineKnowledgeSeen.size,0);
- for(const count of [22,40,44,66]){
+ const h=harness();let previous=h.render(10);const selected=h.context.inlineKnowledgeSelection;
+ assert.ok(selected.length>=8);assert.equal(facts(previous).length,0);assert.equal(h.context.inlineKnowledgeSeen.size,0);
+ for(const count of [11,22,33,44,66]){
   const next=h.render(count);
   assert.deepEqual(sequence(next).slice(0,previous.length),sequence(previous),'existing prefix at '+count+' news');
   assert.strictEqual(h.context.inlineKnowledgeSelection,selected,'append reuses the same selected catalogue');
   previous=next;
  }
- assert.deepEqual(previous.flatMap((node,index)=>node.fixtureKind==='knowledge'?[index+1]:[]),[23,46,69]);
- assert.deepEqual(facts(previous).map(node=>node.card.id),selected.slice(0,3).map(item=>item.card.id));
- assert.equal(h.context.inlineKnowledgeSeen.size,3);assert.deepEqual(sequence(h.render(66)),sequence(previous));
+ assert.deepEqual(previous.flatMap((node,index)=>node.fixtureKind==='knowledge'?[index+1]:[]),[12,24,36,48,60,72]);
+ assert.deepEqual(facts(previous).map(node=>node.card.id),selected.slice(0,6).map(item=>item.card.id));
+ assert.equal(h.context.inlineKnowledgeSeen.size,6);assert.deepEqual(sequence(h.render(66)),sequence(previous));
  const seen=new Set(h.context.inlineKnowledgeSeen);
  h.context.server.page={...h.context.server.page,filter:'13000000',period:'recent',day:null};
  const changed=h.render(22);
- assert.equal(facts(changed).length,1);assert.equal(changed.length,23);
+ assert.equal(facts(changed).length,2);assert.equal(changed.length,24);
  assert.ok(facts(changed).every(node=>!seen.has(node.card.id)),'a new context never reuses a fact already displayed');
- assert.equal(h.context.inlineKnowledgeSeen.size,seen.size+1);
+ assert.equal(h.context.inlineKnowledgeSeen.size,seen.size+2);
  const firstId=selected[0].card.id,expires=now+1000;
  const bounded=KNOWLEDGE_CARDS.map(card=>({...card,reviewedAt:new Date(now-1000).toISOString(),reviewBy:new Date(card.id===firstId?expires:now+10000).toISOString()}));
- const expiring=harness(bounded);assert.equal(facts(expiring.render(20)).length,0);
+ const expiring=harness(bounded);assert.equal(facts(expiring.render(10)).length,0);
  const slots=expiring.context.inlineKnowledgeSelection;assert.equal(slots[0].card.id,firstId);
  expiring.context.now=expires;
  const afterExpiry=expiring.render(44),shown=facts(afterExpiry);
  assert.strictEqual(expiring.context.inlineKnowledgeSelection,slots,'expiry does not compact the selected slots');
- assert.equal(shown.length,1);assert.strictEqual(shown[0].card,slots[1].card);
- assert.equal(afterExpiry.indexOf(shown[0]),44,'the second fact stays after44 news; it cannot fill the expired first slot');
+ assert.equal(shown.length,3);assert.deepEqual(shown.map(node=>node.card.id),slots.slice(1,4).map(item=>item.card.id));
+ assert.deepEqual(shown.map(node=>afterExpiry.indexOf(node)+1),[23,35,47],
+  'an expired fact is not replaced early; later facts keep their eleven-story slots');
  assert.equal(expiring.context.inlineKnowledgeSeen.has(firstId),false);assert.equal(expiring.context.inlineKnowledgeSeen.has(slots[1].card.id),true);
  assert.equal(JSON.stringify(originals),originalsBefore);
 });

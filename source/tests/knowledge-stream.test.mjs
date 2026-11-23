@@ -106,29 +106,29 @@ test('inline selection applies the original model review window and rejects dupl
  assert.throws(()=>selectInlineKnowledge([original],context,NaN,'review'),/KNOWLEDGE_CONTEXT_INVALID/);
 });
 
-test('270 news originals receive knowledge at positions23,46,69 without altering dates, sources or revisions',()=>{
- assert.equal(INLINE_KNOWLEDGE_INTERVAL,23);
+test('270 original news include distinct knowledge after each eleven stories',()=>{
+ assert.equal(INLINE_KNOWLEDGE_INTERVAL,12);
  const news=originals(270),selected=selectInlineKnowledge(facts(15),context,now,'270'),before=JSON.stringify(news);
  const result=interleaveKnowledge(news,selected),inserted=result.filter(item=>item.kind==='knowledge'),retained=result.filter(item=>item.kind==='news');
- assert.equal(result.length,282);assert.equal(retained.length,270);assert.equal(inserted.length,12);
- assert.deepEqual(knowledgePositions(result),[23,46,69,92,115,138,161,184,207,230,253,276]);
- assert.deepEqual(inserted.map(item=>item.afterNews),[22,44,66,88,110,132,154,176,198,220,242,264]);
+ assert.equal(result.length,285);assert.equal(retained.length,270);assert.equal(inserted.length,15);
+ assert.deepEqual(knowledgePositions(result),Array.from({length:15},(_,i)=>(i+1)*12));
+ assert.deepEqual(inserted.map(item=>item.afterNews),Array.from({length:15},(_,i)=>(i+1)*11));
  for(const [index,item] of retained.entries())assert.strictEqual(item.item,news[index]);
  for(const [index,item] of inserted.entries())assert.strictEqual(item.item,selected[index]);
  assert.equal(new Set(retained.map(item=>item.item.key)).size,270);
- assert.equal(new Set(inserted.map(item=>item.item.card.id)).size,12);
+ assert.equal(new Set(inserted.map(item=>item.item.card.id)).size,15);
  assert.equal(JSON.stringify(news),before);
 });
 
-test('knowledge requires22 news, repeats only after another22, and never pads an exhausted catalogue',()=>{
+test('knowledge requires11 news, repeats after another11 and never pads an exhausted catalogue',()=>{
  const news=originals(100),selected=selectInlineKnowledge(facts(3),context,now,'thresholds');
- for(const [count,positions] of [[0,[]],[1,[]],[21,[]],[22,[23]],[23,[23]],[43,[23]],[44,[23,46]],[45,[23,46]]]){
+ for(const [count,positions] of [[0,[]],[1,[]],[10,[]],[11,[12]],[12,[12]],[21,[12]],[22,[12,24]],[23,[12,24]]]){
   const result=interleaveKnowledge(news.slice(0,count),selected);
   assert.deepEqual(knowledgePositions(result),positions);assert.equal(result.filter(item=>item.kind==='news').length,count);
   if(result.length)assert.equal(result[0].kind,'news');
  }
  const limited=interleaveKnowledge(news,selected.slice(0,2));
- assert.deepEqual(knowledgePositions(limited),[23,46]);assert.equal(limited.length,102);
+ assert.deepEqual(knowledgePositions(limited),[12,24]);assert.equal(limited.length,102);
  assert.strictEqual(limited.at(-1).item,news.at(-1));
  assert.deepEqual(interleaveKnowledge(news,[]).map(item=>item.item),news);
  assert.deepEqual(interleaveKnowledge([],selected),[]);

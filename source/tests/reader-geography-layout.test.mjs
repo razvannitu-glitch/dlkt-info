@@ -38,7 +38,7 @@ test('redundant Use my location button is absent in all supported languages',()=
 test('forecast and EUR controls stay on one bounded row with full values in titles',()=>{
  assert.match(css,/#today-glance \.glance-utilities\{[^}]*flex-wrap:nowrap[^}]*overflow:hidden/);
  assert.match(css,/#today-glance \.glance-utilities \.text-button\{[^}]*white-space:nowrap;overflow:hidden;text-overflow:ellipsis/);
- assert.match(css,/@media\(max-width:600px\)[\s\S]*grid-template-columns:minmax\(0,1fr\) auto/);
+ assert.match(css,/@media\(max-width:600px\)[\s\S]*grid-template-areas:'date utilities utilities' 'city city actions'/);
  assert.match(glance,/weatherQuick\.title\s*=\s*get\('glance-weather-note'\)/);
  assert.match(glance,/forexQuick\.title\s*=\s*get\('glance-forex-note'\)/);
 });

@@ -34,7 +34,7 @@ export function setupGlance():void {
  }
  function render():void{
   const now=Date.now(),cards=currentLocalCards(local,city,now),locale=getLocale();
-  const calendar=get<HTMLTimeElement>('glance-date');calendar.textContent=new Intl.DateTimeFormat(locale,{timeZone:zone(),weekday:'short',day:'numeric',month:'long',year:'numeric'}).format(now);calendar.dateTime=localDay(now,zone());calendar.title=zone();
+  const calendar=get<HTMLTimeElement>('glance-date');calendar.textContent=new Intl.DateTimeFormat(locale,{timeZone:zone(),weekday:'short',day:'numeric',month:'long',year:'numeric'}).format(now);calendar.dataset.compactDate=new Intl.DateTimeFormat(locale,{timeZone:zone(),day:'numeric',month:'short'}).format(now);calendar.dateTime=localDay(now,zone());calendar.title=calendar.textContent+' · '+zone();
   get<HTMLElement>('glance-title').textContent=translate('navToday');
   get<HTMLElement>('glance-city-label').textContent=city?.name??translate('chooseCity');
   get<HTMLButtonElement>('glance-city').setAttribute('aria-label',city?translate('changeCity')+': '+city.name+', '+countryLabel(city.countryCode,city.country):translate('chooseCity'));
@@ -50,8 +50,8 @@ export function setupGlance():void {
   const weatherHidden=!preferences.weather||!forecast||!range,forexHidden=!preferences.forex||n===undefined;
   // Preserve keyboard position before an expired or unavailable utility leaves the toolbar.
   if(document.activeElement===weatherQuick&&weatherHidden||document.activeElement===forexQuick&&forexHidden)get<HTMLButtonElement>('glance-city').focus({preventScroll:true});
-  weatherQuick.hidden=weatherHidden;weatherQuick.textContent=(locale==='ro'?'Vreme':locale==='it'?'Meteo':'Weather')+' · '+(range??'');weatherQuick.title=get<HTMLElement>('glance-weather-note').textContent??'';
-  forexQuick.hidden=forexHidden;forexQuick.textContent=n!==undefined?'ECB · 1 EUR = '+new Intl.NumberFormat(locale,{maximumFractionDigits:4}).format(n)+' '+q:'';forexQuick.title=get<HTMLElement>('glance-forex-note').textContent??'';
+  weatherQuick.hidden=weatherHidden;weatherQuick.textContent=(locale==='ro'?'Vreme':locale==='it'?'Meteo':'Weather')+' '+(range??'');weatherQuick.title=get<HTMLElement>('glance-weather-note').textContent??'';weatherQuick.setAttribute('aria-label',weatherQuick.textContent+' · '+weatherQuick.title);
+  forexQuick.hidden=forexHidden;forexQuick.textContent=n!==undefined?'1 € = '+new Intl.NumberFormat(locale,{maximumFractionDigits:4}).format(n)+' '+q:'';forexQuick.title=get<HTMLElement>('glance-forex-note').textContent??'';forexQuick.setAttribute('aria-label',forexQuick.textContent+' · '+forexQuick.title);
   read.textContent=locale==='ro'?'Surse si preferinte':locale==='it'?'Fonti e preferenze':'Sources and preferences';
   read.setAttribute('aria-label',locale==='ro'?'Informatii, surse si setari':locale==='it'?'Informazioni, fonti e impostazioni':'Information, sources and settings');
   // Local reports first, then verified publisher metadata; no synthetic or stale headlines.

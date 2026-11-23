@@ -79,8 +79,9 @@ export function setupGlance() {
         const now = Date.now(), cards = currentLocalCards(local, city, now), locale = getLocale();
         const calendar = get('glance-date');
         calendar.textContent = new Intl.DateTimeFormat(locale, { timeZone: zone(), weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' }).format(now);
+        calendar.dataset.compactDate = new Intl.DateTimeFormat(locale, { timeZone: zone(), day: 'numeric', month: 'short' }).format(now);
         calendar.dateTime = localDay(now, zone());
-        calendar.title = zone();
+        calendar.title = calendar.textContent + ' · ' + zone();
         get('glance-title').textContent = translate('navToday');
         get('glance-city-label').textContent = city?.name ?? translate('chooseCity');
         get('glance-city').setAttribute('aria-label', city ? translate('changeCity') + ': ' + city.name + ', ' + countryLabel(city.countryCode, city.country) : translate('chooseCity'));
@@ -102,11 +103,13 @@ export function setupGlance() {
         if (document.activeElement === weatherQuick && weatherHidden || document.activeElement === forexQuick && forexHidden)
             get('glance-city').focus({ preventScroll: true });
         weatherQuick.hidden = weatherHidden;
-        weatherQuick.textContent = (locale === 'ro' ? 'Vreme' : locale === 'it' ? 'Meteo' : 'Weather') + ' · ' + (range ?? '');
+        weatherQuick.textContent = (locale === 'ro' ? 'Vreme' : locale === 'it' ? 'Meteo' : 'Weather') + ' ' + (range ?? '');
         weatherQuick.title = get('glance-weather-note').textContent ?? '';
+        weatherQuick.setAttribute('aria-label', weatherQuick.textContent + ' · ' + weatherQuick.title);
         forexQuick.hidden = forexHidden;
-        forexQuick.textContent = n !== undefined ? 'ECB · 1 EUR = ' + new Intl.NumberFormat(locale, { maximumFractionDigits: 4 }).format(n) + ' ' + q : '';
+        forexQuick.textContent = n !== undefined ? '1 € = ' + new Intl.NumberFormat(locale, { maximumFractionDigits: 4 }).format(n) + ' ' + q : '';
         forexQuick.title = get('glance-forex-note').textContent ?? '';
+        forexQuick.setAttribute('aria-label', forexQuick.textContent + ' · ' + forexQuick.title);
         read.textContent = locale === 'ro' ? 'Surse si preferinte' : locale === 'it' ? 'Fonti e preferenze' : 'Sources and preferences';
         read.setAttribute('aria-label', locale === 'ro' ? 'Informatii, surse si setari' : locale === 'it' ? 'Informazioni, fonti e impostazioni' : 'Information, sources and settings');
         // Local reports first, then verified publisher metadata; no synthetic or stale headlines.

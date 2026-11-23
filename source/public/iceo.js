@@ -15,7 +15,7 @@ import { NEWS_CATEGORIES, newsCategoryLabel, isNewsCategoryId } from './news-tax
 import { NewsMasonry } from './news-masonry.js';
 import { knowledgeCardNode } from './knowledge-browser.js';
 import { KNOWLEDGE_CARDS } from './knowledge-catalog.js';
-import { selectInlineKnowledge, interleaveKnowledge } from './knowledge-stream.js';
+import { selectInlineKnowledge, interleaveKnowledge, readKnowledgeSeen, writeKnowledgeSeen } from './knowledge-stream.js';
 import { NewsReadingState } from './news-reading-state.js';
 import { DiscoveryLoading, renderDiscoveryLoading, bindDiscoveryLoadingActions } from './loading.js';
 import { selectHomeLanguage } from './home-local.js';
@@ -85,7 +85,7 @@ let restartNewsEdition = false;
 let newsFilter = 'all', stopNewsObserver = () => { };
 let newsPeriod = 'recent';
 let newsInteractionKey = '', newsInteractionRevision = 0;
-const inlineKnowledgeSeen = new Set();
+const inlineKnowledgeSeen = readKnowledgeSeen();
 let inlineKnowledgeContext = '';
 let inlineKnowledgeSelection = [];
 let lastLocalLanguageRefresh = 0;
@@ -1231,8 +1231,10 @@ function renderDiscovery() {
             if (now >= Date.parse(entry.item.card.reviewBy))
                 continue;
             host.append(knowledgeCardNode(entry.item.card, entry.item.scope));
-            if (!document.body.dataset.worldExplore)
+            if (!document.body.dataset.worldExplore && !inlineKnowledgeSeen.has(entry.item.card.id)) {
                 inlineKnowledgeSeen.add(entry.item.card.id);
+                writeKnowledgeSeen(inlineKnowledgeSeen);
+            }
             continue;
         }
         const item = entry.item, index = newsIndex++;

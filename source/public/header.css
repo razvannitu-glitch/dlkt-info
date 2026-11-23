@@ -28,21 +28,21 @@
 .site-header .masthead-inner>.entry-nav:not(#header-navigation){align-self:center;margin:0;gap:8px;overflow:visible;flex-wrap:wrap}
 .site-header .masthead-inner>.entry-nav:not(#header-navigation) .text-button{font-size:13px;line-height:1.35;min-height:44px;padding:10px 12px;text-decoration:none}
 .site-header .masthead-inner>.text-button{margin:0;min-height:44px;font-size:13px;align-self:center;text-decoration:none}
-/* One editorial utility bar; only verified weather and currency values add a second row. */
+/* Date, city, verified weather and ECB reference share one responsive utility toolbar. */
 #today-glance{border-bottom:1px solid var(--line);background:var(--reader-page,var(--white))}
-#today-glance .glance-shell{max-width:1120px;box-sizing:border-box;margin:0 auto;padding:10px 28px}
-#today-glance .glance-heading{max-width:none;box-sizing:border-box;margin:0;padding:0;display:flex;align-items:center;gap:12px 20px;flex-wrap:wrap}
-#today-glance .glance-calendar{display:block;flex:0 1 190px;min-width:0}
+#today-glance .glance-shell{max-width:1120px;box-sizing:border-box;margin:0 auto;padding:6px 28px}
+#today-glance .glance-heading{max-width:none;box-sizing:border-box;margin:0;padding:0;display:grid;grid-template-columns:minmax(0,190px) minmax(0,1fr) minmax(0,268px) auto;grid-template-areas:'date city utilities actions';align-items:center;gap:6px 12px}
+#today-glance .glance-calendar{display:block;grid-area:date;min-width:0}
 #today-glance .glance-caption{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;margin:0}
 #today-glance .glance-calendar time{display:block;white-space:normal;font-size:14px;font-weight:700;line-height:1.45;letter-spacing:-.15px;font-variant-numeric:tabular-nums}
-#today-glance .glance-location{display:flex;flex:1 1 250px;align-items:center;gap:8px;min-width:0;padding-inline-start:16px;border-inline-start:1px solid var(--line)}
+#today-glance .glance-location{display:flex;grid-area:city;align-items:center;gap:8px;min-width:0;padding-inline-start:12px;border-inline-start:1px solid var(--line)}
 #today-glance #glance-city{display:inline-flex;justify-content:flex-start;gap:8px;flex:0 1 auto;min-width:0;min-height:44px;padding:5px 8px;border:1px solid transparent;border-radius:6px;color:var(--black);text-align:start}
 #today-glance #glance-city .glance-city-copy{display:block;min-width:0;overflow-wrap:anywhere}
 #today-glance #glance-city-label{display:block;font-size:14px;font-weight:700;line-height:1.3}
 #today-glance #glance-city svg{flex:0 0 16px;width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 #today-glance .glance-zone{display:block;margin:2px 0 0;padding:0;color:inherit;font-size:11px;font-weight:400;line-height:1.3;overflow-wrap:anywhere}
 #today-glance .glance-zone:empty{display:none}
-#today-glance .glance-actions{display:flex;flex:0 1 auto;align-items:center;gap:12px;min-width:0;margin-inline-start:auto}
+#today-glance .glance-actions{display:flex;grid-area:actions;align-items:center;justify-content:flex-end;gap:8px;min-width:0;margin-inline-start:0}
 #today-glance .reader-language-bar{max-width:none;margin:0;padding:0;display:flex;align-items:center;justify-content:flex-start;gap:6px;box-sizing:border-box;flex-wrap:nowrap}
 #today-glance .reader-language{min-width:0;max-width:none;margin:0;gap:0}
 #today-glance .reader-language>span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
@@ -51,41 +51,45 @@
 #today-glance #glance-read{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-width:0;min-height:44px;max-width:136px;margin:0;padding:8px 10px;border:1px solid var(--line);border-radius:6px;color:var(--black);font-size:12px;font-weight:600;line-height:1.35;white-space:normal;text-align:center}
 #today-glance #glance-read:after{content:"";display:block;flex:0 0 5px;width:5px;height:5px;border-top:1.5px solid currentColor;border-inline-end:1.5px solid currentColor;transform:rotate(45deg)}
 [dir=rtl] #today-glance #glance-read:after{transform:rotate(-45deg)}
-#today-glance .glance-utilities{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;min-width:0;margin:6px 0 0;padding:4px 0 0;border-top:1px solid var(--line);overflow:hidden}
+#today-glance .glance-utilities{display:flex;grid-area:utilities;align-items:center;gap:5px;flex-wrap:nowrap;min-width:0;margin:0;padding:0;border:0;overflow:hidden}
 #today-glance .glance-utilities:not(:has(>button:not([hidden]))){display:none}
-#today-glance .glance-utilities .text-button{flex:0 1 auto;min-width:0;min-height:44px;max-width:calc(50% - 3px);padding:8px 10px;border:1px solid transparent;border-radius:6px;background:var(--reader-panel,var(--soft));color:var(--black);font-size:12px;font-variant-numeric:tabular-nums;line-height:1.4;text-align:start;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#today-glance .glance-utilities .text-button{flex:1 1 0;min-width:0;min-height:44px;max-width:calc(50% - 3px);padding:8px 7px;border:1px solid transparent;border-radius:6px;background:var(--reader-panel,var(--soft));color:var(--black);font-size:11px;font-variant-numeric:tabular-nums;line-height:1.35;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #glance-list .glance-status{max-width:none;box-sizing:border-box;margin:8px 0;padding:0;font-size:12px;line-height:1.5}
 .glance-dialog-tools{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px}
 .glance-dialog-tools .text-button{color:var(--black)}
 @media(max-width:900px){
  #today-glance .glance-shell{padding-inline:20px}
- #today-glance .glance-heading{gap:8px 16px}
- #today-glance .glance-calendar{flex-basis:160px}
- #today-glance .glance-location{flex-basis:230px;padding-inline-start:12px}
+ #today-glance .glance-heading{grid-template-columns:minmax(0,142px) minmax(0,1fr) minmax(0,232px) auto;gap:6px 8px}
+ #today-glance .glance-calendar{min-width:0}
+ #today-glance .glance-location{padding-inline-start:8px}
  #today-glance .glance-actions{gap:8px}
 }
 @media(max-width:760px){
- #today-glance .glance-actions{flex-basis:100%;margin-inline-start:0;justify-content:flex-start}
- #today-glance .glance-calendar{flex:0 1 190px}
- #today-glance .glance-location{flex:1 1 240px}
+ #today-glance .glance-heading{grid-template-columns:minmax(0,126px) minmax(0,1fr) minmax(0,202px) auto}
+ #today-glance .glance-actions{min-width:0}
+ #today-glance .glance-calendar{min-width:0}
+ #today-glance .glance-location{min-width:0}
 }
 @media(max-width:600px){
  #today-glance .glance-shell{padding:8px 16px}
- #today-glance .glance-heading{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 10px}
- #today-glance .glance-calendar{grid-column:1/-1;min-width:0}
- #today-glance .glance-calendar time{font-size:12px;line-height:1.5}
- #today-glance .glance-location{grid-column:1;flex-basis:auto;min-width:0;padding-inline-start:0;border-inline-start:0}
+ #today-glance .glance-heading{grid-template-columns:minmax(0,95px) minmax(0,1fr) minmax(0,130px);grid-template-areas:'date utilities utilities' 'city city actions';gap:4px 8px}
+ #today-glance .glance-calendar{grid-column:auto;min-width:0}
+ #today-glance .glance-calendar time{font-size:0;line-height:1.5}
+ #today-glance #glance-date::after{content:attr(data-compact-date);font-size:12px;white-space:nowrap}
+ #today-glance .glance-location{grid-column:auto;min-width:0;padding-inline-start:0;border-inline-start:0}
  #today-glance #glance-city{max-width:100%;padding-inline-start:0;overflow:hidden}
 #today-glance #glance-city .glance-city-copy{overflow:hidden}
 #today-glance #glance-city-label,#today-glance .glance-zone{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;overflow-wrap:normal}
  #today-glance #glance-city-label{font-size:13px}
-  #today-glance .glance-actions{grid-column:2;justify-self:end;flex-basis:auto;min-width:0;gap:8px;margin:0}
+ #today-glance .glance-actions{grid-column:auto;justify-self:end;min-width:0;gap:8px;margin:0}
  #today-glance .reader-language select{width:100px;padding-inline:8px 24px}
- #today-glance .glance-utilities{margin-top:4px;padding-top:4px}
- #today-glance .glance-utilities .text-button{font-size:11px;padding-inline:8px}
+ #today-glance .glance-utilities{width:100%;gap:4px;min-width:0}
+ #today-glance .glance-utilities .text-button{font-size:10px;padding-inline:5px;max-width:calc(50% - 2px)}
 }
 @media(max-width:360px){
  #today-glance .glance-shell{padding-inline:12px}
+ #today-glance .glance-heading{grid-template-columns:minmax(0,80px) minmax(0,1fr) minmax(0,116px)}
+ #today-glance .glance-utilities .text-button{font-size:9px;padding-inline:3px}
  #today-glance .glance-actions{gap:6px}
  #today-glance #glance-read{font-size:11px;padding-inline:8px;gap:6px}
  #today-glance .reader-language select{width:88px}
