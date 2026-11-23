@@ -105,11 +105,11 @@ export function setupGlance() {
         weatherQuick.hidden = weatherHidden;
         weatherQuick.textContent = (locale === 'ro' ? 'Vreme' : locale === 'it' ? 'Meteo' : 'Weather') + ' ' + (range ?? '');
         weatherQuick.title = get('glance-weather-note').textContent ?? '';
-        weatherQuick.setAttribute('aria-label',weatherQuick.textContent + ' · ' + weatherQuick.title);
+        weatherQuick.setAttribute('aria-label', weatherQuick.textContent + ' · ' + weatherQuick.title);
         forexQuick.hidden = forexHidden;
         forexQuick.textContent = n !== undefined ? '1 € = ' + new Intl.NumberFormat(locale, { maximumFractionDigits: 4 }).format(n) + ' ' + q : '';
         forexQuick.title = get('glance-forex-note').textContent ?? '';
-        forexQuick.setAttribute('aria-label',forexQuick.textContent + ' · ' + forexQuick.title);
+        forexQuick.setAttribute('aria-label', forexQuick.textContent + ' · ' + forexQuick.title);
         read.textContent = locale === 'ro' ? 'Surse si preferinte' : locale === 'it' ? 'Fonti e preferenze' : 'Sources and preferences';
         read.setAttribute('aria-label', locale === 'ro' ? 'Informatii, surse si setari' : locale === 'it' ? 'Informazioni, fonti e impostazioni' : 'Information, sources and settings');
         // Local reports first, then verified publisher metadata; no synthetic or stale headlines.

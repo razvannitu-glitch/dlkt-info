@@ -58,7 +58,7 @@ for(const name of ['iceo','daily-browser','entry-browser','follow-browser']){
 
 for(const name of ['contracts','presentation','preferences','ticker','weather-motion','browser']){
  let compiled=readFileSync(`.build/src/glance/${name}.js`,'utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'');
- compiled=compiled.replaceAll("'./contracts.js'","'./glance-contracts.js'").replaceAll("'./presentation.js'","'./glance-presentation.js'").replaceAll("'./preferences.js'","'./glance-preferences.js'").replaceAll("'./ticker.js'","'./glance-ticker.js'").replaceAll("'./weather-motion.js'","'./glance-weather-motion.js'").replaceAll("'../local/contracts.js'","'./local-contracts.js'").replaceAll('../iceo/','./');
+ compiled=compiled.replaceAll("'./contracts.js'","'./glance-contracts.js'").replaceAll("'./presentation.js'","'./glance-presentation.js'").replaceAll("'./preferences.js'","'./glance-preferences.js'").replaceAll("'./ticker.js'","'./glance-ticker.js'").replaceAll("'./weather-motion.js'","'./glance-weather-motion.js'").replaceAll("'../local/contracts.js'","'./local-contracts.js'").replaceAll("'../i18n/browser.js'","'./i18n-browser.js'").replaceAll('../iceo/','./');
  writeFileSync(`public/glance-${name}.js`,compiled);
 }
 
