@@ -269,3 +269,19 @@ test('private diagnostics validate all reviewed indexes including Italian identi
   const duplicate=structuredClone(diagnostics);duplicate.indexes.push({...duplicate.indexes[0]});
   assert.equal(validNewsDiagnostics(duplicate,now),false);assert.equal(await valid(duplicate),false);
 });
+
+
+test('readiness timeout is function-local and does not weaken the existing schema attestation', async () => {
+  const query=await db.query("select p.proconfig, p.prosecdef from pg_proc p where p.oid=to_regprocedure('public.dlkt_info_read_database_readiness()')");
+  assert.equal(query.rows.length,1);
+  const [row]=query.rows;
+  assert.equal(row.prosecdef,true);
+  assert.ok(row.proconfig.includes('statement_timeout=12s'));
+  assert.ok(row.proconfig.some(setting=>setting.startsWith('search_path=')));
+  assert.ok(row.proconfig.includes('jit=off'));
+  const proof=await readiness('anon');
+  assert.equal(proof.ready,true);
+  assert.equal(proof.schemaFingerprint,FINGERPRINT);
+  assert.equal(proof.schemaRevision,REVISION);
+  assert.equal(Object.values(proof.checks).every(Boolean),true);
+});
