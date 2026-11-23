@@ -257,6 +257,10 @@ export function newsAcquisitionOrder(values:readonly NewsCandidate[],limit:numbe
  const unknownSubjects=limit<4?[]:ordered.filter(row=>sourceLanguage(row.sourceUrl)!==null
   &&classifyNewsSubject(row.title,row.sourceUrl)===null&&!unchanged(row));
  const unknown=unknownSubjects.length?unknownSubjects[slot%unknownSubjects.length]:undefined;
+ // The strongest new development keeps one leading slot even when its
+ // publication language is unknown; an unknown language never becomes an edition.
+ const leadingDevelopment=ordered.find(row=>!unchanged(row)&&candidatePriority(row)===2);
+ if(leadingDevelopment)take(leadingDevelopment);
  const languages=[...byLanguage.keys()].filter((language):language is NewsSourceLanguage=>language!==null),start=slot%languages.length,languageOrder=[...languages.slice(start),...languages.slice(0,start)];
  // Give reviewed editions their first opportunity before a larger language can
  // occupy the leading request slots with urgent headlines. Reserve the bounded
