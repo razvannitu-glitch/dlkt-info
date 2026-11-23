@@ -74,7 +74,7 @@ test('a broken API must not pass as healthy due to a recent date alone', () => {
   assert.ok(failures.includes('json-response'));
   data.status = 200;
   data.body = JSON.stringify({...JSON.parse(fixture().body), state: 'unavailable'});
-  assert.ok(assessLiveIceo(data, NOW).failures.includes('usable-card-catalog') === false);
+  assert.ok(assessLiveIceo(data, NOW).failures.includes('usable-card-catalog'));
   assert.ok(assessLiveIceo(data, NOW).failures.includes('json-response'));
 });
 
