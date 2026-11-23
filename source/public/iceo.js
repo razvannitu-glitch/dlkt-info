@@ -1425,6 +1425,18 @@ function renderDiscovery() {
     }
     memoryControls();
 }
+/** Explicit update buttons share the source check and edition reset; pagination stays append-only. */
+function refreshNewsEdition() {
+    restartNewsEdition = true;
+    applyPublicUpdate = true;
+    renderDiscovery();
+    void load();
+    if (contextualCity && contextualLocalState !== 'loading') {
+        contextualLocalState = 'loading';
+        required('#refresh-local').click();
+        renderDiscovery();
+    }
+}
 async function showNewsPage(focus) {
     const state = newsContinuation.view();
     if (document.visibilityState !== 'visible' || document.body.dataset.entryView !== 'start' || document.body.dataset.worldExplore || state.loading || state.error === 'expired' || state.page?.nextCursor === null)
@@ -1451,11 +1463,8 @@ async function showNewsPage(focus) {
 required('#discovery').addEventListener('click', event => {
     if (!(event.target instanceof Element))
         return;
-    if (event.target.closest('[data-news-restart]')) {
-        restartNewsEdition = true;
-        applyPublicUpdate = true;
-        renderDiscovery();
-    }
+    if (event.target.closest('[data-news-restart]'))
+        refreshNewsEdition();
     else if (event.target.closest('[data-public-more]'))
         void showNewsPage(true);
 });
@@ -1517,11 +1526,7 @@ else
 required('#return-refresh').addEventListener('click', () => { void load(); });
 required('#comparison-saved-only').addEventListener('change', () => { if (changesView)
     render(); });
-required('#discovery-refresh').addEventListener('click', () => { restartNewsEdition = true; applyPublicUpdate = true; renderDiscovery(); void load(); if (contextualCity && contextualLocalState !== 'loading') {
-    contextualLocalState = 'loading';
-    required('#refresh-local').click();
-    renderDiscovery();
-} });
+required('#discovery-refresh').addEventListener('click', refreshNewsEdition);
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
         renderDiscovery();
