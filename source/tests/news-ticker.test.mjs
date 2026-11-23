@@ -32,6 +32,7 @@ test('validated publication ribbon retains an accessible static reading path and
  assert.equal(findId('glance-news-sources',drawer.children).length,1);assert.equal(findId('glance-status',section.children).length,0,'technical source status does not create a third toolbar row');
  assert.equal(findId('glance-status',drawer.children).length,1,'source availability remains visible in the detail drawer');
  assert.equal(findId('glance-read')[0].attribs['aria-describedby'],'glance-status');
- assert.equal(findId('glance-locate',heading.children)[0].attribs['aria-controls'],'place-dialog');
+ assert.equal(findId('glance-locate',heading.children).length,0,'redundant location toolbar action is absent');
+ assert.equal(findId('glance-city',heading.children)[0].attribs['aria-controls'],'place-dialog');
  for(const id of ['glance-date','glance-city','reader-language','reader-theme-toggle'])assert.equal(findId(id,heading.children).length,1);
 });

@@ -39,7 +39,6 @@ export function setupGlance():void {
   get<HTMLElement>('glance-city-label').textContent=city?.name??translate('chooseCity');
   get<HTMLButtonElement>('glance-city').setAttribute('aria-label',city?translate('changeCity')+': '+city.name+', '+countryLabel(city.countryCode,city.country):translate('chooseCity'));
   get<HTMLElement>('glance-zone').textContent=city?countryLabel(city.countryCode,city.country)+(estimatedCity?(locale==='ro'?' · aproximativ':locale==='it'?' · approssimativo':' · approximate'):''):'';
-  get<HTMLButtonElement>('glance-locate').textContent=locale==='ro'?'Foloseste locatia mea':locale==='it'?'Usa la mia posizione':'Use my location';
   get<HTMLElement>('glance-weather').hidden=!preferences.weather;get<HTMLElement>('glance-forex').hidden=!preferences.forex;
   const forecast=cards.find(c=>c.kind==='forecast'),range=forecast?forecastRange(forecast):null;
   updateWeatherMotion(weatherMotion,forecast??null,now);
