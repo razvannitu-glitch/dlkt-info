@@ -21,7 +21,7 @@ test('two existing English editorial profiles extend provenance without enabling
  assert.equal(NEWS_PUBLISHERS.length,75);
  const codes=new Set(NEWS_PUBLICATION_SCOPES.map(profile=>profile.countryCode));
  assert.deepEqual([...codes].sort(),['AU','DE','FR','GB','HK','IE','IN','IT','JP','QA','RO','SG','US']);
- assert.equal(codes.size,13);assert.equal(NEWS_PUBLICATION_SCOPES.length,23);
+ assert.equal(codes.size,13);assert.equal(NEWS_PUBLICATION_SCOPES.length,24);
  assert.equal(sourceEditionCountryCode('https://www.sanews.gov.za/south-africa/controlled-fixture'),'ZA');
  assert.equal(new Set([...codes,'ZA']).size,14,'14 configured country/territory provenance codes, not 14 live or native-language feeds');
  for(const profile of profiles){

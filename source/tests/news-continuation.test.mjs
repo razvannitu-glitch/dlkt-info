@@ -83,10 +83,10 @@ test('context changes and explicit restarts cancel old requests and ignore their
  assert.equal(model.view().page.epoch,'102');assert.equal(model.view().items.length,20);
 });
 test('an expired cursor preserves the displayed edition until an explicit restart',async()=>{
- let calls=0;const model=new NewsContinuation(async()=>{calls++;return calls===2?new Response('',{status:410}):response(page());},()=>now);
+ let calls=0;const model=new NewsContinuation(async()=>{calls++;return calls===2?new Response('',{status:410}):response(page(0,calls>=3?20:60));},()=>now);
  await model.start(context);const prefix=[...model.view().items];await model.next();assert.equal(model.view().error,'expired');
  await model.next();assert.equal(calls,2);assert.deepEqual(model.view().items,prefix);
- await model.start(context,true);assert.equal(calls,3);assert.equal(model.view().error,null);
+ await model.start(context,true);assert.equal(calls,3);assert.equal(model.view().error,null);assert.deepEqual(model.view().items,prefix);assert.equal(model.view().activeReceivedCount,20);
 });
 test('mixed editions, changed context and duplicate pages fail closed without discarding the prefix',async()=>{
  for(const bad of [page(20,60,{epoch:'102'}),page(20,60,{startedAt:new Date(now+1000).toISOString()}),
@@ -175,21 +175,21 @@ function continuationActions(model,selected){
   closest(selector){return selector==='[data-news-restart]'&&this.dataset.newsRestart?this:selector==='[data-public-more]'&&this.dataset.publicMore?this:null;}
  }
  const controls=new Element('div');
- const environment={Element,language:selected.language,newsSourceScope:selected.sourceScope??'edition',newsFilter:selected.filter,newsPeriod:selected.period??'recent',
+ const environment={Element,language:selected.language,getLocale:()=>selected.language,newsInteractionRevision:0,announcement:{textContent:''},newsSourceScope:selected.sourceScope??'edition',newsFilter:selected.filter,newsPeriod:selected.period??'recent',
   contextualCity:selected.city??null,contextualLocalState:'loaded',restartNewsEdition:false,applyPublicUpdate:false,
   document:{visibilityState:'visible',body:{dataset:{entryView:'start'}},createElement:tag=>new Element(tag)},
   controls,make:(tag,_class,text)=>Object.assign(new Element(tag),{textContent:text}),
-  required:selector=>({addEventListener:(type,callback)=>listeners.set(selector+':'+type,callback),click:()=>{assert.equal(selector,'#refresh-local');localChecks++;}}),
+  required:selector=>({querySelectorAll:()=>[],addEventListener:(type,callback)=>listeners.set(selector+':'+type,callback),click:()=>{assert.equal(selector,'#refresh-local');localChecks++;}}),
   load:async()=>{sourceChecks++;},
-  newsContinuation:{view:()=>model.view(),start:(...args)=>{const job=model.start(...args);pending.push(job);return job;},next:()=>model.next()},
+  newsContinuation:{view:()=>model.view(),start:(...args)=>{const job=model.start(...args);pending.push(job);return job;},next:(...args)=>{const job=model.next(...args);pending.push(job);return job;}},
  };
  environment.renderDiscovery=()=>{accepted.push(environment.applyPublicUpdate);runInNewContext(beginEdition,environment);};
  runInNewContext(reader.slice(actionStart,changeStart)+'\n'+header,environment);
  return {
   clickFooter(){
-   environment.server=model.view();environment.visible=model.view().items;
+   environment.server=model.view();environment.visible=model.view().items;environment.remainingCount=Math.max(0,(model.view().page?.filteredTotal??0)-model.view().activeReceivedCount);
    runInNewContext(footer,environment);
-   const button=controls.childNodes.find(node=>node.tag==='button'&&node.dataset.newsRestart==='true');
+   const button=controls.childNodes.find(node=>node.tag==='button'&&(node.dataset.newsRestart==='true'||node.dataset.publicMore==='true'));
    assert.ok(button,'the actual terminal/expired UI offers the explicit update action');
    listeners.get('#discovery:click')({target:button});
   },
@@ -199,7 +199,7 @@ function continuationActions(model,selected){
   checks:()=>({sourceChecks,localChecks,accepted}),
  };
 }
-test('footer updates restart exhausted and expired editions through the same fresh action as the header',async()=>{
+test('header and footer updates keep the reading prefix while adopting a fresh cursor',async()=>{
  const city=findCity('683506');assert.ok(city);
  const selected={...context,cityId:city.id,city,period:'recent'};
  for(const trigger of ['exhausted footer','expired footer','header']){
@@ -209,9 +209,9 @@ test('footer updates restart exhausted and expired editions through the same fre
   const model=new NewsContinuation(async(url,init)=>{
    requests.push({url,init});
    if(requests.length<=2)return response(edition(requests.length===1?0:20,31));
-   return new Promise(resolve=>{release=()=>resolve(response(edition(0,40,{
-    epoch:'102',revision:4,generatedAt:new Date(time).toISOString(),startedAt:new Date(time).toISOString(),expiresAt:new Date(time+900000).toISOString(),
-   })));});
+   const updated={epoch:'102',revision:4,generatedAt:new Date(time).toISOString(),startedAt:new Date(time).toISOString(),expiresAt:new Date(time+900000).toISOString()};
+   if(requests.length===3)return new Promise(resolve=>{release=()=>resolve(response(edition(0,40,updated)));});
+   return response(edition(20,40,updated));
   },()=>time);
   await model.start(selected);await model.next();
   assert.equal(model.view().items.length,31);assert.equal(model.view().page.nextCursor,null);
@@ -221,14 +221,16 @@ test('footer updates restart exhausted and expired editions through the same fre
   assert.deepEqual(model.view().items,before,'automatic continuation cannot restart a completed or expired edition');
   assert.equal(requests.length,2);assert.deepEqual(actions.checks(),{sourceChecks:0,localChecks:0,accepted:[]});
   if(trigger==='header')actions.clickHeader();else actions.clickFooter();
-  assert.equal(requests.length,3,trigger);assert.equal(model.view().loading,true);assert.equal(model.view().items.length,0);
-  assert.equal(actions.checks().sourceChecks,1);assert.equal(actions.checks().localChecks,1);assert.equal(actions.checks().accepted[0],true);
+  assert.equal(requests.length,3,trigger);assert.equal(model.view().loading,true);assert.deepEqual(model.view().items,before);
+  assert.equal(actions.checks().sourceChecks,trigger==='expired footer'?0:1);assert.equal(actions.checks().localChecks,trigger==='expired footer'?0:1);
+  if(trigger!=='expired footer')assert.equal(actions.checks().accepted[0],true);
   const query=new URL(requests[2].url,'https://www.dlkt.ee').searchParams;
   assert.equal(query.has('cursor'),false);assert.equal(query.get('lang'),selected.language);
   assert.equal(query.get('city'),city.id);assert.equal(query.get('category'),'all');assert.equal(query.get('period'),'recent');
-  assert.equal(requests[2].init.credentials,'omit');
+  assert.equal(requests[2].init.credentials,'omit');assert.equal(requests[2].init.cache,'no-store');
   release();await actions.finish();
-  assert.equal(model.view().page.epoch,'102');assert.equal(model.view().items.length,20);assert.equal(model.view().error,null);
+  assert.equal(model.view().page.epoch,'102');assert.equal(model.view().items.length,40);assert.equal(model.view().error,null);
+  assert.deepEqual(model.view().items.slice(0,before.length),before);assert.equal(model.view().activeReceivedCount,40);assert.equal(requests.length,4);
  }
 });
 

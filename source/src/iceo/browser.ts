@@ -1,7 +1,7 @@
 import {getLocale,translate as tr,translatedCategory,countryLabel,languageLabel,setupLanguage,applyInterfaceLanguage} from '../i18n/browser.js';
 import {sourceLanguage,selectNewsLanguage} from './news-sources.js';
 import {consistentCards} from './evidence-consistency.js';
-import {newsOriginalLanguage,type NewsSourceScope} from './news-page-contracts.js';
+import {newsOriginalLanguage,type NewsSourceScope,type NewsPage,type NewsPageItem,type NewsStorySource} from './news-page-contracts.js';
 import {photoNode,integratePhotoHeadline} from '../media/browser.js';
 import {setupExplore,type ExploreController} from '../explore/browser.js';
 import {contextForCard} from './context.js';
@@ -561,6 +561,32 @@ function reconcileDiscovery(target:HTMLElement,next:HTMLElement):void {
   desired.forEach((node,index)=>{if(target.children[index]!==node)target.insertBefore(node,target.children[index]??null);});
   target.dataset.editionState=next.dataset.editionState??'';target.dataset.dailyCoverage=next.dataset.dailyCoverage??'';
 }
+/** Previously validated links remain readable; an expired source cursor is never renewed. */
+function retainedNewsSourcesNode(item:NewsPageItem,page:NewsPage,language:string):HTMLDetailsElement|null {
+  if(!item.story||Date.parse(page.expiresAt)>Date.now())return null;
+  const details=document.createElement('details'),summary=document.createElement('summary'),list=document.createElement('ol');
+  details.className='news-story-sources';details.dataset.storyKey=item.story.key;details.dataset.sourceTotal=String(item.story.sourceTotal);
+  summary.textContent=tr('navSources')+' · '+new Intl.NumberFormat(language).format(item.story.sourceTotal);
+  const primary:NewsStorySource=item.kind==='global'?{kind:'global',card:item.card}:{kind:'local',card:item.card};
+  const originals=[primary,...item.story.related];
+  const publishers=make('span','news-story-publishers',[...new Set(originals.map(source=>source.card.publisher))].slice(0,3).join(' · '));
+  publishers.dir='auto';publishers.setAttribute('translate','no');summary.append(publishers);list.className='news-story-sources-list';
+  for(const source of originals){
+    const url=safeLink(source.card.sourceUrl);if(!url)continue;
+    const row=document.createElement('li'),meta=make('p','news-story-source-meta',source.card.publisher),link=document.createElement('a'),date=document.createElement('time');
+    date.dateTime=source.kind==='global'?source.card.date:source.card.news!.publishedAt;date.title=date.dateTime;
+    date.textContent=new Intl.DateTimeFormat(language,{dateStyle:'medium',timeStyle:'short',timeZone:page.day?.timeZone??'UTC'}).format(new Date(date.dateTime));
+    meta.append(document.createTextNode(' · '),date);
+    link.className='news-story-source-link';link.href=url;link.target='_blank';link.rel='noopener noreferrer';link.textContent=source.card.title;
+    link.dir='auto';link.lang=newsOriginalLanguage(source)??'';link.setAttribute('translate','no');
+    row.append(meta,link);list.append(row);
+  }
+  const note=make('p','news-story-sources-status',language==='ro'
+    ?'Linkuri pastrate din lectura anterioara. Verificarea acestei editii a expirat.'
+    :language==='it'?'Link conservati dalla lettura precedente. La verifica di questa edizione è scaduta.'
+    :'Links kept from the earlier reading. This edition check has expired.');
+  details.append(summary,list,note);return details;
+}
 function renderDiscovery():void {
   clearTimeout(discoveryExpiry);stopNewsObserver();
   worldExplorer?.update();
@@ -572,7 +598,7 @@ function renderDiscovery():void {
   button.disabled=loading;
   target.setAttribute('aria-busy',String(loading||newsContinuation.view().loading));
   if(document.body.dataset.entryView!=='start'){section.dataset.loading='hidden';renderDiscoveryLoading(discoveryLoadingElements,'hidden');newsMasonry?.disconnect();newsMasonry=null;target.replaceChildren();support.replaceChildren();extras.replaceChildren();controls.replaceChildren();toolbar.hidden=true;pruneInsights();return;}
-  const anchors=applyPublicUpdate?[]:[...target.querySelectorAll<HTMLElement>('article')].flatMap(node=>{const rect=node.getBoundingClientRect();return rect.top<innerHeight&&rect.bottom>0?[{node,top:rect.top}]:[];});
+  const anchors=[...target.querySelectorAll<HTMLElement>('article')].flatMap(node=>{const rect=node.getBoundingClientRect();return rect.top<innerHeight&&rect.bottom>0?[{node,top:rect.top}]:[];});
   const now=Date.now();
   const localNeedsCheck=contextualLocalState==='unavailable'||contextualLocal!==null&&now-Date.parse(contextualLocal.checkedAt)>=300_000;
   if(contextualCity&&contextualLocalState!=='loading'&&localNeedsCheck&&document.visibilityState==='visible'&&now-lastLocalLanguageRefresh>=120_000){
@@ -593,13 +619,13 @@ function renderDiscovery():void {
   const pageItemByKey=new Map(server.items.map(item=>[item.key,item]));
   const stream={total:server.page?.total??0,counts:server.page?.counts??Object.fromEntries(['other',...NEWS_CATEGORIES.map(category=>category.id)].map(id=>[id,0]))};
   const newsUpdates=live.changes.total+reading.pending;
-  const topCount=server.page?.filteredTotal??0,localNewsCount=server.items.filter(item=>item.kind==='local').length;
+  const topCount=server.page?.filteredTotal??0,remainingCount=Math.max(0,topCount-server.activeReceivedCount),readingTotal=server.retainedCount>0?visible.length:topCount,localNewsCount=server.items.filter(item=>item.kind==='local').length;
   target.dataset.newsLanguage=language;target.dataset.sourceScope=newsSourceScope;
   button.textContent=newsUpdates?(language==='ro'?'Arata noutatile':'Show updates')+' · '+new Intl.NumberFormat(language).format(newsUpdates):tr('refresh');
   button.setAttribute('aria-label',button.textContent);
   const globalEditionState=publicEditionState(today,{snapshotState:snapshot?.state??null,loading:loading||!initialCheckStarted,failed:lastLoadFailed});
-  const editionState=server.page?(topCount>0?'ready':'empty'):server.loading?'pending':server.error?'unavailable':globalEditionState;
-  const loadingPhase=discoveryLoading.phase({pending:editionState==='pending',unavailable:editionState==='unavailable',firstCount:visible.length,moreCount:Math.max(0,topCount-visible.length)});
+  const editionState=visible.length>0?'ready':server.page?(topCount>0?'ready':'empty'):server.loading?'pending':server.error?'unavailable':globalEditionState;
+  const loadingPhase=discoveryLoading.phase({pending:editionState==='pending',unavailable:editionState==='unavailable',firstCount:visible.length,moreCount:remainingCount});
   section.dataset.loading=loadingPhase;
   renderDiscoveryLoading(discoveryLoadingElements,loadingPhase);
   note.classList.add('sr-only');toolbar.hidden=false;
@@ -623,7 +649,7 @@ function renderDiscovery():void {
   const allSourcesLabel=language==='ro'?'Toate sursele':language==='it'?'Tutte le fonti':'All sources';
   const originalSourcesLabel=language==='ro'?'Toate sursele · limbi originale':language==='it'?'Tutte le fonti · lingue originali':'All sources · original languages';
   required<HTMLElement>('#home-location').textContent=server.page&&coverage
-    ?[editionCountry,coverage.national>0?nationalLabel:internationalLabel,newsSourceScope==='all'?originalSourcesLabel:languageLabel(language)].filter(Boolean).join(' · ')
+    ?[editionCountry,...(newsSourceScope==='all'?[originalSourcesLabel]:[coverage.national>0?nationalLabel:internationalLabel,languageLabel(language)])].filter(Boolean).join(' · ')
     :contextualCity?`${contextualCity.name} · ${countryLabel(contextualCity.countryCode,contextualCity.country)}${contextualLocation==='estimated'?' · approximate':''}`
     :contextualLocationPending?tr('lookupLoading'):tr('chooseCity');
   const discoveryDelay=nextDailyEditionDelay(today,now),returnDelay=checkpoint?nextReturnDelay(snapshot,selectReturnBrief(checkpoint,null,now,false).topics,now):null;
@@ -660,29 +686,39 @@ function renderDiscovery():void {
   }
   picker.value=newsFilter;
   const progress=required<HTMLElement>('#home-news-progress'),format=new Intl.NumberFormat(language);
-  const progressCopy=language==='ro'?`${format.format(visible.length)} din ${format.format(topCount)} subiecte afisate`:language==='it'?`${format.format(visible.length)} di ${format.format(topCount)} notizie mostrate`:`${format.format(visible.length)} of ${format.format(topCount)} stories shown`;
+  const progressCopy=server.retainedCount>0
+    ?language==='ro'?`${format.format(visible.length)} subiecte in lectura · ${format.format(server.activeReceivedCount)} din ${format.format(topCount)} parcurse in editia curenta`
+      :language==='it'?`${format.format(visible.length)} notizie nella lettura · ${format.format(server.activeReceivedCount)} di ${format.format(topCount)} esaminate nell'edizione corrente`
+      :`${format.format(visible.length)} stories in your reading · ${format.format(server.activeReceivedCount)} of ${format.format(topCount)} checked in the current edition`
+    :language==='ro'?`${format.format(visible.length)} din ${format.format(topCount)} subiecte afisate`:language==='it'?`${format.format(visible.length)} di ${format.format(topCount)} notizie mostrate`:`${format.format(visible.length)} of ${format.format(topCount)} stories shown`;
   if(progress.textContent!==progressCopy)progress.textContent=progressCopy;
   const articleScope=language==='ro'?(newsSourceScope==='all'?'articole originale, in limbile surselor':'articole originale in aceasta limba'):language==='it'?(newsSourceScope==='all'?'articoli originali, nelle lingue delle fonti':'articoli originali in questa lingua'):(newsSourceScope==='all'?'original articles in their source languages':'original articles in this language');
   progress.title=language==='ro'?`${format.format(stream.total)} subiecte din ${format.format(server.page?.articleTotal??0)} ${articleScope}`:language==='it'?`${format.format(stream.total)} notizie da ${format.format(server.page?.articleTotal??0)} ${articleScope}`:`${format.format(stream.total)} stories from ${format.format(server.page?.articleTotal??0)} ${articleScope}`;
   host.dataset.editionState=editionState;host.dataset.dailyCoverage='connected-sources';
   const inlinePage=server.page;
-  const inlineContext=inlinePage?JSON.stringify([inlinePage.epoch,inlinePage.revision,inlinePage.startedAt,inlinePage.language,inlinePage.sourceScope??'edition',inlinePage.cityId,inlinePage.countryCode,inlinePage.filter,inlinePage.period,inlinePage.day?.date??null]):'';
+  const inlineContext=inlinePage?JSON.stringify([inlinePage.language,inlinePage.sourceScope??'edition',inlinePage.cityId,inlinePage.countryCode,inlinePage.filter,inlinePage.period]):'';
   if(inlineContext!==inlineKnowledgeContext){
     inlineKnowledgeContext=inlineContext;
     inlineKnowledgeSelection=inlinePage?selectInlineKnowledge(KNOWLEDGE_CARDS.filter(card=>!inlineKnowledgeSeen.has(card.id)),{cityId:inlinePage.cityId,countryCode:inlinePage.countryCode,timeZone:inlinePage.day?.timeZone??Intl.DateTimeFormat().resolvedOptions().timeZone},now,inlinePage.epoch+':'+inlinePage.revision):[];
   }
+  if(server.retainedCount>0)host.append(make('p','discovery-section-label privacy-note',language==='ro'
+    ?`Lectura pastrata · ${format.format(server.retainedCount)} subiecte din editiile anterioare. Verificarile originale raman neschimbate.`
+    :language==='it'?`Lettura conservata · ${format.format(server.retainedCount)} notizie delle edizioni precedenti. Le verifiche originali restano invariate.`
+    :`Kept reading · ${format.format(server.retainedCount)} stories from earlier editions. Original source checks remain unchanged.`));
   let newsIndex=0;
   for(const entry of interleaveKnowledge(visible,inlineKnowledgeSelection)){
     if(entry.kind==='knowledge'){
       if(now>=Date.parse(entry.item.card.reviewBy))continue;
+      if(!inlineKnowledgeSeen.has(entry.item.card.id)&&selectInlineKnowledge([entry.item.card],{cityId:inlinePage?.cityId??null,countryCode:inlinePage?.countryCode??null,timeZone:inlinePage?.day?.timeZone??Intl.DateTimeFormat().resolvedOptions().timeZone},now,'reading-check').length===0)continue;
       host.append(knowledgeCardNode(entry.item.card,entry.item.scope));
       if(!document.body.dataset.worldExplore&&!inlineKnowledgeSeen.has(entry.item.card.id)){inlineKnowledgeSeen.add(entry.item.card.id);writeKnowledgeSeen(inlineKnowledgeSeen);}
       continue;
     }
-    const item=entry.item,index=newsIndex++,originalItem=pageItemByKey.get(item.key);
+    const item=entry.item,index=newsIndex++,originalItem=pageItemByKey.get(item.key),originalPage=newsContinuation.editionFor(item.key);
+    if(server.retainedCount>0&&index===server.retainedCount)host.append(make('p','discovery-section-label',language==='ro'?'Subiecte nevazute din editia actualizata':language==='it'?"Notizie non ancora viste dall'edizione aggiornata":'Unseen stories from the updated edition'));
     let node:HTMLElement;
     if(item.kind==='global'){
-      node=cardNode(item.view,index,topCount,undefined,false,'related',server.page?.day?.timeZone??contextualCity?.timezone??'UTC',newsSourceScope==='all');node.dataset.liveSignature=JSON.stringify([language,newsSourceScope,editionCardSignature(item.view.card),editionStorySignature(item.view)]);
+      node=cardNode(item.view,index,readingTotal,undefined,false,'related',originalPage?.day?.timeZone??contextualCity?.timezone??'UTC',newsSourceScope==='all');node.dataset.liveSignature=JSON.stringify([language,newsSourceScope,editionCardSignature(item.view.card),editionStorySignature(item.view)]);
     }else{
       if(!contextualCity)continue;
       node=localCardNode(item.card,contextualCity,now);node.dataset.homeLocalId=item.card.id;node.dataset.cityId=contextualCity.id;
@@ -693,12 +729,11 @@ function renderDiscovery():void {
       const link=node.querySelector('.card-content > .source-link');if(link)link.textContent=tr('openSource');
       const details=node.querySelector('.evidence > summary');if(details)details.textContent=tr('sourceDetails');
     }
-    if(originalItem?.story&&server.page){
+    if(originalItem?.story&&originalPage){
       node.dataset.storyKey=originalItem.story.key;
-      node.dataset.liveSignature=JSON.stringify([node.dataset.liveSignature,originalItem.story,inlineContext]);
-      node.querySelector('.related')?.remove();
-      const sources=newsStorySourcesNode(originalItem,server.page,language,contextualCity??undefined);
-      if(sources){const evidence=node.querySelector('.evidence');if(evidence)evidence.before(sources);else node.append(sources);}
+      node.dataset.liveSignature=JSON.stringify([node.dataset.liveSignature,originalItem.story,originalPage.epoch,originalPage.revision,originalPage.startedAt]);
+      const sources=newsStorySourcesNode(originalItem,originalPage,language,contextualCity??undefined)??retainedNewsSourcesNode(originalItem,originalPage,language);
+      if(sources){node.querySelector('.related')?.remove();const evidence=node.querySelector('.evidence');if(evidence)evidence.before(sources);else node.append(sources);}
     }
     node.dataset.editionPart='stream';node.dataset.newsStreamKey=item.key;node.dataset.newsCategory=item.category??'other';
     const label=node.querySelector('.card-topic');if(label)label.textContent=item.category?newsCategoryLabel(item.category,language):tr('otherTopics');
@@ -716,16 +751,20 @@ function renderDiscovery():void {
     message.id='home-edition-'+editionState;host.append(message);
   }
   const streamEnd=document.createElement('div');
-  if(server.error==='expired'){
-    streamEnd.append(make('p','privacy-note',language==='ro'?'Aceasta editie trebuie actualizata pentru a continua. Articolele citite raman pe ecran.':'Update this edition to continue. Reports already read remain on screen.'));
-    const update=make('button','secondary',language==='ro'?'Arata noutatile':'Show updates');update.type='button';update.dataset.newsRestart='true';streamEnd.append(update);
-  }else if(server.loading||server.error||server.page?.nextCursor){
-    const label=server.loading?(language==='ro'?'Se incarca urmatoarele articole…':'Loading more reports…'):server.error?(language==='ro'?'Reincearca incarcarea':'Retry loading'):tr('showMore',{count:Math.min(NEWS_PAGE_SIZE,topCount-visible.length),remaining:topCount-visible.length});
+  if(server.limitReached){
+    streamEnd.append(make('p','privacy-note',language==='ro'?'Ai ajuns la limita acestei lecturi. Poti incepe o lectura noua; sursele raman disponibile in cardurile afisate.':language==='it'?'Hai raggiunto il limite di questa lettura. Puoi iniziarne una nuova; le fonti restano disponibili nelle schede mostrate.':'This reading has reached its limit. You can start a new reading; source links remain in the displayed cards.'));
+    const reset=make('button','secondary',language==='ro'?'Incepe o lectura noua':language==='it'?'Inizia una nuova lettura':'Start a new reading');reset.type='button';reset.dataset.newsReset='true';streamEnd.append(reset);
+  }else if(server.error==='expired'){
+    streamEnd.append(make('p','privacy-note',language==='ro'?'Actualizeaza editia pentru urmatoarele subiecte nevazute. Lectura pastrata ramane pe ecran.':'Update the edition for the next unseen stories. Your kept reading stays on screen.'));
+    const update=make('button','secondary',language==='ro'?'Continua cu subiecte nevazute':'Continue with unseen stories');update.type='button';update.id='home-more-button';update.dataset.publicMore='true';streamEnd.append(update);
+  }else if(server.loading||server.error||server.canContinue){
+    const label=server.loading?(language==='ro'?'Se cauta urmatoarele subiecte nevazute…':'Finding the next unseen stories…'):server.error?(language==='ro'?'Reincearca incarcarea':'Retry loading'):server.manualContinuation?(language==='ro'?'Cauta urmatoarele nevazute':'Find the next unseen stories'):tr('showMore',{count:Math.min(NEWS_PAGE_SIZE,remainingCount),remaining:remainingCount});
+    if(server.manualContinuation)streamEnd.append(make('p','privacy-note',language==='ro'?'Lectura este pastrata. Continua pentru urmatoarele subiecte nevazute.':'Your reading is kept. Continue looking for the next unseen stories.'));
     if(server.error)streamEnd.append(make('p','privacy-note',language==='ro'?'Urmatorul lot nu a putut fi incarcat. Ordinea articolelor afisate este pastrata.':'The next page could not be loaded. The reports already shown keep their order.'));
     const next=make('button','secondary',label);next.type='button';next.disabled=server.loading;next.id='home-more-button';next.dataset.publicMore='true';streamEnd.append(next);
   }else if(visible.length){
-    streamEnd.append(make('p','privacy-note',language==='ro'?'Ai parcurs subiectele disponibile in aceasta editie.':language==='it'?'Hai letto le notizie disponibili in questa edizione.':'You have reached the end of the available stories in this edition.'));
-    const update=make('button','secondary',language==='ro'?'Arata noutatile':'Show updates');update.type='button';update.dataset.newsRestart='true';streamEnd.append(update);
+    streamEnd.append(make('p','privacy-note',language==='ro'?'Nu mai sunt subiecte nevazute in editia verificata. Lectura ta ramane pe ecran.':language==='it'?"Non ci sono altre notizie non viste nell'edizione verificata. La tua lettura resta sullo schermo.":'No unseen stories remain in the checked edition. Your reading stays on screen.'));
+    const update=make('button','secondary',language==='ro'?'Cauta subiecte noi':'Check for new stories');update.type='button';update.dataset.newsRestart='true';streamEnd.append(update);
   }
   controls.replaceChildren(...streamEnd.childNodes);
   // Operational city information remains separate from the news stream.
@@ -752,8 +791,8 @@ function renderDiscovery():void {
   reconcileDiscovery(target,host);reconcileDiscovery(support,supportHost);reconcileDiscovery(extras,extrasHost);pruneInsights();
   if(newsMasonry===null)newsMasonry=new NewsMasonry(target);newsMasonry.update();
   const sentinel=controls.querySelector<HTMLElement>('#home-more-button');
-  if(sentinel&&!server.loading&&!server.error&&server.page?.nextCursor)stopNewsObserver=observeNewsStream(sentinel,()=>{void showNewsPage(false);});
-  const publicationState=stream.total?`${stream.total} stories from ${server.page?.articleTotal??0} original articles ${newsSourceScope==='all'?'in their source languages':'in the selected language'} are available from connected sources. ${topCount} match the category filter; ${visible.length} are shown. Reports confidently identified as the same event share one card with their original source links. Different events remain separate.`:editionState==='unavailable'?'Publications could not be checked. Refresh to try again.':editionState==='pending'?'Checking connected publications…':newsSourceScope==='all'?'No current publications are available from connected sources.':'No current publications meet this language selection.';
+  if(sentinel&&!server.loading&&(server.error===null||server.error==='expired')&&!server.manualContinuation&&!server.limitReached&&server.canContinue&&server.page?.nextCursor)stopNewsObserver=observeNewsStream(sentinel,()=>{void showNewsPage(false);});
+  const publicationState=stream.total?`${stream.total} stories from ${server.page?.articleTotal??0} original articles ${newsSourceScope==='all'?'in their source languages':'in the selected language'} are available from connected sources. ${topCount} match the category filter; ${server.activeReceivedCount} have been checked in this edition. The reading contains ${visible.length} displayed stories, including ${server.retainedCount} retained from earlier editions without renewing their original source checks. Reports confidently identified as the same event share one card with their original source links. Different events remain separate.`:editionState==='unavailable'?'Publications could not be checked. Refresh to try again.':editionState==='pending'?'Checking connected publications…':newsSourceScope==='all'?'No current publications are available from connected sources.':'No current publications meet this language selection.';
   const sourceState=loading&&!automaticPublicLoad?' Checking for updates…':lastLoadFailed&&snapshot?' Refresh unavailable; retained source checks are not newly verified.':snapshot?.state==='partial'?' Some source coverage is incomplete.':'';
   const localState=(localNewsCount?` ${localNewsCount} local reports are among the articles loaded so far.`:'')+(awaitingLocal?' Local information is being checked.':local.supporting.length?` ${local.supporting.length} supporting local records are available below.`:contextualCity?' Local coverage is shown below.':'');
   const updateParts=[live.changes.total?editionUpdateLabel(live.changes):'',reading.pending?`${reading.pending} local report changes`:'' ].filter(Boolean);
@@ -797,7 +836,7 @@ function renderDiscovery():void {
   const anchor=anchors.find(item=>item.node.isConnected);if(anchor){const offset=anchor.node.getBoundingClientRect().top-anchor.top;if(Math.abs(offset)>1)window.scrollBy(0,offset);}
   memoryControls();
 }
-/** Explicit update buttons share the source check and edition reset; pagination stays append-only. */
+/** Explicit updates start a fresh cursor while preserving this context's reading prefix. */
 function refreshNewsEdition():void {
   restartNewsEdition=true;applyPublicUpdate=true;renderDiscovery();void load();
   if(contextualCity&&contextualLocalState!=='loading'){
@@ -806,10 +845,10 @@ function refreshNewsEdition():void {
 }
 async function showNewsPage(focus:boolean):Promise<void> {
   const state=newsContinuation.view();
-  if(document.visibilityState!=='visible'||document.body.dataset.entryView!=='start'||document.body.dataset.worldExplore||state.loading||state.error==='expired'||state.page?.nextCursor===null)return;
+  if(document.visibilityState!=='visible'||document.body.dataset.entryView!=='start'||document.body.dataset.worldExplore||state.loading||state.limitReached||!focus&&(state.manualContinuation||state.page?.nextCursor===null)||!state.canContinue)return;
   const target=required<HTMLElement>('#discovery-cards'),before=new Set([...target.querySelectorAll<HTMLElement>('[data-news-stream-key]')].map(node=>node.dataset.newsStreamKey));
   const language=getLocale(),sourceScope=newsSourceScope,filter=newsFilter,period=newsPeriod,cityId=contextualCity?.id??null,revision=newsInteractionRevision,previousCount=state.items.length;
-  await newsContinuation.next();
+  await newsContinuation.next(true);
   if(revision!==newsInteractionRevision||sourceScope!==newsSourceScope||period!==newsPeriod||language!==getLocale()||filter!==newsFilter||cityId!==(contextualCity?.id??null)||document.body.dataset.entryView!=='start'||document.body.dataset.worldExplore)return;
   renderDiscovery();
   if(focus&&newsContinuation.view().items.length>previousCount){
@@ -820,7 +859,8 @@ async function showNewsPage(focus:boolean):Promise<void> {
 }
 required<HTMLElement>('#discovery').addEventListener('click',event=>{
   if(!(event.target instanceof Element))return;
-  if(event.target.closest('[data-news-restart]'))refreshNewsEdition();
+  if(event.target.closest('[data-news-reset]')){newsInteractionRevision++;inlineKnowledgeContext='';void newsContinuation.reset();renderDiscovery();}
+  else if(event.target.closest('[data-news-restart]'))refreshNewsEdition();
   else if(event.target.closest('[data-public-more]'))void showNewsPage(true);
 });
 required<HTMLElement>('#discovery').addEventListener('change',event=>{

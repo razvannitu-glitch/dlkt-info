@@ -4,11 +4,13 @@ import type {City} from '../local/contracts.js';
 import type {NewsPeriod} from './news-day.js';
 import {readingCard} from './reader.js';
 import {editorialCategory} from './editorial-categories.js';
+import {storyThreadKey} from './story-grouping.js';
 
 export interface NewsContinuationContext {readonly language:string;readonly cityId:string|null;readonly filter:NewsStreamFilter;readonly city?:City;readonly period?:NewsPeriod;readonly sourceScope?:NewsSourceScope}
 export interface NewsContinuationView {
  readonly page:NewsPage|null;readonly items:readonly NewsPageItem[];readonly loading:boolean;
  readonly error:'unavailable'|'invalid'|'expired'|null;readonly initialized:boolean;
+ readonly activeReceivedCount:number;readonly retainedCount:number;readonly manualContinuation:boolean;readonly limitReached:boolean;readonly canContinue:boolean;
 }
 const contextKey=(context:NewsContinuationContext):string=>JSON.stringify([context.language,context.cityId,context.city?.countryCode??null,context.city?.timezone??'UTC',context.filter,context.period??'recent',context.sourceScope??'edition']);
 const MAX_PAGE_BYTES=NEWS_MAX_RESPONSE_BYTES;
@@ -30,68 +32,168 @@ async function jsonBody(response:Response,signal:AbortSignal):Promise<unknown>{
 function itemIdentity(item:NewsStorySource):readonly [string,string,string]{
  return item.kind==='global'?[item.card.id,item.card.identity,item.card.sourceUrl]:[item.card.id,item.card.sourceUrl,item.card.sourceUrl];
 }
-/** A server edition is append-only. A context change or explicit refresh starts a new edition. */
+/** Reading memory is bounded like one corpus; aliases cannot grow without limit across refreshes. */
+export const NEWS_READING_MAX_ITEMS=5000;
+export const NEWS_READING_MAX_KEYS=NEWS_READING_MAX_ITEMS*8;
+export const NEWS_REFRESH_MAX_PAGES=3;
+function originals(item:NewsPageItem):readonly NewsStorySource[] {
+ const primary:NewsStorySource=item.kind==='global'?{kind:'global',card:item.card}:{kind:'local',card:item.card};
+ return [primary,...(item.story?.related??[])];
+}
+function readingKeys(item:NewsPageItem):readonly string[] {
+ const keys=['item:'+item.key];
+ if(item.story)keys.push('story:'+item.story.key);
+ for(const original of originals(item)){
+  const [id,identity,url]=itemIdentity(original);
+  keys.push('id:'+id,'identity:'+identity,'url:'+url);
+  // A singleton has no API story summary. Use the existing conservative event
+  // identity so a different checked representative cannot repeat the same event.
+  if(original.kind==='global'){
+   const thread=storyThreadKey(original.card);
+   if(thread!==null)keys.push('thread:'+thread);
+  }
+ }
+ return keys;
+}
+/** Fresh editions are validated independently; an explicit refresh preserves the reading prefix. */
 export class NewsContinuation {
  private context:NewsContinuationContext|null=null;
  private key='';private generation=0;
  private page:NewsPage|null=null;
+ private activePage:NewsPage|null=null;
+ private activeItems:readonly NewsPageItem[]=[];
  private items:readonly NewsPageItem[]=[];
+ private seen=new Set<string>();
+ private itemEditions=new Map<string,NewsPage>();
+ private usedCursors=new Set<string>();
+ private retainedCount=0;
+ private manualContinuation=false;
+ private limitReached=false;
+ private freshStart=false;
  private loading=false;
  private error:NewsContinuationView['error']=null;
  private controller:AbortController|null=null;
  private pending:Promise<void>|null=null;
  constructor(private readonly fetcher:typeof fetch=fetch,private readonly clock:()=>number=Date.now,private readonly changed:()=>void=()=>{}){}
- view():NewsContinuationView{return Object.freeze({page:this.page,items:this.items,loading:this.loading,error:this.error??(this.page&&Date.parse(this.page.expiresAt)<=this.clock()?'expired':null),initialized:this.context!==null});}
+ view():NewsContinuationView {
+  const expired=this.error==='expired'||this.activePage!==null&&Date.parse(this.activePage.expiresAt)<=this.clock();
+  return Object.freeze({page:this.page,items:this.items,loading:this.loading,
+   error:this.error??(expired?'expired':null),
+   initialized:this.context!==null,activeReceivedCount:this.activeItems.length,retainedCount:this.retainedCount,
+   manualContinuation:this.manualContinuation,limitReached:this.limitReached,
+   canContinue:this.context!==null&&!this.limitReached&&(expired||this.activePage?.nextCursor!==null)});
+ }
+ /** The original validated edition context, never the latest edition's source cursor context. */
+ editionFor(key:string):NewsPage|null {return this.itemEditions.get(key)??null;}
  start(context:NewsContinuationContext,restart=false):Promise<void>{
-  const key=contextKey(context);
-  if(this.key===key&&this.context!==null&&!restart)return this.pending??Promise.resolve();
+  const key=contextKey(context),same=this.key===key&&this.context!==null;
+  if(same&&!restart)return this.pending??Promise.resolve();
   this.controller?.abort();this.generation++;this.context=Object.freeze({...context,sourceScope:context.sourceScope??'edition'});this.key=key;
-  this.page=null;this.items=Object.freeze([]);this.loading=false;this.error=null;this.pending=null;
+  if(!same){
+   this.page=null;this.items=Object.freeze([]);this.seen.clear();this.itemEditions.clear();this.limitReached=false;
+  }
+  this.retainedCount=same?this.items.length:0;
+  this.activePage=null;this.activeItems=Object.freeze([]);this.usedCursors.clear();this.freshStart=restart;
+  this.loading=false;this.error=null;this.pending=null;this.manualContinuation=false;
   return this.next();
  }
- async next():Promise<void>{
+ /** Only the explicit reading-limit action discards same-context reading memory. */
+ reset():Promise<void>{
+  const context=this.context;if(context===null)return Promise.resolve();
+  this.key='';return this.start(context,true);
+ }
+ async next(recoverExpired=false):Promise<void>{
   if(this.loading)return this.pending??Promise.resolve();
-  if(!this.context||this.error==='expired'||this.page?.nextCursor===null)return;
-  if(this.page&&Date.parse(this.page.expiresAt)<=this.clock()){this.error='expired';this.changed();return;}
-  const generation=this.generation,context=this.context,cursor=this.page?.nextCursor??null;
-  const controller=new AbortController();this.controller=controller;this.loading=true;this.error=null;
-  const query=new URLSearchParams({lang:context.language,category:context.filter,period:context.period??'recent',sourceScope:context.sourceScope??'edition'});
-  if(context.cityId!==null)query.set('city',context.cityId);if(cursor!==null)query.set('cursor',cursor);
+  if(!this.context||this.limitReached)return;
+  const expired=this.error==='expired'||this.activePage!==null&&Date.parse(this.activePage.expiresAt)<=this.clock();
+  if(expired&&!recoverExpired){this.error='expired';this.changed();return;}
+  if(!expired&&this.activePage?.nextCursor===null)return;
+  const generation=this.generation,context=this.context;
+  const controller=new AbortController();this.controller=controller;this.loading=true;this.error=null;this.manualContinuation=false;
+  let recovered=false;
+  const recover=():boolean=>{
+   if(!recoverExpired||recovered||generation!==this.generation)return false;
+   recovered=true;this.retainedCount=this.items.length;this.activePage=null;this.activeItems=Object.freeze([]);
+   this.usedCursors.clear();this.freshStart=true;return true;
+  };
+  if(expired)recover();
+  // One bounded action, even when its first pages contain only previously shown reports.
   const timeout=setTimeout(()=>controller.abort(),12_000);
   const job=(async():Promise<void>=>{
    try{
-    const fetcher=this.fetcher;
-    const response=await fetcher('/api/news-page?'+query.toString(),{method:'GET',credentials:'omit',cache:cursor===null?'default':'no-store',
-     headers:{Accept:'application/json'},signal:controller.signal});
-    if(generation!==this.generation){await response.body?.cancel();return;}
-    if(response.status===410||response.status===400&&cursor!==null){await response.body?.cancel();this.error='expired';return;}
-    if(!response.ok){await response.body?.cancel();throw Error('NEWS_PAGE_UNAVAILABLE');}
-    const value=await jsonBody(response,controller.signal);
-    if(generation!==this.generation)return;
-    if(!validNewsPage(value,this.clock(),context.city)||value.language!==context.language||value.cityId!==context.cityId||value.countryCode!==(context.city?.countryCode??null)||value.filter!==context.filter||value.period!==(context.period??'recent')||(value.sourceScope??'edition')!==(context.sourceScope??'edition'))throw Error('NEWS_PAGE_INVALID');
-    if(Date.parse(value.expiresAt)<=this.clock()){this.error='expired';return;}
-    const prior=this.page;
-    if(prior&&(value.epoch!==prior.epoch||value.revision!==prior.revision||value.generatedAt!==prior.generatedAt||value.startedAt!==prior.startedAt
-      ||value.period!==prior.period||(value.sourceScope??'edition')!==(prior.sourceScope??'edition')||JSON.stringify(value.day)!==JSON.stringify(prior.day)
-      ||value.expiresAt!==prior.expiresAt||value.total!==prior.total||value.articleTotal!==prior.articleTotal||value.filteredTotal!==prior.filteredTotal||value.countryCode!==prior.countryCode
-      ||value.coverage.national!==prior.coverage.national||value.coverage.local!==prior.coverage.local||value.coverage.international!==prior.coverage.international
-      ||Object.keys(prior.counts).some(key=>value.counts[key]!==prior.counts[key])))throw Error('NEWS_PAGE_INVALID');
-    if(value.nextCursor!==null&&(value.nextCursor===cursor||value.items.length===0))throw Error('NEWS_PAGE_INVALID');
-    const ids=new Set<string>(),identities=new Set<string>(),urls=new Set<string>(),keys=new Set<string>(),stories=new Set<string>();
-    for(const item of [...this.items,...value.items]){
-     if(keys.has(item.key)||item.story&&stories.has(item.story.key))throw Error('NEWS_PAGE_INVALID');
-     keys.add(item.key);if(item.story)stories.add(item.story.key);
-     const primary:NewsStorySource=item.kind==='global'?{kind:'global',card:item.card}:{kind:'local',card:item.card};
-     for(const original of [primary,...(item.story?.related??[])]){
-      const [id,identity,url]=itemIdentity(original);
-      if(ids.has(id)||identities.has(identity)||urls.has(url))throw Error('NEWS_PAGE_INVALID');
-      ids.add(id);identities.add(identity);urls.add(url);
+    for(let scanned=0;scanned<NEWS_REFRESH_MAX_PAGES;scanned++){
+     if(this.activePage&&Date.parse(this.activePage.expiresAt)<=this.clock()&&!recover()){
+      this.error='expired';this.manualContinuation=true;return;
      }
+     const cursor=this.activePage?.nextCursor??null;
+     if(cursor!==null&&this.usedCursors.has(cursor))throw Error('NEWS_PAGE_INVALID');
+     const query=new URLSearchParams({lang:context.language,category:context.filter,period:context.period??'recent',sourceScope:context.sourceScope??'edition'});
+     if(context.cityId!==null)query.set('city',context.cityId);if(cursor!==null)query.set('cursor',cursor);
+     const fetcher=this.fetcher;
+     const response=await fetcher('/api/news-page?'+query.toString(),{method:'GET',credentials:'omit',cache:cursor===null&&!this.freshStart?'default':'no-store',
+      headers:{Accept:'application/json'},signal:controller.signal});
+     if(generation!==this.generation){await response.body?.cancel();return;}
+     if(response.status===410||response.status===400&&cursor!==null){
+      await response.body?.cancel();if(generation!==this.generation)return;
+      if(recover())continue;
+      this.error='expired';this.manualContinuation=true;return;
+     }
+     if(!response.ok){await response.body?.cancel();throw Error('NEWS_PAGE_UNAVAILABLE');}
+     const value=await jsonBody(response,controller.signal);
+     if(generation!==this.generation)return;
+     // An expired response is never accepted. At most one fresh cursor can be
+     // attempted within this same generation, timeout and three-request budget.
+     if(typeof value==='object'&&value!==null&&'expiresAt' in value&&typeof value.expiresAt==='string'&&Date.parse(value.expiresAt)<=this.clock()){
+      if(recover())continue;
+      this.error='expired';this.manualContinuation=true;return;
+     }
+     if(!validNewsPage(value,this.clock(),context.city)||value.language!==context.language||value.cityId!==context.cityId||value.countryCode!==(context.city?.countryCode??null)||value.filter!==context.filter||value.period!==(context.period??'recent')||(value.sourceScope??'edition')!==(context.sourceScope??'edition'))throw Error('NEWS_PAGE_INVALID');
+     if(Date.parse(value.expiresAt)<=this.clock()){this.error='expired';this.manualContinuation=true;return;}
+     const prior=this.activePage;
+     if(prior&&(value.epoch!==prior.epoch||value.revision!==prior.revision||value.generatedAt!==prior.generatedAt||value.startedAt!==prior.startedAt
+       ||value.period!==prior.period||(value.sourceScope??'edition')!==(prior.sourceScope??'edition')||JSON.stringify(value.day)!==JSON.stringify(prior.day)
+       ||value.expiresAt!==prior.expiresAt||value.total!==prior.total||value.articleTotal!==prior.articleTotal||value.filteredTotal!==prior.filteredTotal||value.countryCode!==prior.countryCode
+       ||value.coverage.national!==prior.coverage.national||value.coverage.local!==prior.coverage.local||value.coverage.international!==prior.coverage.international
+       ||Object.keys(prior.counts).some(key=>value.counts[key]!==prior.counts[key])))throw Error('NEWS_PAGE_INVALID');
+     if(value.nextCursor!==null&&(value.nextCursor===cursor||this.usedCursors.has(value.nextCursor)||value.items.length===0))throw Error('NEWS_PAGE_INVALID');
+     const ids=new Set<string>(),identities=new Set<string>(),urls=new Set<string>(),keys=new Set<string>(),stories=new Set<string>();
+     const activeItems=Object.freeze([...this.activeItems,...value.items]);
+     for(const item of activeItems){
+      if(keys.has(item.key)||item.story&&stories.has(item.story.key))throw Error('NEWS_PAGE_INVALID');
+      keys.add(item.key);if(item.story)stories.add(item.story.key);
+      for(const original of originals(item)){
+       const [id,identity,url]=itemIdentity(original);
+       if(ids.has(id)||identities.has(identity)||urls.has(url))throw Error('NEWS_PAGE_INVALID');
+       ids.add(id);identities.add(identity);urls.add(url);
+      }
+     }
+     if(activeItems.length>value.filteredTotal||value.nextCursor===null&&activeItems.length!==value.filteredTotal)throw Error('NEWS_PAGE_INVALID');
+     if(value.nextCursor===null&&value.filteredTotal===value.total&&activeItems.reduce((sum,item)=>sum+(item.story?.sourceTotal??1),0)!==value.articleTotal)throw Error('NEWS_PAGE_INVALID');
+     // No rejected or late response can contribute even a deduplication alias.
+     const seen=new Set(this.seen),additions:NewsPageItem[]=[];
+     for(const item of value.items){
+      const aliases=readingKeys(item),known=aliases.some(alias=>seen.has(alias));
+      if(!known)additions.push(item);
+      for(const alias of aliases)seen.add(alias);
+     }
+     if(this.items.length+additions.length>NEWS_READING_MAX_ITEMS||seen.size>NEWS_READING_MAX_KEYS){
+      this.limitReached=true;return;
+     }
+     // Store only the envelope for original-source panels, never an extra copy
+     // of every scanned page behind each visible card.
+     const edition=Object.freeze({...value,items:Object.freeze([]),nextCursor:null});
+     for(const item of additions)this.itemEditions.set(item.key,edition);
+     this.seen=seen;this.items=Object.freeze([...this.items,...additions]);
+     this.activeItems=activeItems;this.activePage=value;this.page=value;this.freshStart=false;
+     if(cursor!==null)this.usedCursors.add(cursor);
+     this.limitReached=this.items.length>=NEWS_READING_MAX_ITEMS||seen.size>=NEWS_READING_MAX_KEYS;
+     if(additions.length>0||value.nextCursor===null||this.limitReached){
+      if(recovered&&additions.length===0)this.manualContinuation=true;
+      return;
+     }
+     if(scanned+1===NEWS_REFRESH_MAX_PAGES)this.manualContinuation=true;
     }
-    const items=Object.freeze([...this.items,...value.items]);
-    if(items.length>value.filteredTotal||value.nextCursor===null&&items.length!==value.filteredTotal)throw Error('NEWS_PAGE_INVALID');
-    if(value.nextCursor===null&&value.filteredTotal===value.total&&items.reduce((sum,item)=>sum+(item.story?.sourceTotal??1),0)!==value.articleTotal)throw Error('NEWS_PAGE_INVALID');
-    this.page=value;this.items=items;
+    this.manualContinuation=true;
    }catch(error){
     if(generation===this.generation)this.error=error instanceof Error&&error.message==='NEWS_PAGE_INVALID'?'invalid':'unavailable';
    }finally{
