@@ -33,6 +33,14 @@ export function selectInlineKnowledge(cards, context, now, seed) {
         for (const card of selectKnowledgeCards(tiers[scope], 'all', now, seed, context.timeZone ?? 'UTC'))
             result.push({ card, scope });
     }
+    // An independent help spotlight occupies the first existing knowledge slot.
+    // Keep its verified geographic scope; never label a national cause as local.
+    const spotlight = result.findIndex(entry => entry.card.format === 'care');
+    if (spotlight > 0) {
+        const [entry] = result.splice(spotlight, 1);
+        if (entry)
+            result.unshift(entry);
+    }
     return result;
 }
 /**

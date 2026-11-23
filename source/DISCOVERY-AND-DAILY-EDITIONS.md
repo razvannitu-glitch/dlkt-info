@@ -10,7 +10,7 @@ The user selected EUR 6.99 per month on 23 November 2026 (Europe/Bucharest). Sev
 
 The news reader offers a continuous stream. Twenty is a transport page size, not a commercial or editorial total. Today uses the selected validated city's calendar date and time zone. Recent retains the existing source eligibility windows. Publication date, source-check time, publisher origin and event location have distinct meanings.
 
-Did you know is a separate mode of the same reader and a light insertion in the news stream. Original short explanations, useful connections, primary-source links and review timestamps form a finite curated preview. The preview uses existing IPTC category identifiers, with 15 cards across 8 populated categories. It does not claim all categories already contain content or that an autonomous fact-generation service is running. Encyclopedic information is never presented as a newly reported event. Source documents and images retain their own rights.
+Did you know is a separate mode of the same reader and a light insertion in the news stream. Original short explanations, useful connections, primary-source links and review timestamps form a finite curated preview. The preview uses existing IPTC category identifiers, with 19 cards across 9 populated categories, including four independently sourced Coral Care cards. It does not claim all categories already contain content or that an autonomous fact-generation service is running. Encyclopedic information is never presented as a newly reported event. Source documents and images retain their own rights.
 
 ## Acceptance
 
@@ -55,3 +55,9 @@ A new on-this-day card is gated to November 23 in the selected edition's IANA ca
 The existing one-in-23 knowledge cadence remains unchanged. Zodiac is a separate proposed entertainment product requiring opt-in sign selection, transparent creative provenance and a non-predictive label, not an independently verified news report. No horoscope provider or invented prediction is activated.
 
 Local coverage remains bounded by existing registered, rights-reviewed sources. Region, neighborhood, street and building information require independently verified event-level geographic evidence, not the publisher's headquarters, the reader's IP or a general national press label. Full worldwide and real-time source coverage is not yet certified.
+
+## ICEO World Source Atlas and Coral Care addition — 23 November 2026
+
+The inspected current atlas contains configured source definitions, publisher-origin records and unapproved candidates as distinct statuses. Its initial inventory contains 169 entries; counts do not represent active ingestion or worldwide completeness. Source candidates are not executed, fetched or treated as content licences. See ICEO-WORLD-SOURCE-ATLAS.md for all indexed entries and editorial card ideas.
+
+Four new Coral Care entries are health knowledge cards with source-specific time bounds, explicit country where applicable, verified original links, independent-copy disclaimers and #F66061 styling. No payment flow, appointment request, health data collection or alleged charity partnership is added. The existing knowledge cadence remains one insertion after 22 eligible original news items; no source or event can be fabricated to fill a missing slot.

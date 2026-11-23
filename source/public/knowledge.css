@@ -27,3 +27,15 @@
 #discovery-cards>.knowledge-card-inline{border-top:4px solid #F66061;background:var(--reader-panel,var(--soft))}
 .knowledge-card-inline .knowledge-category-tag{background:#F66061;color:#121416}
 .knowledge-card-inline .knowledge-topic{font-weight:700}
+
+/* Coral care cards always use the DLKT identity accent, never a paid/sponsored claim. */
+.knowledge-card[data-knowledge-format="care"]{background:#F66061;color:#121416;border-color:#F66061;--reader-ink:#121416;--reader-muted:#121416;--reader-edge:rgba(18,20,22,.55);--reader-action:#121416;--reader-action-ink:#fff;--reader-focus:#121416}
+.knowledge-card[data-knowledge-format="care"] .knowledge-card-title{color:#fff}
+.knowledge-card[data-knowledge-format="care"] .knowledge-category-tag{background:#121416;color:#fff}
+.knowledge-card[data-knowledge-format="care"] .knowledge-topic,
+.knowledge-card[data-knowledge-format="care"] .knowledge-context p,
+.knowledge-card[data-knowledge-format="care"] .knowledge-provenance,
+.knowledge-card[data-knowledge-format="care"] .knowledge-care-notice{color:#121416}
+.knowledge-card[data-knowledge-format="care"] .knowledge-source{background:#121416;color:#fff;border-color:#121416}
+.knowledge-card[data-knowledge-format="care"] .knowledge-care-notice{font-size:.75rem;line-height:1.55;margin:12px 0 0}
+:root .knowledge-card[data-knowledge-format="care"] .knowledge-source:hover{background:#fff!important;color:#121416!important;border-color:#121416!important}

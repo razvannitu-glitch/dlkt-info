@@ -535,6 +535,164 @@ const reviewed = [
         "revision": 1,
         "reviewedAt": "2026-11-23T09:00:00.000Z",
         "reviewBy": "2027-05-20T09:00:00.000Z"
+    },
+    {
+        "id": "care-breast-cancer-global",
+        "category": "07000000",
+        "format": "care",
+        "topic": {
+            "en": "Breast cancer awareness",
+            "ro": "Constientizare si preventie",
+            "it": "Prevenzione e consapevolezza"
+        },
+        "source": {
+            "publisher": "World Health Organization",
+            "url": "https://www.who.int/news-room/fact-sheets/detail/breast-cancer"
+        },
+        "copy": {
+            "en": {
+                "title": "Breast cancer: informed attention matters.",
+                "explanation": "The World Health Organization explains why timely diagnosis, access to treatment and care matter. Learn about the condition and available health services from the official source.",
+                "connection": "Information here is not a personal screening recommendation. Consult qualified local services for eligibility and care."
+            },
+            "ro": {
+                "title": "Cancerul de san: informatia corecta conteaza.",
+                "explanation": "Organizatia Mondiala a Sanatatii explica importanta diagnosticului la timp, a accesului la tratament si a ingrijirii. Citeste sursa oficiala si verifica serviciile locale.",
+                "connection": "Nu este o recomandare individuala de screening. Pentru eligibilitate si ingrijire, consulta serviciile medicale autorizate."
+            },
+            "it": {
+                "title": "Tumore al seno: informarsi conta.",
+                "explanation": "L'Organizzazione mondiale della sanita spiega l'importanza della diagnosi tempestiva, dell'accesso ai trattamenti e delle cure. Consulta la fonte ufficiale.",
+                "connection": "Non e una raccomandazione personale di screening. Chiedi indicazioni ai servizi sanitari qualificati."
+            }
+        },
+        "kind": "knowledge",
+        "revision": 1,
+        "reviewedAt": "2026-11-23T11:15:00.000Z",
+        "reviewBy": "2027-01-22T11:15:00.000Z"
+    },
+    {
+        "id": "care-breast-screening-romania",
+        "category": "07000000",
+        "format": "care",
+        "topic": {
+            "en": "Screening access in Romania",
+            "ro": "Acces la screening in Romania",
+            "it": "Screening in Romania"
+        },
+        "geography": {
+            "countryCode": "RO",
+            "cityIds": [],
+            "label": {
+                "en": "Romania",
+                "ro": "Romania",
+                "it": "Romania"
+            }
+        },
+        "source": {
+            "publisher": "Fundatia Renasterea",
+            "url": "https://fundatiarenasterea.ro/a-fost-lansat-programul-national-de-screening-pentru-cancerul-de-san-daria-depistarea-activa-responsabilitate-informatie-si-acces/"
+        },
+        "copy": {
+            "en": {
+                "title": "Closer access to breast cancer screening in Romania.",
+                "explanation": "Fundatia Renasterea participates in the DARIA screening information programme. Consult the organiser's official programme details and contacts to understand where assistance may be available.",
+                "connection": "Locations, appointments and eligibility can change. Use the organiser's official contacts to confirm before travelling."
+            },
+            "ro": {
+                "title": "Screeningul pentru cancerul de san, mai aproape de comunitati.",
+                "explanation": "Fundatia Renasterea participa la programul de informare si screening DARIA. Consulta informatiile oficiale ale organizatorului despre proiect si datele de contact.",
+                "connection": "Locurile, programarile si eligibilitatea trebuie confirmate direct cu organizatorii. DLKT nu efectueaza programari."
+            },
+            "it": {
+                "title": "Screening del tumore al seno piu accessibile in Romania.",
+                "explanation": "Fundatia Renasterea partecipa al programma DARIA dedicato all'informazione e all'accesso allo screening. Consulta la fonte ufficiale.",
+                "connection": "Sedi, disponibilita ed eleggibilita vanno confermate direttamente con gli organizzatori."
+            }
+        },
+        "kind": "knowledge",
+        "revision": 1,
+        "reviewedAt": "2026-11-23T11:15:00.000Z",
+        "reviewBy": "2027-01-22T11:15:00.000Z"
+    },
+    {
+        "id": "care-palliative-romania",
+        "category": "07000000",
+        "format": "care",
+        "topic": {
+            "en": "Palliative care and volunteering",
+            "ro": "Ingrijire paliativa si voluntariat",
+            "it": "Cure palliative e volontariato"
+        },
+        "geography": {
+            "countryCode": "RO",
+            "cityIds": [],
+            "label": {
+                "en": "Romania",
+                "ro": "Romania",
+                "it": "Romania"
+            }
+        },
+        "source": {
+            "publisher": "HOSPICE Casa Sperantei",
+            "url": "https://hospice.ro/implica-te"
+        },
+        "copy": {
+            "en": {
+                "title": "Help make compassionate care accessible.",
+                "explanation": "HOSPICE Casa Sperantei explains opportunities to support patients with serious illnesses through volunteering and other forms of involvement. Check the official organisation's current options.",
+                "connection": "Any support or donation takes place directly through the organisation, not through DLKT."
+            },
+            "ro": {
+                "title": "Ajuta ingrijirea celor cu boli grave.",
+                "explanation": "HOSPICE Casa Sperantei prezinta modalitati de implicare pentru sustinerea pacientilor cu boli grave, inclusiv voluntariatul. Consulta direct initiativele actuale ale fundatiei.",
+                "connection": "Orice sustinere sau donatie are loc direct la organizatie, nu prin DLKT."
+            },
+            "it": {
+                "title": "Aiuta ad assicurare cure con dignita.",
+                "explanation": "HOSPICE Casa Sperantei presenta opportunita per aiutare pazienti con malattie gravi, incluso il volontariato. Consulta l'organizzazione ufficiale.",
+                "connection": "Qualsiasi sostegno o donazione avviene direttamente presso l'organizzazione, non tramite DLKT."
+            }
+        },
+        "kind": "knowledge",
+        "revision": 1,
+        "reviewedAt": "2026-11-23T11:15:00.000Z",
+        "reviewBy": "2027-01-22T11:15:00.000Z"
+    },
+    {
+        "id": "care-blood-donation-global",
+        "category": "07000000",
+        "format": "care",
+        "topic": {
+            "en": "Voluntary blood donation",
+            "ro": "Donare voluntara de sange",
+            "it": "Donazione volontaria di sangue"
+        },
+        "source": {
+            "publisher": "World Health Organization",
+            "url": "https://www.who.int/campaigns/world-blood-donor-day/2026"
+        },
+        "copy": {
+            "en": {
+                "title": "One simple way to help: learn about blood donation.",
+                "explanation": "The World Health Organization's 2026 World Blood Donor Day campaign explains the importance of voluntary blood donation. Look up recognised local services if you want to learn about eligibility.",
+                "connection": "Do not assume eligibility or an active appointment from this card. Confirm requirements with your local blood service."
+            },
+            "ro": {
+                "title": "Un gest cu impact: intereseaza-te despre donarea de sange.",
+                "explanation": "Campania OMS pentru Ziua Mondiala a Donatorului de Sange 2026 explica de ce conteaza donarea voluntara. Verifica serviciile autorizate din zona ta.",
+                "connection": "Eligibilitatea si disponibilitatea se confirma la centrul local de transfuzie. Acesta este un mesaj de informare, nu o programare."
+            },
+            "it": {
+                "title": "Un gesto utile: informati sulla donazione del sangue.",
+                "explanation": "La campagna OMS 2026 spiega l'importanza della donazione volontaria. Rivolgiti ai servizi riconosciuti nella tua zona.",
+                "connection": "Requisiti e disponibilita vanno confermati presso i servizi locali. Non e una prenotazione."
+            }
+        },
+        "kind": "knowledge",
+        "revision": 1,
+        "reviewedAt": "2026-11-23T11:15:00.000Z",
+        "reviewBy": "2027-01-22T11:15:00.000Z"
     }
 ];
 export const KNOWLEDGE_CARDS = Object.freeze(validateKnowledgeCatalog(reviewed));
