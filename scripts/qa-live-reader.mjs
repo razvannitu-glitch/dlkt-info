@@ -60,8 +60,13 @@ async function connectChrome(port) {
 }
 async function evaluate(call,expression) {
   const result=await call('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});
-  if(result.exceptionDetails||!result.result||!Object.hasOwn(result.result,'value'))
-    throw Error('LIVE_BROWSER_EVALUATION_FAILED');
+  if(result.exceptionDetails) {
+    const firstLine=String(result.exceptionDetails.exception?.description??result.exceptionDetails.text??'unknown')
+      .split('\\n')[0].slice(0,160);
+    throw Error('LIVE_BROWSER_EVALUATION_FAILED: '+firstLine);
+  }
+  if(!result.result||!Object.hasOwn(result.result,'value'))
+    throw Error('LIVE_BROWSER_EVALUATION_NO_VALUE: '+String(result.result?.type??'missing'));
   return result.result.value;
 }
 
