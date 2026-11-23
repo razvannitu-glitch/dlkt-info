@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {runInNewContext} from 'node:vm';
 import {createHash} from 'node:crypto';
 import {NewsContinuation,continuationItems} from '../.build/src/iceo/news-continuation.js';
 import {NEWS_CATEGORIES} from '../.build/src/iceo/news-taxonomy.js';
@@ -152,4 +154,80 @@ test('a mismatched period response cannot replace or append to the selected Toda
  let calls=0;const model=new NewsContinuation(async()=>response(calls++===0?page(0,40,{period:'today',day}):page(20,40)),()=>now);
  await model.start(today);const prefix=[...model.view().items];assert.equal(model.view().error,null);
  await model.next();assert.equal(model.view().error,'invalid');assert.deepEqual(model.view().items,prefix);
+});
+
+/** Execute the compiled UI bindings and actual controller, not a copy of the refresh action. */
+function continuationActions(model,selected){
+ const reader=readFileSync('.build/src/iceo/browser.js','utf8');
+ const actionStart=reader.indexOf('function refreshNewsEdition()'),clickStart=reader.indexOf("required('#discovery').addEventListener('click'",actionStart);
+ const changeStart=reader.indexOf("required('#discovery').addEventListener('change'",clickStart);
+ const header=reader.match(/required\('#discovery-refresh'\)\.addEventListener\('click', refreshNewsEdition\);/u)?.[0];
+ const start=reader.indexOf('void newsContinuation.start('),end=reader.indexOf('const server =',start);
+ const footerStart=reader.indexOf("const streamEnd = document.createElement('div');"),footerEnd=reader.indexOf('controls.replaceChildren(...streamEnd.childNodes);',footerStart);
+ assert.ok(actionStart>=0&&clickStart>actionStart&&changeStart>clickStart&&header);
+ assert.ok(start>=0&&end>start&&footerStart>=0&&footerEnd>footerStart);
+ const beginEdition=reader.slice(start,end),footer=reader.slice(footerStart,footerEnd+'controls.replaceChildren(...streamEnd.childNodes);'.length);
+ const listeners=new Map(),pending=[],accepted=[];let sourceChecks=0,localChecks=0;
+ class Element {
+  constructor(tag='button'){this.tag=tag;this.dataset={};this.childNodes=[];}
+  append(...nodes){this.childNodes.push(...nodes);}
+  replaceChildren(...nodes){this.childNodes=[...nodes];}
+  closest(selector){return selector==='[data-news-restart]'&&this.dataset.newsRestart?this:selector==='[data-public-more]'&&this.dataset.publicMore?this:null;}
+ }
+ const controls=new Element('div');
+ const environment={Element,language:selected.language,newsFilter:selected.filter,newsPeriod:selected.period??'recent',
+  contextualCity:selected.city??null,contextualLocalState:'loaded',restartNewsEdition:false,applyPublicUpdate:false,
+  document:{visibilityState:'visible',body:{dataset:{entryView:'start'}},createElement:tag=>new Element(tag)},
+  controls,make:(tag,_class,text)=>Object.assign(new Element(tag),{textContent:text}),
+  required:selector=>({addEventListener:(type,callback)=>listeners.set(selector+':'+type,callback),click:()=>{assert.equal(selector,'#refresh-local');localChecks++;}}),
+  load:async()=>{sourceChecks++;},
+  newsContinuation:{view:()=>model.view(),start:(...args)=>{const job=model.start(...args);pending.push(job);return job;},next:()=>model.next()},
+ };
+ environment.renderDiscovery=()=>{accepted.push(environment.applyPublicUpdate);runInNewContext(beginEdition,environment);};
+ runInNewContext(reader.slice(actionStart,changeStart)+'\n'+header,environment);
+ return {
+  clickFooter(){
+   environment.server=model.view();environment.visible=model.view().items;
+   runInNewContext(footer,environment);
+   const button=controls.childNodes.find(node=>node.tag==='button'&&node.dataset.newsRestart==='true');
+   assert.ok(button,'the actual terminal/expired UI offers the explicit update action');
+   listeners.get('#discovery:click')({target:button});
+  },
+  clickHeader(){listeners.get('#discovery-refresh:click')();},
+  automatic(){return environment.showNewsPage(false);},
+  finish(){return Promise.all(pending);},
+  checks:()=>({sourceChecks,localChecks,accepted}),
+ };
+}
+test('footer updates restart exhausted and expired editions through the same fresh action as the header',async()=>{
+ const city=findCity('683506');assert.ok(city);
+ const selected={...context,cityId:city.id,city,period:'recent'};
+ for(const trigger of ['exhausted footer','expired footer','header']){
+  let time=now,release;
+  const requests=[];
+  const edition=(offset,total,extra={})=>page(offset,total,{cityId:city.id,countryCode:city.countryCode,...extra});
+  const model=new NewsContinuation(async(url,init)=>{
+   requests.push({url,init});
+   if(requests.length<=2)return response(edition(requests.length===1?0:20,31));
+   return new Promise(resolve=>{release=()=>resolve(response(edition(0,40,{
+    epoch:'102',revision:4,generatedAt:new Date(time).toISOString(),startedAt:new Date(time).toISOString(),expiresAt:new Date(time+900000).toISOString(),
+   })));});
+  },()=>time);
+  await model.start(selected);await model.next();
+  assert.equal(model.view().items.length,31);assert.equal(model.view().page.nextCursor,null);
+  if(trigger==='expired footer'){time+=900001;assert.equal(model.view().error,'expired');}
+  const actions=continuationActions(model,selected),before=[...model.view().items];
+  await actions.automatic();
+  assert.deepEqual(model.view().items,before,'automatic continuation cannot restart a completed or expired edition');
+  assert.equal(requests.length,2);assert.deepEqual(actions.checks(),{sourceChecks:0,localChecks:0,accepted:[]});
+  if(trigger==='header')actions.clickHeader();else actions.clickFooter();
+  assert.equal(requests.length,3,trigger);assert.equal(model.view().loading,true);assert.equal(model.view().items.length,0);
+  assert.equal(actions.checks().sourceChecks,1);assert.equal(actions.checks().localChecks,1);assert.equal(actions.checks().accepted[0],true);
+  const query=new URL(requests[2].url,'https://www.dlkt.ee').searchParams;
+  assert.equal(query.has('cursor'),false);assert.equal(query.get('lang'),selected.language);
+  assert.equal(query.get('city'),city.id);assert.equal(query.get('category'),'all');assert.equal(query.get('period'),'recent');
+  assert.equal(requests[2].init.credentials,'omit');
+  release();await actions.finish();
+  assert.equal(model.view().page.epoch,'102');assert.equal(model.view().items.length,20);assert.equal(model.view().error,null);
+ }
 });

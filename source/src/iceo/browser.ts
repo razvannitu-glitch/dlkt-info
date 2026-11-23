@@ -775,6 +775,13 @@ function renderDiscovery():void {
   const anchor=anchors.find(item=>item.node.isConnected);if(anchor){const offset=anchor.node.getBoundingClientRect().top-anchor.top;if(Math.abs(offset)>1)window.scrollBy(0,offset);}
   memoryControls();
 }
+/** Explicit update buttons share the source check and edition reset; pagination stays append-only. */
+function refreshNewsEdition():void {
+  restartNewsEdition=true;applyPublicUpdate=true;renderDiscovery();void load();
+  if(contextualCity&&contextualLocalState!=='loading'){
+    contextualLocalState='loading';required<HTMLButtonElement>('#refresh-local').click();renderDiscovery();
+  }
+}
 async function showNewsPage(focus:boolean):Promise<void> {
   const state=newsContinuation.view();
   if(document.visibilityState!=='visible'||document.body.dataset.entryView!=='start'||document.body.dataset.worldExplore||state.loading||state.error==='expired'||state.page?.nextCursor===null)return;
@@ -791,7 +798,7 @@ async function showNewsPage(focus:boolean):Promise<void> {
 }
 required<HTMLElement>('#discovery').addEventListener('click',event=>{
   if(!(event.target instanceof Element))return;
-  if(event.target.closest('[data-news-restart]')){restartNewsEdition=true;applyPublicUpdate=true;renderDiscovery();}
+  if(event.target.closest('[data-news-restart]'))refreshNewsEdition();
   else if(event.target.closest('[data-public-more]'))void showNewsPage(true);
 });
 required<HTMLElement>('#discovery').addEventListener('change',event=>{
@@ -826,7 +833,7 @@ document.addEventListener('dlkt:location-settled',()=>{contextualLocationPending
 required<HTMLButtonElement>('#return-open').addEventListener('click',()=>{if(deviceState.cards.length)openSavedCards();else if(checkpointInvalid)openSettings();else openReturnChanges();});
 required<HTMLButtonElement>('#return-refresh').addEventListener('click',()=>{void load();});
 required<HTMLInputElement>('#comparison-saved-only').addEventListener('change',()=>{if(changesView)render();});
-required<HTMLButtonElement>('#discovery-refresh').addEventListener('click',()=>{restartNewsEdition=true;applyPublicUpdate=true;renderDiscovery();void load();if(contextualCity&&contextualLocalState!=='loading'){contextualLocalState='loading';required<HTMLButtonElement>('#refresh-local').click();renderDiscovery();}});
+required<HTMLButtonElement>('#discovery-refresh').addEventListener('click',refreshNewsEdition);
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible'){renderDiscovery();if(savedView)savedCards();if(Date.now()-lastPublicCheckAttempt>=PUBLIC_REFRESH_MS)void load(true);else schedulePublicRefresh();}
   else{clearTimeout(discoveryExpiry);clearTimeout(publicRefreshTimer);clearTimeout(savedUpdateExpiry);}
