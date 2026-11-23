@@ -1,5 +1,5 @@
 import {localeFromCountry,localeFromPreference,resolveLocale,type Locale} from '../i18n/locale.js';
-import {NEWS_DISCOVERY_INDEXES,NEWS_PUBLICATION_SCOPES,NEWS_PUBLISHERS,newsLanguageMatches,sourceLanguage,sourcePublicationContext,type NewsSourceLanguage} from './news-sources.js';
+import {NEWS_DISCOVERY_INDEXES,NEWS_PUBLICATION_SCOPES,NEWS_PUBLISHERS,REVIEWED_FEED_PUBLICATION_SCOPES,newsLanguageMatches,sourceLanguage,sourcePublicationContext,type NewsSourceLanguage} from './news-sources.js';
 
 /** Country identities come from the existing validated City or /api/places?countries=1.
  * GeoNames reference: https://www.geonames.org/countries/
@@ -41,12 +41,9 @@ const configured:readonly ConfiguredEdition[]=Object.freeze([
   }
   return Object.freeze({publisherId:scope.publisherId,countryCode:scope.countryCode,languages:uniqueSorted(languages)});
  }),
- ...(()=>{
-  // This reviewed-feed exception already exists in sourcePublicationContext and DAILY_FEEDS.
-  // Reuse its provenance without adding SAnews to the discovery-origin registry.
-  const context=sourcePublicationContext('https://www.sanews.gov.za/south-africa/');
-  return context?.language?[Object.freeze({publisherId:'sanews',countryCode:context.publisherCountryCode,languages:Object.freeze([context.language])})]:[];
- })(),
+ ...REVIEWED_FEED_PUBLICATION_SCOPES.map(scope=>Object.freeze({
+   publisherId:scope.sourceId,countryCode:scope.countryCode,languages:Object.freeze([scope.language]),
+  })),
 ]);
 function validCountry(value:unknown):value is CountryEditionCountry {
  if(typeof value!=='object'||value===null||Array.isArray(value))return false;

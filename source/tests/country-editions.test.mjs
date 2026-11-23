@@ -8,7 +8,7 @@ import {NEWS_PUBLISHERS,NEWS_PUBLICATION_SCOPES,NEWS_DISCOVERY_INDEXES,sourceLan
 
 const countries=listCountries(),zero=Object.freeze({national:0,local:0,international:0});
 function country(code){const value=countries.find(country=>country.code===code);assert.ok(value,'existing GeoNames country '+code);return value;}
-const configuredCountries=['AU','DE','FR','GB','HK','IE','IN','IT','JP','QA','RO','SG','US','ZA'];
+const configuredCountries=['AU','DE','FR','GB','HK','IE','IN','IT','JP','NL','NZ','QA','RO','SG','US','ZA'];
 
 test('every actual GeoNames country remains selectable regardless of configured publishers',t=>{
  const before=JSON.stringify(countries),profiles=countryEditionProfiles(countries);

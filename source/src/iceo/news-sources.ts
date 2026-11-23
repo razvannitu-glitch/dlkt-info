@@ -145,25 +145,55 @@ export const NEWS_PUBLICATION_SCOPES:readonly PublicationScope[]=Object.freeze([
   // The New York Times also publishes other language editions. Only its dated English path is declared below.
   publication('nytimes','US','United States','United States and global reporting'),
 ]);
+/** Existing primary feeds have their own reviewed ingestion contract, not a news-discovery origin.
+ * This finite map identifies their publication provenance only. It grants no fetching or reuse rights.
+ * Exact source IDs, origins and article paths are checked against DAILY_FEEDS in regression tests.
+ */
+interface ReviewedFeedPublicationScope {
+  readonly sourceId:string;readonly origin:string;readonly articlePaths:readonly string[];
+  readonly countryCode:string;readonly countryName:string;readonly language:NewsSourceLanguage;readonly coverage:string;
+}
+const reviewedPublication=(sourceId:string,origin:string,articlePaths:readonly string[],countryCode:string,countryName:string,language:NewsSourceLanguage,coverage:string):ReviewedFeedPublicationScope=>
+  Object.freeze({sourceId,origin,articlePaths:Object.freeze([...articlePaths]),countryCode,countryName,language,coverage});
+export const REVIEWED_FEED_PUBLICATION_SCOPES:readonly ReviewedFeedPublicationScope[]=Object.freeze([
+  reviewedPublication('sanews','https://www.sanews.gov.za',['/south-africa/','/features/'],'ZA','South Africa','en','South African government reporting'),
+  reviewedPublication('cbs-news','https://www.cbs.nl',['/en-gb/news/'],'NL','Netherlands','en','Statistics Netherlands English statistical releases'),
+  reviewedPublication('noaa-news','https://www.noaa.gov',['/news/','/stories/'],'US','United States','en','NOAA weather, ocean and environmental research announcements'),
+  reviewedPublication('nist-news','https://www.nist.gov',['/news-events/news/'],'US','United States','en','NIST government research and technology announcements'),
+  reviewedPublication('nsf-news','https://www.nsf.gov',['/news/'],'US','United States','en','National Science Foundation government research announcements'),
+  reviewedPublication('fed-news','https://www.federalreserve.gov',['/newsevents/pressreleases/'],'US','United States','en','Federal Reserve Board statements and releases'),
+  reviewedPublication('ftc-consumer','https://consumer.ftc.gov',['/consumer-alerts/'],'US','United States','en','Federal Trade Commission consumer guidance'),
+  reviewedPublication('fda-food','https://www.fda.gov',['/safety/recalls-market-withdrawals-safety-alerts/'],'US','United States','en','FDA United States food recall listings'),
+  // Primary feed and Crown text-reuse terms rechecked2026-11-23: /feeds, /rss.xml and /copyright.
+  // The source remains government communication; no independent corroboration, images or city coverage is inferred.
+  reviewedPublication('beehive-news','https://www.beehive.govt.nz',['/release/','/speech/'],'NZ','New Zealand','en','New Zealand Government releases and speeches'),
+]);
+type PublicationSource=string|{readonly sourceUrl:string;readonly sourceIds?:readonly string[]};
 const publicationScopes=new Map(NEWS_PUBLICATION_SCOPES.map(value=>[value.publisherId,value]));
 const editionPath=(path:string,prefix:string):boolean=>prefix==='/'||path===prefix.slice(0,-1)||path.startsWith(prefix);
 /** Source-edition language, not automatic detection of the language of an individual article. */
-export function sourcePublicationContext(value:string|{readonly sourceUrl:string}):SourcePublicationContext|null{
+export function sourcePublicationContext(value:PublicationSource):SourcePublicationContext|null{
   const raw=typeof value==='string'?value:value.sourceUrl;
   if(raw.length>3000||/[\u0000-\u0020\u007f<>\\]/u.test(raw))return null;
   let url:URL;try{url=new URL(raw);}catch{return null;}
   if(url.protocol!=='https:'||url.username||url.password||url.port)return null;
-  // This source already belongs to the reviewed-feed registry; it is not added to news discovery's origin allowlist.
-  if(url.origin==='https://www.sanews.gov.za'&&['/south-africa/','/features/'].some(path=>editionPath(url.pathname,path)))return Object.freeze({language:'en',publisherCountryCode:'ZA',publisherCountryName:'South Africa',coverage:'South African government reporting',basis:'reviewed-publisher'});
+  const reviewed=REVIEWED_FEED_PUBLICATION_SCOPES.find(scope=>scope.origin===url.origin&&scope.articlePaths.some(path=>url.pathname.startsWith(path)));
+  if(reviewed){
+    // A card must belong to the exact approved feed. URL-only queries expose reviewed provenance,
+    // but never promote an unrelated source's card or authorize a new discovery publisher.
+    if(url.search||url.hash||typeof value!=='string'&&value.sourceIds!==undefined
+      &&(!Array.isArray(value.sourceIds)||value.sourceIds.length!==1||value.sourceIds[0]!==reviewed.sourceId))return null;
+    return Object.freeze({language:reviewed.language,publisherCountryCode:reviewed.countryCode,publisherCountryName:reviewed.countryName,coverage:reviewed.coverage,basis:'reviewed-publisher'});
+  }
   const publisher=byOrigin.get(url.origin),scope=publisher?publicationScopes.get(publisher.id):undefined;
   if(!scope)return null;
   const edition=scope.editions.find(value=>editionPath(url.pathname,value.path));
   const language=edition?.language??(scope.publisherId==='nytimes'&&/^\/\d{4}\//u.test(url.pathname)?'en':null);
   return Object.freeze({language,publisherCountryCode:scope.countryCode,publisherCountryName:scope.countryName,coverage:scope.coverage,basis:'reviewed-publisher'});
 }
-export function sourceLanguage(value:string|{readonly sourceUrl:string}):NewsSourceLanguage|null{return sourcePublicationContext(value)?.language??null;}
+export function sourceLanguage(value:PublicationSource):NewsSourceLanguage|null{return sourcePublicationContext(value)?.language??null;}
 /** Reviewed edition provenance only. This never establishes an article's event location or city coverage. */
-export function sourceEditionCountryCode(value:string|{readonly sourceUrl:string}):string|null{
+export function sourceEditionCountryCode(value:PublicationSource):string|null{
   const context=sourcePublicationContext(value);
   return context?.language?context.publisherCountryCode:null;
 }

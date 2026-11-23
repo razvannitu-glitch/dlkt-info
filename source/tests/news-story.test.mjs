@@ -151,6 +151,7 @@ test('source cursors bind kind, epoch, event, offset, category, language and exp
  await assert.rejects(reader.readSources(token.slice(0,-1)+(token.at(-1)==='A'?'B':'A')),/NEWS_CURSOR_INVALID/);
  const value=decoded(token);
  await assert.rejects(reader.readSources(sign({...value,version:'news-cursor-4'})),/NEWS_EDITION_EXPIRED/);
+ await assert.rejects(reader.readSources(sign({...value,orderVersion:'iptc17-country-day-stories-20261123'})),/NEWS_EDITION_EXPIRED/);
  await assert.rejects(reader.readSources(sign({...value,storyKey:'story:'+'a'.repeat(64)})),/NEWS_CURSOR_INVALID/);
  await assert.rejects(reader.readSources(sign({...value,after:6})),/NEWS_CURSOR_INVALID/);
  await assert.rejects(reader.readSources(sign({...value,filter:'05000000'})),/NEWS_CURSOR_INVALID/);
@@ -183,4 +184,16 @@ test('source transport is anonymous, abortable, byte-bounded and reports expired
  await assert.rejects(fetchNewsStorySources(cursor,controller.signal,undefined,async()=>new Response(' '.repeat(NEWS_MAX_RESPONSE_BYTES+1),{headers:{'content-type':'application/json'}}),()=>NOW),error=>error.code==='unavailable');
  const aborted=new AbortController();aborted.abort();let calls=0;
  await assert.rejects(fetchNewsStorySources(cursor,aborted.signal,undefined,async()=>{calls++;return response(page);},()=>NOW),error=>error.code==='unavailable');assert.equal(calls,0);
+});
+
+test('the observed Romanian draw is one feed card with both source originals before pagination',async()=>{
+ const records=[
+  report(2300,'Rezultatele LOTO duminică, 22 noiembrie 2026. Numerele câștigătoare la extragerea de azi',{language:'ro',publisher:'HotNews.ro',sourceUrl:'https://hotnews.ro/rezultatele-loto-6-din-49-din-22-noiembrie-2026-2410659'}),
+  report(2301,'Rezultate LOTO - Duminică, 22 noiembrie 2026. Numerele extrase și premiile puse în joc de Loteria Română',{language:'ro',publisher:'Digi24',sourceUrl:'https://www.digi24.ro/stiri/actualitate/social/rezultate-loto-duminica-22-noiembrie-2026-premii-atractive-la-6-49-joker-si-noroc-4046517'}),
+ ];
+ const before=JSON.stringify(records),page=await service(records).read(query({language:'ro'}));
+ assert.equal(page.total,1);assert.equal(page.articleTotal,2);assert.equal(page.items.length,1);
+ assert.equal(page.items[0].story.basis,'shared-event');assert.equal(page.items[0].story.sourceTotal,2);
+ assert.deepEqual(new Set([page.items[0].card,...page.items[0].story.related.map(source=>source.card)].map(card=>card.sourceUrl)),new Set(records.map(card=>card.sourceUrl)));
+ assert.equal(validNewsPage(page,NOW),true);assert.equal(JSON.stringify(records),before);
 });

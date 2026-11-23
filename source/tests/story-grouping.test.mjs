@@ -226,3 +226,79 @@ test('the helper only groups supplied records, leaves software versions alone an
  assert.equal(groupStories(many).length,5000);assert.throws(()=>groupStories([...many,card(6000,'Excess publication')]),/STORY_INPUT_INVALID/u);
  assert.deepEqual(groupStories([]),[]);
 });
+
+const romanianDrawTitle='Rezultatele LOTO duminică, 22 noiembrie 2026. Numerele câștigătoare la extragerea de azi';
+const digiDrawTitle='Rezultate LOTO - Duminică, 22 noiembrie 2026. Numerele extrase și premiile puse în joc de Loteria Română';
+const hotnewsDrawUrl='https://hotnews.ro/rezultatele-loto-6-din-49-din-22-noiembrie-2026-2410659';
+const digiDrawUrl='https://www.digi24.ro/stiri/actualitate/social/rezultate-loto-duminica-22-noiembrie-2026-premii-atractive-la-6-49-joker-si-noroc-4046517';
+const drawReport=(id,title,url,extra={})=>card(id,title,{identity:url,sourceUrl:url,...extra});
+
+test('the observed HotNews and Digi24 results use one dated operator event without rewriting originals',()=>{
+ const records=[drawReport(501,romanianDrawTitle,hotnewsDrawUrl,{publisher:'HotNews.ro',date:'2026-11-22T16:37:00.000Z'}),
+  drawReport(502,digiDrawTitle,digiDrawUrl,{publisher:'Digi24',date:'2026-11-22T16:30:00.000Z'})];
+ const before=JSON.stringify(records),groups=groupStories(records);
+ assert.equal(groups.length,1);assert.equal(groups[0].basis,'shared-event');assert.equal(groups[0].related.length,1);
+ assert.deepEqual(titles(groups[0]),records.map(record=>record.title).sort());assert.equal(JSON.stringify(records),before);
+ const identity=groups[0].key;
+ for(const changed of [[...records].reverse(),[records[1]],records.map(record=>({...record,date:'2026-11-25T00:01:00.000Z',summary:'A different publisher excerpt.'}))]){
+  assert.equal(groupStories(changed).length,1);assert.equal(groupStories(changed)[0].key,identity);
+ }
+});
+
+test('international draw results share an exact game and full printed date across original languages',()=>{
+ for(const [game,variants]of [
+  ['EuroMillions',['EuroMillions results: 22 November 2026','Résultats EuroMillions du 22 novembre 2026','Resultados EuroMillions del 22 noviembre 2026','Euro Millions results November 22, 2026']],
+  ['EuroJackpot',['EuroJackpot results: 2026-11-22','EuroJackpot Ergebnisse 22.11.2026','Risultati EuroJackpot 22 novembre 2026']],
+  ['Mega Millions',['Mega Millions results November 22, 2026','Resultados Mega Millions 22 noviembre 2026']],
+ ]){
+  const records=variants.map((title,index)=>card(520+index,title));const group=groupStories(records);
+  assert.equal(group.length,1,game);assert.equal(group[0].basis,'shared-event');assert.ok(records.every(record=>storyThreadKey(record)===group[0].key));
+ }
+});
+
+test('dates, operators, special draws and non-result stories remain separate',()=>{
+ const main=card(540,'EuroMillions results 22 November 2026');
+ for(const title of [
+  'EuroMillions results 23 November 2026','EuroJackpot results 22 November 2026','Mega Millions results 22 November 2026',
+  'EuroMillions special results 22 November 2026','EuroMillions results bonus draw 22 November 2026',
+  'EuroMillions results and EuroJackpot results 22 November 2026','EuroMillions results and Powerball 22 November 2026',
+  'EuroMillions results for the 20 November draw corrected on 22 November 2026',
+  'EuroMillions results 22 November 2026 and Thunderball results',
+  'EuroMillions results and Thunderball results 22 November 2026',
+  'Résultats EuroMillions du 22 novembre 2026: tirage exceptionnel',
+  'EuroMillions results 22 November 2026: preview and draw schedule',
+  'EuroMillions results 22 November 2026 are expected tonight',
+  'Résultats EuroMillions 22 novembre 2026: résultats attendus ce soir',
+  'EuroMillions jackpot preview 22 November 2026','EuroMillions winner interview 22 November 2026','EuroMillions odds explained 22 November 2026',
+  'EuroMillions results 22 November','EuroMillions results 31 November 2026','EuroMillions results 2026-02-29',
+  'EuroMillions results 22 November 2026 compared with 20 November 2026',
+ ])assert.equal(groupStories([main,card(541,title)]).length,2,title);
+ assert.equal(groupStories([card(544,'EuroJackpot results 22 November 2026'),card(545,'EuroJackpot Ergebnisse 22.11.2026: Sonderziehung')]).length,2);
+ const ro=drawReport(542,romanianDrawTitle,hotnewsDrawUrl);
+ for(const title of [
+  'Rezultate LOTO 22 noiembrie 2026','Rezultate LOTO 22 noiembrie 2026 - Loterie Nationale France',
+  'Rezultate LOTO Italia 22 noiembrie 2026 - Loteria Romana',
+  'Rezultate LOTO Joker 22 noiembrie 2026 - Loteria Romana',
+  'Rezultate LOTO 6/49 22 noiembrie 2026 - Loteria Romana',
+  'Rezultate LOTO speciale 22 noiembrie 2026 - Loteria Romana',
+  'Rezultate LOTO 22 noiembrie 2026 - Loteria Romana: programul extragerii de diseara',
+  'Rezultate LOTO pentru extragerea din 20 noiembrie, actualizate 22 noiembrie 2026 - Loteria Romana',
+  'Rezultate LOTO 22 noiembrie 2026: Loteria Romana si Loteria Moldovei',
+  'Rezultate LOTO 22 noiembrie - Loteria Romana','Rezultate LOTO 31 noiembrie 2026 - Loteria Romana',
+ ])assert.equal(groupStories([ro,card(543,title)]).length,2,title);
+});
+
+test('the reviewed operatorless results series binds exact HTTPS origin, path, identity and headline date',()=>{
+ const expected=drawReport(550,digiDrawTitle,digiDrawUrl);
+ for(const url of [
+  hotnewsDrawUrl.replace('hotnews.ro','hotnews.ro.example.org'),hotnewsDrawUrl.replace('https:','http:'),
+  hotnewsDrawUrl.replace('https://','https://reader@'),hotnewsDrawUrl.replace('hotnews.ro/','hotnews.ro:444/'),
+  hotnewsDrawUrl+'?source=unreviewed',hotnewsDrawUrl+'#result',
+  hotnewsDrawUrl.replace('/rezultatele','/foreign/rezultatele'),
+  hotnewsDrawUrl.replace('22-noiembrie','21-noiembrie'),hotnewsDrawUrl.replace('-2410659','-abc'),
+ ]){
+  assert.equal(groupStories([expected,drawReport(551,romanianDrawTitle,url)]).length,2,url);
+ }
+ assert.equal(groupStories([expected,drawReport(552,romanianDrawTitle,hotnewsDrawUrl,{identity:'https://unrelated.example/article'})]).length,2);
+ assert.equal(groupStories([expected,drawReport(553,romanianDrawTitle.replace('22 noiembrie','21 noiembrie'),hotnewsDrawUrl)]).length,2);
+});
