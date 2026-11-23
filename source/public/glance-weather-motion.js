@@ -33,7 +33,12 @@ export function weatherPresentation(card, now) {
     return current ? { ...weatherVisual(current.symbol), state: 'current', symbol: current.symbol, nextAt } : missing('unavailable', nextAt);
 }
 /** The pure weather projection is available even in SSR/test environments without a URL. */
-const motionLocale = () => { try { return getLocale(); } catch { return 'en'; } };
+const motionLocale = () => { try {
+    return getLocale();
+}
+catch {
+    return 'en';
+} };
 const NS = 'http://www.w3.org/2000/svg';
 function svgElement(name, attributes = {}) {
     const node = document.createElementNS(NS, name);
