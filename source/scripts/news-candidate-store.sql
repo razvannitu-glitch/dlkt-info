@@ -87,7 +87,14 @@ begin
       end if;
       update public.dlkt_info_news_candidates set title=entry->>'title',publisher=entry->>'publisher',
         indexed_at=(entry->>'indexedAt')::timestamptz,category=entry->>'category'
-        where url_hash=digest and indexed_at <= (entry->>'indexedAt')::timestamptz;
+        where url_hash=digest and indexed_at <= (entry->>'indexedAt')::timestamptz
+          and (
+            (title,publisher,category) is distinct from (entry->>'title',entry->>'publisher',entry->>'category')
+            or (
+              indexed_at < (entry->>'indexedAt')::timestamptz
+              and indexed_at <= checked_at - interval '10 minutes'
+            )
+          );
       get diagnostics affected = row_count; accepted := accepted + affected;
     else
       if capacity = 0 then
@@ -116,5 +123,5 @@ revoke all on function dlkt_info_private.valid_news_candidate(jsonb,timestamptz)
 revoke all on function public.dlkt_info_upsert_news_candidates(jsonb) from public,anon,authenticated,service_role;
 grant execute on function public.dlkt_info_upsert_news_candidates(jsonb) to anon,authenticated,service_role;
 comment on table public.dlkt_info_news_candidates is 'Bounded public discovery metadata. indexed_at is not publication time. Reverify original publisher date before creating an EvidenceCard. No account data.';
-comment on function public.dlkt_info_upsert_news_candidates(jsonb) is 'Purpose-bound server writer header required. Maximum500 input candidates, maximum5000 cached rows. Cache expiry after48hours; oldest cache rows may be evicted earlier only to admit newer candidates. Never changes share history.';
+comment on function public.dlkt_info_upsert_news_candidates(jsonb) is 'Purpose-bound server writer header required. Maximum500 input candidates, maximum5000 cached rows. Identical metadata observations coalesce for up to10 minutes; changed metadata updates immediately. Cache expiry after48hours; oldest cache rows may be evicted earlier only to admit newer candidates. Never changes share history.';
 commit;
