@@ -13,7 +13,8 @@
     "verify": "npm run typecheck && npm test && npm audit --audit-level=high",
     "verify:release": "node verify-release.mjs",
     "test:database": "node --test tests/database/*.test.mjs",
-    "verify:eu-live": "npm run build && node scripts/verify-eu-official-live.mjs"
+    "verify:eu-live": "npm run build && node scripts/verify-eu-official-live.mjs",
+    "build:source-radar": "node scripts/build-source-radar.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.16",

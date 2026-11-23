@@ -1,0 +1,16 @@
+/* DLKT World Source Radar. Scoped to the existing source-method page. */
+#source-radar{min-width:0}
+#source-radar .source-radar-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:24px 0}
+#source-radar .source-radar-controls label{display:grid;gap:6px;font-size:.875rem;font-weight:700;line-height:1.5}
+#source-radar .source-radar-controls input,#source-radar .source-radar-controls select{width:100%;min-width:0;min-height:44px;padding:10px 12px;font:inherit;font-size:.875rem;line-height:1.4;background:#fff;color:#121416;border:1px solid #121416;border-radius:8px}
+#source-radar .source-radar-controls :is(input,select):focus-visible,#source-radar .source-radar-more:focus-visible,#source-radar .source-radar-items a:focus-visible{outline:3px solid #F66061;outline-offset:3px}
+#source-radar .source-radar-items{list-style:none;padding:0;margin:14px 0 20px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+#source-radar .source-radar-item{min-width:0;padding:16px;border:1px solid #d9d9d9;border-radius:10px;background:#fff;color:#121416}
+#source-radar .source-radar-item a{font-weight:750;font-size:1rem;overflow-wrap:anywhere;color:#121416;text-decoration:underline;text-decoration-color:#F66061;text-underline-offset:3px}
+#source-radar .source-radar-item a:hover{color:#ba2b3c}
+#source-radar .source-radar-item p{margin:8px 0 0;font-size:.75rem;line-height:1.5;color:#434549}
+#source-radar #source-radar-count,#source-radar #source-radar-summary{font-size:.875rem;line-height:1.6;overflow-wrap:anywhere}
+#source-radar .source-radar-more{width:100%;min-height:44px;padding:11px;border:1px solid #121416;background:#121416;color:#fff;border-radius:8px;font:inherit;font-size:.875rem;font-weight:700;cursor:pointer}
+#source-radar .source-radar-more:hover{background:#F66061;color:#121416;border-color:#F66061}
+#source-radar .source-radar-disclosure{font-size:.8125rem;line-height:1.65;border-top:1px solid #d9d9d9;padding-top:16px}
+@media(max-width:680px){#source-radar .source-radar-controls,#source-radar .source-radar-items{grid-template-columns:minmax(0,1fr)}}
