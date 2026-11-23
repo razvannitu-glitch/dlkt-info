@@ -1104,7 +1104,7 @@ function renderDiscovery() {
     }
     renderReturnBrief();
     const section = required('#discovery'), target = required('#discovery-cards'), host = document.createElement('div'), note = required('#discovery-status'), button = required('#discovery-refresh');
-    const support = required('#home-local-cards'), supportHost = document.createElement('div'), controls = required('#home-more-controls'), toolbar = required('#home-news-toolbar');
+    const support = required('#home-local-cards'), supportHost = document.createElement('div'), extras = required('#home-local-extras'), extrasHost = document.createElement('div'), controls = required('#home-more-controls'), toolbar = required('#home-news-toolbar');
     button.disabled = loading;
     target.setAttribute('aria-busy', String(loading || newsContinuation.view().loading));
     if (document.body.dataset.entryView !== 'start') {
@@ -1114,6 +1114,7 @@ function renderDiscovery() {
         newsMasonry = null;
         target.replaceChildren();
         support.replaceChildren();
+        extras.replaceChildren();
         controls.replaceChildren();
         toolbar.hidden = true;
         pruneInsights();
@@ -1320,7 +1321,7 @@ function renderDiscovery() {
     }
     controls.replaceChildren(...streamEnd.childNodes);
     // Operational city information remains separate from the news stream.
-    if (!suppressLocalPending && (contextualCity || contextualLocationPending)) {
+    if (!suppressLocalPending && contextualCity && (local.supporting.length > 0 || localNewsCount > 0)) {
         const label = make('div', 'discovery-section-label');
         label.id = 'home-local-heading';
         label.append(make('h2', '', contextualCity ? tr('todayLocalTitle', { city: contextualCity.name }) : tr('navMyCity')));
@@ -1335,14 +1336,14 @@ function renderDiscovery() {
         supportHost.append(node);
     }
     if (contextualCity && !suppressLocalPending)
-        supportHost.append(commercialCardNode({ city: contextualCity.name, country: countryLabel(contextualCity.countryCode, contextualCity.country) }, language));
+        extrasHost.append(commercialCardNode({ city: contextualCity.name, country: countryLabel(contextualCity.countryCode, contextualCity.country) }, language));
     if (!suppressLocalPending && !local.supporting.length && !localNewsCount && (contextualCity || contextualLocationPending)) {
         const state = make('div', 'discovery-section-label');
         state.id = 'home-local-state';
         state.setAttribute('role', 'status');
         const expired = contextualLocalState === 'loaded' && contextualLocal !== null && now - Date.parse(contextualLocal.checkedAt) >= 300_000;
         state.append(make('p', 'privacy-note', awaitingLocal ? 'Checking local updates…' : expired ? 'The local check has expired. Refresh to see current local information.' : contextualLocalState === 'unavailable' ? 'Local information could not be checked. Refresh to try again.' : 'No current local cards match this reading language. Check connected sources or choose another language.'));
-        supportHost.append(state);
+        extrasHost.append(state);
     }
     if (contextualCity) {
         const details = make('details', 'selection-details discovery-section-label');
@@ -1356,10 +1357,11 @@ function renderDiscovery() {
         else
             details.append(make('p', 'privacy-note', contextualLocalState === 'loading' ? 'Local sources are being checked.' : 'Local sources could not be verified. This does not mean there are no disruptions or events.'));
         details.append(make('p', 'privacy-note', 'City-level coverage only; your address and neighbourhood are not known. Only connected sources are included.'));
-        supportHost.append(details);
+        extrasHost.append(details);
     }
     reconcileDiscovery(target, host);
     reconcileDiscovery(support, supportHost);
+    reconcileDiscovery(extras, extrasHost);
     pruneInsights();
     if (newsMasonry === null)
         newsMasonry = new NewsMasonry(target);

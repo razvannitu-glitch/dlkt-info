@@ -556,10 +556,10 @@ function renderDiscovery():void {
   if(interactionKey!==newsInteractionKey||restartNewsEdition){newsInteractionKey=interactionKey;newsInteractionRevision++;}
   renderReturnBrief();
   const section=required<HTMLElement>('#discovery'),target=required<HTMLElement>('#discovery-cards'),host=document.createElement('div'),note=required<HTMLElement>('#discovery-status'),button=required<HTMLButtonElement>('#discovery-refresh');
-  const support=required<HTMLElement>('#home-local-cards'),supportHost=document.createElement('div'),controls=required<HTMLElement>('#home-more-controls'),toolbar=required<HTMLElement>('#home-news-toolbar');
+  const support=required<HTMLElement>('#home-local-cards'),supportHost=document.createElement('div'),extras=required<HTMLElement>('#home-local-extras'),extrasHost=document.createElement('div'),controls=required<HTMLElement>('#home-more-controls'),toolbar=required<HTMLElement>('#home-news-toolbar');
   button.disabled=loading;
   target.setAttribute('aria-busy',String(loading||newsContinuation.view().loading));
-  if(document.body.dataset.entryView!=='start'){section.dataset.loading='hidden';renderDiscoveryLoading(discoveryLoadingElements,'hidden');newsMasonry?.disconnect();newsMasonry=null;target.replaceChildren();support.replaceChildren();controls.replaceChildren();toolbar.hidden=true;pruneInsights();return;}
+  if(document.body.dataset.entryView!=='start'){section.dataset.loading='hidden';renderDiscoveryLoading(discoveryLoadingElements,'hidden');newsMasonry?.disconnect();newsMasonry=null;target.replaceChildren();support.replaceChildren();extras.replaceChildren();controls.replaceChildren();toolbar.hidden=true;pruneInsights();return;}
   const anchors=applyPublicUpdate?[]:[...target.querySelectorAll<HTMLElement>('article')].flatMap(node=>{const rect=node.getBoundingClientRect();return rect.top<innerHeight&&rect.bottom>0?[{node,top:rect.top}]:[];});
   const now=Date.now();
   const localNeedsCheck=contextualLocalState==='unavailable'||contextualLocal!==null&&now-Date.parse(contextualLocal.checkedAt)>=300_000;
@@ -707,27 +707,27 @@ function renderDiscovery():void {
   }
   controls.replaceChildren(...streamEnd.childNodes);
   // Operational city information remains separate from the news stream.
-  if(!suppressLocalPending&&(contextualCity||contextualLocationPending)){
+  if(!suppressLocalPending&&contextualCity&&(local.supporting.length>0||localNewsCount>0)){
     const label=make('div','discovery-section-label');label.id='home-local-heading';
     label.append(make('h2','',contextualCity?tr('todayLocalTitle',{city:contextualCity.name}):tr('navMyCity')));
     supportHost.append(label);
   }
   for(const item of local.supporting){if(!contextualCity)break;const node=localCardNode(item,contextualCity,now);node.dataset.homeLocalId=item.id;node.dataset.cityId=contextualCity.id;supportHost.append(node);}
-  if(contextualCity&&!suppressLocalPending)supportHost.append(commercialCardNode({city:contextualCity.name,country:countryLabel(contextualCity.countryCode,contextualCity.country)},language));
+  if(contextualCity&&!suppressLocalPending)extrasHost.append(commercialCardNode({city:contextualCity.name,country:countryLabel(contextualCity.countryCode,contextualCity.country)},language));
   if(!suppressLocalPending&&!local.supporting.length&&!localNewsCount&&(contextualCity||contextualLocationPending)){
     const state=make('div','discovery-section-label');state.id='home-local-state';state.setAttribute('role','status');
     const expired=contextualLocalState==='loaded'&&contextualLocal!==null&&now-Date.parse(contextualLocal.checkedAt)>=300_000;
     state.append(make('p','privacy-note',awaitingLocal?'Checking local updates…':expired?'The local check has expired. Refresh to see current local information.':contextualLocalState==='unavailable'?'Local information could not be checked. Refresh to try again.':'No current local cards match this reading language. Check connected sources or choose another language.'));
-    supportHost.append(state);
+    extrasHost.append(state);
   }
   if(contextualCity){
     const details=make('details','selection-details discovery-section-label');details.id='home-coverage';details.append(make('summary','','Local sources & coverage'));
     if(contextualLocal){for(const item of localCoverageReading(contextualLocal,now))details.append(make('p','privacy-note',item.text));details.append(make('p','privacy-note',`Local check: ${formatted(contextualLocal.checkedAt)}. Each card keeps its own event date, area and source.`));}
     else details.append(make('p','privacy-note',contextualLocalState==='loading'?'Local sources are being checked.':'Local sources could not be verified. This does not mean there are no disruptions or events.'));
     details.append(make('p','privacy-note','City-level coverage only; your address and neighbourhood are not known. Only connected sources are included.'));
-    supportHost.append(details);
+    extrasHost.append(details);
   }
-  reconcileDiscovery(target,host);reconcileDiscovery(support,supportHost);pruneInsights();
+  reconcileDiscovery(target,host);reconcileDiscovery(support,supportHost);reconcileDiscovery(extras,extrasHost);pruneInsights();
   if(newsMasonry===null)newsMasonry=new NewsMasonry(target);newsMasonry.update();
   const sentinel=controls.querySelector<HTMLElement>('#home-more-button');
   if(sentinel&&!server.loading&&!server.error&&server.page?.nextCursor)stopNewsObserver=observeNewsStream(sentinel,()=>{void showNewsPage(false);});

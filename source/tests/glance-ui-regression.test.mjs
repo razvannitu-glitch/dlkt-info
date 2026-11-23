@@ -24,5 +24,6 @@ test('source dialog stays accessible without a redundant visible utility button'
 
 test('mobile header preserves 44px utility touch targets', () => {
   assert.match(header, /#today-glance #glance-read\s*\{[^}]*min-height:\s*44px/s);
-  assert.match(header, /#today-glance #glance-locate\s*\{[^}]*min-height:\s*44px/s);
+  assert.match(header, /#today-glance #glance-city\s*\{[^}]*min-height:\s*44px/s);
+  assert.match(header, /#today-glance \.glance-utilities \.text-button\s*\{[^}]*min-height:\s*44px/s);
 });

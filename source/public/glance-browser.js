@@ -85,7 +85,6 @@ export function setupGlance() {
         get('glance-city-label').textContent = city?.name ?? translate('chooseCity');
         get('glance-city').setAttribute('aria-label', city ? translate('changeCity') + ': ' + city.name + ', ' + countryLabel(city.countryCode, city.country) : translate('chooseCity'));
         get('glance-zone').textContent = city ? countryLabel(city.countryCode, city.country) + (estimatedCity ? (locale === 'ro' ? ' · aproximativ' : locale === 'it' ? ' · approssimativo' : ' · approximate') : '') : '';
-        get('glance-locate').textContent = locale === 'ro' ? 'Foloseste locatia mea' : locale === 'it' ? 'Usa la mia posizione' : 'Use my location';
         get('glance-weather').hidden = !preferences.weather;
         get('glance-forex').hidden = !preferences.forex;
         const forecast = cards.find(c => c.kind === 'forecast'), range = forecast ? forecastRange(forecast) : null;

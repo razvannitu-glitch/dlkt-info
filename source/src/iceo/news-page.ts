@@ -20,7 +20,7 @@ export interface NewsPageRequest {readonly language:Locale;readonly cityId:strin
 export interface NewsPageReader {read(query:NewsPageRequest):Promise<NewsPage>;readSources(cursor:string):Promise<NewsStorySourcesPage>}
 export class NewsPageError extends Error {constructor(readonly code:NewsPageErrorCode){super(code);this.name='NewsPageError';}}
 const NEWS_CURSOR_VERSION='news-cursor-5' as const;
-const NEWS_COUNTRY_ORDER_VERSION='iptc17-country-day-local-first-20261123' as const;
+const NEWS_COUNTRY_ORDER_VERSION='iptc17-local-city-country-world-20261123' as const;
 const object=(value:unknown):value is Record<string,unknown>=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 const exact=(value:Record<string,unknown>,keys:readonly string[]):boolean=>Object.keys(value).length===keys.length&&keys.every(key=>Object.hasOwn(value,key));
 const TOKEN=/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/u;
@@ -129,12 +129,17 @@ export class NewsPageService implements NewsPageReader {
   // Related originals are never expanded back into standalone feed cards.
   const selection=selectNewsStream({first:representatives.flatMap(item=>item.kind==='global'?[item.view]:[]),more:[]},
    representatives.flatMap(item=>item.kind==='local'?[item.card]:[]),at,'all',seed);
+  const scopePriority=(group:NewsStoryGroup):number=>group.primary.kind==='local'?0
+   :countryCode!==null&&sourceEditionCountryCode(group.primary.card)===countryCode?1:2;
+  // Keep category diversity inside each geographic tier, without interleaving
+  // a foreign article ahead of the selected city's or country's verified supply.
+  // The entire order is fixed before the first signed pagination cursor.
   const items=Object.freeze(balanceGeoCategoryRounds(selection.items,
    item=>item.category??'other',item=>{
     const group=byPrimary.get(item.key)!;
     if(group.primary.kind==='local')return 'local';
     return countryCode!==null&&sourceEditionCountryCode(group.primary.card)===countryCode?'national':'international';
-   }).map(item=>byPrimary.get(item.key)!)),coverage={national:0,local:0,international:0};
+   }).map(item=>byPrimary.get(item.key)!).sort((a,b)=>scopePriority(a)-scopePriority(b))),coverage={national:0,local:0,international:0};
   for(const group of items){
    const item=group.primary;
    if(item.kind==='local')coverage.local++;
