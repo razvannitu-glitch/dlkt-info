@@ -10,7 +10,7 @@ import {newsCard} from '../.build/src/local/service.js';
 import {NOW,iso,hash,article,local} from './fixtures/news-corpus.mjs';
 
 const TIME=NOW+1000,cursor=id=>'Y3Vyc29y'+id+'.'+'a'.repeat(43);
-function fixture(count=27,{city,language='en',sources}={}){
+function fixture(count=27,{city,language='en',sources,sourceScope}={}){
  const originals=sources??Array.from({length:count},(_,index)=>({kind:'global',card:article(index,{language})}));
  const primary=originals[0];assert.ok(primary);
  const item={...primary,key:(primary.kind==='global'?'article:':'local:')+primary.card.id,category:newsCategory(primary.card),
@@ -18,13 +18,13 @@ function fixture(count=27,{city,language='en',sources}={}){
    nextSourcesCursor:originals.length>4?cursor(1):null}};
  const counts=Object.fromEntries(['other',...NEWS_CATEGORIES.map(value=>value.id)].map(key=>[key,0]));counts[item.category??'other']=1;
  const page={version:NEWS_PAGE_VERSION,epoch:'1',revision:1,generatedAt:iso(NOW),startedAt:iso(TIME),expiresAt:iso(NOW+120000),
-  language,cityId:city?.id??null,countryCode:city?.countryCode??null,coverage:{national:0,local:primary.kind==='local'?1:0,international:primary.kind==='global'?1:0},
+  language,...(sourceScope===undefined?{}:{sourceScope}),cityId:city?.id??null,countryCode:city?.countryCode??null,coverage:{national:0,local:primary.kind==='local'?1:0,international:primary.kind==='global'?1:0},
   period:'recent',day:null,filter:'all',items:[item],total:1,articleTotal:originals.length,filteredTotal:1,counts,nextCursor:null};
  assert.equal(validNewsPage(page,TIME,city),true,'controlled public group is valid');
  const response=(offset=4,overrides={})=>{
   const values=originals.slice(offset,offset+20);
   return {version:NEWS_STORY_SOURCES_VERSION,epoch:page.epoch,revision:page.revision,generatedAt:page.generatedAt,startedAt:page.startedAt,expiresAt:page.expiresAt,
-   language:page.language,cityId:page.cityId,countryCode:page.countryCode,period:page.period,day:page.day,filter:page.filter,
+   language:page.language,...(sourceScope===undefined?{}:{sourceScope}),cityId:page.cityId,countryCode:page.countryCode,period:page.period,day:page.day,filter:page.filter,
    storyKey:item.story.key,sourceTotal:originals.length,offset,sources:values,nextCursor:offset+values.length<originals.length?cursor(offset===4?2:3):null,...overrides};
  };
  return {page,item,originals,response,city};
@@ -209,4 +209,28 @@ test('source disclosure styles inherit approved card tones and keep readable wra
  assert.match(css,/:focus-visible\{outline:2px solid var\(--reader-focus,var\(--black\)\)/u);
  assert.match(css,/\.news-story-sources-more\[hidden\]/u);
  assert.doesNotMatch(css,/#(?:[0-9a-f]{3}){1,2}\b/iu);
+});
+
+test('story continuation binds source scope and accepts explicit edition for a legacy edition',()=>{
+ const value=fixture(27,{sourceScope:'all'}),state=stateOf(value);
+ const edition=value.response(4,{sourceScope:'edition'});assert.equal(validNewsStorySourcesPage(edition,TIME),true);
+ assert.equal(appendNewsStorySources(state,edition,TIME),null);
+ const missing=value.response();delete missing.sourceScope;assert.equal(validNewsStorySourcesPage(missing,TIME),true);
+ assert.equal(appendNewsStorySources(state,missing,TIME),null);
+ assert.equal(appendNewsStorySources(state,value.response(),TIME).sources.length,24);
+ const legacy=fixture(),old=stateOf(legacy);
+ assert.equal(appendNewsStorySources(old,legacy.response(4,{sourceScope:'edition'}),TIME).sources.length,24);
+});
+
+test('all-source disclosures label every original language without rewriting or relabelling headlines',t=>{
+ const languages=['en','ro','ar','it'];
+ const sources=languages.map((language,index)=>({kind:'global',card:article(700+index,{language})}));
+ const value=fixture(4,{language:'ro',sourceScope:'all',sources}),before=JSON.stringify(value);
+ const document=dom(t,()=>{throw Error('No automatic source request');}),view=mounted(document,value,'ro');
+ const links=view.list.querySelectorAll('a'),labels=view.list.querySelectorAll('span').filter(node=>node.dataset.originalLanguage);
+ assert.deepEqual(links.map(node=>node.textContent),sources.map(source=>source.card.title));
+ assert.deepEqual(links.map(node=>node.lang),languages);assert.ok(links.every(node=>node.getAttribute('translate')==='no'));
+ assert.deepEqual(labels.map(node=>node.dataset.originalLanguage),languages);
+ assert.ok(labels.every(node=>node.textContent.length>0));
+ assert.equal(JSON.stringify(value),before);assert.equal(document.body.children.length,1);
 });

@@ -175,7 +175,7 @@ function continuationActions(model,selected){
   closest(selector){return selector==='[data-news-restart]'&&this.dataset.newsRestart?this:selector==='[data-public-more]'&&this.dataset.publicMore?this:null;}
  }
  const controls=new Element('div');
- const environment={Element,language:selected.language,newsFilter:selected.filter,newsPeriod:selected.period??'recent',
+ const environment={Element,language:selected.language,newsSourceScope:selected.sourceScope??'edition',newsFilter:selected.filter,newsPeriod:selected.period??'recent',
   contextualCity:selected.city??null,contextualLocalState:'loaded',restartNewsEdition:false,applyPublicUpdate:false,
   document:{visibilityState:'visible',body:{dataset:{entryView:'start'}},createElement:tag=>new Element(tag)},
   controls,make:(tag,_class,text)=>Object.assign(new Element(tag),{textContent:text}),
@@ -230,4 +230,50 @@ test('footer updates restart exhausted and expired editions through the same fre
   release();await actions.finish();
   assert.equal(model.view().page.epoch,'102');assert.equal(model.view().items.length,20);assert.equal(model.view().error,null);
  }
+});
+
+test('source scope changes cancel pending requests and cannot reuse a previous cursor or late page',async()=>{
+ const jobs=[],model=new NewsContinuation((url,init)=>new Promise(resolve=>jobs.push({url:new URL(url,'https://www.dlkt.ee'),signal:init.signal,resolve})),()=>now);
+ const first=model.start({...context,sourceScope:'all'});
+ assert.equal(jobs[0].url.searchParams.get('sourceScope'),'all');
+ const selected=model.start({...context,sourceScope:'edition'});
+ assert.equal(jobs[0].signal.aborted,true);assert.equal(jobs[1].url.searchParams.has('cursor'),false);
+ jobs[1].resolve(response(page(0,40,{sourceScope:'edition'})));await selected;
+ jobs[0].resolve(response(page(0,60,{sourceScope:'all'})));await first;
+ assert.equal(model.view().page.sourceScope,'edition');assert.equal(model.view().page.total,40);
+ const again=model.start({...context,sourceScope:'all'});
+ assert.equal(jobs[2].url.searchParams.has('cursor'),false);
+ jobs[2].resolve(response(page(0,40,{sourceScope:'all'})));await again;
+ const prefix=[...model.view().items],next=model.next();
+ assert.equal(jobs[3].url.searchParams.get('sourceScope'),'all');assert.equal(jobs[3].url.searchParams.get('cursor'),cursor(20));
+ jobs[3].resolve(response(page(20,40,{sourceScope:'all'})));await next;
+ assert.deepEqual(model.view().items.slice(0,20),prefix);assert.equal(model.view().items.length,40);
+});
+
+test('scope defaults are edition-compatible and explicit all never accepts an edition response',async()=>{
+ for(const [sourceScope,returnedScope] of [['all',undefined],['all','edition'],['edition','all']]){
+  const changed=returnedScope===undefined?{}:{sourceScope:returnedScope};
+  const first=new NewsContinuation(async()=>response(page(0,20,changed)),()=>now);
+  await first.start({...context,sourceScope});assert.equal(first.view().error,'invalid');assert.equal(first.view().items.length,0);
+  let calls=0;
+  const append=new NewsContinuation(async()=>response(calls++===0?page(0,40,{sourceScope}):page(20,40,changed)),()=>now);
+  await append.start({...context,sourceScope});const prefix=[...append.view().items];assert.equal(append.view().error,null);
+  await append.next();assert.equal(append.view().error,'invalid');assert.deepEqual(append.view().items,prefix);
+ }
+ const queries=[],legacy=new NewsContinuation(async url=>{queries.push(new URL(url,'https://www.dlkt.ee'));return response(page(0,20));},()=>now);
+ await legacy.start(context);assert.equal(legacy.view().error,null);assert.equal(queries[0].searchParams.get('sourceScope'),'edition');
+ await legacy.start({...context,sourceScope:'edition'});assert.equal(queries.length,1,'missing scope and explicit edition share the compatible context');
+});
+
+test('category changes and explicit refresh preserve all scope while resetting their page identity',async()=>{
+ const queries=[],model=new NewsContinuation(async url=>{
+  const query=new URL(url,'https://www.dlkt.ee').searchParams;queries.push(query);
+  return response(page(0,20,{sourceScope:query.get('sourceScope'),filter:query.get('category'),epoch:String(100+queries.length)}));
+ },()=>now);
+ const selected={...context,sourceScope:'all'};
+ await model.start(selected);assert.equal(model.view().error,null);assert.equal(model.view().page.epoch,'101');
+ await model.start({...selected,filter:'04000000'});assert.equal(model.view().error,null);assert.equal(model.view().page.epoch,'102');
+ await model.start({...selected,filter:'04000000'},true);assert.equal(model.view().error,null);assert.equal(model.view().page.epoch,'103');
+ assert.equal(queries.length,3);assert.ok(queries.every(query=>query.get('sourceScope')==='all'&&!query.has('cursor')));
+ assert.equal(model.view().items.length,20);
 });

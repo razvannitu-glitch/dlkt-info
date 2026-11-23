@@ -1,16 +1,16 @@
-import {validNewsPage,validNewsStorySourcesPage,NEWS_MAX_RESPONSE_BYTES,type NewsPage,type NewsPageItem,type NewsStorySummary,type NewsStorySource,type NewsStorySourcesPage} from './news-page-contracts.js';
+import {validNewsPage,validNewsStorySourcesPage,NEWS_MAX_RESPONSE_BYTES,type NewsSourceScope,type NewsPage,type NewsPageItem,type NewsStorySummary,type NewsStorySource,type NewsStorySourcesPage} from './news-page-contracts.js';
 import type {NewsStreamFilter,NewsStreamItem} from './news-stream.js';
 import type {City} from '../local/contracts.js';
 import type {NewsPeriod} from './news-day.js';
 import {readingCard} from './reader.js';
 import {editorialCategory} from './editorial-categories.js';
 
-export interface NewsContinuationContext {readonly language:string;readonly cityId:string|null;readonly filter:NewsStreamFilter;readonly city?:City;readonly period?:NewsPeriod}
+export interface NewsContinuationContext {readonly language:string;readonly cityId:string|null;readonly filter:NewsStreamFilter;readonly city?:City;readonly period?:NewsPeriod;readonly sourceScope?:NewsSourceScope}
 export interface NewsContinuationView {
  readonly page:NewsPage|null;readonly items:readonly NewsPageItem[];readonly loading:boolean;
  readonly error:'unavailable'|'invalid'|'expired'|null;readonly initialized:boolean;
 }
-const contextKey=(context:NewsContinuationContext):string=>JSON.stringify([context.language,context.cityId,context.city?.countryCode??null,context.city?.timezone??'UTC',context.filter,context.period??'recent']);
+const contextKey=(context:NewsContinuationContext):string=>JSON.stringify([context.language,context.cityId,context.city?.countryCode??null,context.city?.timezone??'UTC',context.filter,context.period??'recent',context.sourceScope??'edition']);
 const MAX_PAGE_BYTES=NEWS_MAX_RESPONSE_BYTES;
 async function jsonBody(response:Response,signal:AbortSignal):Promise<unknown>{
  if(!(response.headers.get('content-type')??'').toLowerCase().includes('application/json'))throw Error('NEWS_PAGE_INVALID');
@@ -45,7 +45,7 @@ export class NewsContinuation {
  start(context:NewsContinuationContext,restart=false):Promise<void>{
   const key=contextKey(context);
   if(this.key===key&&this.context!==null&&!restart)return this.pending??Promise.resolve();
-  this.controller?.abort();this.generation++;this.context=Object.freeze({...context});this.key=key;
+  this.controller?.abort();this.generation++;this.context=Object.freeze({...context,sourceScope:context.sourceScope??'edition'});this.key=key;
   this.page=null;this.items=Object.freeze([]);this.loading=false;this.error=null;this.pending=null;
   return this.next();
  }
@@ -55,7 +55,7 @@ export class NewsContinuation {
   if(this.page&&Date.parse(this.page.expiresAt)<=this.clock()){this.error='expired';this.changed();return;}
   const generation=this.generation,context=this.context,cursor=this.page?.nextCursor??null;
   const controller=new AbortController();this.controller=controller;this.loading=true;this.error=null;
-  const query=new URLSearchParams({lang:context.language,category:context.filter,period:context.period??'recent'});
+  const query=new URLSearchParams({lang:context.language,category:context.filter,period:context.period??'recent',sourceScope:context.sourceScope??'edition'});
   if(context.cityId!==null)query.set('city',context.cityId);if(cursor!==null)query.set('cursor',cursor);
   const timeout=setTimeout(()=>controller.abort(),12_000);
   const job=(async():Promise<void>=>{
@@ -68,11 +68,11 @@ export class NewsContinuation {
     if(!response.ok){await response.body?.cancel();throw Error('NEWS_PAGE_UNAVAILABLE');}
     const value=await jsonBody(response,controller.signal);
     if(generation!==this.generation)return;
-    if(!validNewsPage(value,this.clock(),context.city)||value.language!==context.language||value.cityId!==context.cityId||value.countryCode!==(context.city?.countryCode??null)||value.filter!==context.filter||value.period!==(context.period??'recent'))throw Error('NEWS_PAGE_INVALID');
+    if(!validNewsPage(value,this.clock(),context.city)||value.language!==context.language||value.cityId!==context.cityId||value.countryCode!==(context.city?.countryCode??null)||value.filter!==context.filter||value.period!==(context.period??'recent')||(value.sourceScope??'edition')!==(context.sourceScope??'edition'))throw Error('NEWS_PAGE_INVALID');
     if(Date.parse(value.expiresAt)<=this.clock()){this.error='expired';return;}
     const prior=this.page;
     if(prior&&(value.epoch!==prior.epoch||value.revision!==prior.revision||value.generatedAt!==prior.generatedAt||value.startedAt!==prior.startedAt
-      ||value.period!==prior.period||JSON.stringify(value.day)!==JSON.stringify(prior.day)
+      ||value.period!==prior.period||(value.sourceScope??'edition')!==(prior.sourceScope??'edition')||JSON.stringify(value.day)!==JSON.stringify(prior.day)
       ||value.expiresAt!==prior.expiresAt||value.total!==prior.total||value.articleTotal!==prior.articleTotal||value.filteredTotal!==prior.filteredTotal||value.countryCode!==prior.countryCode
       ||value.coverage.national!==prior.coverage.national||value.coverage.local!==prior.coverage.local||value.coverage.international!==prior.coverage.international
       ||Object.keys(prior.counts).some(key=>value.counts[key]!==prior.counts[key])))throw Error('NEWS_PAGE_INVALID');

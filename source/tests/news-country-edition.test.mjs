@@ -9,39 +9,45 @@ import {searchCities,findCity} from '../.build/src/local/cities.js';
 import {NOW,iso,hash,article,local,epoch,CorpusMemoryStore,CATEGORIES} from './fixtures/news-corpus.mjs';
 
 const KEY='test-only-news-cursor-writer-123456789012345678901234567890';
-const request=(language,cityId=null,filter='all',cursor=null)=>({language,cityId,filter,cursor});
+const request=(language,cityId=null,filter='all',cursor=null,sourceScope)=>({language,cityId,filter,cursor,...(sourceScope===undefined?{}:{sourceScope})});
 const city=(name,country)=>{const found=searchCities(name,country,12).find(row=>row.countryCode===country);assert.ok(found);return found;};
 function publication(index,publisher,sourceUrl,title){
  const record={...article(index),id:hash(sourceUrl).slice(0,24),identity:sourceUrl,sourceUrl,publisher,title,attribution:'Source: '+publisher+'. Open the original publication.'};
  record.contentHash=hash(cardContent(record));return record;
 }
-async function allPages(service,language,cityId,filter='all'){
+async function allPages(service,language,cityId,filter='all',sourceScope){
  const items=[],pages=[];let cursor=null;
- do{const page=await service.read(request(language,cityId,filter,cursor));items.push(...page.items);pages.push(page);cursor=page.nextCursor;assert.ok(pages.length<=250);}while(cursor);
+ do{const page=await service.read(request(language,cityId,filter,cursor,sourceScope));items.push(...page.items);pages.push(page);cursor=page.nextCursor;assert.ok(pages.length<=250);}while(cursor);
  return {items,pages};
 }
-function assertGeoOrder(items,countryCode){
- let previous=-1;
- for(const item of items){
-  const tier=item.kind==='local'?0:sourceEditionCountryCode(item.card)===countryCode?1:2;
-  assert.ok(tier>=previous,'geographic tiers must not return to a narrower scope after a wider one');
-  previous=tier;
+function assertCategoryCycles(items){
+ const remaining=new Map();
+ for(const item of items){const category=item.category??'other';remaining.set(category,(remaining.get(category)??0)+1);}
+ let offset=0;
+ while(offset<items.length){
+  const active=[...remaining].filter(([,count])=>count>0).map(([category])=>category),cycle=items.slice(offset,offset+active.length);
+  assert.deepEqual(new Set(cycle.map(item=>item.category??'other')),new Set(active));
+  if(offset&&active.length>1)assert.notEqual(items[offset-1].category??'other',cycle[0].category??'other');
+  for(const item of cycle){const category=item.category??'other';remaining.set(category,remaining.get(category)-1);}
+  offset+=active.length;
  }
 }
 
-test('a reviewed national edition is first within every category while the complete international corpus remains',async()=>{
+test('a relevant national opening leads publisher and category rounds across the complete edition',async()=>{
  const london=city('London','GB'),categories=Object.keys(CATEGORIES);
  const national=Array.from({length:36},(_,i)=>publication(i+1,'The Guardian','https://www.theguardian.com/news/2026/nov/22/country-fixture-'+i,CATEGORIES[categories[i%categories.length]]+' '+i));
  const international=Array.from({length:36},(_,i)=>article(i+101,{category:categories[i%categories.length]}));
  const before=JSON.stringify([...national,...international]),service=new NewsPageService(new CorpusMemoryStore([epoch([...international,...national])]),KEY,()=>NOW+1000);
  const {items,pages}=await allPages(service,'en',london.id);
- assert.equal(items.length,72);assert.equal(new Set(items.map(item=>item.key)).size,72);assertGeoOrder(items,'GB');
- assert.ok(items.slice(0,36).every(item=>sourceEditionCountryCode(item.card)==='GB'));
- assert.ok(items.slice(36).every(item=>sourceEditionCountryCode(item.card)!=='GB'));
+ assert.equal(items.length,72);assert.equal(new Set(items.map(item=>item.key)).size,72);assertCategoryCycles(items);
+ assert.equal(sourceEditionCountryCode(items[0].card),'GB','the opening keeps relevant national evidence');
+ assert.ok(items.slice(0,20).some(item=>sourceEditionCountryCode(item.card)!=='GB'),'international publishers participate in the first page');
+ assert.ok(items.slice(20).some(item=>sourceEditionCountryCode(item.card)==='GB'),'national articles remain interleaved in later pages');
+ assert.notEqual(items[19].card.publisher,items[20].card.publisher,'publisher continuity spans the first page boundary');
  for(const page of pages){assert.equal(page.countryCode,'GB');assert.deepEqual(page.coverage,{national:36,local:0,international:36});assert.ok(validNewsPage(page,NOW+1000,london));}
  for(const category of new Set(items.map(item=>item.category))){
-  const inCategory=items.filter(item=>item.category===category),lastNational=inCategory.findLastIndex(item=>sourceEditionCountryCode(item.card)==='GB');
-  assert.ok(lastNational>=0);assert.ok(inCategory.slice(0,lastNational+1).every(item=>sourceEditionCountryCode(item.card)==='GB'));
+  const inCategory=items.filter(item=>item.category===category);
+  assert.deepEqual(new Set(inCategory.map(item=>item.card.publisher)),new Set(['The Guardian','DW']));
   const projected=await allPages(service,'en',london.id,category??'other');assert.deepEqual(projected.items,inCategory);
  }
  assert.deepEqual(new Map(items.map(item=>[item.card.id,item.card])),new Map([...national,...international].map(card=>[card.id,card])));
@@ -52,7 +58,7 @@ test('Romanian national provenance and verified Bucharest articles are counted s
  const international=article(2,{language:'ro'}),entry=local(2),service=new NewsPageService(new CorpusMemoryStore([epoch([international,national],[entry])]),KEY,()=>NOW+1000);
  const bucharest=await service.read(request('ro',entry.city.id));
  assert.equal(bucharest.countryCode,'RO');assert.deepEqual(bucharest.coverage,{national:1,local:2,international:1});
- assert.equal(bucharest.items.filter(item=>item.kind==='local').length,2);assertGeoOrder(bucharest.items,'RO');assert.ok(validNewsPage(bucharest,NOW+1000,entry.city));
+ assert.equal(bucharest.items.filter(item=>item.kind==='local').length,2);assert.equal(bucharest.items[0].kind,'local');assertCategoryCycles(bucharest.items);assert.ok(validNewsPage(bucharest,NOW+1000,entry.city));
  const cluj=city('Cluj','RO'),elsewhere=await service.read(request('ro',cluj.id));
  assert.equal(elsewhere.countryCode,'RO');assert.deepEqual(elsewhere.coverage,{national:1,local:0,international:1});
  assert.ok(elsewhere.items.every(item=>item.kind==='global'));
@@ -106,7 +112,7 @@ test('the signed cursor binds national context and old cursor versions expire wi
  const london=city('London','GB'),turin=city('Torino','IT'),edition=epoch(Array.from({length:45},(_,i)=>article(i+1)));
  const service=new NewsPageService(new CorpusMemoryStore([edition]),KEY,()=>NOW+1000),page=await service.read(request('en',london.id));
  const [encoded]=page.nextCursor.split('.'),payload=JSON.parse(Buffer.from(encoded,'base64url').toString('utf8'));
- assert.equal(payload.version,'news-cursor-5');assert.equal(payload.countryCode,'GB');assert.equal(payload.kind,'page');assert.equal(payload.storyKey,null);
+ assert.equal(payload.version,'news-cursor-6');assert.equal(payload.sourceScope,'edition');assert.equal(payload.countryCode,'GB');assert.equal(payload.kind,'page');assert.equal(payload.storyKey,null);
  const sign=value=>{const body=Buffer.from(JSON.stringify(value)).toString('base64url'),key=createHmac('sha256',KEY).update('dlkt-info/news-page/cursor-key/v1').digest();
   return body+'.'+createHmac('sha256',key).update('dlkt-info/news-page/cursor/v1:'+body).digest('base64url');};
  const changed=sign({...payload,countryCode:'IT'});
@@ -118,6 +124,7 @@ test('the signed cursor binds national context and old cursor versions expire wi
  await assert.rejects(service.read(request('en',london.id,'all',sign({...payload,version:'news-cursor-2'}))),/NEWS_EDITION_EXPIRED/,'a pre-fix cursor cannot reuse its offset after language provenance changes');
  await assert.rejects(service.read(request('en',london.id,'all',sign({...payload,version:'news-cursor-3'}))),/NEWS_EDITION_EXPIRED/,'a pre-calendar cursor cannot reuse its offset under the new ordering policy');
  await assert.rejects(service.read(request('en',london.id,'all',sign({...payload,version:'news-cursor-4'}))),/NEWS_EDITION_EXPIRED/,'an article-offset cursor cannot be reused after whole-edition story grouping');
+ await assert.rejects(service.read(request('en',london.id,'all',sign({...payload,version:'news-cursor-5'}))),/NEWS_EDITION_EXPIRED/,'a pre-diversity cursor cannot reuse its offset in publisher rounds');
  const next=await service.read(request('en',london.id,'all',page.nextCursor));
  assert.deepEqual(next.coverage,page.coverage);assert.equal(next.countryCode,page.countryCode);
  assert.equal(new Set([...page.items,...next.items].map(item=>item.key)).size,40);
@@ -148,4 +155,58 @@ test('existing corpus originals follow their article edition language without re
  for(const card of [english,italian])assert.equal(card.contentHash,hash(cardContent(card)));
  assert.equal(JSON.stringify(stored),before,'reading reclassifies provenance without restamping or replacing the persisted corpus');
  assert.equal(validNewsPage({...it,items:en.items},NOW+1000,turin),false,'an English original cannot pass the Italian page contract');
+});
+
+
+test('source scope is explicit, bounded and optional requests keep the native edition',()=>{
+ assert.deepEqual(parseNewsPageRequest('/api/news-page?lang=ro'),request('ro'));
+ assert.deepEqual(parseNewsPageRequest('/api/news-page?lang=ro&sourceScope=all'),request('ro',null,'all',null,'all'));
+ assert.deepEqual(parseNewsPageRequest('/api/news-page?lang=ro&sourceScope=edition'),request('ro',null,'all',null,'edition'));
+ for(const value of ['','ALL','unknown','null','all&sourceScope=edition']){
+  assert.throws(()=>parseNewsPageRequest('/api/news-page?lang=ro&sourceScope='+value),/NEWS_PAGE_QUERY_INVALID/);
+ }
+});
+
+test('all-source pages retain original languages and signed cursors cannot cross source scope',async()=>{
+ const entry=local(1),records=[...Array.from({length:25},(_,i)=>article(i+1,{language:'ro'})),
+  ...Array.from({length:25},(_,i)=>article(i+101,{language:'en'}))],stored=epoch(records,[entry]),before=JSON.stringify(stored);
+ const service=new NewsPageService(new CorpusMemoryStore([stored]),KEY,()=>NOW+1000);
+ const native=await service.read(request('ro',entry.city.id)),all=await allPages(service,'ro',entry.city.id,'all','all');
+ assert.equal(native.sourceScope,'edition');assert.equal(native.total,26);
+ assert.ok(native.items.filter(item=>item.kind==='global').every(item=>sourceLanguage(item.card)==='ro'));
+ assert.equal(all.items.length,51);assertCategoryCycles(all.items);
+ assert.equal(all.items[0].kind,'local');assert.equal(all.items.filter(item=>item.kind==='local').length,1);
+ assert.deepEqual(new Set(all.items.filter(item=>item.kind==='global').map(item=>sourceLanguage(item.card))),new Set(['ro','en']));
+ for(const page of all.pages){assert.equal(page.sourceScope,'all');assert.equal(page.language,'ro');assert.ok(validNewsPage(page,NOW+1000,entry.city));}
+ assert.deepEqual(new Map(all.items.filter(item=>item.kind==='global').map(item=>[item.card.id,item.card])),new Map(records.map(card=>[card.id,card])));
+ assert.equal(new Set(all.items.map(item=>item.key)).size,51);
+ await assert.rejects(service.read(request('ro',entry.city.id,'all',all.pages[0].nextCursor,'edition')),/NEWS_CONTEXT_MISMATCH/);
+ await assert.rejects(service.read(request('ro',entry.city.id,'all',native.nextCursor,'all')),/NEWS_CONTEXT_MISMATCH/);
+ assert.equal(JSON.stringify(stored),before,'reading all sources changes no original text, dates, hashes or language provenance');
+});
+
+test('publisher rounds preserve one confirmed shared-event group and all mixed-language source continuations',async()=>{
+ const records=Array.from({length:8},(_,index)=>{
+  const record={...article(index+700,{language:index%2?'ro':'en'}),title:'Researchers disclose CVE-2026-43111 in a browser security report '+index};
+  record.contentHash=hash(cardContent(record));return record;
+ });
+ const fillers=Array.from({length:45},(_,index)=>article(index+800,{category:Object.keys(CATEGORIES)[index%18]}));
+ const stored=epoch([...records,...fillers]),before=JSON.stringify(stored),service=new NewsPageService(new CorpusMemoryStore([stored]),KEY,()=>NOW+1000);
+ const all=await allPages(service,'ro',null,'all','all');
+ assert.equal(all.items.length,46);assert.equal(new Set(all.items.map(item=>item.key)).size,46);
+ assertCategoryCycles(all.items);
+ const grouped=all.items.filter(item=>item.story?.sourceTotal===8);
+ assert.equal(grouped.length,1,'a confirmed event is not expanded into duplicate feed cards for publisher balance');
+ const group=grouped[0],sources=[{kind:group.kind,card:group.card},...group.story.related];
+ let cursor=group.story.nextSourcesCursor,pages=0;
+ assert.ok(cursor,'the fixture must exercise source continuation after the preview');
+ while(cursor){
+  const page=await service.readSources(cursor);pages++;assert.ok(pages<10);
+  assert.equal(page.sourceScope,'all');assert.equal(page.storyKey,group.story.key);assert.equal(page.language,'ro');
+  sources.push(...page.sources);cursor=page.nextCursor;
+ }
+ assert.equal(sources.length,8);assert.equal(new Set(sources.map(source=>source.card.sourceUrl)).size,8);
+ assert.deepEqual(new Set(sources.map(source=>sourceLanguage(source.card))),new Set(['ro','en']));
+ assert.equal(all.pages[0].articleTotal,53);
+ assert.equal(JSON.stringify(stored),before);
 });

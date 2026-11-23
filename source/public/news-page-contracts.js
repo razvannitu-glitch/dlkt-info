@@ -5,6 +5,7 @@ import { localeFromPreference } from './i18n-locale.js';
 import { validCity } from './local-contracts.js';
 import { newsFeed, validLocalNewsArticle, NEWS_WINDOW_MS } from './local-news-policy.js';
 import { newsPublishedInDay, validNewsDayWindow, validNewsPeriod } from './news-day.js';
+export const validNewsSourceScope = (value) => value === 'edition' || value === 'all';
 export const NEWS_PAGE_VERSION = 'dlkt-news-page-4';
 export const NEWS_STORY_SOURCES_VERSION = 'dlkt-news-sources-1';
 export const NEWS_SERVER_PAGE_SIZE = 20, NEWS_SOURCE_PAGE_SIZE = 20, NEWS_STORY_PREVIEW_SIZE = 3, NEWS_MAX_RESPONSE_BYTES = 1_048_576;
@@ -95,19 +96,27 @@ export function validNewsPageItem(value, now, city) {
     }
     return distinctSources(originals);
 }
-function sourceInContext(source, language, cityId, expiresAt, day) {
+/** Reviewed original language only; an unknown source is never labelled with the interface locale. */
+export function newsOriginalLanguage(source) {
     if (source.kind === 'global')
-        return newsLanguageMatches(sourceLanguage(source.card), language)
+        return sourceLanguage(source.card);
+    const sourceId = source.card.news?.sourceId;
+    return sourceId ? newsFeed(sourceId)?.language ?? null : null;
+}
+function sourceInContext(source, language, cityId, expiresAt, day, sourceScope = 'edition') {
+    if (source.kind === 'global')
+        return (sourceScope === 'all' || newsLanguageMatches(sourceLanguage(source.card), language))
             && (day === null || newsPublishedInDay(source.card.date, day))
             && Date.parse(expiresAt) <= Math.min(Date.parse(source.card.observedAt) + 3600000, Date.parse(source.card.date) + 86400000);
     const article = source.card.news;
-    return article !== undefined && article.cityId === cityId && newsLanguageMatches(newsFeed(article.sourceId)?.language ?? null, language)
+    return article !== undefined && article.cityId === cityId && (sourceScope === 'all' || newsLanguageMatches(newsFeed(article.sourceId)?.language ?? null, language))
         && (day === null || newsPublishedInDay(article.publishedAt, day))
         && Date.parse(expiresAt) <= Math.min(Date.parse(article.validUntil), Date.parse(article.publishedAt) + NEWS_WINDOW_MS + 1);
 }
 /** Browser-safe boundary. Context continuity and cross-page duplicates are checked by the reader controller. */
 export function validNewsPage(value, now = Date.now(), city) {
-    if (!Number.isFinite(now) || !object(value) || !exact(value, ['version', 'epoch', 'revision', 'generatedAt', 'startedAt', 'expiresAt', 'language', 'cityId', 'countryCode', 'coverage', 'period', 'day', 'filter', 'items', 'total', 'articleTotal', 'filteredTotal', 'counts', 'nextCursor'])
+    if (!Number.isFinite(now) || !object(value) || !fields(value, ['version', 'epoch', 'revision', 'generatedAt', 'startedAt', 'expiresAt', 'language', 'cityId', 'countryCode', 'coverage', 'period', 'day', 'filter', 'items', 'total', 'articleTotal', 'filteredTotal', 'counts', 'nextCursor'], ['sourceScope'])
+        || value.sourceScope !== undefined && !validNewsSourceScope(value.sourceScope)
         || value.version !== NEWS_PAGE_VERSION || !validNewsPeriod(value.period) || !validNewsEpochId(value.epoch) || !integer(value.revision, Number.MAX_SAFE_INTEGER) || value.revision === 0
         || !timestamp(value.generatedAt) || !timestamp(value.startedAt) || !timestamp(value.expiresAt) || Date.parse(value.generatedAt) > now + 5000
         || Date.parse(value.startedAt) > now + 5000 || Date.parse(value.startedAt) < Date.parse(value.generatedAt) - 5000 || Date.parse(value.expiresAt) <= Date.parse(value.startedAt) || Date.parse(value.expiresAt) <= now
@@ -151,7 +160,7 @@ export function validNewsPage(value, now = Date.now(), city) {
         for (const source of [primary, ...(item.story?.related ?? [])]) {
             const identity = source.kind === 'global' ? source.card.identity : source.card.sourceUrl;
             if (ids.has(source.card.id) || urls.has(source.card.sourceUrl) || identities.has(identity)
-                || !sourceInContext(source, language, value.cityId, value.expiresAt, day))
+                || !sourceInContext(source, language, value.cityId, value.expiresAt, day, value.sourceScope))
                 return false;
             ids.add(source.card.id);
             urls.add(source.card.sourceUrl);
@@ -167,7 +176,8 @@ export function validNewsPage(value, now = Date.now(), city) {
     return declaredSources <= value.articleTotal && (value.items.length !== value.total || declaredSources === value.articleTotal) && observed.national <= Number(value.coverage.national) && observed.local <= Number(value.coverage.local) && observed.international <= Number(value.coverage.international);
 }
 export function validNewsStorySourcesPage(value, now = Date.now(), city) {
-    if (!Number.isFinite(now) || !object(value) || !exact(value, ['version', 'epoch', 'revision', 'generatedAt', 'startedAt', 'expiresAt', 'language', 'cityId', 'countryCode', 'period', 'day', 'filter', 'storyKey', 'sourceTotal', 'offset', 'sources', 'nextCursor'])
+    if (!Number.isFinite(now) || !object(value) || !fields(value, ['version', 'epoch', 'revision', 'generatedAt', 'startedAt', 'expiresAt', 'language', 'cityId', 'countryCode', 'period', 'day', 'filter', 'storyKey', 'sourceTotal', 'offset', 'sources', 'nextCursor'], ['sourceScope'])
+        || value.sourceScope !== undefined && !validNewsSourceScope(value.sourceScope)
         || value.version !== NEWS_STORY_SOURCES_VERSION || !validNewsPeriod(value.period) || !validNewsEpochId(value.epoch) || !integer(value.revision, Number.MAX_SAFE_INTEGER) || value.revision === 0
         || !timestamp(value.generatedAt) || !timestamp(value.startedAt) || !timestamp(value.expiresAt) || Date.parse(value.generatedAt) > now + 5000
         || Date.parse(value.startedAt) > now + 5000 || Date.parse(value.startedAt) < Date.parse(value.generatedAt) - 5000 || Date.parse(value.expiresAt) <= Date.parse(value.startedAt) || Date.parse(value.expiresAt) <= now
@@ -189,7 +199,7 @@ export function validNewsStorySourcesPage(value, now = Date.now(), city) {
         return false;
     const day = value.period === 'today' ? value.day : null, sources = [];
     for (const source of value.sources) {
-        if (!validNewsStorySource(source, now, city) || !sourceInContext(source, value.language, value.cityId, value.expiresAt, day))
+        if (!validNewsStorySource(source, now, city) || !sourceInContext(source, value.language, value.cityId, value.expiresAt, day, value.sourceScope))
             return false;
         sources.push(source);
     }

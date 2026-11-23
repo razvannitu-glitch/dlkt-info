@@ -1,10 +1,10 @@
-import {validNewsPage,validNewsStorySourcesPage,NEWS_SOURCE_PAGE_SIZE,type NewsPage,type NewsPageItem,type NewsStorySource,type NewsStorySourcesPage} from './news-page-contracts.js';
+import {validNewsPage,validNewsStorySourcesPage,newsOriginalLanguage,NEWS_SOURCE_PAGE_SIZE,type NewsPage,type NewsPageItem,type NewsStorySource,type NewsStorySourcesPage} from './news-page-contracts.js';
 import {fetchNewsStorySources,NewsStorySourcesError} from './news-continuation.js';
 import {resolveLocale,t,type Locale} from '../i18n/locale.js';
 import type {City} from '../local/contracts.js';
 
 const CONTEXT_FIELDS=['epoch','revision','generatedAt','startedAt','expiresAt','language','cityId','countryCode','period','filter'] as const;
-type NewsStoryContext=Pick<NewsPage,typeof CONTEXT_FIELDS[number]|'day'>;
+type NewsStoryContext=Pick<NewsPage,typeof CONTEXT_FIELDS[number]|'day'|'sourceScope'>;
 export interface NewsStorySourcesState {
  readonly context:NewsStoryContext;readonly storyKey:string;readonly sourceTotal:number;
  readonly sources:readonly NewsStorySource[];readonly nextCursor:string|null;readonly usedCursors:readonly string[];
@@ -14,11 +14,11 @@ function original(item:NewsPageItem):NewsStorySource {
 }
 function contextOf(page:NewsPage):NewsStoryContext {
  return Object.freeze({epoch:page.epoch,revision:page.revision,generatedAt:page.generatedAt,startedAt:page.startedAt,expiresAt:page.expiresAt,
-  language:page.language,cityId:page.cityId,countryCode:page.countryCode,period:page.period,filter:page.filter,
+  language:page.language,cityId:page.cityId,countryCode:page.countryCode,period:page.period,filter:page.filter,sourceScope:page.sourceScope??'edition',
   day:page.day===null?null:Object.freeze({...page.day})});
 }
 function sameContext(expected:NewsStoryContext,page:NewsStorySourcesPage):boolean {
- if(CONTEXT_FIELDS.some(key=>expected[key]!==page[key]))return false;
+ if((expected.sourceScope??'edition')!==(page.sourceScope??'edition')||CONTEXT_FIELDS.some(key=>expected[key]!==page[key]))return false;
  const a=expected.day,b=page.day;
  return a===null?b===null:b!==null&&a.date===b.date&&a.timeZone===b.timeZone&&a.start===b.start&&a.end===b.end;
 }
@@ -60,7 +60,11 @@ function sourceNode(source:NewsStorySource,locale:Locale,timeZone:string):HTMLLI
  date.title=date.dateTime;date.setAttribute('aria-label',t(locale,'published')+': '+date.textContent);
  link.className='news-story-source-link';link.href=source.card.sourceUrl;link.target='_blank';link.rel='noopener noreferrer';
  link.textContent=source.card.title;link.title=source.card.sourceUrl;link.dir='auto';
- meta.append(publisher,document.createTextNode(' · '),date);row.append(meta,link);return row;
+ const originalLanguage=newsOriginalLanguage(source),language=document.createElement('span');
+ link.lang=originalLanguage??'';link.setAttribute('translate','no');
+ language.dataset.originalLanguage=originalLanguage??'unknown';
+ language.textContent=originalLanguage?(new Intl.DisplayNames([locale],{type:'language'}).of(originalLanguage)??originalLanguage):locale==='ro'?'Limba sursei neprecizata':locale==='it'?'Lingua della fonte non specificata':'Source language unspecified';
+ meta.append(publisher,document.createTextNode(' · '),date,document.createTextNode(' · '),language);row.append(meta,link);return row;
 }
 
 /** Inert until the reader explicitly requests more originals from a connected, open disclosure. */
@@ -72,6 +76,9 @@ export function newsStorySourcesNode(item:NewsPageItem,page:NewsPage,language:st
   list=document.createElement('ol'),progress=document.createElement('p'),more=document.createElement('button'),status=document.createElement('p');
  details.className='news-story-sources';details.dataset.storyKey=state.storyKey;
  summary.textContent=t(locale,'navSources')+' · '+new Intl.NumberFormat(locale).format(state.sourceTotal);
+ const publishers=document.createElement('span');publishers.className='news-story-publishers';publishers.dir='auto';publishers.setAttribute('translate','no');
+ publishers.textContent=[...new Set(state.sources.map(source=>source.card.publisher))].slice(0,3).join(' · ');summary.append(publishers);
+ details.dataset.sourceTotal=String(state.sourceTotal);
  note.className='news-story-sources-note';note.textContent=t(locale,'storyReportsNote');
  list.className='news-story-sources-list';progress.className='news-story-sources-progress';
  more.className='news-story-sources-more';more.type='button';
