@@ -7,18 +7,20 @@ import {NEWS_DISCOVERY_INDEXES, publisherForNewsUrl} from '../source/.build/src/
 
 // Observational evidence only. Never changes a registry, publishes a card,
 // follows a redirect, bypasses a denial or uses credentials.
+// Exact primary RSS declarations observed in Actions45285237202 on 2026-11-23.
+// Edupedu's separately declared web-stories feed is not the primary news feed.
 const SOURCES=Object.freeze([
-  {id:'edupedu',origin:'https://www.edupedu.ro'},
-  {id:'libertatea',origin:'https://www.libertatea.ro'},
-  {id:'mediafax',origin:'https://www.mediafax.ro'},
-  {id:'agerpres',origin:'https://agerpres.ro'},
-  {id:'green-report',origin:'https://green-report.ro'},
-  {id:'prosport',origin:'https://www.prosport.ro'},
+  {id:'edupedu',origin:'https://www.edupedu.ro',primaryFeed:'https://www.edupedu.ro/feed/'},
+  {id:'prosport',origin:'https://www.prosport.ro',primaryFeed:'https://www.prosport.ro/feed',knownOriginals:[
+    'https://www.prosport.ro/fotbal-extern/campionate-externe/italia/radu-dragusin-nota-monza-fiorentina-3-0-integralist-serie-a-dezastru-20576187',
+    'https://www.prosport.ro/fotbal-intern/superliga/anunt-venire-mirel-radoi-u-cluj-20576183',
+  ]},
 ]);
 const USER_AGENT='DLKT-Info-ICEO/1.0 (+https://www.dlkt.ee)';
 const BYTE_LIMIT=1_048_576,DAY=86_400_000;
-const startedAt=Date.now(),deadline=startedAt+180_000;
-const attempts={robots:0,homepage:0,feed:0,article:0},limits={robots:6,homepage:6,feed:6,article:12};
+const DEADLINE_MS=90_000;
+const startedAt=Date.now(),deadline=startedAt+DEADLINE_MS;
+const attempts={robots:0,homepage:0,feed:0,article:0},limits={robots:2,homepage:2,feed:2,article:4};
 const object=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 const list=value=>value===undefined?[]:Array.isArray(value)?value:[value];
 const plain=value=>typeof value==='string'?value:object(value)&&typeof value['#text']==='string'?value['#text']:null;
@@ -40,6 +42,7 @@ function timestamp(raw){
   return {raw:clean(raw,100),explicitTimezone:explicit,iso:Number.isFinite(ms)?new Date(ms).toISOString():null};
 }
 async function boundedGet(url,kind){
+  if(!SOURCES.some(source=>source.origin===new URL(url).origin))throw new Error('PROBE_ORIGIN_OUT_OF_SCOPE');
   if(attempts[kind]>=limits[kind]||Date.now()>=deadline)throw new Error('PROBE_RESOURCE_LIMIT');
   attempts[kind]++;
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),Math.min(10_000,deadline-Date.now()));
@@ -199,6 +202,7 @@ function metadataEvidence(html){
     if(types.some(type=>typeof type==='string'&&/^(?:NewsArticle|Article|ReportageNewsArticle|AnalysisNewsArticle|BlogPosting|TechArticle|ScholarlyArticle|MedicalScholarlyArticle|LiveBlogPosting)$/u.test(type))){
       const entity=value.mainEntityOfPage;
       articles.push({types:types.map(type=>clean(type,100)),headline:clean(value.headline??value.name),headlineLength:typeof (value.headline??value.name)==='string'?(value.headline??value.name).length:null,
+        alternativeHeadline:clean(value.alternativeHeadline),alternativeHeadlineLength:typeof value.alternativeHeadline==='string'?value.alternativeHeadline.length:null,
         datePublished:timestamp(value.datePublished),dateModified:timestamp(value.dateModified),url:clean(value.url),id:clean(value['@id']),
         mainEntityOfPage:clean(typeof entity==='string'?entity:object(entity)?entity['@id']??entity.url:null),
         articleSection:list(value.articleSection).slice(0,8).map(section=>clean(section,100))});
@@ -222,8 +226,9 @@ async function inspectSource(source){
   if(!homeDecision.allowed){result.error=homeDecision.reason;return result;}
   const homepage=await boundedGet(source.origin+'/','homepage');result.homepage=publicResponse(homepage);
   if(!homepage.ok){result.error='homepage-request-failed';return result;}
-  const document=parseDocument(homepage.text,{decodeEntities:true}),feeds=[];
+  const document=parseDocument(homepage.text,{decodeEntities:true,withStartIndices:true,withEndIndices:true}),feeds=[];
   for(const node of DomUtils.getElementsByTagName('link',document,true)){
+    if(node.startIndex===null||node.endIndex===null||!homepage.text.slice(node.startIndex,node.endIndex+1).endsWith('>'))continue;
     if(!(node.attribs.rel??'').toLowerCase().split(/\s+/u).includes('alternate')||(node.attribs.type??'').toLowerCase()!=='application/rss+xml')continue;
     let url;try{url=new URL(node.attribs.href,source.origin+'/');}catch{continue;}
     if(url.origin!==source.origin||url.username||url.password||url.search||url.hash)continue;
@@ -231,8 +236,13 @@ async function inspectSource(source){
     if(!feeds.some(feed=>feed.url===url.href))feeds.push({url:url.href,title:clean(node.attribs.title)});
   }
   result.declaredFeeds=feeds.slice(0,8);
-  if(feeds.length!==1){result.error=feeds.length?'ambiguous-declared-feeds':'no-declared-rss-feed';return result;}
-  source={...source,feed:feeds[0].url,format:'rss',articlePath:'/'};result.feedUrl=source.feed;
+  result.feedDeclarationScope=homepage.partial?'bounded-homepage-prefix':'complete-homepage';
+  const primary=feeds.find(feed=>feed.url===source.primaryFeed);
+  if(!primary){
+    result.error=homepage.partial?'reviewed-primary-feed-not-observed-in-bounded-prefix':'reviewed-primary-feed-not-declared';return result;
+  }
+  result.selectedFeed={...primary,basis:'exact-primary-rss-declaration-observed-in-prior-probe-and-current-homepage'};
+  source={...source,feed:primary.url,format:'rss',articlePath:'/'};result.feedUrl=source.feed;
   const sameFeedOrigin=new URL(source.feed).origin===source.origin;
   let feedPolicy=policy;
   if(!sameFeedOrigin){
@@ -305,10 +315,10 @@ for(const source of SOURCES){
 const incomplete=reports.some(report=>report.status!=='observed'||report.error||report.articles.length!==2
   ||report.articles.some(article=>!article.request?.ok)
   ||report.productionRequired&&(report.productionFeedParser?.state!=='accepted'||report.articles.some(article=>article.productionArticleParser?.state!=='accepted')));
-console.log(JSON.stringify({probe:'dlkt-ro-breadth-declared-rss-1',commit:process.env.GITHUB_SHA??null,
-  startedAt:new Date(startedAt).toISOString(),finishedAt:new Date().toISOString(),attempts,limits,robotsParserChecks,
+console.log(JSON.stringify({probe:'dlkt-ro-breadth-declared-rss-2',commit:process.env.GITHUB_SHA??null,
+  startedAt:new Date(startedAt).toISOString(),finishedAt:new Date().toISOString(),attempts,limits,
+  deadlineMs:DEADLINE_MS,requestTimeoutMs:10_000,bodyLimitBytes:BYTE_LIMIT,robotsParserChecks,
   outcome:incomplete?'incomplete-evidence':'observations-collected',
   boundary:'Metadata observations only. This script changes no source registry, publishes no content and makes no assertion of publisher reuse rights.',
   reports},null,2));
 if(incomplete)process.exitCode=1;
-
