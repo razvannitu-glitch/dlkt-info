@@ -43,13 +43,13 @@ test('exact 128-KiB response size succeeds without retaining extra bytes',async(
 });
 test('oversize streamed provider response is cancelled and rejected',async()=>{
   const bytes=utf8(JSON.stringify({pad:'x'.repeat(MAX_BYTES)}));
-  const {response,wasCancelled}=streamResponse([bytes.subarray(0,64_000),bytes.subarray(64_000,128_000),bytes.subarray(128_000)]);
+  const {response,wasCancelled}=streamResponse([bytes.subarray(0,64_000),bytes.subarray(64_000,128_000),bytes.subarray(128_000),utf8('unread-upstream-chunk')]);
   await assert.rejects(makeTransport(response).requestCode(email,metadata),{message:'DLKT_INFO_IDENTITY_RESPONSE_TOO_LARGE'});
   assert.equal(wasCancelled(),true);
 });
 test('a lying small Content-Length does not bypass streamed byte limit',async()=>{
   const huge=utf8(JSON.stringify({pad:'x'.repeat(MAX_BYTES+1)}));
-  const {response,wasCancelled}=streamResponse([huge],{'content-type':'application/json','content-length':'12'});
+  const {response,wasCancelled}=streamResponse([huge,utf8('unread-upstream-chunk')],{'content-type':'application/json','content-length':'12'});
   await assert.rejects(makeTransport(response).requestCode(email,metadata),{message:'DLKT_INFO_IDENTITY_RESPONSE_TOO_LARGE'});
   assert.equal(wasCancelled(),true);
 });
