@@ -100,13 +100,11 @@ export function setupGlance() {
         forexQuick.hidden = forexHidden;
         forexQuick.textContent = n !== undefined ? 'ECB · 1 EUR = ' + new Intl.NumberFormat(locale, { maximumFractionDigits: 4 }).format(n) + ' ' + q : '';
         forexQuick.title = get('glance-forex-note').textContent ?? '';
-        read.textContent = locale === 'ro' ? 'Vreme si curs' : locale === 'it' ? 'Meteo e cambi' : 'Weather & rates';
-        // The visible weather and FX tiles already open their own verified details.
-        // Do not show a second generic weather/rates button above them.
-        const visibleTiles = (!get('glance-weather').hidden || !get('glance-forex').hidden);
-        if (visibleTiles && document.activeElement === read)
-            get('glance-city').focus({ preventScroll: true });
-        read.hidden = visibleTiles;
+        // This control opens the complete utility dialog; the tiles open their own details.
+        // Label the distinct action instead of repeating weather and FX.
+        read.textContent = locale === 'ro' ? 'Detalii' : locale === 'it' ? 'Dettagli' : 'Details';
+        read.hidden = false;
+        read.setAttribute('aria-label', locale === 'ro' ? 'Deschide detaliile si setarile meteo si curs' : locale === 'it' ? 'Apri dettagli e impostazioni meteo e cambi' : 'Open weather and exchange-rate details and settings');
         get('glance-empty').hidden = preferences.weather || preferences.forex;
         refresh.disabled = busy || localBusy;
         if (detail.open)
