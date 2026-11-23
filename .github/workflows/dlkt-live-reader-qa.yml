@@ -41,6 +41,10 @@ jobs:
         run: node --check scripts/qa-live-reader.mjs
       - name: Inspect public homepage on four viewports
         run: node scripts/qa-live-reader.mjs
+      - name: Verify credential-free account probe against offline fixtures
+        run: node --test tests/anonymous-account-live.test.mjs
+      - name: Verify production anonymous account and session HTTP boundary
+        run: node scripts/verify-anonymous-account.mjs
       - name: Preserve screenshots and measured browser report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
