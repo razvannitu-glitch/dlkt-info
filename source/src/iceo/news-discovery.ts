@@ -12,9 +12,23 @@ import {NEWS_INDEX_URL,NEWS_PUBLISHERS,NEWS_CATEGORY_SOURCES,NEWS_UNCLASSIFIED_S
 
 /** Untrusted discovery metadata. indexedAt is never a publisher publication date. */
 export interface NewsCandidate {readonly sourceUrl:string;readonly title:string;readonly publisher:string;readonly indexedAt:string;readonly category:PublicEditorialCategory|null}
-export interface NewsDiscoveryOptions {readonly deadlineMs?:number;readonly requestTimeoutMs?:number;readonly maxArticleRequests?:number;readonly concurrency?:number;readonly publisherIndexes?:boolean;readonly frontpageHighlights?:boolean;readonly originBackoff?:Map<string,string|null>;readonly retainedCards?:readonly EvidenceCard[]}
+export interface NewsDiscoveryOptions {readonly deadlineMs?:number;readonly requestTimeoutMs?:number;readonly maxArticleRequests?:number;readonly concurrency?:number;readonly publisherIndexes?:boolean;readonly publisherIndexBatch?:number;readonly frontpageHighlights?:boolean;readonly originBackoff?:Map<string,string|null>;readonly retainedCards?:readonly EvidenceCard[]}
 const DAY=86_400_000,INDEX_BYTES=3_145_728,HTML_BYTES=1_048_576,MAX_CANDIDATES=5000;
 export const NEWS_ACQUISITION_ROTATION_MS=120_000;
+
+/**
+ * Cycle every reviewed publisher index, without re-fetching all registries
+ * every two minutes. GDELT remains an independent always-on index.
+ * The batch is selected exclusively from the static reviewed allowlist.
+ */
+export function rotatedPublisherIndexes(now:number,batchSize:number=NEWS_DISCOVERY_INDEXES.length):readonly NewsDiscoveryIndex[]{
+ if(!Number.isSafeInteger(now)||now<0||!Number.isSafeInteger(batchSize)||batchSize<1||batchSize>NEWS_DISCOVERY_INDEXES.length)
+  throw new Error('NEWS_INDEX_ROTATION_INVALID');
+ const groups=Math.ceil(NEWS_DISCOVERY_INDEXES.length/batchSize);
+ const group=Math.floor(now/NEWS_ACQUISITION_ROTATION_MS)%groups;
+ return Object.freeze(NEWS_DISCOVERY_INDEXES.slice(group*batchSize,(group+1)*batchSize));
+}
+
 const KEYS=['category','indexedAt','publisher','sourceUrl','title'];
 const object=(value:unknown):value is Record<string,unknown>=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 const digest=(value:unknown):string=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -424,7 +438,7 @@ export interface NewsDiscoveryResult {readonly sources:readonly SourceResult[];r
 export async function discoverNewsWithDiagnostics(fetcher:typeof fetch,now:number,seedCandidates:readonly NewsCandidate[]=[],onCandidates?:(candidates:readonly NewsCandidate[])=>Promise<void>,options:NewsDiscoveryOptions={}):Promise<NewsDiscoveryResult>{
   if(!Number.isFinite(now))throw new Error('NEWS_CLOCK_INVALID');
   const checkedAt=new Date(now).toISOString(),today=checkedAt.slice(0,10),diagnostics=new NewsDiagnosticsBuilder(now);
-  const indexes:(NewsDiscoveryIndex|null)[]=[null,...(options.publisherIndexes===false?[]:NEWS_DISCOVERY_INDEXES)];
+  const indexes:(NewsDiscoveryIndex|null)[]=[null,...(options.publisherIndexes===false?[]:rotatedPublisherIndexes(now,options.publisherIndexBatch))];
   // Discovery shares one acquisition pipeline. An expired review blocks its
   // indexes, originals, homepage requests and retained-candidate callbacks.
   if(NEWS_SOURCES.some(source=>today>source.rightsReviewBy)){

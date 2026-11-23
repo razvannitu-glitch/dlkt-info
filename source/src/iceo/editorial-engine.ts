@@ -29,7 +29,10 @@ async function collectEditorialData(
   const newsFetch=environment.VERCEL==='1'?newsBackoffFetch(boundedFetch,clock):boundedFetch;
   return discoverNewsWithDiagnostics(newsFetch,now,candidates,async pool=>{
    if(store?.writable)await store.write(pool,clock());
-  },previousSnapshot?{retainedCards:previousSnapshot.cards}:{});
+  },{
+    ...(environment.VERCEL==='1'?{publisherIndexBatch:7,deadlineMs:27_000,maxArticleRequests:60}:{}),
+    ...(previousSnapshot?{retainedCards:previousSnapshot.cards}:{}),
+  });
  })();
  const [base,discovered]=await Promise.all([official,news]);signal?.throwIfAborted();
  const records:SourceResult[]=base.sources.map(health=>({health,cards:base.cards.filter(card=>card.sourceIds.includes(health.id))}));
