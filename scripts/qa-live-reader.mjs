@@ -91,7 +91,7 @@ function browserProbe() {
     brand:visible(brand),
     brandRight:Math.ceil(brand?.getBoundingClientRect().right??0),
     menu:visible(menu),
-    scrollWidth:Math.ceil(document.documentElement.scrollWidth),
+    scrollWidth:Math.ceil(document.documentElement?.scrollWidth??0),
     innerWidth,
     cards:cards.length,
     sourceLinks:sourceLinks.length,
