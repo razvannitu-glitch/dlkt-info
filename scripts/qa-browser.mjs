@@ -197,8 +197,7 @@ async function run(){
   }catch(error){
    // Only this ephemeral, blank Chrome profile can remain; GitHub's disposable
    // runner removes it after the job. Never mask a different cleanup failure.
-   if(!(error&&typeof error==='object'&&'code' in error&&
-      (error.code==='ENOTEMPTY'||error.code==='EBUSY'))))throw error;
+   if(!['ENOTEMPTY','EBUSY'].includes(error?.code))throw error;
    console.warn('DLKT_UI_EPHEMERAL_BROWSER_PROFILE_CLEANUP_DEFERRED');
   }
  }
