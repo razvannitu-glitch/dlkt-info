@@ -141,7 +141,7 @@ test('language-bound news ticker retains verified sources while utilities remain
  assert.equal(value('glance-weather-value'),weather);assert.equal(value('glance-forex-value'),currency);
  h.ids.get('glance-detail').close();assert.strictEqual(h.doc.activeElement,h.ids.get('glance-weather-quick'),'closing a static signal restores its invoking control');
  h.selectLocal(null);assert.equal(h.ids.get('glance-weather-quick').hidden,true,'failed local verification removes the main forecast command');assert.equal(h.ids.get('glance-forex-quick').hidden,false);
- assert.strictEqual(h.doc.activeElement,h.ids.get('glance-read'),'unavailable evidence returns a focused utility to the stable details action');
+ assert.strictEqual(h.doc.activeElement,h.ids.get('glance-city'),'unavailable evidence returns focus to visible city control');
  assert.ok(h.ids.get('glance-ticker-track').children.length>0,'validated ECB fallback remains available');assert.ok(!value('glance-screen-summary').includes(originalTitle),'expired local evidence is removed');assert.equal(h.requests.length,1,'language and city evidence changes only reproject the existing currency response');
  assert.deepEqual(h.writes,[]);assert.equal(JSON.stringify(local),before);
 });
@@ -162,7 +162,7 @@ test('expired utility controls transfer focus before hiding and never take it fr
   if(choice==='forex')assert.equal(validFx(h.forex,expiry),false,'the existing currency evidence is expired');
   h.setTime(expiry);h.win.dispatchEvent(new Event('pageshow'));
   assert.equal(utility.hidden,true);
-  assert.strictEqual(h.doc.activeElement,choice==='elsewhere'?elsewhere:h.ids.get('glance-read'));
+  assert.strictEqual(h.doc.activeElement,choice==='elsewhere'?elsewhere:h.ids.get('glance-city'));
   h.ids.get('glance-read').click();assert.equal(h.ids.get('glance-list').open,true,'details stay available when references expire');
   assert.equal(h.requests.length,1,'expiry rendering does not start another acquisition');
   assert.deepEqual(h.writes,[]);assert.equal(JSON.stringify(local),before);

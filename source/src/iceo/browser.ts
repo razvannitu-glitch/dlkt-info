@@ -651,7 +651,7 @@ function renderDiscovery():void {
   const inlineContext=inlinePage?JSON.stringify([inlinePage.epoch,inlinePage.revision,inlinePage.startedAt,inlinePage.language,inlinePage.cityId,inlinePage.countryCode,inlinePage.filter,inlinePage.period,inlinePage.day?.date??null]):'';
   if(inlineContext!==inlineKnowledgeContext){
     inlineKnowledgeContext=inlineContext;
-    inlineKnowledgeSelection=inlinePage?selectInlineKnowledge(KNOWLEDGE_CARDS.filter(card=>!inlineKnowledgeSeen.has(card.id)),{cityId:inlinePage.cityId,countryCode:inlinePage.countryCode},now,inlinePage.epoch+':'+inlinePage.revision):[];
+    inlineKnowledgeSelection=inlinePage?selectInlineKnowledge(KNOWLEDGE_CARDS.filter(card=>!inlineKnowledgeSeen.has(card.id)),{cityId:inlinePage.cityId,countryCode:inlinePage.countryCode,timeZone:inlinePage.day?.timeZone??Intl.DateTimeFormat().resolvedOptions().timeZone},now,inlinePage.epoch+':'+inlinePage.revision):[];
   }
   let newsIndex=0;
   for(const entry of interleaveKnowledge(visible,inlineKnowledgeSelection)){

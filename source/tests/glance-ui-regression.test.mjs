@@ -12,11 +12,14 @@ test('weather and currency details retain distinct click handlers', () => {
   assert.match(browser, /\['glance-forex-quick', 'forex'\]/);
 });
 
-test('generic dialog remains reachable without a redundant weather-and-rates label', () => {
+test('source dialog stays accessible without a redundant visible utility button', () => {
   assert.match(browser, /read\.addEventListener\('click', \(\) => list\.showModal\(\)\)/);
-  assert.match(browser, /read\.textContent = locale === 'ro' \? 'Detalii'/);
+  assert.match(browser, /read\.textContent = locale === 'ro' \? 'Surse si preferinte'/);
   assert.match(browser, /read\.setAttribute\('aria-label'/);
   assert.doesNotMatch(browser, /read\.textContent = locale === 'ro' \? 'Vreme si curs'/);
+  const html=readFileSync(new URL('../public/iceo.html', import.meta.url), 'utf8');
+  assert.match(html, /id="glance-read" type="button" class="text-button sr-only"/);
+  assert.match(browser, /list\.showModal\(\)/);
 });
 
 test('mobile header preserves 44px utility touch targets', () => {

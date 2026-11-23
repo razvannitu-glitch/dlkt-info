@@ -6,6 +6,7 @@ import {newsFeed,NEWS_WINDOW_MS,validLocalNewsArticle} from '../local/news-polic
 import {ICEO_SOURCES} from './registry.js';
 import {selectContextualToday} from './contextual-today.js';
 import {newsLanguageMatches,selectNewsLanguage,sourceEditionCountryCode} from './news-sources.js';
+import {balanceGeoCategoryRounds} from './geo-balance.js';
 import {selectNewsStream,type NewsStreamFilter,type NewsStreamItem} from './news-stream.js';
 import {NEWS_ORDER_VERSION,NEWS_CORPUS_MAX_AGE_MS,type NewsCorpusEpoch} from './news-corpus.js';
 import {createNewsCorpusStore,type NewsCorpusStore} from './news-corpus-store.js';
@@ -19,7 +20,7 @@ export interface NewsPageRequest {readonly language:Locale;readonly cityId:strin
 export interface NewsPageReader {read(query:NewsPageRequest):Promise<NewsPage>;readSources(cursor:string):Promise<NewsStorySourcesPage>}
 export class NewsPageError extends Error {constructor(readonly code:NewsPageErrorCode){super(code);this.name='NewsPageError';}}
 const NEWS_CURSOR_VERSION='news-cursor-5' as const;
-const NEWS_COUNTRY_ORDER_VERSION='iptc17-country-day-draws-20261123' as const;
+const NEWS_COUNTRY_ORDER_VERSION='iptc17-country-day-local-first-20261123' as const;
 const object=(value:unknown):value is Record<string,unknown>=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 const exact=(value:Record<string,unknown>,keys:readonly string[]):boolean=>Object.keys(value).length===keys.length&&keys.every(key=>Object.hasOwn(value,key));
 const TOKEN=/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/u;
@@ -128,7 +129,12 @@ export class NewsPageService implements NewsPageReader {
   // Related originals are never expanded back into standalone feed cards.
   const selection=selectNewsStream({first:representatives.flatMap(item=>item.kind==='global'?[item.view]:[]),more:[]},
    representatives.flatMap(item=>item.kind==='local'?[item.card]:[]),at,'all',seed);
-  const items=Object.freeze(selection.items.map(item=>byPrimary.get(item.key)!)),coverage={national:0,local:0,international:0};
+  const items=Object.freeze(balanceGeoCategoryRounds(selection.items,
+   item=>item.category??'other',item=>{
+    const group=byPrimary.get(item.key)!;
+    if(group.primary.kind==='local')return 'local';
+    return countryCode!==null&&sourceEditionCountryCode(group.primary.card)===countryCode?'national':'international';
+   }).map(item=>byPrimary.get(item.key)!)),coverage={national:0,local:0,international:0};
   for(const group of items){
    const item=group.primary;
    if(item.kind==='local')coverage.local++;

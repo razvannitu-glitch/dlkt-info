@@ -101,14 +101,14 @@ export function setupGlance() {
         const weatherHidden = !preferences.weather || !forecast || !range, forexHidden = !preferences.forex || n === undefined;
         // Preserve keyboard position before an expired or unavailable utility leaves the toolbar.
         if (document.activeElement === weatherQuick && weatherHidden || document.activeElement === forexQuick && forexHidden)
-            read.focus({ preventScroll: true });
+            get('glance-city').focus({ preventScroll: true });
         weatherQuick.hidden = weatherHidden;
         weatherQuick.textContent = (locale === 'ro' ? 'Vreme' : locale === 'it' ? 'Meteo' : 'Weather') + ' · ' + (range ?? '');
         weatherQuick.title = get('glance-weather-note').textContent ?? '';
         forexQuick.hidden = forexHidden;
         forexQuick.textContent = n !== undefined ? 'ECB · 1 EUR = ' + new Intl.NumberFormat(locale, { maximumFractionDigits: 4 }).format(n) + ' ' + q : '';
         forexQuick.title = get('glance-forex-note').textContent ?? '';
-        read.textContent = locale === 'ro' ? 'Detalii' : locale === 'it' ? 'Dettagli' : 'Details';
+        read.textContent = locale === 'ro' ? 'Surse si preferinte' : locale === 'it' ? 'Fonti e preferenze' : 'Sources and preferences';
         read.setAttribute('aria-label', locale === 'ro' ? 'Informatii, surse si setari' : locale === 'it' ? 'Informazioni, fonti e impostazioni' : 'Information, sources and settings');
         // Local reports first, then verified publisher metadata; no synthetic or stale headlines.
         const tickerItems = [];
@@ -213,7 +213,7 @@ export function setupGlance() {
         }
     }
     function populate() { get('glance-show-weather').checked = preferences.weather; get('glance-show-forex').checked = preferences.forex; get('glance-currency').value = preferences.currency; get('glance-save-status').textContent = ''; }
-    function openSignal(kind) { detailReturn = list.open ? read : document.activeElement instanceof HTMLElement ? document.activeElement : read; if (list.open)
+    function openSignal(kind) { detailReturn = list.open ? get('glance-city') : document.activeElement instanceof HTMLElement ? document.activeElement : get('glance-city'); if (list.open)
         list.close(); if (kind === 'weather' && !city) {
         get('entry-show-city').click();
         return;
@@ -224,10 +224,10 @@ export function setupGlance() {
         currencies.append(new Option(`EUR / ${c}`, c));
     get('glance-customize-open').addEventListener('click', () => { if (list.open)
         list.close(); populate(); custom.showModal(); });
-    custom.addEventListener('close', () => read.focus());
+    custom.addEventListener('close', () => get('glance-city').focus());
     get('glance-customize-close').addEventListener('click', () => custom.close());
     get('glance-detail-close').addEventListener('click', () => detail.close());
-    detail.addEventListener('close', () => { opened = null; (detailReturn?.isConnected && !detailReturn.hidden ? detailReturn : read).focus(); detailReturn = null; });
+    detail.addEventListener('close', () => { opened = null; (detailReturn?.isConnected && !detailReturn.hidden ? detailReturn : get('glance-city')).focus(); detailReturn = null; });
     read.addEventListener('click', () => list.showModal());
     get('glance-list-close').addEventListener('click', () => list.close());
     get('glance-preferences').addEventListener('submit', e => { e.preventDefault(); const next = { version: GLANCE_VERSION, weather: get('glance-show-weather').checked, forex: get('glance-show-forex').checked, keyThing: false, currency: currencies.value }; if (!validPreferences(next))

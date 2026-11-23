@@ -7,8 +7,8 @@ import {NEWS_CATEGORIES} from '../.build/src/iceo/news-taxonomy.js';
 const now=Date.parse('2026-11-23T12:00:00.000Z');
 const copy=value=>JSON.parse(JSON.stringify(value));
 test('knowledge preview keeps original multilingual copy, primary provenance and bounded review dates',()=>{
- assert.equal(KNOWLEDGE_CARDS.length,13);assert.equal(new Set(KNOWLEDGE_CARDS.map(card=>card.category)).size,8);
- assert.equal(validateKnowledgeCatalog(KNOWLEDGE_CARDS).length,13);
+ assert.equal(KNOWLEDGE_CARDS.length,15);assert.equal(new Set(KNOWLEDGE_CARDS.map(card=>card.category)).size,8);
+ assert.equal(validateKnowledgeCatalog(KNOWLEDGE_CARDS).length,15);
  for(const card of KNOWLEDGE_CARDS){
   assert.ok(validKnowledgeCard(card));assert.ok(NEWS_CATEGORIES.some(category=>category.id===card.category));
   for(const language of ['en','ro','it'])for(const field of ['title','explanation','connection'])assert.ok(card.copy[language][field].trim().length>15);
@@ -110,4 +110,23 @@ test('knowledge geography is explicit, bounded and multilingual',()=>{
   {...base.geography,label:{en:'Turin',ro:'Torino'}},
  ])assert.equal(validKnowledgeCard({...base,geography}),false);
  assert.ok(validKnowledgeCard({...base,geography:{...base.geography,cityIds:[]}}));
+});
+
+test('new knowledge formats carry reviewed sources and calendar eligibility, without pretending to be current news',()=>{
+ const historical=KNOWLEDGE_CARDS.find(card=>card.id==='computer-industry-1992-nov-23');
+ const recipe=KNOWLEDGE_CARDS.find(card=>card.id==='apple-cinnamon-oats');
+ assert.ok(historical);assert.ok(recipe);
+ assert.equal(historical.format,'on-this-day');assert.equal(historical.calendarDay,'11-23');
+ assert.equal(historical.source.url,'https://www.computerhistory.org/tdih/november/23/');
+ assert.equal(recipe.format,'recipe');assert.equal(recipe.source.url,'https://foodhero.org/recipes/apple-spice-oatmeal');
+ const onDate=Date.parse('2026-11-23T12:00:00.000Z');
+ const nextDate=Date.parse('2026-11-24T12:00:00.000Z');
+ assert.ok(selectKnowledgeCards(KNOWLEDGE_CARDS,'all',onDate,'fixture','Europe/Bucharest').some(card=>card.id===historical.id));
+ assert.ok(!selectKnowledgeCards(KNOWLEDGE_CARDS,'all',nextDate,'fixture','Europe/Bucharest').some(card=>card.id===historical.id));
+ assert.ok(selectKnowledgeCards(KNOWLEDGE_CARDS,'all',nextDate,'fixture','Europe/Bucharest').some(card=>card.id===recipe.id));
+ assert.equal(validKnowledgeCard({...historical,calendarDay:'02-30'}),false);
+ assert.equal(validKnowledgeCard({...recipe,calendarDay:'11-23'}),false);
+ assert.equal(validKnowledgeCard({...historical,format:'horoscope'}),false);
+ assert.equal(Object.hasOwn(historical,'publishedAt'),false);
+ assert.equal(Object.hasOwn(recipe,'publishedAt'),false);
 });
