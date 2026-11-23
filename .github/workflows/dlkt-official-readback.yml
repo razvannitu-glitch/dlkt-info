@@ -1,0 +1,39 @@
+name: DLKT INFO official-domain release read-back
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dlkt-official-readback-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  official:
+    name: Compare current main with www.dlkt.ee
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout main as expected release
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Set up Node.js 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - name: Read expected commit from checked-out main (not workflow SHA)
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(git rev-parse HEAD)"
+          test "${#expected}" -eq 40
+          echo "DLKT_EXPECTED_SHA=$expected" >> "$GITHUB_ENV"
+      - name: Inspect official HTTPS origin without secrets or writes
+        env:
+          EXPECTED_SHA: ${{ env.DLKT_EXPECTED_SHA }}
+        run: node scripts/verify-official-readback.mjs "$EXPECTED_SHA"
