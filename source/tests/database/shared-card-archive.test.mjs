@@ -139,7 +139,7 @@ test('every news category, unclassified source and reviewed publisher retains st
     }
   }
   for(const publisher of NEWS_PUBLISHERS)for(const origin of publisher.origins){
-    const identity=origin+'/news/controlled-article';
+    const identity=origin+(publisher.id==='stirile-protv'?'/stiri/controlled-article':'/news/controlled-article');
     const value=card({identity,id:digest(identity).slice(0,24),sourceUrl:identity,topic:'world',publisher:publisher.label,sourceIds:['news-world']});
     assert.equal(validArchiveCard(value),true,origin);
     assert.equal((await db.query('select dlkt_info_private.valid_share_archive_card($1::jsonb) as ok',[JSON.stringify(value)])).rows[0].ok,true,origin);

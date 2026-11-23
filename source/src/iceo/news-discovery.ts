@@ -257,7 +257,7 @@ export function newsAcquisitionOrder(values:readonly NewsCandidate[],limit:numbe
  const unknownSubjects=limit<4?[]:ordered.filter(row=>sourceLanguage(row.sourceUrl)!==null
   &&classifyNewsSubject(row.title,row.sourceUrl)===null&&!unchanged(row));
  const unknown=unknownSubjects.length?unknownSubjects[slot%unknownSubjects.length]:undefined;
- const languages=[...byLanguage.keys()],start=slot%languages.length,languageOrder=[...languages.slice(start),...languages.slice(0,start)];
+ const languages=[...byLanguage.keys()].filter((language):language is NewsSourceLanguage=>language!==null),start=slot%languages.length,languageOrder=[...languages.slice(start),...languages.slice(0,start)];
  // Give reviewed editions their first opportunity before a larger language can
  // occupy the leading request slots with urgent headlines. Reserve the bounded
  // unknown-subject opportunity when the batch has room for it.

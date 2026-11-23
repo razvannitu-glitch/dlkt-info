@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {XMLParser, XMLValidator} from 'fast-xml-parser';
 import {parseDocument, DomUtils} from 'htmlparser2';
@@ -7,22 +8,14 @@ import {NEWS_DISCOVERY_INDEXES, publisherForNewsUrl} from '../source/.build/src/
 // Observational evidence only. Never changes a registry, publishes a card,
 // follows a redirect, bypasses a denial or uses credentials.
 const SOURCES=Object.freeze([
-  {id:'digi24-ro-news',feed:'https://www.digi24.ro/rss',format:'rss',
-    origin:'https://www.digi24.ro',articlePath:'/stiri/',robots:'https://www.digi24.ro/robots.txt',
-    productionRequired:true,knownOriginals:["https://www.digi24.ro/stiri/actualitate/sanatate/ce-scade-cu-adevarat-tensiunea-arteriala-cercetatorii-au-analizat-efectele-cafelei-sarii-alimentatiei-si-exercitiilor-fizice-4050049","https://www.digi24.ro/stiri/sci-tech/lumea-digitala/seful-onu-cere-un-mecanism-international-pentru-controlul-riscurilor-inteligentei-artificiale-trebuie-sa-actionam-pana-anul-viitor-4050023"]},
   {id:'protv-ro-news',feed:'https://rss.stirileprotv.ro/',format:'rss',
     origin:'https://stirileprotv.ro',articlePath:'/stiri/',robots:'https://stirileprotv.ro/robots.txt',
     feedRobots:'https://rss.stirileprotv.ro/robots.txt',productionRequired:true},
-  // Official /rss page declares /rss.xml. Article paths are read from that feed;
-  // /stiri is an editorial listing, not an assumed article URL prefix.
-  {id:'doxologia-ro-diagnostic',feed:'https://doxologia.ro/rss.xml',format:'rss',
-    origin:'https://doxologia.ro',articlePath:'/',robots:'https://doxologia.ro/robots.txt',
-    productionRequired:false},
 ]);
 const USER_AGENT='DLKT-Info-ICEO/1.0 (+https://www.dlkt.ee)';
 const BYTE_LIMIT=1_048_576,DAY=86_400_000;
-const startedAt=Date.now(),deadline=startedAt+210_000;
-const attempts={robots:0,feed:0,article:0},limits={robots:4,feed:3,article:6};
+const startedAt=Date.now(),deadline=startedAt+65_000;
+const attempts={robots:0,feed:0,article:0},limits={robots:2,feed:1,article:2};
 const object=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 const list=value=>value===undefined?[]:Array.isArray(value)?value:[value];
 const plain=value=>typeof value==='string'?value:object(value)&&typeof value['#text']==='string'?value['#text']:null;
@@ -56,9 +49,9 @@ async function boundedGet(url,kind){
     if(response.status>=300&&response.status<400){await response.body?.cancel();return {...base,ok:false,error:'redirect-not-followed'};}
     if(!response.ok){await response.body?.cancel();return {...base,ok:false,error:'http-status'};}
     const accepted=kind==='article'?['text/html','application/xhtml+xml']:kind==='robots'?['text/plain']:['application/rss+xml','application/xml','text/xml'];
-    if(!accepted.includes(type)){await response.body?.cancel();return {...base,ok:false,error:'content-type'};}
+    if(kind!=='robots'&&!accepted.includes(type)){await response.body?.cancel();return {...base,ok:false,error:'content-type'};}
     if(!response.body)return {...base,ok:false,error:'empty-body'};
-    const max=kind==='robots'?65_536:BYTE_LIMIT,declared=response.headers.get('content-length');
+    const max=BYTE_LIMIT,declared=response.headers.get('content-length');
     if(kind!=='article'&&declared&&Number(declared)>max){await response.body.cancel();return {...base,ok:false,error:'body-limit'};}
     reader=response.body.getReader();
     const chunks=[];let bytes=0,partial=false;
@@ -81,25 +74,62 @@ async function boundedGet(url,kind){
   }finally{if(reader)reader.releaseLock();clearTimeout(timer);controller.abort();}
 }
 function publicResponse(response){const {text,...metadata}=response;return metadata;}
+function robotsBodyEvidence(response){
+  if(!response.ok||typeof response.text!=='string')return null;
+  const text=response.text.replace(/^\uFEFF/u,''),root=/^\s*(?:<\?xml[^>]*\?>\s*)?<([A-Za-z][A-Za-z0-9:_-]*)\b/u.exec(text)?.[1]?.toLowerCase()??null;
+  const kind=root==='rss'?'rss':root==='feed'?'atom':root?'markup':/^\s*<!doctype\s+html/iu.test(text)?'html':'text';
+  return {declaredContentType:response.contentType,conformingMediaType:response.contentType==='text/plain',
+    completeBody:response.partial===false,bodyKind:kind,rootElement:root,lineCount:text.split(/\r\n|\n|\r/u).length,
+    bodyPrefix:clean(text.slice(0,500),500)};
+}
 function robotsPolicy(response){
   if(response.status===404)return {state:'absent',rules:[],crawlDelay:null};
-  if(!response.ok)return {state:'unavailable',rules:[],crawlDelay:null};
-  const groups=[];let group={agents:[],rules:[],crawlDelay:null},hasDirectives=false;
-  const push=()=>{if(group.agents.length)groups.push(group);group={agents:[],rules:[],crawlDelay:null};hasDirectives=false;};
-  for(const raw of response.text.split(/\r?\n/u)){
-    const line=raw.replace(/#.*/u,'').trim(),at=line.indexOf(':');if(at<0)continue;
+  if(!response.ok||response.partial)return {state:'unavailable',rules:[],crawlDelay:null};
+  const text=response.text.replace(/^\uFEFF/u,''),bodyEvidence=robotsBodyEvidence(response);
+  const lines=text.split(/\r\n|\n|\r/u),groups=[];
+  let group={agents:[],rules:[],crawlDelay:null},hasRules=false,malformedDirectives=0,recognizedLines=0;
+  const directiveEvidence=[];
+  const push=()=>{if(group.agents.length)groups.push(group);group={agents:[],rules:[],crawlDelay:null};hasRules=false;};
+  // RFC 9309 sections 2.3.1.1 and 2.3.1.5 require every line to be
+  // examined and parseable rules to be honored. A wrong MIME is evidence
+  // of publisher nonconformance, not grounds to skip a successful body.
+  for(let index=0;index<lines.length;index++){
+    const line=lines[index].replace(/#.*/u,'').trim(),at=line.indexOf(':');if(at<0)continue;
     const key=line.slice(0,at).trim().toLowerCase(),value=line.slice(at+1).trim();
-    if(key==='user-agent'){if(hasDirectives)push();if(value)group.agents.push(value.toLowerCase());continue;}
+    if(!['user-agent','allow','disallow','crawl-delay'].includes(key))continue;
+    recognizedLines++;
+    if(directiveEvidence.length<40)directiveEvidence.push({line:index+1,name:key,value:clean(value,512)});
+    if(key==='user-agent'){
+      if(!/^(?:[A-Za-z_-]+|\*)$/u.test(value)){malformedDirectives++;continue;}
+      if(hasRules)push();group.agents.push(value.toLowerCase());continue;
+    }
     if(!group.agents.length)continue;
-    hasDirectives=true;
-    if((key==='allow'||key==='disallow')&&value)group.rules.push({allow:key==='allow',path:value});
-    if(key==='crawl-delay'&&/^\d+(?:\.\d+)?$/u.test(value))group.crawlDelay=Number(value);
+    if(key==='allow'||key==='disallow'){
+      hasRules=true;
+      if(!value)continue;
+      if(!/^[/*]/u.test(value)||/[\u0000-\u0020\u007f]/u.test(value)){malformedDirectives++;continue;}
+      group.rules.push({allow:key==='allow',path:value});continue;
+    }
+    if(key==='crawl-delay'){
+      if(/^\d+(?:\.\d+)?$/u.test(value))group.crawlDelay=Math.max(group.crawlDelay??0,Number(value));
+      else malformedDirectives++;
+    }
+    // Unknown/extension records never terminate a group (RFC 9309 2.2.4).
   }
   push();
-  const matches=groups.map(g=>({group:g,specificity:Math.max(-1,...g.agents.map(a=>a==='*'?0:'dlkt-info-iceo'.includes(a)?a.length:-1))})).filter(m=>m.specificity>=0);
-  const best=Math.max(-1,...matches.map(m=>m.specificity)),chosen=matches.filter(m=>m.specificity===best).map(m=>m.group);
-  if(chosen.reduce((total,g)=>total+g.rules.length,0)>200)return {state:'unavailable',rules:[],crawlDelay:null};
-  return {state:'observed',rules:chosen.flatMap(g=>g.rules),crawlDelay:chosen.some(g=>g.crawlDelay!==null)?Math.max(...chosen.map(g=>g.crawlDelay??0)):null};
+  const named=groups.filter(g=>g.agents.some(agent=>agent!=='*'&&'dlkt-info-iceo'.includes(agent)));
+  const chosen=named.length?named:groups.filter(g=>g.agents.includes('*'));
+  const rules=chosen.flatMap(g=>g.rules);
+  const parsing={bodyEvidence,recognizedLines,malformedDirectives,groupCount:groups.length,applicableGroupCount:chosen.length,
+    totalRuleCount:groups.reduce((count,g)=>count+g.rules.length,0),directiveEvidence};
+  const denialBody=/^\s*(?:access denied|forbidden|unauthorized|too many requests)\b/iu.test(text)
+    ||(/^(?:error)$/iu.test(bodyEvidence?.rootElement??'')&&/<(?:Code|code)>\s*(?:AccessDenied|Forbidden|Unauthorized|TooManyRequests)\s*</u.test(text))
+    ||(bodyEvidence?.bodyKind==='html'||bodyEvidence?.rootElement==='html')&&/<title[^>]*>\s*(?:just a moment|access denied|attention required|forbidden|sign in|log in)\b/iu.test(text);
+  if(denialBody||malformedDirectives||rules.length>200)return {state:'unavailable',rules,crawlDelay:null,
+    reason:denialBody?'denial-body':malformedDirectives?'ambiguous-robots-directive':'robots-rule-limit',...parsing};
+  // Only a fully read, decoded and line-parsed body can establish no
+  // applicable groups (RFC 9309 2.2.1). XML MIME alone never allows a URL.
+  return {state:'observed',rules,crawlDelay:chosen.some(g=>g.crawlDelay!==null)?Math.max(...chosen.map(g=>g.crawlDelay??0)):null,...parsing};
 }
 function robotsDecision(policy,url){
   if(policy.state==='unavailable')return {allowed:false,reason:'robots-unavailable'};
@@ -120,10 +150,10 @@ function robotsDecision(policy,url){
     while(pattern[p]==='*')p++;
     const matches=t===target.length&&p===pattern.length;
     if(!matches)continue;
-    const score=body.replaceAll('*','').length;
+    const score=Buffer.byteLength(body.replaceAll('*',''),'utf8');
     if(!winner||score>winner.score||score===winner.score&&rule.allow)winner={...rule,score};
   }
-  return {allowed:winner?.allow??true,reason:winner?(winner.allow?'allow-rule':'disallow-rule'):'no-matching-disallow'};
+  return {allowed:winner?.allow??true,reason:winner?(winner.allow?'allow-rule':'disallow-rule'):policy.applicableGroupCount===0?'complete-body-no-applicable-robots-group':'no-matching-disallow'};
 }
 function parseFeed(xml,source,now){
   if(/<!\s*(?:DOCTYPE|ENTITY)/iu.test(xml)||XMLValidator.validate(xml)!==true)throw new Error('PROBE_XML_INVALID');
@@ -231,6 +261,24 @@ async function inspectSource(source){
   if(feed.samples.length!==2)result.error='two-current-reviewed-samples-unavailable';
   return result;
 }
+function verifyRobotsParsing(){
+  const response=text=>({status:200,ok:true,partial:false,contentType:'application/xml',text});
+  const decide=(text,url='https://rss.stirileprotv.ro/')=>robotsDecision(robotsPolicy(response(text)),url);
+  assert.equal(decide('User-agent: *\nDisallow: /').allowed,false,'XML MIME never discards a disallow');
+  assert.equal(decide('<rss>\nUser-agent: *\nDisallow: /\n</rss>').allowed,false,'parseable rules survive mixed malformed content');
+  assert.equal(decide('User-agent: DLKT-Info-ICEO\n<not-a-robots-line/>\nUser-agent: *\nDisallow: /').allowed,false,'unknown records do not split a group');
+  assert.equal(decide('User-agent: *\rDisallow: /private\rAllow: /private/public','https://rss.stirileprotv.ro/private/a').allowed,false,'CR-only lines are parsed');
+  assert.equal(decide('User-agent: *\rDisallow: /private\rAllow: /private/public','https://rss.stirileprotv.ro/private/public/a').allowed,true,'longest matching allow is retained');
+  assert.equal(decide('User-agent: DLKT-Info-ICEO\nDisallow: /a\nUser-agent: dlkt-info-iceo\nDisallow: /b','https://rss.stirileprotv.ro/b').allowed,false,'all matching groups are combined');
+  assert.equal(decide('User-agent: *\nDisallow: /hidden\nMalformed: ignored\nAllow: /public','https://rss.stirileprotv.ro/hidden').allowed,false,'unknown lines never erase a prior disallow');
+  assert.equal(decide('User-agent: *\nDisallow: invalid-path').allowed,false,'ambiguous recognizable directives fail closed');
+  const empty=robotsPolicy(response('<?xml version="1.0"?><rss><channel><title>Example</title></channel></rss>'));
+  assert.equal(empty.bodyEvidence.bodyKind,'rss');assert.equal(empty.groupCount,0);assert.equal(empty.recognizedLines,0);
+  assert.equal(decide('<Error><Code>AccessDenied</Code></Error>').allowed,false,'successful HTTP denial bodies still block');
+  for(const status of [401,402,403,429,500,503])assert.equal(robotsDecision(robotsPolicy({status,ok:false}),'https://rss.stirileprotv.ro/').allowed,false,'HTTP denial/server failure remains blocked');
+  return {state:'passed',cases:16};
+}
+const robotsParserChecks=verifyRobotsParsing();
 const reports=[];
 for(const source of SOURCES){
   try{reports.push(await inspectSource(source));}
@@ -239,8 +287,8 @@ for(const source of SOURCES){
 const incomplete=reports.some(report=>report.status!=='observed'||report.error||report.articles.length!==2
   ||report.articles.some(article=>!article.request?.ok)
   ||report.productionRequired&&(report.productionFeedParser?.state!=='accepted'||report.articles.some(article=>article.productionArticleParser?.state!=='accepted')));
-console.log(JSON.stringify({probe:'dlkt-category-source-compatibility-2',commit:process.env.GITHUB_SHA??null,
-  startedAt:new Date(startedAt).toISOString(),finishedAt:new Date().toISOString(),attempts,limits,
+console.log(JSON.stringify({probe:'dlkt-protv-robots-compatibility-3',commit:process.env.GITHUB_SHA??null,
+  startedAt:new Date(startedAt).toISOString(),finishedAt:new Date().toISOString(),attempts,limits,robotsParserChecks,
   outcome:incomplete?'incomplete-evidence':'observations-collected',
   boundary:'Metadata observations only. This script changes no source registry, publishes no content and makes no assertion of publisher reuse rights.',
   reports},null,2));
