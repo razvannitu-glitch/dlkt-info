@@ -116,7 +116,7 @@ test('270 original news include distinct knowledge after each eleven stories',()
  for(const [index,item] of retained.entries())assert.strictEqual(item.item,news[index]);
  for(const [index,item] of inserted.entries())assert.strictEqual(item.item,selected[index]);
  assert.equal(new Set(retained.map(item=>item.item.key)).size,270);
- assert.equal(new Set(inserted.map(item=>item.item.card.id)).size,12);
+ assert.equal(new Set(inserted.map(item=>item.item.card.id)).size,15);
  assert.equal(JSON.stringify(news),before);
 });
 

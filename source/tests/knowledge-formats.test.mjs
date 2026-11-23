@@ -40,6 +40,6 @@ test('knowledge and new formats retain news order and never fake infinite cards'
  const news=Array.from({length:50},(_,i)=>({key:'n-'+i}));
  const items=interleaveKnowledge(news,selected);
  assert.equal(items.filter(item=>item.kind==='news').length,50);
- assert.equal(new Set(items.filter(item=>item.kind==='knowledge').map(item=>item.item.card.id)).size,2);
- assert.deepEqual(items.filter(item=>item.kind==='knowledge').map(item=>item.afterNews),[22,44]);
+ assert.equal(new Set(items.filter(item=>item.kind==='knowledge').map(item=>item.item.card.id)).size,4);
+ assert.deepEqual(items.filter(item=>item.kind==='knowledge').map(item=>item.afterNews),[11,22,33,44]);
 });

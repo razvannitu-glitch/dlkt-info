@@ -50,7 +50,7 @@ test('reader keeps evidence details, exploration and SVG controls without fake a
 });
 test('calendar assets preserve exact compiled code and resolve only curated browser modules',()=>{
  for(const name of ['event-calendar','card-node']){
-  const compiled=read(`.build/src/local/${name}.js`).replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'').replaceAll("'./contracts.js'","'./local-contracts.js'").replaceAll("'./presentation.js'","'./local-presentation.js'").replaceAll("'./event-calendar.js'","'./local-event-calendar.js'").replaceAll("'../glance/weather-motion.js'","'./glance-weather-motion.js'").replaceAll("'../media/browser.js'","'./card-photo-browser.js'");
+  const compiled=read(`.build/src/local/${name}.js`).replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'').replaceAll("'./contracts.js'","'./local-contracts.js'").replaceAll("'./presentation.js'","'./local-presentation.js'").replaceAll("'./event-calendar.js'","'./local-event-calendar.js'").replaceAll("'../glance/weather-motion.js'","'./glance-weather-motion.js'").replaceAll("'../i18n/browser.js'","'./i18n-browser.js'").replaceAll("'../media/browser.js'","'./card-photo-browser.js'");
   assert.equal(read(`public/local-${name}.js`),compiled);
  }
  for(const file of ['saved-updates.js','local-event-calendar.js','local-card-node.js']){
