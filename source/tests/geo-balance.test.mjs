@@ -27,10 +27,10 @@ test('ordering is deterministic and input references stay untouched',()=>{
 
 test('local prioritization preserves category rounds and original report identity',()=>{
  const categories=Array.from({length:18},(_,i)=>'cat-'+i);
- const items=categories.flatMap((category,i)=>[
-  {key:'a'+i,category,band:i%3===0?'local':'international'},
-  {key:'b'+i,category,band:i%3===1?'national':'international'}
- ]);
+ const items=[
+  ...categories.map((category,i)=>({key:'a'+i,category,band:i%3===0?'local':'international'})),
+  ...categories.map((category,i)=>({key:'b'+i,category,band:i%3===1?'national':'international'})),
+ ];
  const rounds=balanceGeoCategoryRounds(items,x=>x.category,x=>x.band);
  assert.equal(rounds.length,items.length);
  assert.equal(new Set(rounds.slice(0,18).map(x=>x.category)).size,18);
