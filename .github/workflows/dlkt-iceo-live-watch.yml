@@ -1,6 +1,9 @@
 name: DLKT INFO live ICEO freshness watch
 
 on:
+  pull_request:
+    branches:
+      - main
   schedule:
     - cron: "7,22,37,52 * * * *"
   workflow_dispatch:
@@ -9,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: dlkt-live-iceo-watch
+  group: dlkt-live-iceo-watch-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
