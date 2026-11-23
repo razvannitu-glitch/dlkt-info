@@ -25,7 +25,11 @@ test('backend completes the full city-country-world order before pagination',()=
  assert.doesNotMatch(backend,/iptc17-country-day-local-first-20261123/);
 });
 test('redundant Use my location button is absent in all supported languages',()=>{
- assert.doesNotMatch(html,/glance-locate|Use my location/);
+ const heading=html.match(/<div class="glance-heading">([\s\S]*?)<div class="glance-utilities">/u)?.[1];
+ assert.ok(heading,'main utility heading exists');
+ assert.doesNotMatch(heading,/glance-locate|Use my location/);
+ assert.doesNotMatch(html,/id="glance-locate"/);
+ assert.match(html,/id="locate-place"/,'the functional location option remains in the city chooser');
  assert.doesNotMatch(css,/glance-locate/);
  assert.doesNotMatch(glance,/glance-locate|Foloseste locatia mea|Usa la mia posizione/);
  assert.doesNotMatch(source,/glance-locate|Foloseste locatia mea|Usa la mia posizione/);
