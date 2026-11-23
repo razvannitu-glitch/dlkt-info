@@ -273,7 +273,7 @@
     "public/edition-artifact.js": "4ec865079360ddfa161f7e5fbb0736a3809d0d8536addeee7ef7eaca08083656",
     "public/edition-browser.js": "63080c49d40370dfbd14c3d7f454b1be1ab247d304f79b4105a48e7b11afbfd8",
     "public/edition-render.js": "c28fd788dcaeacae57d976817295c0aa00ecb4cfb79f63cd675478e21a64b3c4",
-    "public/editorial-cards.css": "a0637b549b4d341bfe22d0e39e1ee5b3b4bdc2d4a04bb2127818ede9778ea6de",
+    "public/editorial-cards.css": "aa4e14073116c37d4e0f9c3587dcd704d2bf2a6a467360ea48192e26c0244d35",
     "public/editorial-categories.js": "3f33eed94aa1155caed1e4263261a8ddc2be40794bab890e4b0e90efd811905d",
     "public/editorial-photos.js": "893738ec346316a352d7b723c2c33b6f9b70c031def6e71ec2cb7ce4c6fcea69",
     "public/editorial-presentation.js": "e05322c014a89b4818102c53c02b6b24ad99f3fe52777650c4ee104a0530065c",
@@ -1003,6 +1003,6 @@
     "tsconfig.json": "a6fe6af5c5cee7adc34f2441b6dc72ea311da623378df0240f39a389a2a13d36",
     "vercel.json": "33c38fc50e8e528a56cda7d75a528447132f667e2732b60db909340fb4e91407",
     "vercel.public.json": "a69ada3e523cd4be2537ce9c533f8d417369d21d76e2aecd2306008e35b4cbf1",
-    "verify-release.mjs": "628d878b95129c1d80cda762ed42bb2db4b6416131f6adb39776275b62e24848"
+    "verify-release.mjs": "93e4c3efccea8e3f0be4394f541c6916ab3cf0b9c1df17622eee86209290705d"
   }
 }
