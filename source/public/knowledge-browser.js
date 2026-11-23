@@ -1,9 +1,9 @@
 import { getLocale } from './i18n-browser.js';
 import { knowledgeLanguage } from './knowledge.js';
 const labels = {
-    en: { know: 'Did you know?', history: 'On this day', recipe: 'Recipe idea', context: 'The useful bit', source: 'Open source', checked: 'Checked', global: 'General knowledge' },
-    ro: { know: 'Stiati ca?', history: 'S-a intamplat azi', recipe: 'Idee de reteta', context: 'Ce merita retinut', source: 'Deschide sursa', checked: 'Verificat', global: 'Fapt general' },
-    it: { know: 'Lo sapevi?', history: 'Accadde oggi', recipe: 'Idea ricetta', context: 'Da ricordare', source: 'Apri la fonte', checked: 'Verificato', global: 'Conoscenza generale' },
+    en: { know: 'Did you know?', history: 'On this day', recipe: 'Recipe idea', impact: 'Make a difference', context: 'The useful bit', action: 'How to help', disclaimer: 'Independent DLKT information. No partnership, donation collection or medical advice.', source: 'Official information', checked: 'Checked', global: 'General knowledge' },
+    ro: { know: 'Stiati ca?', history: 'S-a intamplat azi', recipe: 'Idee de reteta', impact: 'Impreuna putem ajuta', context: 'Ce merita retinut', action: 'Cum poti ajuta', disclaimer: 'Informare independenta DLKT. Fara parteneriat, colectare de donatii sau sfaturi medicale.', source: 'Informatii oficiale', checked: 'Verificat', global: 'Fapt general' },
+    it: { know: 'Lo sapevi?', history: 'Accadde oggi', recipe: 'Idea ricetta', impact: 'Insieme possiamo aiutare', context: 'Da ricordare', action: 'Come aiutare', disclaimer: 'Informazioni DLKT indipendenti. Nessuna partnership, raccolta fondi o consulenza medica.', source: 'Fonte ufficiale', checked: 'Verificato', global: 'Conoscenza generale' },
 };
 function make(tag, className, text = '') {
     const node = document.createElement(tag);
@@ -17,6 +17,7 @@ export function knowledgeCardNode(card, scope) {
     const article = make('article', 'knowledge-card knowledge-card-inline');
     article.id = 'news-know-' + card.id;
     article.dataset.knowledgeId = card.id;
+    article.dataset.knowledgeFormat = card.format ?? 'did-you-know';
     article.dataset.newsStreamKey = 'knowledge:' + card.id;
     article.dataset.newsCategory = card.category;
     article.dataset.knowledgeScope = scope;
@@ -26,12 +27,12 @@ export function knowledgeCardNode(card, scope) {
     article.dir = 'auto';
     article.tabIndex = -1;
     const meta = make('div', 'knowledge-card-meta');
-    meta.append(make('span', 'knowledge-category-tag', card.format === 'on-this-day' ? copy.history : card.format === 'recipe' ? copy.recipe : copy.know), make('span', 'knowledge-topic', scope === 'global' ? copy.global : (card.geography?.label[language] ?? copy.global)));
+    meta.append(make('span', 'knowledge-category-tag', card.format === 'on-this-day' ? copy.history : card.format === 'recipe' ? copy.recipe : card.format === 'impact' ? copy.impact : copy.know), make('span', 'knowledge-topic', scope === 'global' ? copy.global : (card.geography?.label[language] ?? copy.global)));
     const title = make('h3', 'knowledge-card-title', value.title);
     title.id = 'news-know-title-' + card.id;
     article.setAttribute('aria-labelledby', title.id);
     const detail = make('details', 'knowledge-context');
-    detail.append(make('summary', '', copy.context), make('p', '', value.connection));
+    detail.append(make('summary', '', card.format === 'impact' ? copy.action : copy.context), make('p', '', value.connection));
     const provenance = make('p', 'knowledge-provenance'), reviewed = make('time', '', new Intl.DateTimeFormat(language, { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(card.reviewedAt)));
     reviewed.dateTime = card.reviewedAt;
     reviewed.title = card.reviewedAt;
@@ -57,5 +58,7 @@ export function knowledgeCardNode(card, scope) {
     source.setAttribute('aria-label', copy.source + ' · ' + card.source.publisher);
     actions.append(source);
     article.append(meta, title, make('p', 'knowledge-explanation', value.explanation), detail, provenance, actions);
+    if (card.format === 'impact')
+        article.append(make('p', 'knowledge-impact-disclaimer', copy.disclaimer));
     return article;
 }

@@ -537,5 +537,111 @@ const reviewed=[
   "reviewedAt": "2026-11-23T09:00:00.000Z",
   "reviewBy": "2027-05-20T09:00:00.000Z"
 }
+,
+{
+  "id": "impact-breast-health-awareness",
+  "category": "07000000",
+  "format": "impact",
+  "topic": {
+    "en": "Breast health",
+    "ro": "Sanatatea sanilor",
+    "it": "Salute del seno"
+  },
+  "source": {
+    "publisher": "World Health Organization",
+    "url": "https://www.who.int/initiatives/global-breast-cancer-initiative"
+  },
+  "copy": {
+    "en": {
+      "title": "Breast health deserves informed attention.",
+      "explanation": "Early diagnosis and timely access to care are important parts of breast cancer control. The WHO Global Breast Cancer Initiative focuses on education, diagnosis and complete care.",
+      "connection": "Learn the signs from the official source. Discuss personal risk and appropriate screening with a qualified clinician."
+    },
+    "ro": {
+      "title": "Sanatatea sanilor merita atentie informata.",
+      "explanation": "Diagnosticul timpuriu si accesul prompt la ingrijire sunt esentiale. Initiativa globala OMS se concentreaza pe informare, diagnostic si tratament complet.",
+      "connection": "Consulta informatiile oficiale si discuta despre risc si investigatiile potrivite cu un medic."
+    },
+    "it": {
+      "title": "La salute del seno merita attenzione informata.",
+      "explanation": "La diagnosi precoce e un accesso tempestivo alle cure contano. L iniziativa globale OMS promuove informazione, diagnosi e assistenza completa.",
+      "connection": "Leggi le informazioni ufficiali e confrontati con un medico su rischio e controlli appropriati."
+    }
+  },
+  "kind": "knowledge",
+  "revision": 1,
+  "reviewedAt": "2026-11-23T11:00:00.000Z",
+  "reviewBy": "2027-02-20T11:00:00.000Z"
+},
+{
+  "id": "impact-cervical-cancer-prevention",
+  "category": "07000000",
+  "format": "impact",
+  "topic": {
+    "en": "Cervical health",
+    "ro": "Preventie si sanatate",
+    "it": "Prevenzione e salute"
+  },
+  "source": {
+    "publisher": "World Health Organization",
+    "url": "https://www.who.int/initiatives/cervical-cancer-elimination-initiative"
+  },
+  "copy": {
+    "en": {
+      "title": "Cervical cancer prevention can protect lives.",
+      "explanation": "The WHO initiative supports HPV vaccination, access to effective screening, and timely treatment. Services and eligibility differ by country.",
+      "connection": "Check local public health guidance and talk to a qualified professional about vaccination and screening."
+    },
+    "ro": {
+      "title": "Preventia cancerului de col uterin poate salva vieti.",
+      "explanation": "Initiativa OMS sustine vaccinarea HPV, accesul la screening si tratamentul la timp. Disponibilitatea si eligibilitatea difera intre tari.",
+      "connection": "Consulta recomandarile autoritatilor sanitare locale si discuta cu un specialist despre vaccinare si screening."
+    },
+    "it": {
+      "title": "La prevenzione del tumore cervicale puo salvare vite.",
+      "explanation": "L iniziativa OMS sostiene vaccinazione HPV, screening e cura tempestiva. Accesso e criteri variano da paese a paese.",
+      "connection": "Consulta le indicazioni sanitarie locali e parla con un professionista di vaccinazione e screening."
+    }
+  },
+  "kind": "knowledge",
+  "revision": 1,
+  "reviewedAt": "2026-11-23T11:00:00.000Z",
+  "reviewBy": "2027-02-20T11:00:00.000Z"
+},
+{
+  "id": "impact-voluntary-blood-donation",
+  "category": "07000000",
+  "format": "impact",
+  "topic": {
+    "en": "Blood donation",
+    "ro": "Donare de sange",
+    "it": "Donazione di sangue"
+  },
+  "source": {
+    "publisher": "World Health Organization",
+    "url": "https://www.who.int/campaigns/world-blood-donor-day/2026"
+  },
+  "copy": {
+    "en": {
+      "title": "A blood donation can make a real difference.",
+      "explanation": "Voluntary blood donors help patients during emergencies, surgery, childbirth and cancer care. Eligibility and collection locations depend on local blood services.",
+      "connection": "Read the official campaign, then check eligibility and appointments with an authorised local blood centre."
+    },
+    "ro": {
+      "title": "Donarea de sange poate schimba vieti.",
+      "explanation": "Donatorii voluntari ajuta pacientii in urgente, interventii, nasteri si tratamente oncologice. Eligibilitatea si centrele de colectare sunt locale.",
+      "connection": "Consulta campania oficiala, apoi verifica eligibilitatea si programarile la un centru de transfuzie autorizat."
+    },
+    "it": {
+      "title": "Donare sangue puo fare la differenza.",
+      "explanation": "I donatori volontari aiutano pazienti in emergenze, interventi, parti e cure oncologiche. Idoneita e centri sono locali.",
+      "connection": "Leggi la campagna ufficiale, poi verifica idoneita e prenotazioni presso un centro autorizzato."
+    }
+  },
+  "kind": "knowledge",
+  "revision": 1,
+  "reviewedAt": "2026-11-23T11:00:00.000Z",
+  "reviewBy": "2027-02-20T11:00:00.000Z"
+}
 ] as const satisfies readonly KnowledgeCard[];
 export const KNOWLEDGE_CARDS:readonly KnowledgeCard[]=Object.freeze(validateKnowledgeCatalog(reviewed));

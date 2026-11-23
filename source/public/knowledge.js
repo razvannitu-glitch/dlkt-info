@@ -9,7 +9,7 @@ const origins = new Set([
     'https://oceanservice.noaa.gov', 'https://weather.metoffice.gov.uk', 'https://www.qrcode.com',
     'https://www.nps.gov', 'https://www.ecb.europa.eu', 'https://www.olympics.com', 'https://www.afb.org',
     'https://www.museoegizio.it', 'https://www.filarmonicaenescu.ro',
-    'https://www.computerhistory.org', 'https://foodhero.org',
+    'https://www.computerhistory.org', 'https://foodhero.org', 'https://www.who.int',
 ]);
 function object(value) { return typeof value === 'object' && value !== null && !Array.isArray(value); }
 function text(value, max) { return typeof value === 'string' && value.trim().length > 0 && value.length <= max && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f<>]/u.test(value); }
@@ -43,7 +43,7 @@ export function validKnowledgeCard(value) {
         !Number.isSafeInteger(value.revision) || Number(value.revision) < 1 || !isNewsCategoryId(value.category) ||
         !object(value.source) || !text(value.source.publisher, 100) || !safeKnowledgeSource(value.source.url) ||
         value.geography !== undefined && !validKnowledgeGeography(value.geography) ||
-        value.format !== undefined && !['did-you-know', 'on-this-day', 'recipe'].includes(String(value.format)) ||
+        value.format !== undefined && !['did-you-know', 'on-this-day', 'recipe', 'impact'].includes(String(value.format)) ||
         value.format === 'on-this-day' && (!/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/u.test(String(value.calendarDay)) || !Number.isFinite(Date.parse('2024-' + String(value.calendarDay) + 'T12:00:00.000Z')) || new Date('2024-' + String(value.calendarDay) + 'T12:00:00.000Z').toISOString().slice(5, 10) !== value.calendarDay) ||
         value.format !== 'on-this-day' && value.calendarDay !== undefined ||
         !instant(value.reviewedAt) || !instant(value.reviewBy) || Date.parse(value.reviewBy) <= Date.parse(value.reviewedAt) ||

@@ -27,3 +27,12 @@
 #discovery-cards>.knowledge-card-inline{border-top:4px solid #F66061;background:var(--reader-panel,var(--soft))}
 .knowledge-card-inline .knowledge-category-tag{background:#F66061;color:#121416}
 .knowledge-card-inline .knowledge-topic{font-weight:700}
+
+/* DLKT original coral impact cards. Black ordinary text meets contrast needs; no third-party logos. */
+.knowledge-card[data-knowledge-format="impact"]{background:#F66061;color:#121416;border-color:#121416}
+.knowledge-card[data-knowledge-format="impact"] .knowledge-category-tag{background:#121416;color:#fff}
+.knowledge-card[data-knowledge-format="impact"] .knowledge-topic,
+.knowledge-card[data-knowledge-format="impact"] .knowledge-provenance{color:#121416}
+.knowledge-card[data-knowledge-format="impact"] .knowledge-context{border-color:#121416}
+.knowledge-card[data-knowledge-format="impact"] .knowledge-actions>.knowledge-source{background:#121416;color:#fff;border-color:#121416}
+.knowledge-impact-disclaimer{margin:14px 0 0;font-size:.75rem;line-height:1.5;color:#121416}
