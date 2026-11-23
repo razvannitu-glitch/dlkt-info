@@ -979,7 +979,7 @@
     "tsconfig.build.json": "057767fbae50960a626ae050fdfcbd0224a8665bcbdf2d74d9a12b88d0b6a80c",
     "tsconfig.json": "a6fe6af5c5cee7adc34f2441b6dc72ea311da623378df0240f39a389a2a13d36",
     "vercel.json": "33c38fc50e8e528a56cda7d75a528447132f667e2732b60db909340fb4e91407",
-    "vercel.public.json": "895512eb115e4d2b8bac51631492918638c37d1f22fc6a321e973c593253bf94",
+    "vercel.public.json": "a69ada3e523cd4be2537ce9c533f8d417369d21d76e2aecd2306008e35b4cbf1",
     "verify-release.mjs": "0e392d4d7aa36fbf1af2904f7ef23757a50a1206e864bc802d438e4e0bc2294d"
   }
 }

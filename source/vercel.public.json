@@ -43,7 +43,7 @@
       "maxDuration": 60
     },
     "api/iceo-refresh.ts": {
-      "maxDuration": 60
+      "maxDuration": 80
     },
     "api/share-archive.ts": {
       "maxDuration": 60
