@@ -3,6 +3,7 @@ import {CONTEXT_PHOTOS} from '../.build/src/media/context-photos.js';
 import {EDITORIAL_PHOTOS} from '../.build/src/media/editorial-photos.js';
 import {worldSourceAtlas} from '../.build/src/iceo/world-source-atlas.js';
 import {renderSourceAtlas} from './source-atlas-public.mjs';
+import {createPublicBuildReceipt} from '../.build/src/service/public-release-receipt.js';
 import {copyFileSync,mkdirSync,readdirSync,rmSync,writeFileSync,readFileSync} from 'node:fs';
 import {resolve,join} from 'node:path';
 import {pathToFileURL} from 'node:url';
@@ -21,6 +22,11 @@ export function preparePublicRelease(root,authorization){
   const sourcePage=readFileSync(sourcesFile,'utf8');
   if(sourcePage.split('</main>').length!==2)throw Error('SOURCE_ATLAS_INSERTION_INVALID');
   writeFileSync(sourcesFile,sourcePage.replace('</main>',renderSourceAtlas(worldSourceAtlas())+'</main>'));
+
+  // Public, deterministic provenance. No secrets, database identity or live-health claims.
+  const sourceManifest=readFileSync(join(root,`RELEASE-${pkg.version}.json`),'utf8');
+  const receipt=createPublicBuildReceipt(sourceManifest,process.env.VERCEL_GIT_COMMIT_SHA);
+  writeFileSync(join(dest,'release.json'),JSON.stringify(receipt,null,2)+'\n');
 
   writeFileSync(join(dest,'robots.txt'),['facebookexternalhit','Facebot','Twitterbot'].map(agent=>`User-agent: ${agent}\nAllow: /card/\nAllow: /api/card-image\nDisallow: /\n`).join('\n')+'\nUser-agent: *\nDisallow: /\n');
   for(const file of readdirSync(join(root,'api'))){if(!['iceo.ts','iceo-refresh.ts','news-page.ts','insight.ts','edition.ts','account.ts','account-session.ts','local.ts','places.ts','card.ts','glance.ts','card-image.ts','article-photo.ts','wallet.ts','connections.ts','share-archive.ts'].includes(file))rmSync(join(root,'api',file),{recursive:true,force:true});}

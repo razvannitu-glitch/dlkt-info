@@ -43,3 +43,6 @@ jobs:
 
       - name: Build the public package locally
         run: npm run package:local
+
+      - name: Audit prelaunch reader UX, routes, assets, source attribution and build receipt
+        run: npm run qa:prelaunch

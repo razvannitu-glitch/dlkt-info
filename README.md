@@ -25,3 +25,11 @@ Production credentials belong in the existing Vercel project's protected environ
 ## Reading language
 
 The current-country language is the automatic starting point when there is no explicit URL or saved manual language choice. English remains available. News selection uses known source languages and preserves original publisher content; no automatic article translation service is enabled. See `source/CONTEXTUAL-EDITION.md` for coverage limits, local-news promotion and acquisition rules.
+
+## Prelaunch control and production identity
+
+The public homepage is generated from `source/public/iceo.html`, not the historical `source/public/index.html`. Every verified public package includes `/release.json` containing the exact source release-manifest SHA-256, version, revision and an optional sanitized Git SHA. This is **build provenance only**. It deliberately never discloses database identifiers, credentials, private API configuration or a false runtime-health attestation.
+
+The official site remains `noindex, nofollow` with `robots.txt` blocking general indexing during prelaunch. To inspect the static output after `npm run package:local`, run `npm run qa:prelaunch`. This deterministic test fails on homepage drift, invalid or missing assets, broken internal links, release-receipt mismatch, missing static accessibility hooks, legal navigation, source attribution and unexpected SEO exposure. It also emits **explicitly unverified** requirements: real-device visual/keyboard journeys, live source availability, live database verification, publisher licensing, consumer-law review, payment flow and official deployment alias parity.
+
+The static preflight is a **necessary but insufficient** release gate. Its passing result must never be presented as approval for public search indexing, a finished subscription launch, validated browser layouts or deployment to `www.dlkt.ee`. A deliberate public-launch change requires switching SEO controls and this gate together after the outstanding security, editorial, operational and commercial checks are independently verified. The Vercel preview build currently fails closed on `BUILD_IDENTITY` because production OIDC attestation is mandatory; do not remove that control merely to get a preview URL.

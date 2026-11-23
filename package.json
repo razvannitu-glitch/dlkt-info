@@ -10,13 +10,14 @@
     "setup": "npm ci --ignore-scripts --no-audit --no-fund",
     "build": "npm --prefix source run build",
     "typecheck": "npm --prefix source run typecheck",
-    "test:packaging": "node --test tests/packaging.test.mjs",
+    "test:packaging": "node --test tests/*.test.mjs",
     "test": "npm run test:packaging && npm --prefix source test",
     "verify": "npm run test:packaging && npm --prefix source run verify",
     "verify:release": "npm run test:packaging && node bootstrap.mjs --check && npm --prefix source run verify:release",
     "source:pin": "node scripts/pin-source.mjs",
     "package:check": "node bootstrap.mjs --check",
-    "package:local": "node bootstrap.mjs --local"
+    "package:local": "node bootstrap.mjs --local",
+    "qa:prelaunch": "node scripts/verify-launch-surface.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.16",
