@@ -192,7 +192,15 @@ async function run(){
   await new Promise(resolve=>server.close(resolve));
   // Chrome writes asynchronous profile files after SIGTERM. Retry transient
   // ENOTEMPTY/EBUSY rather than turning a successful UI audit into a false fail.
-  rmSync(profile,{recursive:true,force:true,maxRetries:15,retryDelay:100});
+  try{
+   rmSync(profile,{recursive:true,force:true,maxRetries:5,retryDelay:100});
+  }catch(error){
+   // Only this ephemeral, blank Chrome profile can remain; GitHub's disposable
+   // runner removes it after the job. Never mask a different cleanup failure.
+   if(!(error&&typeof error==='object'&&'code' in error&&
+      (error.code==='ENOTEMPTY'||error.code==='EBUSY'))))throw error;
+   console.warn('DLKT_UI_EPHEMERAL_BROWSER_PROFILE_CLEANUP_DEFERRED');
+  }
  }
 }
 await run();
