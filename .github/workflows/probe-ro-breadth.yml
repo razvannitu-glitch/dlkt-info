@@ -1,0 +1,39 @@
+name: Probe DLKT Romanian source breadth
+
+on:
+  push:
+    branches:
+      - codex/iceo-ro-breadth-20261124
+    paths:
+      - scripts/probe-ro-breadth.mjs
+      - .github/workflows/probe-ro-breadth.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dlkt-ro-source-breadth
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    name: Observe declared Romanian publisher metadata
+    if: github.ref == 'refs/heads/codex/iceo-ro-breadth-20261124'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Build current parsers
+        run: npm run build
+      - name: Observe six declared publisher feeds with thirty requests maximum
+        run: node scripts/probe-ro-breadth.mjs
