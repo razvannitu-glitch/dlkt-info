@@ -43,7 +43,7 @@ function eventTime(at, city, now, from) {
 /** Presentation never changes the source record, its timing, saved signature or evidence. */
 export function localReading(card, city, now, locale = 'en') {
     if (locale === 'ro' && card.kind === 'forecast') {
-        const measure = /^Hourly forecast temperatures ([-0-9.]+)–([-0-9.]+) °C\\. Total precipitation ([-0-9.]+) mm over the six hourly periods\\. Highest hourly wind-speed forecast ([-0-9.]+) km\\/h \\(not gusts\\)\\.$/u.exec(card.text);
+        const measure = /^Hourly forecast temperatures ([-0-9.]+)–([-0-9.]+) °C\. Total precipitation ([-0-9.]+) mm over the six hourly periods\. Highest hourly wind-speed forecast ([-0-9.]+) km\/h \(not gusts\)\.$/u.exec(card.text);
         const summary = measure ? `Temperaturi prognozate intre ${measure[1]} si ${measure[2]} °C. Precipitatii estimate: ${measure[3]} mm in sase ore. Viteza maxima orara a vantului: ${measure[4]} km/h (fara rafale).` : card.text;
         const date = new Intl.DateTimeFormat('ro-RO', { timeZone: city.timezone, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
         return { title: 'Vremea in ' + city.name, paragraphs: [summary], period: date.format(new Date(card.validFrom)) + ' – ' + date.format(new Date(card.validTo)) + ' (ora locala)', nextStep: null };
