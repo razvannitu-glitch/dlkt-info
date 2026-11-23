@@ -35,6 +35,8 @@ export function weatherPresentation(card:LocalCard|null,now:number):WeatherPrese
  return current?{...weatherVisual(current.symbol),state:'current',symbol:current.symbol,nextAt}:missing('unavailable',nextAt);
 }
 
+/** The pure weather projection is available even in SSR/test environments without a URL. */
+const motionLocale=():string=>{try{return getLocale();}catch{return 'en';}};
 const NS='http://www.w3.org/2000/svg';
 function svgElement<K extends keyof SVGElementTagNameMap>(name:K,attributes:Readonly<Record<string,string>>={}):SVGElementTagNameMap[K]{
  const node=document.createElementNS(NS,name);for(const [key,value]of Object.entries(attributes))node.setAttribute(key,value);return node;
@@ -87,7 +89,7 @@ function syncAll():void {
  const dialogs=[...document.querySelectorAll<HTMLDialogElement>('dialog[open]')];
  for(const [element,entry]of mounted){
   if(!element.isConnected){mounted.delete(element);continue;}
-  const view=weatherPresentation(entry.card,now),key=JSON.stringify([view.state,view.symbol,getLocale()]);
+  const view=weatherPresentation(entry.card,now),key=JSON.stringify([view.state,view.symbol,motionLocale()]);
   if(entry.key!==key){renderMotion(element,view);entry.key=key;}
   const rect=element.getBoundingClientRect(),visible=document.visibilityState==='visible'&&element.getClientRects().length>0&&rect.bottom>0&&rect.top<innerHeight&&(!dialogs.length||dialogs.some(dialog=>dialog.contains(element)));
   element.dataset.active=String(visible&&!reduced?.matches&&view.state==='current');
@@ -105,7 +107,7 @@ function initialize():void {
 }
 function renderMotion(element:HTMLElement,view:WeatherPresentation):void {
  const copy=document.createElement('span');copy.className='weather-motion-copy';
- const ro=getLocale()==='ro';
+ const ro=motionLocale()==='ro';
  const caption=document.createElement('small');caption.textContent=ro?(view.state==='current'?'Prognoza pentru aceasta ora':'Starea prognozei'):(view.state==='current'?'Forecast this hour':'Forecast condition');
  const romanian:Readonly<Record<WeatherCondition,string>>={clear:'Senin',fair:'Mai mult senin','partly-cloudy':'Partial noros',cloudy:'Innorat',fog:'Ceata',rain:'Ploaie',snow:'Ninsoare',sleet:'Lapovita',thunder:'Furtuna',unknown:'Conditie indisponibila'};
  const roLabel=view.state==='expired'?'Prognoza expirata':view.state==='unavailable'?'Conditie indisponibila':romanian[view.condition]+(view.light==='night'?' · Noaptea':'');
@@ -114,7 +116,7 @@ function renderMotion(element:HTMLElement,view:WeatherPresentation):void {
  element.dataset.active='false';element.title=view.state==='current'?'MET Norway forecast for the current hourly interval, not measured conditions.':'No verified condition symbol for this hour. Numerical forecast values may remain available.';
 }
 export function updateWeatherMotion(element:HTMLElement,card:LocalCard|null,now=Date.now()):void {
- initialize();const view=weatherPresentation(card,now),key=JSON.stringify([view.state,view.symbol,getLocale()]),previous=mounted.get(element);
+ initialize();const view=weatherPresentation(card,now),key=JSON.stringify([view.state,view.symbol,motionLocale()]),previous=mounted.get(element);
  if(previous?.key!==key)renderMotion(element,view);
  mounted.set(element,{card,key});schedule();
 }

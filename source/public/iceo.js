@@ -85,7 +85,7 @@ let restartNewsEdition = false;
 let newsFilter = 'all', stopNewsObserver = () => { };
 let newsPeriod = 'recent';
 let newsInteractionKey = '', newsInteractionRevision = 0;
-const inlineKnowledgeSeen = readKnowledgeSeen(() => localStorage);
+const inlineKnowledgeSeen = readKnowledgeSeen();
 let inlineKnowledgeContext = '';
 let inlineKnowledgeSelection = [];
 let lastLocalLanguageRefresh = 0;
@@ -1233,7 +1233,7 @@ function renderDiscovery() {
             host.append(knowledgeCardNode(entry.item.card, entry.item.scope));
             if (!document.body.dataset.worldExplore && !inlineKnowledgeSeen.has(entry.item.card.id)) {
                 inlineKnowledgeSeen.add(entry.item.card.id);
-                writeKnowledgeSeen(inlineKnowledgeSeen, () => localStorage);
+                writeKnowledgeSeen(inlineKnowledgeSeen);
             }
             continue;
         }

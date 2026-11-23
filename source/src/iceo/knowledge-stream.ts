@@ -6,7 +6,7 @@ const NEWS_PER_KNOWLEDGE=INLINE_KNOWLEDGE_INTERVAL-1;
 /** Local-only reading history; no device identifier, account token or network request. */
 export const KNOWLEDGE_SEEN_KEY='dlkt-info-knowledge-seen-v1';
 const KNOWLEDGE_ID=/^[a-z][a-z0-9-]{2,79}$/u;
-export function readKnowledgeSeen(storage:()=>Pick<Storage,'getItem'>):Set<string>{
+export function readKnowledgeSeen(storage:()=>Pick<Storage,'getItem'>=()=>localStorage):Set<string>{
  try{
   const raw=storage().getItem(KNOWLEDGE_SEEN_KEY);
   if(raw===null||raw.length>450_000)return new Set();
@@ -15,7 +15,7 @@ export function readKnowledgeSeen(storage:()=>Pick<Storage,'getItem'>):Set<strin
   return new Set(value);
  }catch{return new Set();}
 }
-export function writeKnowledgeSeen(seen:ReadonlySet<string>,storage:()=>Pick<Storage,'setItem'>):boolean{
+export function writeKnowledgeSeen(seen:ReadonlySet<string>,storage:()=>Pick<Storage,'setItem'>=()=>localStorage):boolean{
  if(seen.size>5000||[...seen].some(id=>!KNOWLEDGE_ID.test(id)))return false;
  try{storage().setItem(KNOWLEDGE_SEEN_KEY,JSON.stringify([...seen]));return true;}catch{return false;}
 }

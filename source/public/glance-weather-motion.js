@@ -32,6 +32,8 @@ export function weatherPresentation(card, now) {
     const nextAt = nextTimes.length ? Math.min(...nextTimes) : null;
     return current ? { ...weatherVisual(current.symbol), state: 'current', symbol: current.symbol, nextAt } : missing('unavailable', nextAt);
 }
+/** The pure weather projection is available even in SSR/test environments without a URL. */
+const motionLocale = () => { try { return getLocale(); } catch { return 'en'; } };
 const NS = 'http://www.w3.org/2000/svg';
 function svgElement(name, attributes = {}) {
     const node = document.createElementNS(NS, name);
@@ -103,7 +105,7 @@ function syncAll() {
             mounted.delete(element);
             continue;
         }
-        const view = weatherPresentation(entry.card, now), key = JSON.stringify([view.state, view.symbol, getLocale()]);
+        const view = weatherPresentation(entry.card, now), key = JSON.stringify([view.state, view.symbol, motionLocale()]);
         if (entry.key !== key) {
             renderMotion(element, view);
             entry.key = key;
@@ -136,7 +138,7 @@ function initialize() {
 function renderMotion(element, view) {
     const copy = document.createElement('span');
     copy.className = 'weather-motion-copy';
-    const ro = getLocale() === 'ro';
+    const ro = motionLocale() === 'ro';
     const caption = document.createElement('small');
     caption.textContent = ro ? (view.state === 'current' ? 'Prognoza pentru aceasta ora' : 'Starea prognozei') : (view.state === 'current' ? 'Forecast this hour' : 'Forecast condition');
     const romanian = { clear: 'Senin', fair: 'Mai mult senin', 'partly-cloudy': 'Partial noros', cloudy: 'Innorat', fog: 'Ceata', rain: 'Ploaie', snow: 'Ninsoare', sleet: 'Lapovita', thunder: 'Furtuna', unknown: 'Conditie indisponibila' };
@@ -153,7 +155,7 @@ function renderMotion(element, view) {
 }
 export function updateWeatherMotion(element, card, now = Date.now()) {
     initialize();
-    const view = weatherPresentation(card, now), key = JSON.stringify([view.state, view.symbol, getLocale()]), previous = mounted.get(element);
+    const view = weatherPresentation(card, now), key = JSON.stringify([view.state, view.symbol, motionLocale()]), previous = mounted.get(element);
     if (previous?.key !== key)
         renderMotion(element, view);
     mounted.set(element, { card, key });

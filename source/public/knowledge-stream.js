@@ -5,7 +5,7 @@ const NEWS_PER_KNOWLEDGE = INLINE_KNOWLEDGE_INTERVAL - 1;
 /** Local-only reading history; no device identifier, account token or network request. */
 export const KNOWLEDGE_SEEN_KEY = 'dlkt-info-knowledge-seen-v1';
 const KNOWLEDGE_ID = /^[a-z][a-z0-9-]{2,79}$/u;
-export function readKnowledgeSeen(storage) {
+export function readKnowledgeSeen(storage = () => localStorage) {
     try {
         const raw = storage().getItem(KNOWLEDGE_SEEN_KEY);
         if (raw === null || raw.length > 450_000)
@@ -19,7 +19,7 @@ export function readKnowledgeSeen(storage) {
         return new Set();
     }
 }
-export function writeKnowledgeSeen(seen, storage) {
+export function writeKnowledgeSeen(seen, storage = () => localStorage) {
     if (seen.size > 5000 || [...seen].some(id => !KNOWLEDGE_ID.test(id)))
         return false;
     try {
