@@ -134,13 +134,13 @@ async function run(){
    '--remote-allow-origins=*','--user-data-dir='+profile,'about:blank'
   ],{stdio:'ignore'});
   let port=null;
-  for(let i=0;i<80;i++){
+  for(let i=0;i<240;i++){
    if(browser.exitCode!==null)throw Error('DLKT_UI_BROWSER_EXITED');
    const file=join(profile,'DevToolsActivePort');
    if(existsSync(file)){const value=Number(readFileSync(file,'utf8').split('\n')[0]);if(Number.isSafeInteger(value)&&value>0){port=value;break;}}
    await pause(100);
   }
-  if(port===null)throw Error('DLKT_UI_BROWSER_PORT_TIMEOUT');
+  if(port===null)throw Error('DLKT_UI_BROWSER_PORT_TIMEOUT_AFTER_24S');
   ws=await connectChrome(port);
   const cdp=rpcClient(ws);
   await cdp('Page.enable');await cdp('Runtime.enable');
