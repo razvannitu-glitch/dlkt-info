@@ -8,19 +8,17 @@ import {NEWS_DISCOVERY_INDEXES, publisherForNewsUrl} from '../source/.build/src/
 // Observational evidence only. Never changes a registry, publishes a card,
 // follows a redirect, bypasses a denial or uses credentials.
 // Exact primary RSS declarations observed in Actions45285237202 on 2026-11-23.
-// Edupedu's separately declared web-stories feed is not the primary news feed.
 const SOURCES=Object.freeze([
-  {id:'edupedu',origin:'https://www.edupedu.ro',primaryFeed:'https://www.edupedu.ro/feed/'},
-  {id:'prosport',origin:'https://www.prosport.ro',primaryFeed:'https://www.prosport.ro/feed',knownOriginals:[
+  {id:'prosport',origin:'https://www.prosport.ro',productionRequired:true,primaryFeed:'https://www.prosport.ro/feed',knownOriginals:[
     'https://www.prosport.ro/fotbal-extern/campionate-externe/italia/radu-dragusin-nota-monza-fiorentina-3-0-integralist-serie-a-dezastru-20576187',
     'https://www.prosport.ro/fotbal-intern/superliga/anunt-venire-mirel-radoi-u-cluj-20576183',
   ]},
 ]);
 const USER_AGENT='DLKT-Info-ICEO/1.0 (+https://www.dlkt.ee)';
 const BYTE_LIMIT=1_048_576,DAY=86_400_000;
-const DEADLINE_MS=90_000;
+const DEADLINE_MS=60_000;
 const startedAt=Date.now(),deadline=startedAt+DEADLINE_MS;
-const attempts={robots:0,homepage:0,feed:0,article:0},limits={robots:2,homepage:2,feed:2,article:4};
+const attempts={robots:0,homepage:0,feed:0,article:0},limits={robots:1,homepage:1,feed:1,article:2};
 const object=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 const list=value=>value===undefined?[]:Array.isArray(value)?value:[value];
 const plain=value=>typeof value==='string'?value:object(value)&&typeof value['#text']==='string'?value['#text']:null;
@@ -218,7 +216,7 @@ function metadataEvidence(html){
   return {canonical:canonicals,meta:fields.slice(0,24),jsonLdArticles:articles};
 }
 async function inspectSource(source){
-  const result={id:source.id,productionRequired:false,status:'incomplete',observedAt:new Date().toISOString(),articles:[]};
+  const result={id:source.id,productionRequired:source.productionRequired===true,status:'incomplete',observedAt:new Date().toISOString(),articles:[]};
   const robotResponse=await boundedGet(source.origin+'/robots.txt','robots'),policy=robotsPolicy(robotResponse);
   result.robots={...publicResponse(robotResponse),policy:{...policy,rules:policy.rules.slice(0,40),omittedRules:Math.max(0,policy.rules.length-40)}};
   if(policy.state==='unavailable'){result.error='original-robots-unavailable';return result;}
@@ -315,7 +313,7 @@ for(const source of SOURCES){
 const incomplete=reports.some(report=>report.status!=='observed'||report.error||report.articles.length!==2
   ||report.articles.some(article=>!article.request?.ok)
   ||report.productionRequired&&(report.productionFeedParser?.state!=='accepted'||report.articles.some(article=>article.productionArticleParser?.state!=='accepted')));
-console.log(JSON.stringify({probe:'dlkt-ro-breadth-declared-rss-2',commit:process.env.GITHUB_SHA??null,
+console.log(JSON.stringify({probe:'dlkt-prosport-production-1',commit:process.env.GITHUB_SHA??null,
   startedAt:new Date(startedAt).toISOString(),finishedAt:new Date().toISOString(),attempts,limits,
   deadlineMs:DEADLINE_MS,requestTimeoutMs:10_000,bodyLimitBytes:BYTE_LIMIT,robotsParserChecks,
   outcome:incomplete?'incomplete-evidence':'observations-collected',

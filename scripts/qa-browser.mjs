@@ -16,13 +16,15 @@ const MIME={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=u
  '.ico':'image/x-icon','.txt':'text/plain; charset=utf-8'};
 const formats=[
  {width:320,height:750,label:'small-mobile',mobile:true},
+ {width:360,height:800,label:'mobile-360',mobile:true},
  {width:390,height:844,label:'mobile',mobile:true},
+ {width:430,height:932,label:'mobile-430',mobile:true},
  {width:768,height:1024,label:'tablet',mobile:false},
  {width:1440,height:900,label:'desktop',mobile:false},
 ];
 const pause=ms=>new Promise(ok=>setTimeout(ok,ms));
 
-function localServer(){
+function localServer(fixture){
  if(!existsSync(join(publicDir,'index.html')))throw Error('DLKT_UI_BUILD_MISSING');
  const config=JSON.parse(readFileSync(join(root,'vercel.json'),'utf8'));
  const csp=(config.headers??[]).flatMap(x=>x.headers??[]).find(x=>x.key==='Content-Security-Policy')?.value;
@@ -37,7 +39,7 @@ function localServer(){
   let url;try{url=new URL(req.url??'', 'http://'+HOST);}catch{res.writeHead(400).end();return;}
   if(url.pathname.startsWith('/api/')){
    res.setHeader('Content-Type','application/json; charset=utf-8');
-   res.writeHead(503).end(JSON.stringify({error:'DLKT_OFFLINE_UI_QA_ONLY'}));return;
+   void fixture.response(url).then(({status,value})=>res.writeHead(status).end(JSON.stringify(value))).catch(()=>res.writeHead(500).end(JSON.stringify({error:'DLKT_QA_FIXTURE_FAILED'})));return;
   }
   const candidate=routes.get(url.pathname)??(url.pathname==='/'?'/index.html':url.pathname);
   if(!candidate.startsWith('/')||candidate.includes('..')||candidate.includes('\\')||candidate.includes('\0')){
@@ -116,6 +118,114 @@ async function loaded(call){
  throw Error('DLKT_UI_DOCUMENT_TIMEOUT');
 }
 
+
+/** Controlled evidence exercises the real page service; it is never a claim of a live source check. */
+async function newsFixture(){
+ const [{NewsPageService,parseNewsPageRequest,parseNewsSourcesRequest},{article,epoch,CorpusMemoryStore,snapshot,hash},{cardContent},{findCity}]=await Promise.all([
+  import('../source/.build/src/iceo/news-page.js'),import('../source/tests/fixtures/news-corpus.mjs'),
+  import('../source/.build/src/iceo/card-validation.js'),import('../source/.build/src/local/cities.js'),
+ ]);
+ const now=Date.now(),city=findCity('683506');assert.ok(city,'controlled Bucharest city is registered');
+ const observed=[
+  {title:'O cântăreață iraniană și membrii trupei sale, pedepsiți cu 74 de lovituri de bici pentru un concert - HotNews.ro',publisher:'HotNews.ro',
+   sourceUrl:'https://hotnews.ro/o-cantareata-iraniana-si-membrii-trupei-sale-pedepsiti-cu-74-de-lovituri-de-bici-pentru-un-concert-2412112'},
+  {title:'O cântăreață iraniană a fost pedepsită cu 74 de lovituri de bici pentru un concert fără vălul islamic. VIDEO',publisher:'Știrile ProTV',
+   sourceUrl:'https://stirileprotv.ro/stiri/international/o-cantareata-iraniana-a-fost-pedepsita-cu-74-de-lovituri-de-bici-pentru-un-concert-fara-valul-islamic-video.html'},
+  {title:'O cântăreaţă iraniană şi membrii trupei sale au primit 74 de lovituri de bici din cauza unui concert pe YouTube',publisher:'Digi24',
+   sourceUrl:'https://www.digi24.ro/stiri/externe/mapamond/o-cantareata-iraniana-si-membrii-trupei-sale-au-primit-74-de-lovituri-de-bici-din-cauza-unui-concert-pe-youtube-4049697'},
+ ];
+ const reports=observed.map((entry,index)=>{
+  const card={...article(900+index,{now,language:'ro',category:'01000000',published:now-10_000-index*1000}),...entry,
+   identity:entry.sourceUrl,id:hash(entry.sourceUrl).slice(0,24),boundary:'Controlled browser QA evidence; source-check and publication dates are fixtures.',
+   attribution:'Controlled QA fixture from observed publisher headline and URL.'};
+  card.contentHash=hash(cardContent(card));return card;
+ });
+ const distinct={...article(950,{now,language:'ro',category:'01000000'}),
+  title:'O cântăreață iraniană a primit 75 de lovituri de bici pentru un concert in Teheran',
+  boundary:'Synthetic negative-control event for browser QA; not live reporting.'};
+ distinct.contentHash=hash(cardContent(distinct));
+ const english=article(960,{now,language:'en',category:'13000000'}),cards=[...reports,distinct,english];
+ const stored=epoch(cards,[],{now}),before=JSON.stringify(stored),service=new NewsPageService(new CorpusMemoryStore([stored]),'test-only-browser-qa-cursor-key-123456789012345678901234567890');
+ const selected=await service.read({language:'ro',cityId:city.id,filter:'all',cursor:null,period:'recent',sourceScope:'all'});
+ assert.equal(selected.articleTotal,5,'all five originals are eligible before testing layout');
+ assert.equal(selected.total,3,'three reports share one event; two distinct reports remain separate');
+ const groups=selected.items.filter(item=>item.story?.sourceTotal===3);assert.equal(groups.length,1);
+ const grouped=groups[0],groupOriginals=[{kind:grouped.kind,card:grouped.card},...grouped.story.related];
+ assert.deepEqual(new Set(groupOriginals.map(item=>item.card.sourceUrl)),new Set(reports.map(card=>card.sourceUrl)));
+ assert.equal(selected.items.some(item=>item.card.id===distinct.id),true,'the different penalty cannot be silently merged');
+ assert.equal(selected.items.some(item=>item.card.id===english.id),true,'all-source scope must include the English original');
+ assert.equal(JSON.stringify(stored),before,'the reader cannot restamp the stored evidence');
+ return {city,groupKey:grouped.story.key,urls:reports.map(card=>card.sourceUrl),titles:reports.map(card=>card.title),storyCount:selected.total,articleTotal:selected.articleTotal,
+  async response(url){
+   if(url.pathname==='/api/iceo')return {status:200,value:snapshot(cards,now)};
+   if(url.pathname==='/api/news-page'){
+    const cursor=parseNewsSourcesRequest(url);
+    return {status:200,value:cursor===null?await service.read(parseNewsPageRequest(url)):await service.readSources(cursor)};
+   }
+   return {status:503,value:{error:'DLKT_OFFLINE_UI_QA_ONLY'}};
+  }};
+}
+
+
+async function selectControlledEdition(call,fixture){
+ for(let attempt=0;attempt<60;attempt++){
+  if(await evaluate(call,"Boolean(document.querySelector('#reader-language option[value=\"ro\"]')&&document.querySelector('#home-news-source-scope'))"))break;
+  if(attempt===59)throw Error('DLKT_UI_READER_CONTROLS_TIMEOUT');await pause(100);
+ }
+ await evaluate(call,'(()=>{const picker=document.querySelector("#reader-language");picker.value="ro";picker.dispatchEvent(new Event("change",{bubbles:true}));document.dispatchEvent(new CustomEvent("dlkt:city-selected",{detail:{city:'+JSON.stringify(fixture.city)+'}}));return true;})()');
+ for(let attempt=0;attempt<80;attempt++){
+  const current=await evaluate(call,'(()=>{const root=document.querySelector("#discovery-cards");return {scope:root?.dataset.sourceScope,count:root?.querySelectorAll("article[data-news-stream-key]").length,city:document.querySelector("#glance-city-label")?.textContent};})()');
+  if(current.scope==='all'&&current.count===fixture.storyCount&&current.city===fixture.city.name)return;
+  if(attempt===79)throw Error('DLKT_UI_NEWS_FIXTURE_TIMEOUT_'+JSON.stringify(current));await pause(100);
+ }
+}
+/** Run inside Chrome: actual layout and computed styles, without replacing production DOM. */
+function readerProbe(expected){
+ const visible=node=>Boolean(node)&&node.getClientRects().length>0&&getComputedStyle(node).visibility!=='hidden'&&getComputedStyle(node).display!=='none';
+ const rect=node=>{const value=node.getBoundingClientRect();return {left:value.left,right:value.right,top:value.top,bottom:value.bottom,width:value.width,height:value.height};};
+ const textFits=(node,container)=>{
+  if(!visible(node)||!visible(container))return false;
+  const range=document.createRange();range.selectNodeContents(node);const text=range.getBoundingClientRect(),bound=container.getBoundingClientRect();
+  return text.left>=bound.left-1&&text.right<=bound.right+1&&text.top>=bound.top-1&&text.bottom<=bound.bottom+1
+   &&(node.clientWidth===0||node.scrollWidth<=node.clientWidth+1)&&(node.clientHeight===0||node.scrollHeight<=node.clientHeight+1);
+ };
+ const calendar=document.querySelector('#glance-date'),city=document.querySelector('#glance-city-label'),country=document.querySelector('#glance-zone'),cityButton=document.querySelector('#glance-city');
+ const normalized=value=>value.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase().trim();
+ const expectedCountry=new Intl.DisplayNames(['ro'],{type:'region'}).of(expected.city.countryCode);
+ const cards=[...document.querySelectorAll('#discovery-cards article[data-news-stream-key]')],groups=cards.filter(node=>node.dataset.storyKey===expected.groupKey),group=groups[0];
+ const originals=group?[...group.querySelectorAll('.news-story-source-link')]:[];
+ const languageLabels=cards.map(card=>({id:card.dataset.cardId,labels:[...card.querySelectorAll('[data-original-language]')].filter(visible).map(node=>({language:node.dataset.originalLanguage,text:node.textContent}))}));
+ const controls=[...document.querySelectorAll('#glance-city,#reader-language,#reader-theme-toggle,#home-news-source-scope,#home-news-english,#home-news-period,#home-news-category,#discovery-cards .card-actions > button,#discovery-cards .card-actions > a,#discovery-cards .evidence > summary,#discovery-cards .news-story-sources > summary')].filter(visible);
+ return {scope:document.querySelector('#discovery-cards')?.dataset.sourceScope,documentWidth:document.documentElement.scrollWidth,
+  date:calendar?.textContent??'',dateValue:calendar?.dateTime??'',dateAfter:calendar?getComputedStyle(calendar,'::after').content:null,dateVisible:visible(calendar),
+  city:city?.textContent??'',country:country?.textContent??'',expectedCountry,
+  cityComplete:city?.textContent===expected.city.name&&textFits(city,cityButton),
+  countryComplete:normalized(country?.textContent??'')===normalized(expectedCountry??'')&&textFits(country,cityButton),
+  cityButton:cityButton?rect(cityButton):null,storyCount:cards.length,groupCount:groups.length,
+  groupUrls:originals.map(node=>node.href),groupTitles:originals.map(node=>node.textContent),languageLabels,
+  controls:controls.map(node=>({id:node.id||node.className,tag:node.tagName,...rect(node)}))};
+}
+function assertReaderGeometry(measured,format,fixture){
+ const width=format.width;
+ assert.ok(measured.documentWidth<=width+2,'news document overflows at '+width+'px');
+ assert.equal(measured.scope,'all');assert.equal(measured.dateVisible,true,'date visible at '+width+'px');
+ assert.match(measured.dateValue,/^\d{4}-\d\d-\d\d$/u);assert.ok(measured.date.length>8,'date has real text');
+ assert.ok(['none','normal','""'].includes(measured.dateAfter),'date must have one text rendering, without duplicate ::after content at '+width+'px');
+ assert.equal(measured.cityComplete,true,'full city text must fit at '+width+'px: '+JSON.stringify(measured.cityButton));
+ assert.equal(measured.countryComplete,true,'full country text must fit at '+width+'px');
+ assert.equal(measured.storyCount,fixture.storyCount,'every distinct story remains represented');
+ assert.equal(measured.groupCount,1,'the shared event appears once in the main feed');
+ assert.deepEqual(new Set(measured.groupUrls),new Set(fixture.urls),'the single event keeps all three original source links');
+ assert.deepEqual(new Set(measured.groupTitles),new Set(fixture.titles),'the three publisher headlines stay exact');
+ assert.ok(measured.languageLabels.every(card=>card.labels.length>0),'every card has a visible original-language label');
+ assert.deepEqual(new Set(measured.languageLabels.flatMap(card=>card.labels.map(label=>label.language))),new Set(['ro','en']),'all preserves both original languages');
+ assert.ok(measured.controls.length>=10,'reader and card controls were actually measured');
+ for(const control of measured.controls){
+  assert.ok(control.width>=43.5&&control.height>=43.5,'tap target must be at least 44px at '+width+'px: '+JSON.stringify(control));
+  assert.ok(control.left>=-1&&control.right<=width+1,'tap target must fit viewport at '+width+'px: '+JSON.stringify(control));
+ }
+}
+
 async function run(){
  if(typeof WebSocket!=='function')throw Error('DLKT_UI_NODE_WEBSOCKET_UNAVAILABLE');
  const bin=process.env.DLKT_CHROME_BIN??'/usr/bin/google-chrome';
@@ -123,7 +233,7 @@ async function run(){
  const profile=mkdtempSync(join(process.env.RUNNER_TEMP??tmpdir(),'dlkt-ui-qa-'));
  const outputDir=join(process.env.RUNNER_TEMP??profile,'dlkt-ui-screenshots');
  mkdirSync(outputDir,{recursive:true});
- const server=localServer();
+ const fixture=await newsFixture(),server=localServer(fixture);
  let browser=null,ws=null;
  try{
   await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,HOST,resolve);});
@@ -149,6 +259,15 @@ async function run(){
    await cdp('Emulation.setDeviceMetricsOverride',{width:f.width,height:f.height,deviceScaleFactor:1,mobile:f.mobile,scale:1});
    await cdp('Page.navigate',{url:'http://'+HOST+':'+binding.port+'/'});
    await loaded(cdp);await pause(400);
+   await selectControlledEdition(cdp,fixture);
+   await evaluate(cdp,'(()=>{window.scrollTo(0,0);return true;})()');
+   const news=await evaluate(cdp,'('+readerProbe.toString()+')('+JSON.stringify({city:fixture.city,groupKey:fixture.groupKey,urls:fixture.urls,titles:fixture.titles})+')');
+   writeFileSync(join(outputDir,'measured-'+f.width+'.json'),JSON.stringify(news,null,2)+'\n',{mode:0o600});
+   try{assertReaderGeometry(news,f,fixture);}catch(error){
+    const failedImage=(await cdp('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false})).data;
+    if(typeof failedImage==='string')writeFileSync(join(outputDir,'failed-'+f.width+'.png'),Buffer.from(failedImage,'base64'),{mode:0o600});
+    throw error;
+   }
    const m=await evaluate(cdp,probe);
    assert.equal(m.main,1,'reader main absent');
    assert.equal(m.header,true,'header missing');
@@ -171,11 +290,16 @@ async function run(){
    if(typeof image!=='string'||image.length<1000)throw Error('DLKT_UI_EMPTY_SCREENSHOT');
    const screenshot='dlkt-'+f.label+'-'+f.width+'.png';
    writeFileSync(join(outputDir,screenshot),Buffer.from(image,'base64'),{mode:0o600});
-   observations.push({viewport:f.width,documentWidth:m.scroll,menuTested:f.mobile,brandVisible:true,reducedMotion:true,screenshot});
+   await evaluate(cdp,"(()=>{document.querySelector('#discovery-cards article[data-news-stream-key]')?.scrollIntoView({block:'start'});return true;})()");
+   const cardImage=(await cdp('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false})).data;
+   assert.ok(typeof cardImage==='string'&&cardImage.length>=1000,'card screenshot is present');
+   const cardScreenshot='dlkt-cards-'+f.label+'-'+f.width+'.png';writeFileSync(join(outputDir,cardScreenshot),Buffer.from(cardImage,'base64'),{mode:0o600});
+   observations.push({viewport:f.width,documentWidth:m.scroll,menuTested:f.mobile,brandVisible:true,reducedMotion:true,screenshot,cardScreenshot,news});
   }
   const result={version:'dlkt-info-offline-browser-smoke-1',status:'OFFLINE_BROWSER_PASS',
-   scope:'local-built-static-reader',viewports:observations,
-   limitations:['No API, authenticated user, current news, payment or runtime availability tested.',
+   scope:'local-built-reader-with-controlled-news-corpus',viewports:observations,fixture:{storyCount:fixture.storyCount,articleTotal:fixture.articleTotal,groupOriginals:fixture.urls.length},
+   limitations:['News pages use the actual service over controlled corpus fixtures; no external publisher request, authenticated user, payment or production runtime availability is tested.',
+    'The three publisher headlines and URLs reproduce an observed case; source-check and publication dates are controlled fixtures.',
     'Programmatic layout metrics and screenshots do not replace manual visual review.']};
   writeFileSync(join(outputDir,'report.json'),JSON.stringify(result,null,2)+'\n',{mode:0o600});
   console.log('DLKT_UI_BROWSER_QA '+JSON.stringify(result));
@@ -203,3 +327,4 @@ async function run(){
  }
 }
 await run();
+

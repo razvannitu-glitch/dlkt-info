@@ -1,5 +1,7 @@
 import { getLocale, translate as tr, translatedCategory, countryLabel, languageLabel, setupLanguage, applyInterfaceLanguage } from './i18n-browser.js';
 import { sourceLanguage, selectNewsLanguage } from './news-sources.js';
+import { consistentCards } from './evidence-consistency.js';
+import { newsOriginalLanguage } from './news-page-contracts.js';
 import { photoNode, integratePhotoHeadline } from './card-photo-browser.js';
 import { setupExplore } from './explore-browser.js';
 import { contextForCard } from './context.js';
@@ -84,6 +86,7 @@ const newsContinuation = new NewsContinuation(fetch, Date.now, () => queueMicrot
 let restartNewsEdition = false;
 let newsFilter = 'all', stopNewsObserver = () => { };
 let newsPeriod = 'recent';
+let newsSourceScope = 'all';
 let newsInteractionKey = '', newsInteractionRevision = 0;
 const inlineKnowledgeSeen = readKnowledgeSeen();
 let inlineKnowledgeContext = '';
@@ -700,7 +703,7 @@ async function shareSource(card, button, fallback) {
         announcement.textContent = 'Copy the original source link from the selected field.';
     }
 }
-function cardNode(view, index, total, saved, automaticInsights = true, followPresentation = 'category', publicationTimeZone = 'UTC') {
+function cardNode(view, index, total, saved, automaticInsights = true, followPresentation = 'category', publicationTimeZone = 'UTC', showOriginalLanguage = false) {
     const fragment = template.content.cloneNode(true);
     const node = fragment.querySelector('article');
     if (!node)
@@ -766,16 +769,33 @@ function cardNode(view, index, total, saved, automaticInsights = true, followPre
     }
     if (card.kind === 'publication') {
         const provenance = editorialSourceContext(card), context = make('div', 'card-source-context');
-        if (provenance.editionLanguage)
-            context.append(make('p', '', tr('editionLanguage', { language: languageLabel(provenance.editionLanguage) })));
+        if (provenance.editionLanguage) {
+            const originalLanguage = make('p', '', tr('editionLanguage', { language: languageLabel(provenance.editionLanguage) }));
+            originalLanguage.dataset.originalLanguage = provenance.editionLanguage;
+            context.append(originalLanguage);
+        }
+        else if (showOriginalLanguage) {
+            const originalLanguage = make('p', '', getLocale() === 'ro' ? 'Limba sursei neprecizata' : getLocale() === 'it' ? 'Lingua della fonte non specificata' : 'Source language unspecified');
+            originalLanguage.dataset.originalLanguage = 'unknown';
+            context.append(originalLanguage);
+        }
         if (provenance.publisherCountry)
             context.append(make('p', '', tr('publisherCountry', { country: countryLabel(provenance.publisherCountry.code, provenance.publisherCountry.name) })));
         if (provenance.coverage) {
             const countries = new Intl.ListFormat(getLocale(), { style: 'short', type: 'conjunction' }).format(provenance.coverage.countries.map(country => countryLabel(country.code, country.name)));
             context.append(make('p', '', tr(provenance.coverage.basis === 'publisher-category' ? 'publisherCountryTags' : 'publisherScopeCountries', { countries })));
         }
+        if (showOriginalLanguage) {
+            const original = context.querySelector('[data-original-language]');
+            if (original) {
+                const badge = make('span', 'card-language', provenance.editionLanguage ? languageLabel(provenance.editionLanguage) : original.textContent ?? '');
+                badge.dataset.originalLanguage = original.dataset.originalLanguage ?? 'unknown';
+                badge.title = original.textContent ?? '';
+                node.querySelector('.card-meta')?.append(badge);
+            }
+        }
         if (context.childNodes.length)
-            readingContext?.after(context);
+            evidence?.querySelector('summary')?.after(context);
         if (kind && presentation.kindLabel === 'From the publisher')
             kind.hidden = true;
     }
@@ -885,6 +905,11 @@ function cardNode(view, index, total, saved, automaticInsights = true, followPre
     }
     if (editorialCategory && !unclassified)
         following.attach(node, editorialCategory, followPresentation);
+    if (card.kind === 'publication' && evidence) {
+        const follow = node.querySelector('.card-follow');
+        if (follow)
+            evidence.append(follow);
+    }
     if (saved) {
         const note = make('p', 'saved-copy-note', `Saved here ${formatted(saved.savedAt)}. Original source check ${formatted(card.observedAt)}. This saved copy is retained; current comparisons appear separately when available.`);
         evidence?.append(note);
@@ -907,6 +932,10 @@ function cardNode(view, index, total, saved, automaticInsights = true, followPre
             evidence.append(photoEvidence);
             photoDetails.remove();
         }
+        // A generic source-image link repeats the visible original-source action.
+        // Reviewed photograph credits and licence links remain beside their image.
+        if (photograph.querySelector('img[data-article-photo]'))
+            photograph.querySelector('.card-photo-caption')?.remove();
     }
     return node;
 }
@@ -1097,7 +1126,7 @@ function renderDiscovery() {
     clearTimeout(discoveryExpiry);
     stopNewsObserver();
     worldExplorer?.update();
-    const interactionKey = JSON.stringify([getLocale(), newsFilter, newsPeriod, contextualCity?.id ?? null, document.body.dataset.entryView, document.body.dataset.worldExplore ?? null]);
+    const interactionKey = JSON.stringify([getLocale(), newsSourceScope, newsFilter, newsPeriod, contextualCity?.id ?? null, document.body.dataset.entryView, document.body.dataset.worldExplore ?? null]);
     if (interactionKey !== newsInteractionKey || restartNewsEdition) {
         newsInteractionKey = interactionKey;
         newsInteractionRevision++;
@@ -1134,11 +1163,11 @@ function renderDiscovery() {
     const language = getLocale(), globalContext = { countryCode: null, preferredTopics: [] };
     const local = selectHomeLanguage(contextualLocal, contextualCity, now, language);
     const awaitingLocal = contextualLocationPending || contextualCity !== null && contextualLocalState === 'loading';
-    const candidate = snapshot ? selectContextualToday(selectNewsLanguage(snapshot.cards, language), globalContext, now) : { first: [], more: [] };
-    const contextKey = JSON.stringify([language, context.countryCode, city?.id ?? null, newsPeriod, [...interests].sort()]);
+    const candidate = snapshot ? selectContextualToday(newsSourceScope === 'all' ? consistentCards(snapshot.cards) : selectNewsLanguage(snapshot.cards, language), globalContext, now) : { first: [], more: [] };
+    const contextKey = JSON.stringify([language, newsSourceScope, context.countryCode, city?.id ?? null, newsPeriod, [...interests].sort()]);
     const live = liveEdition.present(candidate, contextKey, now, applyPublicUpdate, newsReading.hasVisibleLocal(now));
     const today = live.selection, reading = newsReading.present(today, local.cards, contextKey, language, now, applyPublicUpdate);
-    void newsContinuation.start({ language, cityId: contextualCity?.id ?? null, filter: newsFilter, period: newsPeriod, ...(contextualCity ? { city: contextualCity } : {}) }, restartNewsEdition);
+    void newsContinuation.start({ language, sourceScope: newsSourceScope, cityId: contextualCity?.id ?? null, filter: newsFilter, period: newsPeriod, ...(contextualCity ? { city: contextualCity } : {}) }, restartNewsEdition);
     restartNewsEdition = false;
     applyPublicUpdate = false;
     const server = newsContinuation.view(), visible = continuationItems(server.items, now);
@@ -1147,6 +1176,7 @@ function renderDiscovery() {
     const newsUpdates = live.changes.total + reading.pending;
     const topCount = server.page?.filteredTotal ?? 0, localNewsCount = server.items.filter(item => item.kind === 'local').length;
     target.dataset.newsLanguage = language;
+    target.dataset.sourceScope = newsSourceScope;
     button.textContent = newsUpdates ? (language === 'ro' ? 'Arata noutatile' : 'Show updates') + ' · ' + new Intl.NumberFormat(language).format(newsUpdates) : tr('refresh');
     button.setAttribute('aria-label', button.textContent);
     const globalEditionState = publicEditionState(today, { snapshotState: snapshot?.state ?? null, loading: loading || !initialCheckStarted, failed: lastLoadFailed });
@@ -1167,12 +1197,14 @@ function renderDiscovery() {
     const suppressLocalPending = (loadingPhase === 'initial' || loadingPhase === 'slow') && !local.supporting.length;
     required('#today-heading').textContent = newsPeriod === 'today' ? (language === 'ro' ? 'Stirile de azi' : language === 'it' ? 'Notizie di oggi' : "Today's news") : (language === 'ro' ? 'Stiri recente' : language === 'it' ? 'Notizie recenti' : 'Recent news');
     const editionCountry = server.page?.countryCode ? countryLabel(server.page.countryCode) : null, coverage = server.page?.coverage;
-    const countryProfile = contextualCity && contextualCity.countryCode !== 'ZZ' ? countryEditionProfile({ code: contextualCity.countryCode, name: contextualCity.country }, language, server.page?.countryCode === contextualCity.countryCode && server.page.language === language ? coverage : undefined) : null;
+    const countryProfile = newsSourceScope === 'edition' && contextualCity && contextualCity.countryCode !== 'ZZ' ? countryEditionProfile({ code: contextualCity.countryCode, name: contextualCity.country }, language, server.page?.countryCode === contextualCity.countryCode && server.page.language === language ? coverage : undefined) : null;
     section.dataset.countryEditionState = countryProfile?.state ?? 'unknown';
     const nationalLabel = language === 'ro' ? 'surse nationale' : language === 'it' ? 'fonti nazionali' : 'national sources';
     const internationalLabel = language === 'ro' ? 'surse internationale' : language === 'it' ? 'fonti internazionali' : 'international sources';
+    const allSourcesLabel = language === 'ro' ? 'Toate sursele' : language === 'it' ? 'Tutte le fonti' : 'All sources';
+    const originalSourcesLabel = language === 'ro' ? 'Toate sursele · limbi originale' : language === 'it' ? 'Tutte le fonti · lingue originali' : 'All sources · original languages';
     required('#home-location').textContent = server.page && coverage
-        ? [editionCountry, coverage.national > 0 ? nationalLabel : internationalLabel, languageLabel(language)].filter(Boolean).join(' · ')
+        ? [editionCountry, coverage.national > 0 ? nationalLabel : internationalLabel, newsSourceScope === 'all' ? originalSourcesLabel : languageLabel(language)].filter(Boolean).join(' · ')
         : contextualCity ? `${contextualCity.name} · ${countryLabel(contextualCity.countryCode, contextualCity.country)}${contextualLocation === 'estimated' ? ' · approximate' : ''}`
             : contextualLocationPending ? tr('lookupLoading') : tr('chooseCity');
     const discoveryDelay = nextDailyEditionDelay(today, now), returnDelay = checkpoint ? nextReturnDelay(snapshot, selectReturnBrief(checkpoint, null, now, false).topics, now) : null;
@@ -1183,8 +1215,12 @@ function renderDiscovery() {
         discoveryExpiry = setTimeout(renderDiscovery, Math.min(...delays));
     host.replaceChildren();
     required('#home-news-language-caption').textContent = language === 'ro' ? 'Limba stirilor' : language === 'it' ? 'Lingua delle notizie' : 'News language';
-    required('#home-news-language-label').textContent = languageLabel(language);
-    required('#home-news-english').hidden = language === 'en';
+    required('#home-news-language-label').textContent = newsSourceScope === 'all' ? originalSourcesLabel : languageLabel(language);
+    const sourceScopeButton = required('#home-news-source-scope');
+    sourceScopeButton.textContent = newsSourceScope === 'edition' ? allSourcesLabel : language === 'ro' ? `Inapoi la ${languageLabel(language)}` : language === 'it' ? `Torna a ${languageLabel(language)}` : `Back to ${languageLabel(language)}`;
+    sourceScopeButton.setAttribute('aria-pressed', String(newsSourceScope === 'all'));
+    sourceScopeButton.dataset.sourceScope = newsSourceScope;
+    required('#home-news-english').hidden = newsSourceScope === 'edition' && language === 'en';
     const periodPicker = required('#home-news-period');
     required('#home-news-period-label').textContent = language === 'ro' ? 'Perioada' : language === 'it' ? 'Periodo' : 'Period';
     const todayOption = periodPicker.querySelector('option[value="today"]'), recentOption = periodPicker.querySelector('option[value="recent"]');
@@ -1200,7 +1236,7 @@ function renderDiscovery() {
     const filterLabel = required('#home-news-category-label');
     filterLabel.textContent = language === 'ro' ? 'Categorie' : language === 'it' ? 'Categoria' : 'Category';
     const picker = required('#home-news-category');
-    const countsKey = JSON.stringify([language, stream.total, stream.counts]);
+    const countsKey = JSON.stringify([language, newsSourceScope, stream.total, stream.counts]);
     if (picker.dataset.countsKey !== countsKey) {
         const options = [];
         const addOption = (value, label, count) => { const option = make('option', '', label + ' · ' + new Intl.NumberFormat(language).format(count)); option.value = value; options.push(option); };
@@ -1216,11 +1252,12 @@ function renderDiscovery() {
     const progressCopy = language === 'ro' ? `${format.format(visible.length)} din ${format.format(topCount)} subiecte afisate` : language === 'it' ? `${format.format(visible.length)} di ${format.format(topCount)} notizie mostrate` : `${format.format(visible.length)} of ${format.format(topCount)} stories shown`;
     if (progress.textContent !== progressCopy)
         progress.textContent = progressCopy;
-    progress.title = language === 'ro' ? `${format.format(stream.total)} subiecte din ${format.format(server.page?.articleTotal ?? 0)} articole originale in aceasta limba` : language === 'it' ? `${format.format(stream.total)} notizie da ${format.format(server.page?.articleTotal ?? 0)} articoli originali in questa lingua` : `${format.format(stream.total)} stories from ${format.format(server.page?.articleTotal ?? 0)} original articles in this language`;
+    const articleScope = language === 'ro' ? (newsSourceScope === 'all' ? 'articole originale, in limbile surselor' : 'articole originale in aceasta limba') : language === 'it' ? (newsSourceScope === 'all' ? 'articoli originali, nelle lingue delle fonti' : 'articoli originali in questa lingua') : (newsSourceScope === 'all' ? 'original articles in their source languages' : 'original articles in this language');
+    progress.title = language === 'ro' ? `${format.format(stream.total)} subiecte din ${format.format(server.page?.articleTotal ?? 0)} ${articleScope}` : language === 'it' ? `${format.format(stream.total)} notizie da ${format.format(server.page?.articleTotal ?? 0)} ${articleScope}` : `${format.format(stream.total)} stories from ${format.format(server.page?.articleTotal ?? 0)} ${articleScope}`;
     host.dataset.editionState = editionState;
     host.dataset.dailyCoverage = 'connected-sources';
     const inlinePage = server.page;
-    const inlineContext = inlinePage ? JSON.stringify([inlinePage.epoch, inlinePage.revision, inlinePage.startedAt, inlinePage.language, inlinePage.cityId, inlinePage.countryCode, inlinePage.filter, inlinePage.period, inlinePage.day?.date ?? null]) : '';
+    const inlineContext = inlinePage ? JSON.stringify([inlinePage.epoch, inlinePage.revision, inlinePage.startedAt, inlinePage.language, inlinePage.sourceScope ?? 'edition', inlinePage.cityId, inlinePage.countryCode, inlinePage.filter, inlinePage.period, inlinePage.day?.date ?? null]) : '';
     if (inlineContext !== inlineKnowledgeContext) {
         inlineKnowledgeContext = inlineContext;
         inlineKnowledgeSelection = inlinePage ? selectInlineKnowledge(KNOWLEDGE_CARDS.filter(card => !inlineKnowledgeSeen.has(card.id)), { cityId: inlinePage.cityId, countryCode: inlinePage.countryCode, timeZone: inlinePage.day?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone }, now, inlinePage.epoch + ':' + inlinePage.revision) : [];
@@ -1237,11 +1274,11 @@ function renderDiscovery() {
             }
             continue;
         }
-        const item = entry.item, index = newsIndex++;
+        const item = entry.item, index = newsIndex++, originalItem = pageItemByKey.get(item.key);
         let node;
         if (item.kind === 'global') {
-            node = cardNode(item.view, index, topCount, undefined, false, 'related', server.page?.day?.timeZone ?? contextualCity?.timezone ?? 'UTC');
-            node.dataset.liveSignature = JSON.stringify([language, editionCardSignature(item.view.card), editionStorySignature(item.view)]);
+            node = cardNode(item.view, index, topCount, undefined, false, 'related', server.page?.day?.timeZone ?? contextualCity?.timezone ?? 'UTC', newsSourceScope === 'all');
+            node.dataset.liveSignature = JSON.stringify([language, newsSourceScope, editionCardSignature(item.view.card), editionStorySignature(item.view)]);
         }
         else {
             if (!contextualCity)
@@ -1249,12 +1286,18 @@ function renderDiscovery() {
             node = localCardNode(item.card, contextualCity, now);
             node.dataset.homeLocalId = item.card.id;
             node.dataset.cityId = contextualCity.id;
-            node.dataset.liveSignature = JSON.stringify([language, item.card]);
+            node.dataset.liveSignature = JSON.stringify([language, newsSourceScope, item.card]);
+            const originalLanguage = originalItem ? newsOriginalLanguage(originalItem) : null;
             const title = node.querySelector('h3');
             if (title) {
-                title.lang = language;
+                title.lang = originalLanguage ?? '';
                 title.dir = 'auto';
                 title.setAttribute('translate', 'no');
+            }
+            if (newsSourceScope === 'all') {
+                const sourceLanguageNote = make('p', 'card-date', originalLanguage ? languageLabel(originalLanguage) : language === 'ro' ? 'Limba sursei neprecizata' : language === 'it' ? 'Lingua della fonte non specificata' : 'Source language unspecified');
+                sourceLanguageNote.dataset.originalLanguage = originalLanguage ?? 'unknown';
+                title?.after(sourceLanguageNote);
             }
             const link = node.querySelector('.card-content > .source-link');
             if (link)
@@ -1263,7 +1306,6 @@ function renderDiscovery() {
             if (details)
                 details.textContent = tr('sourceDetails');
         }
-        const originalItem = pageItemByKey.get(item.key);
         if (originalItem?.story && server.page) {
             node.dataset.storyKey = originalItem.story.key;
             node.dataset.liveSignature = JSON.stringify([node.dataset.liveSignature, originalItem.story, inlineContext]);
@@ -1287,6 +1329,10 @@ function renderDiscovery() {
     }
     if (!visible.length && loadingPhase === 'hidden') {
         const message = make('p', 'discovery-section-label privacy-note', editionState === 'unavailable' ? tr('storiesUnavailable') : newsPeriod === 'today' ? (language === 'ro' ? 'Nu sunt inca articole verificate pentru aceasta zi, categorie si limba. Alege Recent pentru articolele anterioare.' : language === 'it' ? 'Nessun articolo verificato per questo giorno, categoria e lingua. Scegli Recenti per gli articoli precedenti.' : 'No checked articles match this day, category and language yet. Choose Recent for earlier reports.') : (language === 'ro' ? 'Nu sunt articole verificate pentru aceasta categorie si limba. Acoperirea surselor este partiala.' : language === 'it' ? 'Nessun articolo verificato per questa categoria e lingua. La copertura delle fonti è parziale.' : 'No checked articles match this category and language. Source coverage is partial.'));
+        if (editionState !== 'unavailable' && newsSourceScope === 'all')
+            message.textContent = newsPeriod === 'today'
+                ? (language === 'ro' ? 'Nu sunt inca articole verificate pentru aceasta zi si categorie in sursele conectate. Alege Recent pentru articolele anterioare.' : language === 'it' ? 'Nessun articolo verificato per questo giorno e categoria nelle fonti collegate. Scegli Recenti per gli articoli precedenti.' : 'No checked articles match this day and category in connected sources yet. Choose Recent for earlier reports.')
+                : (language === 'ro' ? 'Nu sunt articole verificate pentru aceasta categorie in sursele conectate. Acoperirea surselor este partiala.' : language === 'it' ? 'Nessun articolo verificato per questa categoria nelle fonti collegate. La copertura delle fonti è parziale.' : 'No checked articles match this category in connected sources. Source coverage is partial.');
         if (editionState !== 'unavailable' && countryProfile?.state === 'unconnected')
             message.textContent = language === 'ro'
                 ? `Pentru ${countryProfile.countryName} nu sunt inca conectate surse nationale in ${languageLabel(language)}. Poti incerca perioada Recent sau optiunea English.`
@@ -1344,7 +1390,7 @@ function renderDiscovery() {
         state.id = 'home-local-state';
         state.setAttribute('role', 'status');
         const expired = contextualLocalState === 'loaded' && contextualLocal !== null && now - Date.parse(contextualLocal.checkedAt) >= 300_000;
-        state.append(make('p', 'privacy-note', awaitingLocal ? 'Checking local updates…' : expired ? 'The local check has expired. Refresh to see current local information.' : contextualLocalState === 'unavailable' ? 'Local information could not be checked. Refresh to try again.' : 'No current local cards match this reading language. Check connected sources or choose another language.'));
+        state.append(make('p', 'privacy-note', awaitingLocal ? 'Checking local updates…' : expired ? 'The local check has expired. Refresh to see current local information.' : contextualLocalState === 'unavailable' ? 'Local information could not be checked. Refresh to try again.' : newsSourceScope === 'all' ? 'No current local cards are available from connected sources.' : 'No current local cards match this reading language. Check connected sources or choose another language.'));
         extrasHost.append(state);
     }
     if (contextualCity) {
@@ -1371,7 +1417,7 @@ function renderDiscovery() {
     const sentinel = controls.querySelector('#home-more-button');
     if (sentinel && !server.loading && !server.error && server.page?.nextCursor)
         stopNewsObserver = observeNewsStream(sentinel, () => { void showNewsPage(false); });
-    const publicationState = stream.total ? `${stream.total} stories from ${server.page?.articleTotal ?? 0} original articles in the selected language are available from connected sources. ${topCount} match the category filter; ${visible.length} are shown. Reports confidently identified as the same event share one card with their original source links. Different events remain separate.` : editionState === 'unavailable' ? 'Publications could not be checked. Refresh to try again.' : editionState === 'pending' ? 'Checking connected publications…' : 'No current publications meet this language selection.';
+    const publicationState = stream.total ? `${stream.total} stories from ${server.page?.articleTotal ?? 0} original articles ${newsSourceScope === 'all' ? 'in their source languages' : 'in the selected language'} are available from connected sources. ${topCount} match the category filter; ${visible.length} are shown. Reports confidently identified as the same event share one card with their original source links. Different events remain separate.` : editionState === 'unavailable' ? 'Publications could not be checked. Refresh to try again.' : editionState === 'pending' ? 'Checking connected publications…' : newsSourceScope === 'all' ? 'No current publications are available from connected sources.' : 'No current publications meet this language selection.';
     const sourceState = loading && !automaticPublicLoad ? ' Checking for updates…' : lastLoadFailed && snapshot ? ' Refresh unavailable; retained source checks are not newly verified.' : snapshot?.state === 'partial' ? ' Some source coverage is incomplete.' : '';
     const localState = (localNewsCount ? ` ${localNewsCount} local reports are among the articles loaded so far.` : '') + (awaitingLocal ? ' Local information is being checked.' : local.supporting.length ? ` ${local.supporting.length} supporting local records are available below.` : contextualCity ? ' Local coverage is shown below.' : '');
     const updateParts = [live.changes.total ? editionUpdateLabel(live.changes) : '', reading.pending ? `${reading.pending} local report changes` : ''].filter(Boolean);
@@ -1403,7 +1449,7 @@ function renderDiscovery() {
     }
     languages.replaceChildren();
     if (server.page) {
-        languages.append(make('p', 'privacy-note', languageLabel(server.page.language) + ' · ' + tr('matchingStories', { count: server.page.total }) + ' · ' + tr('partialCoverage')));
+        languages.append(make('p', 'privacy-note', ((server.page.sourceScope ?? 'edition') === 'all' ? originalSourcesLabel : languageLabel(server.page.language)) + ' · ' + tr('matchingStories', { count: server.page.total }) + ' · ' + tr('partialCoverage')));
         if (coverage) {
             const number = new Intl.NumberFormat(language), national = number.format(coverage.national), localCount = number.format(coverage.local), international = number.format(coverage.international);
             languages.append(make('p', 'privacy-note', language === 'ro'
@@ -1446,9 +1492,9 @@ async function showNewsPage(focus) {
     if (document.visibilityState !== 'visible' || document.body.dataset.entryView !== 'start' || document.body.dataset.worldExplore || state.loading || state.error === 'expired' || state.page?.nextCursor === null)
         return;
     const target = required('#discovery-cards'), before = new Set([...target.querySelectorAll('[data-news-stream-key]')].map(node => node.dataset.newsStreamKey));
-    const language = getLocale(), filter = newsFilter, period = newsPeriod, cityId = contextualCity?.id ?? null, revision = newsInteractionRevision, previousCount = state.items.length;
+    const language = getLocale(), sourceScope = newsSourceScope, filter = newsFilter, period = newsPeriod, cityId = contextualCity?.id ?? null, revision = newsInteractionRevision, previousCount = state.items.length;
     await newsContinuation.next();
-    if (revision !== newsInteractionRevision || period !== newsPeriod || language !== getLocale() || filter !== newsFilter || cityId !== (contextualCity?.id ?? null) || document.body.dataset.entryView !== 'start' || document.body.dataset.worldExplore)
+    if (revision !== newsInteractionRevision || sourceScope !== newsSourceScope || period !== newsPeriod || language !== getLocale() || filter !== newsFilter || cityId !== (contextualCity?.id ?? null) || document.body.dataset.entryView !== 'start' || document.body.dataset.worldExplore)
         return;
     renderDiscovery();
     if (focus && newsContinuation.view().items.length > previousCount) {
@@ -1494,7 +1540,8 @@ required('#discovery').addEventListener('change', event => {
     if (restoreFocus)
         required('#home-news-category').focus({ preventScroll: true });
 });
-required('#home-news-english').addEventListener('click', () => { const picker = required('#reader-language'); picker.value = 'en'; picker.dispatchEvent(new Event('change', { bubbles: true })); required('#home-news-category').focus(); });
+required('#home-news-source-scope').addEventListener('click', () => { newsSourceScope = newsSourceScope === 'all' ? 'edition' : 'all'; renderDiscovery(); });
+required('#home-news-english').addEventListener('click', () => { newsSourceScope = 'edition'; const picker = required('#reader-language'); picker.value = 'en'; picker.dispatchEvent(new Event('change', { bubbles: true })); renderDiscovery(); required('#home-news-category').focus(); });
 // Automatic location and saved choices inform this page without choosing a view or writing memory.
 document.addEventListener('dlkt:city-selected', event => {
     if (!(event instanceof CustomEvent) || !object(event.detail) || !validCity(event.detail.city))

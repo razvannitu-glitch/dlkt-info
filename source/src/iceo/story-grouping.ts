@@ -277,12 +277,39 @@ function lotteryDrawAnchor(card:EvidenceCard,title:string):ThreadAnchor|null {
  return {key:key('lottery-draw','ro-lottery-results',date,'standard'),basis:'shared-event',strong:true};
 }
 
+/**
+ * Conservative Romanian reported-penalty paraphrases. An identical distinctive
+ * actor, positive numeric penalty and concrete cause are required. This is a
+ * headline match in the existing fixed time window, not inferred case identity.
+ */
+function reportedPenaltyAnchor(card:EvidenceCard,title:string):ThreadAnchor|null {
+ const publisherSuffix=' - '+text(card.publisher);
+ let headline=title.endsWith(publisherSuffix)?title.slice(0,-publisherSuffix.length):title;
+ headline=headline.replace(/[.!]?\s+(?:video|foto)$/u,'').trim();
+ if(/\b(?:nu|nici|fals|falsa|zvon|zvonuri|neaga|negat|dezminte|achitat(?:a|i|e)?|achitare|anulat(?:a|i|e)?|anulare|revocat(?:a|i|e)?|revocare|apel|recurs|contestat(?:a|i|e)?|contestatie|acuzat(?:a|i|e)?|acuzatie|risca|riscand|cerut|cere|solicita|propus|propune|ar|putea|va|vor|urmeaza|biciuit(?:a|i|e)?|executat(?:a|i|e)?|aplicat(?:a|i|e)?|documentar|retrospectiva|aniversare)\b/u.test(headline))return null;
+ const match=/^(.{8,160}?)\s+(?:(?:a|au)\s+fost\s+)?(?:pedepsit(?:a|i|e)?|condamnat(?:a|i|e)?|(?:a|au)\s+primit)\s+(?:cu\s+|la\s+)?(\d{1,4})\s+(?:de\s+)?(lovituri de bici|ani de inchisoare|luni de inchisoare)\s+(?:pentru|din cauza)\s+(?:(?:un|o|unui|unei)\s+)?(.+)$/u.exec(headline);
+ if(!match||Number(match[2])<=0||[...headline.matchAll(/\b\d+\b/gu)].length!==1)return null;
+ const actor=(match[1]??'').replace(/[,\s]+$/u,'').replace(/^(?:un|o)\s+/u,'')
+  .replace(/\s+si (?:membrii|membrele) (?:trupei|echipei) sale$/u,'');
+ const words=actor.match(/\p{L}+/gu)??[];
+ if(actor.length<12||words.length<2||new Set(words).size<2||!/^[\p{L}][\p{L} '.-]+$/u.test(actor)
+  ||/^(?:barbat|femeie|persoana|om|oameni|tanar|tanara|minor|minora|copil|alta?|inca)\b/u.test(actor))return null;
+ // Remove only presentation/channel/clothing adjuncts observed in these
+ // equivalent report forms. Names, places, other causes and extra numbers stay distinct.
+ const cause=(match[4]??'').replace(/[.!]+$/u,'').replace(/\s+pe youtube\b/gu,'')
+  .replace(/\s+fara (?:valul islamic|val islamic|valul|val|hijabul|hijab)\b/gu,'').replace(/\s+/gu,' ').trim();
+ if(cause.length<4||cause.length>140||!/^[\p{L}][\p{L} '-]+$/u.test(cause))return null;
+ return {key:key('reported-penalty','ro',actor,Number(match[2]),match[3],cause,countries(card),card.summary===undefined?'':text(card.summary)),
+  basis:'matching-headlines',strong:false};
+}
+
 function anchor(card:EvidenceCard):ThreadAnchor|null {
   if(card.kind!=='publication'||!card.title.trim()||card.title.length>4000||!Number.isFinite(Date.parse(card.date)))return null;
   const title=text(card.title),revenue=launchRevenueAnchor(card,title);if(revenue)return revenue;
   const documentary=documentaryNarrativeAnchor(card,title);if(documentary)return documentary;
   if(!EXPLANATORY.test(title)){
     const draw=lotteryDrawAnchor(card,title);if(draw)return draw;
+    const penalty=reportedPenaltyAnchor(card,title);if(penalty)return penalty;
     const vulnerability=[...new Set([...title.matchAll(/\bcve-(\d{4})-(\d{4,7})\b/gu)].map(match=>`${match[1]}-${match[2]}`))];
     if(vulnerability.length===1)return{key:key('vulnerability',vulnerability[0]),basis:'shared-event',strong:true};
     if(vulnerability.length>1)return headlineAnchor(card,title);

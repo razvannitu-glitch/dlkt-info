@@ -17,8 +17,8 @@ const xmlResponse=body=>new Response(body,{headers:{'content-type':'application/
 const htmlResponse=body=>new Response(body,{headers:{'content-type':'text/html'}});
 const rowsByCategory=amount=>PUBLIC_EDITORIAL_CATEGORIES.flatMap(category=>Array.from({length:amount},(_,i)=>candidate(category,i)));
 
-test('catalog has20 organizational category sources, an unclassified source and74 exact publisher families',()=>{
- assert.equal(NEWS_SOURCES.length,22);assert.equal(NEWS_CATEGORY_SOURCES.length,20);assert.equal(NEWS_PUBLISHERS.length,74);assert.equal(new Set(NEWS_SOURCES.map(s=>s.id)).size,22);
+test('catalog has20 organizational category sources, an unclassified source and75 exact publisher families',()=>{
+ assert.equal(NEWS_SOURCES.length,22);assert.equal(NEWS_CATEGORY_SOURCES.length,20);assert.equal(NEWS_PUBLISHERS.length,75);assert.equal(new Set(NEWS_SOURCES.map(s=>s.id)).size,22);
  assert.equal(NEWS_UNCLASSIFIED_SOURCE.id,'news-unclassified');assert.equal(NEWS_UNCLASSIFIED_SOURCE.topic,'other');
  assert.ok(NEWS_CATEGORY_SOURCES.every(s=>s.adapter==='news-index'&&s.endpoint===NEWS_INDEX_URL));assert.equal(NEWS_FEATURED_SOURCE.id,'editorial-frontpage');
  for(const source of ['https://www.rte.ie/news/story','https://blogs.nvidia.com/blog/story','https://www.reuters.com/world/story'])assert.ok(publisherForNewsUrl(source));
@@ -198,12 +198,16 @@ test('homepage-selected candidates enter the bounded verification queue before i
  const result=await discoverNews(fetcher,now,[],undefined,{frontpageHighlights:true,maxArticleRequests:4});assert.equal(looked.length,4);assert.equal(looked[0],chosen.sourceUrl);
  assert.ok(result.flatMap(r=>r.cards).find(card=>card.sourceUrl===chosen.sourceUrl)?.sourceIds.includes('editorial-frontpage'));
 });
-test('publisher diversity cannot hide a stronger generic investigation before the global candidate cut',async()=>{
+test('strong investigations keep the leading opportunity and admission while the bounded first pass varies publishers',async()=>{
  const strong=[0,1].map(i=>({...candidate('technology',i),sourceUrl:`https://www.theguardian.com/technology/inquiry-${i}`,publisher:'The Guardian',title:`Regulator investigates artificial intelligence software maker in region ${i}`}));
  const weak=[['Reuters','https://www.reuters.com'],['BBC','https://www.bbc.com'],['The Verge','https://www.theverge.com'],['TechCrunch','https://techcrunch.com']].map(([publisher,origin],i)=>({...candidate('technology',i+2),publisher,sourceUrl:`${origin}/technology/launch-${i}`}));
  const rows=[...weak,...strong],looked=[];
  const fetcher=async url=>{const value=String(url);if(value===NEWS_INDEX_URL)return xmlResponse(rss(rows));looked.push(value);return htmlResponse(html(rows.find(row=>row.sourceUrl===value)));};
- const result=await discoverNews(fetcher,now,[],undefined,{maxArticleRequests:4});assert.equal(looked.length,4);assert.deepEqual(new Set(looked.slice(0,2)),new Set(strong.map(row=>row.sourceUrl)));
+  const result=await discoverNews(fetcher,now,[],undefined,{maxArticleRequests:4});
+  assert.equal(looked.length,4);assert.equal(new Set(looked).size,4);
+  assert.equal(looked[0],strong[0].sourceUrl,'the strongest investigation keeps the leading opportunity');
+  assert.equal(new Set(looked.slice(0,3).map(url=>publisherForNewsUrl(url).id)).size,3,'the first three opportunities represent distinct publishers');
+  assert.ok(strong.every(row=>looked.includes(row.sourceUrl)),'both strong originals are verified inside the same four-request budget');
  assert.ok(strong.every(row=>result.flatMap(r=>r.cards).some(card=>card.sourceUrl===row.sourceUrl)));
 });
 test('highest-priority development is verified before four weaker homepage candidates can fill its category',async()=>{

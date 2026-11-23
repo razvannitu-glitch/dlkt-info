@@ -6,6 +6,7 @@ import {selectNewsStream,newsStreamPage,observeNewsStream,NEWS_PAGE_SIZE} from '
 import {NEWS_CATEGORIES,newsCategory} from '../.build/src/iceo/news-taxonomy.js';
 import {selectContextualToday} from '../.build/src/iceo/contextual-today.js';
 import {selectNewsLanguage} from '../.build/src/iceo/news-sources.js';
+import {consistentCards} from '../.build/src/iceo/evidence-consistency.js';
 import {readingCard} from '../.build/src/iceo/reader.js';
 import {selectHomeLanguage} from '../.build/src/iceo/home-local.js';
 import {parseLocalNews} from '../.build/src/local/news-service.js';
@@ -171,17 +172,19 @@ test('editorial queue relevance and exact deduplication survive without a highli
  const local=selectHomeLanguage(localSnapshot(2),city,now,'ro').cards;
  const noGlobal=selectNewsStream({first:[],more:[]},local,now);assert.equal(noGlobal.highlighted,0);assert.equal(noGlobal.total,2);
 });
-test('home global ranking keeps the reading language but receives no city or topic preference',()=>{
+test('home global selection uses explicit source scope without city or topic bias',()=>{
  const source=readFileSync('.build/src/iceo/browser.js','utf8');
  const declaration=source.match(/const language = getLocale\(\), globalContext = \{ countryCode: null, preferredTopics: \[\] \};/u)?.[0];
- const candidate=source.match(/const candidate = snapshot \? selectContextualToday\(selectNewsLanguage\(snapshot.cards, language\), globalContext, now\) : \{ first: \[\], more: \[\] \};/u)?.[0];
+ const candidate=source.match(/const candidate = snapshot \? selectContextualToday\(newsSourceScope === 'all' \? consistentCards\(snapshot.cards\) : selectNewsLanguage\(snapshot.cards, language\), globalContext, now\) : \{ first: \[\], more: \[\] \};/u)?.[0];
  assert.ok(declaration);assert.ok(candidate);
- const snapshot={cards:[global(801,'ro'),global(802,'en')]},calls=[],ranking={first:[],more:[]};
- const context={getLocale:()=> 'ro',snapshot,now,selectNewsLanguage,selectContextualToday:(cards,rankContext,time)=>{calls.push({cards,rankContext,time});return ranking;}};
- runInNewContext(declaration+'\n'+candidate+'\nthis.result = candidate;',context);
- assert.strictEqual(context.result,ranking);assert.deepEqual(calls[0].cards,[snapshot.cards[0]]);assert.equal(calls[0].time,now);
- assert.equal(calls[0].rankContext.countryCode,null);assert.equal(calls[0].rankContext.preferredTopics.length,0);assert.equal('city' in calls[0].rankContext,false);
- assert.match(source,/const contextKey = JSON.stringify\(\[language, context.countryCode, city\?\.id \?\? null, newsPeriod, \[\.\.\.interests\]\.sort\(\)\]\);/u);
+ const snapshot={cards:[global(801,'ro'),global(802,'en')]},ranking={first:[],more:[]};
+ for(const newsSourceScope of ['all','edition']){
+  const calls=[],context={getLocale:()=> 'ro',newsSourceScope,snapshot,now,selectNewsLanguage,consistentCards,selectContextualToday:(cards,rankContext,time)=>{calls.push({cards,rankContext,time});return ranking;}};
+  runInNewContext(declaration+'\n'+candidate+'\nthis.result = candidate;',context);
+  assert.strictEqual(context.result,ranking);assert.deepEqual(calls[0].cards,newsSourceScope==='all'?snapshot.cards:[snapshot.cards[0]]);assert.equal(calls[0].time,now);
+  assert.equal(calls[0].rankContext.countryCode,null);assert.equal(calls[0].rankContext.preferredTopics.length,0);assert.equal('city' in calls[0].rankContext,false);
+ }
+ assert.match(source,/const contextKey = JSON.stringify\(\[language, newsSourceScope, context.countryCode, city\?\.id \?\? null, newsPeriod, \[\.\.\.interests\]\.sort\(\)\]\);/u);
  assert.doesNotMatch(source,/Selectia globala/u);assert.doesNotMatch(source,/Global selection/u);
 });
 

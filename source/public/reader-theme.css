@@ -365,15 +365,16 @@ html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(.world-city-res
 
 /* Mobile utility and edition controls: explicit rows prevent legacy flex/grid overlap. */
 @media(max-width:760px){
- #today-glance .glance-heading{display:grid;grid-template-columns:minmax(0,1fr);align-items:stretch;justify-items:stretch;gap:6px;text-align:start}
+ #today-glance .glance-heading{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:'date date' 'city actions' 'utilities utilities';align-items:center;justify-items:stretch;gap:6px 12px;text-align:start}
  #today-glance .glance-calendar{min-width:0;max-width:none}
  #today-glance .glance-calendar time{font-size:.8125rem;line-height:1.4;text-align:start}
- #today-glance .glance-location{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:center;gap:8px;min-width:0;padding:0;border:0}
+ #today-glance .glance-location{display:block;min-width:0;padding:0;border:0}
  #today-glance #glance-city{width:100%;max-width:100%;min-height:44px;box-sizing:border-box;justify-content:flex-start;padding:4px 0;text-align:start}
- #today-glance #glance-city-label{font-size:.875rem;line-height:1.3}
- #today-glance .glance-zone{font-size:.75rem;line-height:1.3}
+ #today-glance .glance-city-copy{min-width:0;overflow:visible;white-space:normal}
+ #today-glance #glance-city-label{font-size:.875rem;line-height:1.3;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+ #today-glance .glance-zone{font-size:.75rem;line-height:1.3;white-space:normal;overflow:visible;text-overflow:clip}
  #today-glance #glance-locate{justify-self:end;min-height:44px;max-width:100%;margin:0;padding:8px 10px;font-size:.8125rem;line-height:1.3}
- #today-glance .glance-actions{display:flex;align-items:stretch;justify-content:space-between;gap:8px;width:100%;min-width:0;margin:0}
+ #today-glance .glance-actions{display:flex;align-items:stretch;justify-content:flex-end;gap:8px;width:auto;min-width:0;margin:0}
  #today-glance #glance-read{flex:1 1 auto;max-width:none;min-height:44px;padding:8px 10px;font-size:.875rem;line-height:1.3}
  #today-glance .reader-language-bar{flex:0 0 auto;gap:6px;min-width:0}
  #today-glance .reader-language{flex:0 1 auto;min-width:0}
@@ -382,7 +383,7 @@ html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(.world-city-res
  #today-glance .glance-utilities{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;gap:6px;margin-top:6px;padding:0;border:0}
  #today-glance .glance-utilities:has(>button[hidden]){grid-template-columns:minmax(0,1fr)}
  #today-glance .glance-utilities:not(:has(>button:not([hidden]))){display:none}
- #today-glance .glance-utilities .text-button{width:100%;min-width:0;min-height:44px;box-sizing:border-box;padding:6px 8px;font-size:.75rem;line-height:1.3;white-space:normal;overflow-wrap:anywhere}
+ #today-glance .glance-utilities .text-button{width:100%;max-width:none;min-width:0;min-height:44px;box-sizing:border-box;padding:7px 10px;font-size:.75rem;line-height:1.3;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
  #discovery .discovery-heading{align-items:center;gap:12px;margin-bottom:8px;min-width:0}
  #discovery .discovery-heading h1{min-width:0;font-size:clamp(1.5rem,4.5vw,1.875rem);line-height:1.15;overflow-wrap:anywhere}
  #discovery #discovery-refresh{flex:0 1 auto;max-width:46%;min-height:44px;box-sizing:border-box;padding:8px 10px;font-size:.8125rem;line-height:1.3;white-space:normal;overflow-wrap:anywhere}
@@ -407,7 +408,12 @@ html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(.world-city-res
  #discovery #home-news-progress{font-variant-numeric:tabular-nums}
 }
 @media(max-width:600px){
+ .site-header .masthead-inner{padding:12px 16px}
+ .site-header a.brand.brand-header{grid-template-columns:56px max-content;grid-template-rows:40px 15px;column-gap:10px;font-size:42px;letter-spacing:-1.6px}
+ .site-header .brand-header .kate-mark{width:56px;height:56px}
+ .site-header .brand-header .brand-tagline{font-size:10.5px;line-height:15px}
  #today-glance .glance-shell{padding:8px 16px}
  #today-glance .glance-calendar{margin:0 0 2px}
  #today-glance .glance-heading{gap:6px}
 }
+
