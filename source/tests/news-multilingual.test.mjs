@@ -13,7 +13,7 @@ const feed=(source,rows,{language=source.language,home=source.feedHome,title=sou
 const metadata=(row,overrides={})=>`<html><head><link rel="canonical" href="${row.sourceUrl}"><script type="application/ld+json">${JSON.stringify({'@type':'NewsArticle',url:row.sourceUrl,headline:row.title,datePublished:date,...overrides})}</script></head><body>Excluded article body</body></html>`;
 
 test('publication provenance separates source language, publisher country and story locality',()=>{
-  assert.equal(NEWS_PUBLISHERS.length,74);
+  assert.equal(NEWS_PUBLISHERS.length,75);
   assert.equal(sourceLanguage(frUrl),'fr');assert.equal(sourceLanguage({sourceUrl:jaUrl}),'ja');
   assert.equal(sourceLanguage('https://www.france24.com/en/africa/fixture'),'en');
   assert.equal(sourceLanguage('https://www.france24.com/ar/fixture'),'ar');

@@ -58,7 +58,7 @@ function extracted(id,options){
 test('existing national primary feeds gain provenance without new publishers, indexes or permissions',()=>{
  assert.equal(REVIEWED_FEED_PUBLICATION_SCOPES.length,9);
  assert.deepEqual(REVIEWED_FEED_PUBLICATION_SCOPES.map(value=>value.sourceId),cases.map(value=>value[0]));
- assert.equal(DAILY_FEEDS.length,14);assert.equal(NEWS_PUBLISHERS.length,74);assert.equal(NEWS_DISCOVERY_INDEXES.length,28);
+ assert.equal(DAILY_FEEDS.length,14);assert.equal(NEWS_PUBLISHERS.length,75);assert.equal(NEWS_DISCOVERY_INDEXES.length,29);
  for(const [id,code] of cases){
   const reviewed=source(id),profile=REVIEWED_FEED_PUBLICATION_SCOPES.find(value=>value.sourceId===id);
   assert.equal(reviewed.adapter,'reviewed-feed');assert.equal(reviewed.feed.dateLabel,'Published');

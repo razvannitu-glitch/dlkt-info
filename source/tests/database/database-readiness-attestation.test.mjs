@@ -238,7 +238,7 @@ for (const [name, sql] of [
 }
 
 test('national source SQL keeps exact reviewed origin parity without adding publisher aliases', async () => {
-  assert.equal(NEWS_PUBLISHERS.length,74);
+  assert.equal(NEWS_PUBLISHERS.length,75);
   for(const publisher of NEWS_PUBLISHERS)for(const origin of publisher.origins){
     assert.equal((await db.query('select dlkt_info_private.valid_news_candidate_publisher($1,$2) ok',[publisher.label,origin+(publisher.id==='stirile-protv'?'/stiri/checked-national-origin':'/news/checked-national-origin')])).rows[0].ok,true,origin);
   }
@@ -259,7 +259,7 @@ test('national source SQL keeps exact reviewed origin parity without adding publ
 test('private diagnostics validate all reviewed indexes including Italian identity with TS and SQL parity', async () => {
   const now=Date.parse('2026-11-22T21:05:04.970Z'),builder=new NewsDiagnosticsBuilder(now);
   builder.index(null,true,null);for(const index of NEWS_DISCOVERY_INDEXES)builder.index(index,true,null);
-  const diagnostics=builder.finish();assert.equal(diagnostics.indexes.length,29);assert.ok(validNewsDiagnostics(diagnostics,now));
+  const diagnostics=builder.finish();assert.equal(diagnostics.indexes.length,30);assert.ok(validNewsDiagnostics(diagnostics,now));
   const valid=async value=>(await db.query('select dlkt_info_private.valid_news_diagnostics($1::jsonb,$2::timestamptz) ok',[JSON.stringify(value),new Date(now).toISOString()])).rows[0].ok;
   assert.equal(await valid(diagnostics),true);
   for(const change of [row=>{row.language='en';},row=>{row.publisherId='digi24';},row=>{row.extra=true;}]){
