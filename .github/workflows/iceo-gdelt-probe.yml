@@ -1,0 +1,44 @@
+name: ICEO GDELT source discovery probe
+
+on:
+  push:
+    branches:
+      - "codex/iceo-gdelt-probe-*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dlkt-iceo-gdelt-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: One-shot metadata discovery (no publication)
+    if: github.repository == 'razvannitu-glitch/dlkt-info'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify source integrity and compile
+        run: npm run typecheck && npm --prefix source run build
+      - name: Fetch fixed GDELT GAL metadata once and create review-only artifact
+        run: node source/scripts/probe-gdelt-directory.mjs
+      - name: Upload sanitized origin proposals (7 days)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: iceo-gdelt-origin-review
+          path: ${{ runner.temp }}/iceo-gdelt-candidates.json
+          retention-days: 7
+          if-no-files-found: error
