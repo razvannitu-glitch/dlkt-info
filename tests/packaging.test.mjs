@@ -64,7 +64,7 @@ test('untrusted build identity fails before any database request', async () => {
 
 test('readiness request retries an abort but never skips production schema checks', async () => {
   const endpoint='https://fixture.supabase.co/rest/v1/rpc/dlkt_info_read_database_readiness';
-  let calls=0;
+  let calls=0;const delays=[];
   const response=await requestDatabaseReadiness(async (url,options)=>{
     assert.equal(url,endpoint);
     assert.equal(options.method,'POST');
@@ -74,18 +74,18 @@ test('readiness request retries an abort but never skips production schema check
     assert.ok(options.signal);
     if (++calls===1) throw Object.assign(new Error('transient timeout'),{name:'TimeoutError'});
     return new Response('{"ready":true}',{status:200,headers:{'content-type':'application/json'}});
-  },endpoint,'sb_publishable_fixture');
-  assert.equal(calls,2);
+  },endpoint,'sb_publishable_fixture',async ms=>{delays.push(ms);});
+  assert.equal(calls,2);assert.deepEqual(delays,[1_500]);
   assert.equal((await response.json()).ready,true);
 });
 
 test('readiness temporary 503 retries but authorization and unsafe endpoints fail closed', async () => {
   const endpoint='https://fixture.supabase.co/rest/v1/rpc/dlkt_info_read_database_readiness';
-  let count=0;
+  let count=0;const delays=[];
   const value=await requestDatabaseReadiness(async()=>{
     count++;return new Response(null,{status:count===1?503:200});
-  },endpoint,'sb_publishable_fixture');
-  assert.equal(value.status,200);assert.equal(count,2);
+  },endpoint,'sb_publishable_fixture',async ms=>{delays.push(ms);});
+  assert.equal(value.status,200);assert.equal(count,2);assert.deepEqual(delays,[1_500]);
   await assert.rejects(requestDatabaseReadiness(async()=>{
     count++;return new Response(null,{status:403});
   },endpoint,'sb_publishable_fixture'),/BUILD_DATABASE_ATTESTATION_HTTP/);
@@ -98,9 +98,10 @@ test('readiness temporary 503 retries but authorization and unsafe endpoints fai
 test('readiness exhausts finite retries instead of declaring an unavailable database ready', async () => {
   const endpoint='https://fixture.supabase.co/rest/v1/rpc/dlkt_info_read_database_readiness';
   let count=0;
+  const delays=[];
   await assert.rejects(requestDatabaseReadiness(async()=>{count++;throw Object.assign(new Error('network'),{name:'TimeoutError'});},
-    endpoint,'sb_publishable_fixture'),/BUILD_DATABASE_ATTESTATION_UNAVAILABLE/);
-  assert.equal(count,3);
+    endpoint,'sb_publishable_fixture',async ms=>{delays.push(ms);}),/BUILD_DATABASE_ATTESTATION_UNAVAILABLE/);
+  assert.equal(count,4);assert.deepEqual(delays,[1_500,4_000,8_000]);
 });
 
 
@@ -115,4 +116,14 @@ test('transport failure diagnostics are bounded and never expose credentials or 
     Object.assign(new Error('disconnected'),{code:'ENETUNREACH'}),
   ],'connect failed')})),'ENETUNREACH');
   assert.equal(classifyReadinessTransport(null),'UNCLASSIFIED_TRANSPORT');
+});
+
+test('invalid attestation identities and nonretryable HTTP responses do not enter the backoff loop', async () => {
+ const endpoint='https://fixture.supabase.co/rest/v1/rpc/dlkt_info_read_database_readiness';
+ let count=0,delays=0;
+ const fetcher=async()=>{count++;return new Response(null,{status:401});};
+ await assert.rejects(requestDatabaseReadiness(fetcher,endpoint,'sb_publishable_fixture',async()=>{delays++;}),/BUILD_DATABASE_ATTESTATION_HTTP/);
+ assert.equal(count,1);assert.equal(delays,0);
+ await assert.rejects(requestDatabaseReadiness(fetcher,'https://fixture.supabase.co/rest/v1/rpc/other','sb_publishable_fixture',async()=>{delays++;}),/BUILD_DATABASE_ATTESTATION_REQUEST_INVALID/);
+ assert.equal(count,1);assert.equal(delays,0);
 });
