@@ -273,3 +273,13 @@ The following are concepts, not activated source connectors or claims of content
 ## Operational gates and KPIs
 
 Measure approved vs candidate origins, last successful fetch, source-rights review age, verified local coverage, country/language gaps, unique-event yield, false-positive merges, duplicate incidents per 1,000 cards, original-source click-through, charity action click-through and confirmed partner relationships. Avoid headline counts without source diversity or validated locality. Follow costs from verified acquisition and rights-cleared usage rather than promises of every site on Earth.
+
+## Candidate qualification engine — controlled increment, 23 November 2026
+
+The pure, offline engine in `src/iceo/discovery-qualification.ts` accepts bounded third-party directory observations (maximum 200 per batch) from research indexes including GDELT, Media Cloud, OpenAlex and ReliefWeb. These names identify expected metadata provenance, NOT connected APIs, verified index records, permitted crawling, validated publisher ownership or live ingestion. No network request, public endpoint, schedule or new feed is added by this change.
+
+Each proposal preserves an original HTTPS source origin, an index record reference with its query string removed, observation time, category inferred only from the type of index, and an explicitly unknown publication/event geography. Known origins, www aliases and duplicate proposals are not promoted. The batch rejects malformed origins, forged index hosts, stale/future observations and untrusted records. It neither authenticates the directory's identity nor verifies the underlying news article, and does not treat OpenAlex scholarly sources as a news feed.
+
+A separate operator review checklist requires recorded publisher-identity evidence, terms/robots inspection, the declared rights basis, intended metadata/excerpt use and a non-expired review window. Passing the checklist means COMPLETE FOR HUMAN REVIEW only; the output always sets `activationAllowed: false`. The operator must independently verify evidence and follow the existing source-specific registry and rights-review controls before any acquisition. Candidate metadata must never be connected to the public card stream as if it were sourced news.
+
+Acceptance tests validate no outbound network calls, no invented event country, no rights promotion, deduplication, source/index URL constraints, date restrictions and fail-closed review. The four existing Coral Care cards, visual interface, user navigation, paid systems and production configuration remain unmodified. A separate approved rights-reviewed provider adapter and controlled runtime connectivity test are required before a directory can power automatic discovery.
