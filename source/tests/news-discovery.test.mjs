@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createHash} from 'node:crypto';
 import {NEWS_INDEX_URL,NEWS_PUBLISHERS,NEWS_SOURCES,NEWS_CATEGORY_SOURCES,NEWS_UNCLASSIFIED_SOURCE,NEWS_FEATURED_SOURCE,NEWS_DISCOVERY_INDEXES,publisherForNewsUrl,canonicalNewsUrl} from '../.build/src/iceo/news-sources.js';
-import {readNewsCandidates,readPublisherNewsCandidates,validateNewsCandidate,mergeNewsCandidates,matchingNewsHeadline,readNewsArticleMetadata,discoverNews as runDiscovery} from '../.build/src/iceo/news-discovery.js';
+import {readNewsCandidates,readPublisherNewsCandidates,validateNewsCandidate,mergeNewsCandidates,matchingNewsHeadline,readNewsArticleMetadata,rotatedPublisherIndexes,discoverNewsWithDiagnostics,discoverNews as runDiscovery} from '../.build/src/iceo/news-discovery.js';
 import {PUBLIC_EDITORIAL_CATEGORIES} from '../.build/src/iceo/editorial-categories.js';
 import {cardContent,validCard} from '../.build/src/iceo/card-validation.js';
 const discoverNews=(fetcher,now,seeds=[],callback,options={})=>runDiscovery(fetcher,now,seeds,callback,{publisherIndexes:false,frontpageHighlights:false,...options});
@@ -232,4 +232,37 @@ test('tracking normalization agrees with archive SQL while preserving encoded pa
  assert.equal(canonicalNewsUrl(base+'?FBCLID=x&GCLID&MC_CID=x&MC_EID&utm_SOURCE=feed'),base);
  for(const name of ['%66bclid','arti%63le','%75tm_source'])assert.equal(canonicalNewsUrl(base+'?'+name+'=x'),null);
  assert.equal(canonicalNewsUrl(base+'?article=a%2Fb'),base+'?article=a%2Fb');
+});
+
+
+test('rotating publisher discovery batches cover the whole reviewed registry without duplicates or new hosts',()=>{
+ const batchSize=7,windows=Math.ceil(NEWS_DISCOVERY_INDEXES.length/batchSize);
+ const seen=new Set(),base=Math.floor(now/120_000)*120_000;
+ const trusted=new Set(NEWS_DISCOVERY_INDEXES.map(x=>x.url));
+ for(let cycle=0;cycle<windows;cycle++){
+  const group=rotatedPublisherIndexes(base+cycle*120_000,batchSize);
+  assert.ok(group.length>=1&&group.length<=batchSize);
+  for(const item of group){assert.ok(trusted.has(item.url));assert.equal(seen.has(item.id),false);seen.add(item.id);}
+ }
+ assert.equal(seen.size,NEWS_DISCOVERY_INDEXES.length);
+ assert.deepEqual(rotatedPublisherIndexes(base,7).map(x=>x.id),rotatedPublisherIndexes(base+windows*120_000,7).map(x=>x.id));
+ assert.equal(rotatedPublisherIndexes(base).length,NEWS_DISCOVERY_INDEXES.length);
+ for(const invalid of [0,-1,1.2,NaN,Infinity,NEWS_DISCOVERY_INDEXES.length+1]){
+  assert.throws(()=>rotatedPublisherIndexes(base,invalid),/NEWS_INDEX_ROTATION_INVALID/u);
+ }
+ assert.throws(()=>rotatedPublisherIndexes(NaN,7),/NEWS_INDEX_ROTATION_INVALID/u);
+});
+test('one bounded discovery cycle fetches GDELT plus only its reviewed index rotation batch',async()=>{
+ const calls=[],fetcher=async input=>{
+  const url=String(input);calls.push(url);
+  return url===NEWS_INDEX_URL?xmlResponse(rss([])):new Response('',{status:503});
+ };
+ const result=await discoverNewsWithDiagnostics(fetcher,now,[],undefined,{
+  publisherIndexBatch:7,frontpageHighlights:false,maxArticleRequests:1,
+ });
+ assert.equal(calls.filter(x=>x===NEWS_INDEX_URL).length,1);
+ assert.equal(calls.length,1+rotatedPublisherIndexes(now,7).length);
+ assert.equal(result.diagnostics.indexes.length,calls.length);
+ assert.ok(calls.filter(x=>x!==NEWS_INDEX_URL).every(x=>NEWS_DISCOVERY_INDEXES.some(row=>row.url===x)));
+ assert.equal(result.diagnostics.totals.verifiedNow,0);
 });
