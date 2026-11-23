@@ -185,3 +185,7 @@
 }
 
 @media(max-width:560px){.news-continuation{flex-direction:column;align-items:stretch;gap:12px;text-align:start}.news-continuation>button{align-self:flex-start}.news-continuation>p{max-width:none}}
+
+/* Readable source links for verified news exposed by the scrolling ribbon. */
+.glance-news-sources:not([hidden]){display:grid;gap:8px;margin:10px 0 16px}
+.glance-news-sources .glance-news-link{display:block;min-height:44px;padding:10px 12px;font-size:13px;line-height:1.55;overflow-wrap:anywhere;border:1px solid var(--line);border-radius:8px}

@@ -1,9 +1,12 @@
-import {DEFAULT_PREFERENCES,CURRENCIES,FX_HOME,FX_SOURCE,GLANCE_VERSION,object,validFx,validGlance,validPreferences,type GlancePreferences,type GlanceSnapshot} from './contracts.js';
+import {DEFAULT_PREFERENCES,CURRENCIES,FX_HOME,FX_SOURCE,GLANCE_VERSION,object,validFx,validGlance,validPreferences,eligiblePublication,type GlancePreferences,type GlanceSnapshot} from './contracts.js';
 import {currentLocalCards,forecastRange,quoteCurrency,nextGlanceDelay,localDay} from './presentation.js';
 import {currentLocalSnapshot,validCity,type City,type LocalSnapshot,type LocalCard} from '../local/contracts.js';
 import {readPreferences,savePreferences,clearPreferences} from './preferences.js';
 import {weatherMotionNode,updateWeatherMotion} from './weather-motion.js';
 import {getLocale,countryLabel,translate} from '../i18n/browser.js';
+import {NewsTicker,type TickerItem} from './ticker.js';
+import {selectHomeLanguage} from '../iceo/home-local.js';
+import {sourceLanguage,newsLanguageMatches} from '../iceo/news-sources.js';
 
 const get=<T extends HTMLElement>(id:string):T=>{const n=document.getElementById(id);if(!n)throw Error('GLANCE_ELEMENT_MISSING');return n as T;};
 const node=<K extends keyof HTMLElementTagNameMap>(tag:K,text='',className=''):HTMLElementTagNameMap[K]=>{const n=document.createElement(tag);n.textContent=text;n.className=className;return n;};
@@ -11,7 +14,8 @@ export function setupGlance():void {
  const root=get<HTMLElement>('today-glance'),custom=get<HTMLDialogElement>('glance-customize'),detail=get<HTMLDialogElement>('glance-detail'),body=get<HTMLElement>('glance-detail-body'),status=get<HTMLElement>('glance-status'),refresh=get<HTMLButtonElement>('glance-refresh');
  const list=get<HTMLDialogElement>('glance-list'),read=get<HTMLButtonElement>('glance-read');
  let detailReturn:HTMLElement|null=null;
- // No urgency metadata exists in this payload: ordinary headlines never initialize an alert ticker.
+ // Verified news and local information use a non-alert scrolling ribbon.
+ const ticker=new NewsTicker(root,kind=>{if(kind==='key'){if(!list.open)list.showModal();return;}openSignal(kind);});
  const weatherMotion=weatherMotionNode(null,Date.now(),true);get<HTMLElement>('glance-weather').append(weatherMotion);
  let preferences:GlancePreferences=readPreferences(()=>localStorage),snapshot:GlanceSnapshot|null=null,city:City|null=null,local:LocalSnapshot|null=null,estimatedCity=false,busy=false,localBusy=false,localTicket=0,attempted=false,timer:ReturnType<typeof setTimeout>|undefined,opened:'weather'|'forex'|'notice'|null=null;
  let browserZone='UTC';try{browserZone=Intl.DateTimeFormat().resolvedOptions().timeZone;}catch{/* UTC remains explicit. */}
@@ -49,7 +53,39 @@ export function setupGlance():void {
   if(document.activeElement===weatherQuick&&weatherHidden||document.activeElement===forexQuick&&forexHidden)read.focus({preventScroll:true});
   weatherQuick.hidden=weatherHidden;weatherQuick.textContent=(locale==='ro'?'Vreme':locale==='it'?'Meteo':'Weather')+' · '+(range??'');weatherQuick.title=get<HTMLElement>('glance-weather-note').textContent??'';
   forexQuick.hidden=forexHidden;forexQuick.textContent=n!==undefined?'ECB · 1 EUR = '+new Intl.NumberFormat(locale,{maximumFractionDigits:4}).format(n)+' '+q:'';forexQuick.title=get<HTMLElement>('glance-forex-note').textContent??'';
-  read.textContent=locale==='ro'?'Vreme si curs':locale==='it'?'Meteo e cambi':'Weather & rates';
+  read.textContent=locale==='ro'?'Detalii':locale==='it'?'Dettagli':'Details';
+  read.setAttribute('aria-label',locale==='ro'?'Informatii, surse si setari':locale==='it'?'Informazioni, fonti e impostazioni':'Information, sources and settings');
+  // Local reports first, then verified publisher metadata; no synthetic or stale headlines.
+  const tickerItems:TickerItem[]=[];
+  const seenSources=new Set<string>();
+  const newsLinks=get<HTMLElement>('glance-news-sources');
+  newsLinks.replaceChildren();
+  function addNews(title:string,publisher:string,url:string,note:string):void {
+   if(seenSources.has(url)||tickerItems.length>=12)return;
+   seenSources.add(url);
+   tickerItems.push({signal:'key',label:publisher,value:title,note});
+   const anchor=link(title,url);anchor.classList.add('glance-news-link');
+   anchor.setAttribute('aria-label',publisher+': '+title);
+   newsLinks.append(anchor);
+  }
+  for(const card of selectHomeLanguage(local,city,now,locale).cards)if(card.kind==='local-news'){
+   addNews(card.title,card.publisher,card.sourceUrl,'Local · source checked '+date(card.checkedAt));
+  }
+  for(const publication of snapshot?.publications??[]){
+   if(!eligiblePublication(publication,now)||!newsLanguageMatches(sourceLanguage(publication),locale))continue;
+   addNews(publication.title,publication.publisher,publication.sourceUrl,'Published '+date(publication.date));
+  }
+  newsLinks.hidden=newsLinks.childElementCount===0;
+  if(tickerItems.length===0){
+   if(preferences.weather&&forecast&&range&&city)
+    tickerItems.push({signal:'weather',label:city.name+' · Weather',value:range,note:'MET Norway · forecast'});
+   if(preferences.forex&&n!==undefined&&fx)
+    tickerItems.push({signal:'forex',label:'ECB reference',value:'1 EUR = '+new Intl.NumberFormat(locale,{maximumFractionDigits:4}).format(n)+' '+q,note:date(fx.date)});
+  }
+  const ribbon=get<HTMLElement>('glance-ribbon');
+  ribbon.hidden=tickerItems.length===0;
+  ribbon.setAttribute('aria-hidden',String(tickerItems.length===0));
+  ticker.update(tickerItems);
   get<HTMLElement>('glance-empty').hidden=preferences.weather||preferences.forex;
   refresh.disabled=busy||localBusy;if(detail.open)renderDetail();clearTimeout(timer);if(document.visibilityState==='visible')timer=setTimeout(render,nextGlanceDelay(cards,[],fx??null,now));
  }

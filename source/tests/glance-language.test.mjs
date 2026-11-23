@@ -72,6 +72,8 @@ class ElementFixture extends EventTarget {
  constructor(tag='div'){super();this.tagName=tag.toUpperCase();this.id='';this.className='';this.dataset={};this.attributes=new Map();this.children=[];this.parentElement=null;this.copy='';this.value='';this.checked=false;this.hidden=false;this.disabled=false;this.open=false;this.clientWidth=320;}
  get textContent(){return this.copy+this.children.map(child=>child.textContent).join('');}
  set textContent(value){this.copy=String(value);for(const child of this.children)child.parentElement=null;this.children=[];}
+ get childElementCount(){return this.children.length;}
+ get classList(){return {add:(name)=>{this.className=(this.className+' '+name).trim();}};}
  get isConnected(){return this===document.body||this===document.documentElement||Boolean(this.parentElement?.isConnected);}
  append(...nodes){for(const child of nodes){child.parentElement=this;this.children.push(child);}}
  replaceChildren(...nodes){this.textContent='';this.append(...nodes);}
@@ -95,7 +97,7 @@ async function harness(t){
  const previous=new Map();
  const install=(name,value)=>{previous.set(name,Object.getOwnPropertyDescriptor(globalThis,name));Object.defineProperty(globalThis,name,{configurable:true,writable:true,value});};
  const doc=new EventTarget();doc.documentElement=new ElementFixture('html');doc.body=new ElementFixture('body');doc.documentElement.append(doc.body);doc.body.dataset.entryView='start';doc.visibilityState='hidden';
- const names=['today-glance','glance-customize','glance-detail','glance-detail-body','glance-status','glance-refresh','glance-list','glance-read','glance-weather','glance-forex','glance-key','glance-headsup','glance-detail-title','glance-title','glance-date','glance-zone','glance-city','glance-city-label','glance-locate','glance-weather-quick','glance-forex-quick','glance-weather-value','glance-weather-note','glance-forex-value','glance-forex-note','glance-key-value','glance-key-note','glance-empty','glance-show-weather','glance-show-forex','glance-show-key','glance-currency','glance-save-status','glance-customize-open','glance-customize-close','glance-detail-close','glance-list-close','glance-preferences','entry-show-city','choose-place','glance-ticker-viewport','glance-ticker-track','glance-screen-summary'];
+ const names=['today-glance','glance-customize','glance-detail','glance-detail-body','glance-status','glance-refresh','glance-list','glance-read','glance-weather','glance-forex','glance-key','glance-headsup','glance-detail-title','glance-title','glance-date','glance-zone','glance-city','glance-city-label','glance-locate','glance-weather-quick','glance-forex-quick','glance-weather-value','glance-weather-note','glance-forex-value','glance-forex-note','glance-key-value','glance-key-note','glance-empty','glance-show-weather','glance-show-forex','glance-show-key','glance-currency','glance-save-status','glance-customize-open','glance-customize-close','glance-detail-close','glance-list-close','glance-preferences','entry-show-city','choose-place','glance-ribbon','glance-news-sources','glance-ticker-viewport','glance-ticker-track','glance-screen-summary'];
  const dialogs=new Set(['glance-customize','glance-detail','glance-list']),ids=new Map(names.map(id=>{const node=new ElementFixture(dialogs.has(id)?'dialog':'div');node.id=id;doc.body.append(node);return[id,node];}));
  doc.getElementById=id=>ids.get(id)??null;doc.createElement=tag=>new ElementFixture(tag);doc.createElementNS=(_namespace,tag)=>new ElementFixture(tag);
  doc.querySelectorAll=selector=>doc.body.querySelectorAll(selector);doc.querySelector=selector=>doc.querySelectorAll(selector)[0]??null;
@@ -119,7 +121,7 @@ async function harness(t){
   language(locale){win.location.searchParams.set('lang',locale);doc.dispatchEvent(new CustomEventFixture('dlkt:language-changed',{detail:{locale}}));}};
 }
 
-test('the static utilities preserve weather and ECB evidence across language changes without repeating news or starting a ticker',async t=>{
+test('language-bound news ticker retains verified sources while utilities remain stable',async t=>{
  const h=await harness(t),local=localFixture(),before=JSON.stringify(local);
  assert.equal(h.requests.length,1);assert.equal(h.requests[0].options.credentials,'omit');
  assert.equal(h.ids.get('glance-weather-quick').hidden,true,'no unchecked forecast appears on the main surface');
@@ -127,20 +129,20 @@ test('the static utilities preserve weather and ECB evidence across language cha
  const value=id=>h.ids.get(id).textContent;
  assert.equal(h.ids.get('glance-weather-quick').hidden,false);assert.equal(h.ids.get('glance-forex-quick').hidden,false);
  assert.equal(value('glance-city-label'),city.name);assert.equal(h.ids.get('glance-date').dateTime,'2026-11-22');
- assert.ok(!value('today-glance').includes(originalTitle));
- assert.equal(value('glance-screen-summary'),'');assert.equal(h.ids.get('glance-ticker-track').children.length,0);
+ assert.ok(value('glance-screen-summary').includes(originalTitle));
+ assert.equal(h.ids.get('glance-ribbon').hidden,false);assert.ok(h.ids.get('glance-ticker-track').children.length>0);
  const weather=value('glance-weather-value'),currency=value('glance-forex-value');assert.notEqual(weather,'Unavailable');assert.match(currency,/RON/u);
  h.ids.get('glance-weather-quick').focus();h.ids.get('glance-weather-quick').click();
  assert.equal(h.ids.get('glance-detail').open,true);assert.match(value('glance-detail-title'),/Weather in/u);assert.ok(!value('glance-detail-body').includes(originalTitle));
  h.language('en');await tick();
  assert.equal(h.ids.get('glance-detail').open,true);assert.equal(value('glance-weather-value'),weather);assert.equal(value('glance-forex-value'),currency);
- assert.ok(!value('glance-detail-body').includes(originalTitle));assert.equal(value('glance-screen-summary'),'');
+ assert.ok(!value('glance-detail-body').includes(originalTitle));assert.ok(!value('glance-screen-summary').includes(originalTitle),'English does not repeat Romanian news');
  h.language('ro');await tick();
  assert.equal(value('glance-weather-value'),weather);assert.equal(value('glance-forex-value'),currency);
  h.ids.get('glance-detail').close();assert.strictEqual(h.doc.activeElement,h.ids.get('glance-weather-quick'),'closing a static signal restores its invoking control');
  h.selectLocal(null);assert.equal(h.ids.get('glance-weather-quick').hidden,true,'failed local verification removes the main forecast command');assert.equal(h.ids.get('glance-forex-quick').hidden,false);
  assert.strictEqual(h.doc.activeElement,h.ids.get('glance-read'),'unavailable evidence returns a focused utility to the stable details action');
- assert.equal(h.ids.get('glance-ticker-track').children.length,0);assert.equal(h.requests.length,1,'language and city evidence changes only reproject the existing currency response');
+ assert.ok(h.ids.get('glance-ticker-track').children.length>0,'validated ECB fallback remains available');assert.ok(!value('glance-screen-summary').includes(originalTitle),'expired local evidence is removed');assert.equal(h.requests.length,1,'language and city evidence changes only reproject the existing currency response');
  assert.deepEqual(h.writes,[]);assert.equal(JSON.stringify(local),before);
 });
 
