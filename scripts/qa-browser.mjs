@@ -181,9 +181,18 @@ async function run(){
   console.log('DLKT_UI_BROWSER_QA '+JSON.stringify(result));
  }finally{
   try{ws?.close();}catch{}
-  try{browser?.kill('SIGTERM');}catch{}
+  if(browser&&browser.exitCode===null){
+   try{
+    await Promise.race([
+     new Promise(resolve=>{browser.once('exit',resolve);browser.kill('SIGTERM');}),
+     pause(1500).then(()=>{if(browser.exitCode===null)browser.kill('SIGKILL');}),
+    ]);
+   }catch{/* Process termination must not hide the measured browser result. */}
+  }
   await new Promise(resolve=>server.close(resolve));
-  rmSync(profile,{recursive:true,force:true});
+  // Chrome writes asynchronous profile files after SIGTERM. Retry transient
+  // ENOTEMPTY/EBUSY rather than turning a successful UI audit into a false fail.
+  rmSync(profile,{recursive:true,force:true,maxRetries:15,retryDelay:100});
  }
 }
 await run();
