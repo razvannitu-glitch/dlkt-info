@@ -232,3 +232,40 @@
   .info-card.editorial-card .card-photo-caption { padding: 8px 16px 0; }
   .info-card.editorial-card .evidence { padding: 0 16px; }
 }
+
+
+/* Desktop/tablet editorial density: maintain existing DOM, filters, and cards. */
+@media (min-width: 701px) {
+  #discovery .discovery-heading { gap: 14px; margin-bottom: 3px; }
+  #discovery .discovery-heading h1 { font-size: clamp(1.6rem, 2.4vw, 1.9rem); }
+  .news-context-line { margin-bottom: 5px; }
+  .news-toolbar {
+    grid-template-columns: minmax(140px,auto) minmax(220px,1fr) auto;
+    gap: 12px 18px;
+    padding: 9px 0;
+    margin-bottom: 12px;
+  }
+  #discovery-cards { gap: 14px; }
+  #home-local-cards { gap: 14px; }
+  .info-card.editorial-card>header { padding: 17px 18px 0; font-size: .82rem; }
+  .info-card.editorial-card .card-content { padding: 14px 18px 18px; }
+  :is(#discovery-cards,#home-local-cards,#world-cards,#cards)>.info-card.editorial-card h3,
+  :is(#discovery-cards,#home-local-cards,#world-cards,#cards)>.info-card.editorial-card .card-photo-headline h3 {
+    font-size: clamp(1.3rem, 1.8vw, 1.65rem);
+    line-height: 1.22;
+    margin-bottom: 12px;
+  }
+  :is(#discovery-cards,#home-local-cards,#world-cards,#cards)>.info-card.editorial-card .card-context {
+    font-size: .93rem;
+    line-height: 1.52;
+    margin: 9px 0;
+  }
+  .photo-editorial .card-photo-headline { padding: 17px 18px 19px; }
+  .info-card.editorial-card .card-photo-caption { padding: 9px 18px 0; }
+  .info-card.editorial-card .evidence { padding-inline: 18px; }
+}
+@media (min-width: 701px) and (max-width: 1050px) {
+  #discovery-cards { --news-columns: 2; }
+  .news-toolbar { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+  .news-progress { grid-column: 2; text-align: right; }
+}
