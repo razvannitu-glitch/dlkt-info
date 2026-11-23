@@ -1,0 +1,40 @@
+name: Probe DLKT category sources
+
+on:
+  push:
+    branches:
+      - codex/iceo-category-coverage-20261123
+    paths:
+      - scripts/probe-category-sources.mjs
+      - .github/workflows/probe-category-sources.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dlkt-category-source-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    name: Bounded publisher metadata observations
+    if: github.ref == 'refs/heads/codex/iceo-category-coverage-20261123'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Build existing parsers
+        run: npm run build
+      - name: Observe declared feeds and original metadata
+        run: node scripts/probe-category-sources.mjs

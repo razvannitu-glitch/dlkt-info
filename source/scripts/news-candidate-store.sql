@@ -1,23 +1,44 @@
--- DRAFT ONLY. Root must generate the migration, complete the reviewed publisher
--- validator below, and update exact readiness/ACL attestation before applying.
+-- Bootstrap template mirrors reviewed publisher validation and nullable category discovery.
+-- Apply the versioned migration chain to an existing database; this template creates fresh objects.
 -- No credential provisioning and no changes to historical shared cards.
 begin;
 
--- TODO(ROOT): replace this fail-closed body with the exact reviewed
--- NEWS_PUBLISHERS label/origin pairs and canonical URL restrictions.
-create function dlkt_info_private.valid_news_candidate_publisher(p_publisher text, p_url text)
-returns boolean language sql immutable set search_path = '' as $$ select false $$;
+CREATE OR REPLACE FUNCTION dlkt_info_private.valid_news_candidate_publisher(p_publisher text, p_url text)
+ RETURNS boolean
+ LANGUAGE plpgsql
+ IMMUTABLE
+ SET search_path TO ''
+AS $function$
+declare origins constant jsonb := '{"https://www.reuters.com":"Reuters","https://reuters.com":"Reuters","https://apnews.com":"Associated Press","https://www.apnews.com":"Associated Press","https://www.bbc.com":"BBC","https://bbc.com":"BBC","https://www.bbc.co.uk":"BBC","https://bbc.co.uk":"BBC","https://www.theguardian.com":"The Guardian","https://theguardian.com":"The Guardian","https://www.ft.com":"Financial Times","https://ft.com":"Financial Times","https://www.cnbc.com":"CNBC","https://cnbc.com":"CNBC","https://www.france24.com":"France 24","https://france24.com":"France 24","https://www.dw.com":"DW","https://dw.com":"DW","https://amp.dw.com":"DW","https://www.aljazeera.com":"Al Jazeera","https://aljazeera.com":"Al Jazeera","https://www.npr.org":"NPR","https://npr.org":"NPR","https://www.rte.ie":"RTE","https://rte.ie":"RTE","https://www.cnn.com":"CNN","https://cnn.com":"CNN","https://edition.cnn.com":"CNN","https://www.abc.net.au":"ABC Australia","https://abc.net.au":"ABC Australia","https://www.cbc.ca":"CBC","https://cbc.ca":"CBC","https://www.euronews.com":"Euronews","https://euronews.com":"Euronews","https://www.politico.com":"POLITICO","https://politico.com":"POLITICO","https://www.politico.eu":"POLITICO","https://politico.eu":"POLITICO","https://www.bloomberg.com":"Bloomberg","https://bloomberg.com":"Bloomberg","https://www.businessinsider.com":"Business Insider","https://businessinsider.com":"Business Insider","https://fortune.com":"Fortune","https://www.fortune.com":"Fortune","https://techcrunch.com":"TechCrunch","https://www.techcrunch.com":"TechCrunch","https://www.theverge.com":"The Verge","https://theverge.com":"The Verge","https://arstechnica.com":"Ars Technica","https://www.arstechnica.com":"Ars Technica","https://www.wired.com":"WIRED","https://wired.com":"WIRED","https://www.engadget.com":"Engadget","https://engadget.com":"Engadget","https://blogs.nvidia.com":"NVIDIA","https://nvidianews.nvidia.com":"NVIDIA","https://www.anthropic.com":"Anthropic","https://anthropic.com":"Anthropic","https://www.rockstargames.com":"Rockstar Games","https://rockstargames.com":"Rockstar Games","https://blog.playstation.com":"PlayStation","https://www.ign.com":"IGN","https://ign.com":"IGN","https://www.pcgamer.com":"PC Gamer","https://pcgamer.com":"PC Gamer","https://www.eurogamer.net":"Eurogamer","https://eurogamer.net":"Eurogamer","https://www.gamespot.com":"GameSpot","https://gamespot.com":"GameSpot","https://variety.com":"Variety","https://www.variety.com":"Variety","https://www.billboard.com":"Billboard","https://billboard.com":"Billboard","https://www.hollywoodreporter.com":"The Hollywood Reporter","https://hollywoodreporter.com":"The Hollywood Reporter","https://deadline.com":"Deadline","https://www.deadline.com":"Deadline","https://www.espn.com":"ESPN","https://espn.com":"ESPN","https://global.espn.com":"ESPN","https://africa.espn.com":"ESPN","https://www.skysports.com":"Sky Sports","https://skysports.com":"Sky Sports","https://www.olympics.com":"Olympics","https://olympics.com":"Olympics","https://www.parents.com":"Parents","https://parents.com":"Parents","https://www.edweek.org":"Education Week","https://edweek.org":"Education Week","https://www.nature.com":"Nature","https://nature.com":"Nature","https://www.science.org":"Science","https://science.org":"Science","https://www.livescience.com":"Live Science","https://livescience.com":"Live Science","https://www.scientificamerican.com":"Scientific American","https://scientificamerican.com":"Scientific American","https://www.space.com":"Space.com","https://space.com":"Space.com","https://www.nationalgeographic.com":"National Geographic","https://nationalgeographic.com":"National Geographic","https://www.newscientist.com":"New Scientist","https://newscientist.com":"New Scientist","https://www.travelandleisure.com":"Travel + Leisure","https://travelandleisure.com":"Travel + Leisure","https://skift.com":"Skift","https://www.skift.com":"Skift","https://www.lonelyplanet.com":"Lonely Planet","https://lonelyplanet.com":"Lonely Planet","https://www.cntraveler.com":"Conde Nast Traveler","https://cntraveler.com":"Conde Nast Traveler","https://www.goodhousekeeping.com":"Good Housekeeping","https://goodhousekeeping.com":"Good Housekeeping","https://www.consumerreports.org":"Consumer Reports","https://consumerreports.org":"Consumer Reports","https://www.which.co.uk":"Which?","https://which.co.uk":"Which?","https://www.foodandwine.com":"Food & Wine","https://foodandwine.com":"Food & Wine","https://www.foodsafetynews.com":"Food Safety News","https://foodsafetynews.com":"Food Safety News","https://www.architecturaldigest.com":"Architectural Digest","https://architecturaldigest.com":"Architectural Digest","https://www.dezeen.com":"Dezeen","https://dezeen.com":"Dezeen","https://weather.com":"The Weather Channel","https://www.weather.com":"The Weather Channel","https://www.accuweather.com":"AccuWeather","https://accuweather.com":"AccuWeather","https://www.carbonbrief.org":"Carbon Brief","https://carbonbrief.org":"Carbon Brief","https://globalvoices.org":"Global Voices","https://www.globalvoices.org":"Global Voices","https://360info.org":"360info","https://www.360info.org":"360info","https://www.scmp.com":"South China Morning Post","https://scmp.com":"South China Morning Post","https://www.thehindu.com":"The Hindu","https://thehindu.com":"The Hindu","https://www.japantimes.co.jp":"The Japan Times","https://japantimes.co.jp":"The Japan Times","https://www.channelnewsasia.com":"CNA","https://channelnewsasia.com":"CNA","https://www.straitstimes.com":"The Straits Times","https://straitstimes.com":"The Straits Times","https://www.nytimes.com":"The New York Times","https://nytimes.com":"The New York Times","https://www.digi24.ro":"Digi24","https://hotnews.ro":"HotNews.ro","https://www.repubblica.it":"la Repubblica","https://stirileprotv.ro":"Știrile ProTV"}'::jsonb; origin text; path text;
+begin
+  if p_url is null or p_publisher is null or length(p_url) not between 1 and 3000
+    or p_url ~ '[[:space:]#<>\\]' then return false; end if;
+  origin := substring(p_url from '^(https://[^/?#]+)');
+  path := substring(p_url from '^https://[^/?#]+(/[^?#]*)');
+  if origin is null or origins->>origin is distinct from p_publisher or path is null or path='/'
+    or (origin='https://stirileprotv.ro' and path not like '/stiri/%')
+    or lower(path) ~ '/(login|signin|sign-in|account|subscribe|search|api)(/|$)'
+    or lower(path) ~ '(^|/)([.]|%2e){1,2}(/|$)'
+    or lower(p_url) ~ '[?&](utm_[^=&]*|fbclid|gclid|mc_cid|mc_eid)(=|&|$)'
+    or p_url ~ '[?&][^=&]*%[^=&]*(=|&|$)' then return false; end if;
+  return true;
+end $function$;
 
-create function dlkt_info_private.valid_news_candidate(p_candidate jsonb, p_now timestamptz)
-returns boolean language plpgsql immutable set search_path = '' as $$
+CREATE OR REPLACE FUNCTION dlkt_info_private.valid_news_candidate(p_candidate jsonb, p_now timestamp with time zone)
+ RETURNS boolean
+ LANGUAGE plpgsql
+ IMMUTABLE
+ SET search_path TO ''
+AS $function$
 declare field_name text; stamp timestamptz;
 begin
   if p_candidate is null or jsonb_typeof(p_candidate) <> 'object' or p_now is null or not isfinite(p_now) then return false; end if;
   if (select count(*) from jsonb_object_keys(p_candidate)) <> 5
     or not p_candidate ?& array['sourceUrl','title','publisher','indexedAt','category'] then return false; end if;
-  foreach field_name in array array['sourceUrl','title','publisher','indexedAt','category'] loop
+  foreach field_name in array array['sourceUrl','title','publisher','indexedAt'] loop
     if jsonb_typeof(p_candidate->field_name) <> 'string' then return false; end if;
   end loop;
+  if jsonb_typeof(p_candidate->'category') not in ('null','string') then return false; end if;
   if length(p_candidate->>'sourceUrl') not between 1 and 3000
     or length(p_candidate->>'title') not between 1 and 200
     or btrim(p_candidate->>'title') <> p_candidate->>'title'
@@ -25,12 +46,12 @@ begin
     or length(p_candidate->>'publisher') not between 1 and 120
     or p_candidate->>'publisher' ~ '[[:cntrl:]<>]'
     or not dlkt_info_private.valid_news_candidate_publisher(p_candidate->>'publisher',p_candidate->>'sourceUrl')
-    or not (p_candidate->>'category' = any(array['world','business','technology','money','health','sport','gaming','culture','shopping','travel','work','education','family','science','environment','public-affairs','digital-life','food','housing','weather']))
+    or (p_candidate->'category'<>'null'::jsonb and not (p_candidate->>'category' = any(array['world','business','technology','money','health','sport','gaming','culture','shopping','travel','work','education','family','science','environment','public-affairs','digital-life','food','housing','weather'])))
     or p_candidate->>'indexedAt' !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$' then return false; end if;
   stamp := (p_candidate->>'indexedAt')::timestamptz;
   return isfinite(stamp) and stamp between p_now - interval '24 hours' and p_now + interval '5 minutes';
 exception when others then return false;
-end $$;
+end $function$;
 
 create table public.dlkt_info_news_candidates (
   source_url text not null check (length(source_url) between 1 and 3000),
@@ -39,7 +60,7 @@ create table public.dlkt_info_news_candidates (
   title text not null check (length(title) between 1 and 200),
   publisher text not null check (length(publisher) between 1 and 120),
   indexed_at timestamptz not null check (isfinite(indexed_at)),
-  category text not null check (category = any(array['world','business','technology','money','health','sport','gaming','culture','shopping','travel','work','education','family','science','environment','public-affairs','digital-life','food','housing','weather']))
+  category text check (category is null or category = any(array['world','business','technology','money','health','sport','gaming','culture','shopping','travel','work','education','family','science','environment','public-affairs','digital-life','food','housing','weather']))
 );
 create index dlkt_info_news_candidates_recent on public.dlkt_info_news_candidates(indexed_at desc,url_hash);
 alter table public.dlkt_info_news_candidates enable row level security;

@@ -20,16 +20,19 @@ revoke all on dlkt_info_private.news_corpus_epochs from public,anon,authenticate
 create index news_corpus_expiry on dlkt_info_private.news_corpus_epochs(expires_at);
 comment on table dlkt_info_private.news_corpus_epochs is 'Immutable full verified public article metadata, private staging and bounded one-hour epoch retention. No account data or article bodies.';
 
--- Proposed private validator only; this text has not been applied to a database.
--- Mirrors news-diagnostics.ts at publisher catalog72 / direct indexes26.
-create or replace function dlkt_info_private.valid_news_diagnostics(p_diagnostics jsonb,p_now timestamptz default statement_timestamp())
-returns boolean language plpgsql stable set search_path='' as $fn$
+-- Mirrors the current reviewed diagnostics contract:74 publisher families /28 direct indexes.
+CREATE OR REPLACE FUNCTION dlkt_info_private.valid_news_diagnostics(p_diagnostics jsonb, p_now timestamp with time zone DEFAULT statement_timestamp())
+ RETURNS boolean
+ LANGUAGE plpgsql
+ STABLE
+ SET search_path TO ''
+AS $function$
 declare
-  publisher_ids text[] := array['reuters','ap','bbc','guardian','ft','cnbc','france24','dw','aljazeera','npr','rte','cnn','abc-au','cbc','euronews','politico','bloomberg','business-insider','fortune','techcrunch','the-verge','ars-technica','wired','engadget','nvidia','anthropic','rockstar','playstation','ign','pcgamer','eurogamer','gamespot','variety','billboard','hollywood-reporter','deadline','espn','sky-sports','olympics','parents','edweek','nature','science','live-science','scientific-american','space','national-geographic','new-scientist','travel-leisure','skift','lonely-planet','conde-nast-traveler','good-housekeeping','consumer-reports','which','food-wine','food-safety-news','architectural-digest','dezeen','weather-channel','accuweather','carbon-brief','global-voices','360info','scmp','the-hindu','japan-times','cna','straits-times','nytimes','digi24','hotnews'];
-  language_ids text[] := array['en','fr','ja','es','ar','de','pt-BR','pt-002','sq','am','bn','bs','bg','zh-Hans','zh-Hant','hr','fa-AF','el','ha','hi','id','sw','mk','ps','fa-IR','pl','ro','ru','sr','tr','uk','ur'];
+  publisher_ids text[] := array['reuters','ap','bbc','guardian','ft','cnbc','france24','dw','aljazeera','npr','rte','cnn','abc-au','cbc','euronews','politico','bloomberg','business-insider','fortune','techcrunch','the-verge','ars-technica','wired','engadget','nvidia','anthropic','rockstar','playstation','ign','pcgamer','eurogamer','gamespot','variety','billboard','hollywood-reporter','deadline','espn','sky-sports','olympics','parents','edweek','nature','science','live-science','scientific-american','space','national-geographic','new-scientist','travel-leisure','skift','lonely-planet','conde-nast-traveler','good-housekeeping','consumer-reports','which','food-wine','food-safety-news','architectural-digest','dezeen','weather-channel','accuweather','carbon-brief','global-voices','360info','scmp','the-hindu','japan-times','cna','straits-times','nytimes','digi24','hotnews','repubblica','stirile-protv'];
+  language_ids text[] := array['en','fr','ja','es','ar','de','it','pt-BR','pt-002','sq','am','bn','bs','bg','zh-Hans','zh-Hant','hr','fa-AF','el','ha','hi','id','sw','mk','ps','fa-IR','pl','ro','ru','sr','tr','uk','ur'];
   reason_ids text[] := array['index-identity','index-schema','index-stale','index-unavailable','access-denied','rate-limited','http-unavailable','timeout','deadline','request-capacity','origin-backoff','redirect','content-type','response-size','empty-response','metadata-unverified','identity-conflict','duplicate','request-unavailable','rights-review-expired','candidate-store'];
   counter_keys text[] := array['freshDiscovered','pool','scheduled','attempted','requestAttempts','verifiedNow','rejected','duplicates','deferredCapacity','deferredBeforeAttempt','retained'];
-  index_identity jsonb := '{"gdelt-gal":{"publisherId":null,"language":null},"digi24-ro-news":{"publisherId":"digi24","language":"ro"},"hotnews-ro-news":{"publisherId":"hotnews","language":"ro"},"guardian-news":{"publisherId":"guardian","language":"en"},"ap-news":{"publisherId":"ap","language":null},"bbc-news":{"publisherId":"bbc","language":null},"verge-news":{"publisherId":"the-verge","language":"en"},"pcgamer-news":{"publisherId":"pcgamer","language":"en"},"live-science-news":{"publisherId":"live-science","language":"en"},"parents-news":{"publisherId":"parents","language":"en"},"travel-leisure-news":{"publisherId":"travel-leisure","language":null},"food-wine-news":{"publisherId":"food-wine","language":null},"good-housekeeping-news":{"publisherId":"good-housekeeping","language":null},"education-week-news":{"publisherId":"edweek","language":"en"},"weather-channel-news":{"publisherId":"weather-channel","language":null},"the-hindu-news":{"publisherId":"the-hindu","language":"en"},"dw-ro-news":{"publisherId":"dw","language":"ro"},"dw-de-news":{"publisherId":"dw","language":"de"},"dw-fr-news":{"publisherId":"dw","language":"fr"},"dw-es-news":{"publisherId":"dw","language":"es"},"dw-ar-news":{"publisherId":"dw","language":"ar"},"france24-en-news":{"publisherId":"france24","language":"en"},"france24-fr-news":{"publisherId":"france24","language":"fr"},"france24-es-news":{"publisherId":"france24","language":"es"},"france24-ar-news":{"publisherId":"france24","language":"ar"},"japan-times-news":{"publisherId":"japan-times","language":"en"},"guardian-africa-news":{"publisherId":"guardian","language":"en"}}'::jsonb;
+  index_identity jsonb := '{"gdelt-gal":{"publisherId":null,"language":null},"digi24-ro-news":{"publisherId":"digi24","language":"ro"},"hotnews-ro-news":{"publisherId":"hotnews","language":"ro"},"guardian-news":{"publisherId":"guardian","language":"en"},"ap-news":{"publisherId":"ap","language":null},"bbc-news":{"publisherId":"bbc","language":null},"verge-news":{"publisherId":"the-verge","language":"en"},"pcgamer-news":{"publisherId":"pcgamer","language":"en"},"live-science-news":{"publisherId":"live-science","language":"en"},"parents-news":{"publisherId":"parents","language":"en"},"travel-leisure-news":{"publisherId":"travel-leisure","language":null},"food-wine-news":{"publisherId":"food-wine","language":null},"good-housekeeping-news":{"publisherId":"good-housekeeping","language":null},"education-week-news":{"publisherId":"edweek","language":"en"},"weather-channel-news":{"publisherId":"weather-channel","language":null},"the-hindu-news":{"publisherId":"the-hindu","language":"en"},"dw-ro-news":{"publisherId":"dw","language":"ro"},"dw-de-news":{"publisherId":"dw","language":"de"},"dw-fr-news":{"publisherId":"dw","language":"fr"},"dw-es-news":{"publisherId":"dw","language":"es"},"dw-ar-news":{"publisherId":"dw","language":"ar"},"france24-en-news":{"publisherId":"france24","language":"en"},"france24-fr-news":{"publisherId":"france24","language":"fr"},"france24-es-news":{"publisherId":"france24","language":"es"},"france24-ar-news":{"publisherId":"france24","language":"ar"},"japan-times-news":{"publisherId":"japan-times","language":"en"},"guardian-africa-news":{"publisherId":"guardian","language":"en"},"repubblica-it-news":{"publisherId":"repubblica","language":"it"},"stirile-protv-ro-news":{"publisherId":"stirile-protv","language":"ro"}}'::jsonb;
   totals_acc jsonb := '{"freshDiscovered":0,"pool":0,"scheduled":0,"attempted":0,"requestAttempts":0,"verifiedNow":0,"rejected":0,"duplicates":0,"deferredCapacity":0,"deferredBeforeAttempt":0,"retained":0}'::jsonb;
   stamp_pattern text := '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$';
   counts jsonb; item jsonb; detail jsonb; expected jsonb;
@@ -44,7 +47,7 @@ begin
     or jsonb_typeof(p_diagnostics->'version') is distinct from 'string'
     or p_diagnostics->>'version'<>'dlkt-news-diagnostics-1'
     or jsonb_typeof(p_diagnostics->'checkedAt') is distinct from 'string' or p_diagnostics->>'checkedAt' !~ stamp_pattern
-    or jsonb_typeof(p_diagnostics->'indexes') is distinct from 'array' or jsonb_array_length(p_diagnostics->'indexes')>27
+    or jsonb_typeof(p_diagnostics->'indexes') is distinct from 'array' or jsonb_array_length(p_diagnostics->'indexes')>29
     or jsonb_typeof(p_diagnostics->'groups') is distinct from 'array' or jsonb_array_length(p_diagnostics->'groups')>256
     or jsonb_typeof(p_diagnostics->'issues') is distinct from 'array' or jsonb_array_length(p_diagnostics->'issues')>cardinality(reason_ids)
     then return false; end if;
@@ -57,7 +60,7 @@ begin
       or exists(select 1 from jsonb_object_keys(counts) k where k<>all(counter_keys)) then return false; end if;
     foreach field in array counter_keys loop
       if jsonb_typeof(counts->field) is distinct from 'number' or counts->>field !~ '^[0-9]+$'
-        or (counts->>field)::numeric>140000 then return false; end if;
+        or (counts->>field)::numeric>150000 then return false; end if;
     end loop;
     if (counts->>'pool')::bigint<>(counts->>'scheduled')::bigint+(counts->>'deferredCapacity')::bigint
       or (counts->>'scheduled')::bigint<>(counts->>'attempted')::bigint+(counts->>'deferredBeforeAttempt')::bigint
@@ -98,7 +101,7 @@ begin
         or exists(select 1 from jsonb_object_keys(detail) k where k<>all(array['code','count']))
         or jsonb_typeof(detail->'code') is distinct from 'string' or not (detail->>'code'=any(reason_ids))
         or jsonb_typeof(detail->'count') is distinct from 'number' or detail->>'count' !~ '^[0-9]+$'
-        or (detail->>'count')::numeric not between 1 and 140000 then return false; end if;
+        or (detail->>'count')::numeric not between 1 and 150000 then return false; end if;
       code:=detail->>'code';if code=any(seen_reasons) then return false; end if;
       seen_reasons:=array_append(seen_reasons,code);reason_total:=reason_total+(detail->>'count')::bigint;
     end loop;
@@ -126,7 +129,8 @@ begin
     and (totals_acc->>'requestAttempts')::bigint<=80 and (totals_acc->>'retained')::bigint<=5000;
 exception when others then return false;
 end;
-$fn$;
+$function$;
+
 revoke all on function dlkt_info_private.valid_news_diagnostics(jsonb,timestamptz) from public,anon,authenticated,service_role;
 
 create function dlkt_info_private.news_fold(p_value text)

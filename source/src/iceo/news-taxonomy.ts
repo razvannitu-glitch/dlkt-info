@@ -34,7 +34,7 @@ export interface NewsCategoryDefinition {
  readonly id:NewsCategoryId; readonly qcode:`medtop:${NewsCategoryId}`; readonly uri:string;
  readonly iptcLabel:string; readonly label:string; readonly labelRo:string;
 }
-export const NEWS_TAXONOMY_VERSION='iptc-media-topics-top-level-2026-10-16-dlkt-3' as const;
+export const NEWS_TAXONOMY_VERSION='iptc-media-topics-top-level-2026-10-16-dlkt-4' as const;
 export const NEWS_CATEGORIES:readonly NewsCategoryDefinition[]=Object.freeze(DEFINITIONS.map(([id,iptcLabel,label,labelRo])=>
  Object.freeze({id,qcode:('medtop:'+id) as `medtop:${NewsCategoryId}`,uri:'http://cv.iptc.org/newscodes/mediatopic/'+id,iptcLabel,label,labelRo})));
 const ids:ReadonlySet<string>=new Set(NEWS_CATEGORIES.map(category=>category.id));
@@ -75,10 +75,10 @@ const SECTIONS:Readonly<Record<string,NewsCategoryId>>=Object.freeze({
  'human-interest':'08000000',celebrity:'08000000',celebrities:'08000000',gossip:'08000000',monden:'08000000',
  labour:'09000000',labor:'09000000',employment:'09000000',jobs:'09000000',careers:'09000000',munca:'09000000',
  lifestyle:'10000000',leisure:'10000000',travel:'10000000',tourism:'10000000',vacations:'10000000',gardening:'10000000',hobbies:'10000000',motoring:'10000000',food:'10000000',recipes:'10000000',turism:'10000000',vacante:'10000000',gradinarit:'10000000',
- politics:'11000000',government:'11000000',politica:'11000000',politique:'11000000',politik:'11000000',
+ politics:'11000000',government:'11000000',politica:'11000000',politic:'11000000',politique:'11000000',politik:'11000000',
  religion:'12000000',religie:'12000000',
  science:'13000000',technology:'13000000',tech:'13000000',software:'13000000',programming:'13000000','software-development':'13000000','web-development':'13000000',astronomy:'13000000',space:'13000000','science-and-technology':'13000000',stiinta:'13000000',tehnologie:'13000000',wissenschaft:'13000000',tecnologia:'13000000',
- society:'14000000',societate:'14000000',societe:'14000000',gesellschaft:'14000000',
+ society:'14000000',societate:'14000000',familie:'14000000',societe:'14000000',gesellschaft:'14000000',
  sport:'15000000',sports:'15000000',football:'15000000',soccer:'15000000',motorsport:'15000000',motogp:'15000000',deportes:'15000000',fotbal:'15000000',
  weather:'17000000',meteo:'17000000',
 });
@@ -107,20 +107,20 @@ const SECTOR_REGULATION=/\b(?:regulations?|regulators?|regulatory|legislation|la
 const CELEBRITY=/\b(?:celebrit(?:y|ies)|hollywood|movie stars?|pop stars?|actors?|actresses|vedet(?:a|e|ele)|actor(?:ul|i|ii)?|actrit(?:a|e|ele))\b/u;
 const PERSONAL_LIFE=/\b(?:gossip|wedding|engagement|married|marriage|divorce|birthday|relationship|barfe|nunta|logodn\w*|casatori\w*|divort\w*|ziua de nastere)\b/u;
 const DIRECT:readonly (readonly [NewsCategoryId,RegExp])[]=[
- ['02000000',/\b(?:charged with|convicted|sentenced|arrested|murder|homicide|police investigat\w*|court (?:rules|ruling|orders|judgment)|criminal trial|crime rates?|robber(?:y|ies)|burglar(?:y|ies)|thefts?|criminalitate|furt(?:ul|uri)?|jaf(?:ul|uri)?|sentinta|condamnat\w*|arestat\w*|dosar penal|ancheta penala|urmarire penala|justitie|coruptie|tribunal|meurtre|verurteilt|asesinato)\b/u],
- ['03000000',/\b(?:earthquakes?|tsunami|wildfires?|(?:plane|train|car|road|traffic|motorcycle|bus) (?:crash(?:es)?|accidents?|collisions?)|train derailment|building collapse|flash floods?|cutremur\w*|incendiu\w*|inundatii\w*|accident(?:ul|e|ele)? (?:rutier|rutiere|feroviar|feroviare|aviatic|aviatice)|coliziune rutiera|coliziuni rutiere|deraiere|terremoto|erdbeben|seisme)\b|地震|津波|زلزال/u],
+ ['02000000',/\b(?:charged with|convicted|sentenced|arrested|murder|homicide|police investigat\w*|court (?:rules|ruling|orders|judgment)|criminal trial|crime rates?|robber(?:y|ies)|burglar(?:y|ies)|thefts?|criminalitate|furt(?:ul|uri)?|jaf(?:ul|uri)?|sentinta|condamnat\w*|arestat\w*|arest(?:ul|ului)?|dosar penal|ancheta penala|urmarire penala|justitie|coruptie|tribunal|diicot|curtea de apel|inalta curte|procuror(?:ul|ului|i|ii|ilor)?|magistrat(?:ul|ului|i|ii|ilor)?|judecator(?:ul|ului|i|ii|ilor)?|meurtre|verurteilt|asesinato)\b/u],
+ ['03000000',/\b(?:earthquakes?|tsunami|wildfires?|(?:plane|train|car|road|traffic|motorcycle|bus) (?:crash(?:es)?|accidents?|collisions?)|train derailment|building collapse|flash floods?|cutremur\w*|incendiu\w*|inundatii\w*|accident(?:ul|e|ele)? (?:rutier|rutiere|feroviar|feroviare|aviatic|aviatice)|coliziune rutiera|coliziuni rutiere|munitie neexplodata|bomba de aviatie|deraiere|terremoto|erdbeben|seisme)\b|地震|津波|زلزال/u],
  ['16000000',/\b(?:ceasefire|airstrikes?|air strikes?|armed conflict|peace talks|war in|war against|invasion|razboi(?:ul)?|bombardamente|armistitiu|conflict armat|incetarea focului|cessez-le-feu|waffenstillstand|alto el fuego)\b|停戦|空爆|وقف إطلاق النار/u],
- ['09000000',/\b(?:workers? strike|teachers? strike|industrial action|trade unions?|layoffs?|unemployment|workforce|job vacancies|hiring|recruitment|labour market|labor market|greva|grevis\w*|sindicat\w*|concedieri|somaj|angajari|recrutare|posturi vacante|locuri de munca)\b/u],
+ ['09000000',/\b(?:workers? strike|teachers? strike|industrial action|trade unions?|layoffs?|unemployment|workforce|job vacancies|hiring|recruitment|labour market|labor market|greva|grevis\w*|sindicat\w*|concedieri|somaj|angajari|recrutare|posturi vacante|locuri de munca|salarizar(?:e|ea|ii)|salari(?:u|ul|ului) minim|majorari salariale|ministrul muncii)\b/u],
  ['14000000',/\b(?:homelessness|social services|public housing|human rights|child protection|parenting|childcare|saracie|asistenta sociala|protectia copilului|drepturile omului|locuinte sociale|persoane fara adapost)\b/u],
- ['11000000',/\b(?:elections?|parliament|prime minister|prim[- ]ministru(?:l)?|premier(?:ul)? desemnat|government policy|city council|urban planning|election results|alegeri|parlament\w*|primari[ae]|primarul|consiliul local|consiliul general|consilierii locali|politic[ai]|guvern(?:ul)?|plan urbanistic)\b/u],
+ ['11000000',/\b(?:elections?|parliament|prime minister|prim[- ]ministru(?:l)?|premier(?:ul)? desemnat|government policy|city council|urban planning|election results|alegeri(?:le|lor)?|politicien(?:i|ii|ilor)|referendum(?:ul|uri)?|parlament\w*|primari[ae]|primarul|consiliul local|consiliul general|consilierii locali|politic[ai]|guvern(?:ul)?|plan urbanistic)\b/u],
  ['05000000',/\b(?:education|schools?|universit(?:y|ies)|students?|curriculum|tuition|scholarships?|educatie|scoal[ai]|scoli|liceu(?:l)?|elevi(?:i|lor)?|gradinit[ae]|universitat\w*|burse scolare|invatamant|bacalaureat)\b/u],
  ['01000000',/\b(?:concert(?:s|ul|e)?|festival(?:s|ul|uri)?|muzeu\w*|teatru\w*|expoziti[aei]|cinema|hollywood|film premieres?|box office|filme|muzica|literatura)\b/u],
  ['15000000',/\b(?:football|soccer|tennis|basketball|formula 1|formula one|grand prix|world cup|motogp|motocross|superbike|rugby|cricket|cycling championship|fotbal|baschet|tenis|handbal|campionat\w*)\b/u],
- ['12000000',/\b(?:religion|religious worship|pope|papal|ramadan|pilgrimage|pelerinaj|liturghie|religie|papa|patriarh)\b/u],
- ['06000000',/\b(?:climate change|biodiversity|deforestation|wildlife conservation|endangered species|renewable energy|schimbari climatice|poluare|defrisari|biodiversitate|conservarea naturii|specii protejate|specii pe cale de disparitie|energie regenerabila|protectia mediului)\b/u],
- ['17000000',/\b(?:weather forecast|prognoza meteo|vremea|temperaturi|avertizare meteorologica)\b/u],
+ ['12000000',/\b(?:religion|religious worship|pope|papal|ramadan|pilgrimage|pelerinaj(?:ul|e|ele|elor)?|liturghi(?:e|a|i|ile)|rugaciun(?:e|ea|i|ile|ilor)|religie|papa|patriarh(?:ul|ului|i|ii)?|episcop(?:ul|ului|i|ii)?|maica domnului|dumnezeu)\b/u],
+ ['06000000',/\b(?:climate change|biodiversity|deforestation|wildlife conservation|endangered species|renewable energy|schimbari climatice|poluare|defrisari|biodiversitate|conservarea naturii|specii protejate|specii pe cale de disparitie|energie regenerabila|protectia mediului|deseuri(?:le|lor)? voluminoase|deseuri(?:le|lor)? medicale|garda de mediu)\b/u],
+ ['17000000',/\b(?:weather forecast|prognoza meteo|vremea|temperatur(?:i|ile)|prognoza anm|administratia nationala de meteorologie|meteorologi(?:i|lor)?|avertizare meteorologica)\b/u],
  ['10000000',/\b(?:gardening|hobbies|hobby|knitting|birdwatching|car reviews?|motorcycle reviews?|classic cars|classic motorcycles|car enthusiasts|motoring|vacations?|holiday destinations?|gradinarit|masini clasice|motociclete clasice|pasionati (?:auto|moto)|vacante|destinatii turistice|turism)\b/u],
- ['13000000',/\b(?:cosmos|astronomie|astronauti|galaxii|exoplanete|telescop(?:ul)?|cercetatori|studiu stiintific|biologie|botanica)\b/u],
+ ['13000000',/\b(?:cosmos|astronomie|astronauti|galaxii|exoplanete|telescop(?:ul)?|cercetatori(?:i|lor)?|studiu stiintific|biologie|botanica)\b/u],
  ['06000000',/\b(?:pet[- ]care|pet adoption|dog training|cat care|animale de companie|ingrijirea (?:cainilor|pisicilor))\b/u],
 ];
 function headlineCategory(title:string):NewsCategoryId|null {
@@ -170,11 +170,17 @@ type LocalInput=Pick<LocalCard,'title'|'sourceUrl'|'kind'|'news'>;
 function publisherSubject(card:EvidenceInput):NewsClassification|null {
  const metadata=card.articleSubject;
  if(!validArticleSubject(metadata,card.sourceUrl))return null;
- const mapped=(values:readonly string[]):Set<NewsCategoryId>=>new Set(values.flatMap(term=>{
+ const termCategory=(term:string):NewsCategoryId|null=>{
   const normalized=fold(term),key=normalized.replaceAll(' ','-');
   const definition=NEWS_CATEGORIES.find(category=>[category.iptcLabel,category.label,category.labelRo,category.qcode,category.uri].some(label=>fold(label)===normalized));
-  const category=definition?.id??(Object.hasOwn(SECTIONS,key)?SECTIONS[key]:undefined);
-  return category?[category]:[];
+  return definition?.id??(Object.hasOwn(SECTIONS,key)?SECTIONS[key]??null:null);
+ };
+ // Some publishers encode a section hierarchy as "Actualitate, Politic".
+ // Keep complete IPTC labels intact, then inspect explicit separated section terms.
+ // Multiple distinct subjects remain ambiguous; a quota never supplies a subject.
+ const mapped=(values:readonly string[]):Set<NewsCategoryId>=>new Set(values.flatMap(term=>{
+  const whole=termCategory(term);if(whole)return [whole];
+  return term.split(/[,;|]/u).map(termCategory).filter(isNewsCategoryId);
  }));
  const sections=mapped(metadata.sections),keywords=mapped(metadata.keywords);
  // A precise section takes precedence over broad keywords. Conflicting sections are not collapsed into one label.

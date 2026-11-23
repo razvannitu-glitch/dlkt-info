@@ -145,7 +145,7 @@ test('RPC acceptance must be bounded and exact; partial cache capacity is report
   const store=createNewsCandidateStore(environment,async()=>json({accepted:0}));assert.equal(await store.write([candidate()],now),0);
 });
 
-test('candidate SQL draft validates authorization, public-only ACLs, exact payloads, bounded capacity and cache-only expiry',async()=>{
+test('candidate SQL bootstrap validates authorization, public-only ACLs, exact payloads, bounded capacity and cache-only expiry',async()=>{
   const db=new PGlite();await db.waitReady;const current=Date.now();
   const fresh=(changes={})=>candidate({indexedAt:new Date(current-1000).toISOString(),...changes});
   const asRole=async(role,fn)=>{await db.exec(`set role ${role}`);try{return await fn();}finally{await db.exec('reset role');}};
@@ -166,14 +166,13 @@ test('candidate SQL draft validates authorization, public-only ACLs, exact paylo
     for(const value of [{},{'x-dlkt-share-write':'wrong'},{'x-dlkt-share-write':'y'.repeat(43)}]){await headers(value);await assert.rejects(write([fresh()]),{code:'42501'});}
     await db.query("select set_config('request.headers','not-json',false)");await assert.rejects(write([fresh()]),{code:'42501'});
     await headers({'x-dlkt-share-write':environment.DLKT_INFO_SHARE_ARCHIVE_WRITE_KEY});
-    // The reviewed publisher registry is deliberately absent from this draft.
-    await assert.rejects(write([fresh()]),{code:'22023'});
-    // Test-only publisher rule. Root owns the real complete migration registry.
-    await db.exec(`create or replace function dlkt_info_private.valid_news_candidate_publisher(p_publisher text,p_url text)
-      returns boolean language sql immutable set search_path='' as $$ select p_publisher='IGN' and p_url ~ '^https://www[.]ign[.]com/articles/[a-z0-9-]+$' $$;`);
+    // Exercise the complete reviewed publisher validator from the bootstrap template.
     assert.equal((await write([fresh()])).rows[0].result.accepted,1);
     const seen=(await asRole('anon',()=>db.query('select source_url,title,publisher,indexed_at,category from public.dlkt_info_news_candidates'))).rows;
     assert.equal(seen.length,1);assert.equal(seen[0].publisher,'IGN');
+    assert.equal((await write([fresh({category:null})])).rows[0].result.accepted,1);
+    assert.equal((await db.query('select category from public.dlkt_info_news_candidates')).rows[0].category,null,'unknown subject remains explicitly nullable');
+    assert.equal((await write([fresh()])).rows[0].result.accepted,1,'restoring a classified subject updates the same candidate');
     for(const role of ['anon','authenticated','service_role']){
       for(const sql of ['delete from public.dlkt_info_news_candidates','truncate public.dlkt_info_news_candidates',
         'update public.dlkt_info_news_candidates set title=title',
