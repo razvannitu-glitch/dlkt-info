@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createHash} from 'node:crypto';
-import {ContinuousSnapshotService,validDailySnapshot,CONTINUOUS_PUBLIC_CACHE_MS} from '../.build/src/iceo/daily-cache.js';
+import {ContinuousSnapshotService,validDailySnapshot,CONTINUOUS_PUBLIC_CACHE_MS,safeRefreshFailureCode} from '../.build/src/iceo/daily-cache.js';
 import {createRefreshLedger,publicSnapshotDigest,CONTINUOUS_REFRESH_INTERVAL_MS,validRefreshTrigger} from '../.build/src/iceo/refresh-ledger.js';
 import {handleIceoRefresh,refreshRequestTrigger} from '../.build/api/iceo-refresh.js';
 import {handleIceo} from '../.build/api/iceo.js';
@@ -226,4 +226,45 @@ test('a claimed refresh passes only a digest-valid unexpired prior catalog to bo
   let invalidPrevious='unset';
   await new ContinuousSnapshotService(invalid,async(_signal,prior)=>{invalidPrevious=prior;return snapshot(invalid.now);},null,()=>invalid.now).refresh(manual);
   assert.equal(invalidPrevious,undefined);
+});
+
+
+test('refresh failure code never exposes secrets, URLs or arbitrary upstream errors',()=>{
+ const secret='sb_publishable_PRIVATE_XYZ';
+ assert.equal(safeRefreshFailureCode(Object.assign(new Error('private '+secret),{code:'NEWS_CORPUS_INVALID'})),'NEWS_CORPUS_INVALID');
+ assert.equal(safeRefreshFailureCode(Object.assign(new Error('private '+secret),{code:'REFRESH_LEDGER_UNAVAILABLE'})),'REFRESH_LEDGER_UNAVAILABLE');
+ assert.equal(safeRefreshFailureCode(Object.assign(new Error('https://internal.invalid/?token='+secret),{code:'ENOTFOUND'})),'UNCLASSIFIED');
+ assert.equal(safeRefreshFailureCode(new Error(secret)),'UNCLASSIFIED');
+ assert.equal(safeRefreshFailureCode({code:secret}),'UNCLASSIFIED');
+ assert.equal(safeRefreshFailureCode(null),'UNCLASSIFIED');
+});
+
+test('corpus-stage failure logs bounded phase only and keeps publication blocked',async()=>{
+ const ledger=new Ledger(),raw='sensitive-credential-never-log';
+ const records=[],old=console.warn;
+ console.warn=(...values)=>{records.push(values);};
+ try{
+  const corpusStore={
+   async stage(){throw Object.assign(new Error('upstream '+raw),{code:'NEWS_CORPUS_INVALID'});},
+   async read(){throw Error('must not read');},async lookup(){throw Error('must not lookup');},
+  };
+  const collector=async()=>({snapshot:snapshot(),corpus:{},diagnostics:undefined});
+  const service=new ContinuousSnapshotService(ledger,collector,null,()=>START,45_000,corpusStore);
+  await assert.rejects(service.refresh(),/upstream sensitive-credential-never-log/u);
+ }finally{console.warn=old;}
+ assert.deepEqual(records,[['DLKT_ICEO_REFRESH_PHASE_FAILED','corpus-stage','NEWS_CORPUS_INVALID']]);
+ assert.equal(JSON.stringify(records).includes(raw),false);
+ assert.equal(ledger.publishes,0);assert.deepEqual(ledger.failures,['publish-unavailable']);
+});
+
+test('untrusted collector errors are redacted at the collection phase',async()=>{
+ const ledger=new Ledger(),raw='private-user-or-provider-value',records=[],old=console.warn;
+ console.warn=(...values)=>{records.push(values);};
+ try{
+  const service=new ContinuousSnapshotService(ledger,async()=>{throw Error(raw);},null,()=>START);
+  await assert.rejects(service.refresh(),/private-user-or-provider-value/u);
+ }finally{console.warn=old;}
+ assert.deepEqual(records,[['DLKT_ICEO_REFRESH_PHASE_FAILED','collect','UNCLASSIFIED']]);
+ assert.equal(JSON.stringify(records).includes(raw),false);
+ assert.deepEqual(ledger.failures,['collector-unavailable']);
 });

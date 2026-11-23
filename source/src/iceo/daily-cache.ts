@@ -21,6 +21,22 @@ const PROJECT = 'prj_3JKAWw8EvzWKNPqFNFxk4iDL2l7P';
 const REGISTRY_REVISION = createHash('sha256').update(JSON.stringify({sources:ICEO_SOURCES,indexes:NEWS_DISCOVERY_INDEXES,classification:EDITORIAL_CATEGORIES_VERSION})).digest('hex').slice(0, 16);
 export const DAILY_CACHE_NAMESPACE = `${PROJECT}:iceo-daily-v1:${REGISTRY_REVISION}`;
 
+/** Operator-only, non-sensitive phase labels. Never log upstream error text. */
+export type ContinuousRefreshPhase='collect'|'snapshot-validate'|'corpus-stage'|'snapshot-publish'|'snapshot-readback'|'corpus-readback'|'receipt';
+const SAFE_FAILURE_CODES:ReadonlySet<string>=new Set([
+  'NEWS_CORPUS_INVALID','NEWS_CORPUS_UNAVAILABLE','REFRESH_LEDGER_INVALID','REFRESH_LEDGER_UNAVAILABLE',
+  'CONTINUOUS_LEASE_EXPIRED','CONTINUOUS_REFRESH_TIMEOUT','CONTINUOUS_SNAPSHOT_INVALID',
+  'CONTINUOUS_CORPUS_NOT_CONFIGURED','CONTINUOUS_READBACK_FAILED',
+  'CONTINUOUS_CORPUS_READBACK_FAILED','CONTINUOUS_SNAPSHOT_UNAVAILABLE',
+]);
+/** This intentionally ignores raw cause, URL, stack, response body and secret-bearing messages. */
+export function safeRefreshFailureCode(error:unknown):string {
+  if(error===null||typeof error!=='object')return 'UNCLASSIFIED';
+  const candidate='code' in error?error.code:error instanceof Error?error.message:null;
+  return typeof candidate==='string'&&SAFE_FAILURE_CODES.has(candidate)?candidate:'UNCLASSIFIED';
+}
+
+
 /** Public source metadata only. This interface never accepts account or request data. */
 export interface DailyCacheStore {
   read(key: string): Promise<unknown>;
@@ -292,6 +308,7 @@ export class ContinuousSnapshotService {
     const started=this.clock(),expires=Date.parse(claim.leaseExpiresAt??'');
     const controller=new AbortController();let timer:ReturnType<typeof setTimeout>|undefined;
     let failure:RefreshFailure='collector-unavailable';
+    let phase:ContinuousRefreshPhase='collect';
     try{
       if(!Number.isFinite(expires)||expires<=started)throw new Error('CONTINUOUS_LEASE_EXPIRED');
       const timeout=new Promise<never>((_resolve,reject)=>{timer=setTimeout(()=>{failure='timeout';const error=new Error('CONTINUOUS_REFRESH_TIMEOUT');reject(error);controller.abort(error);},Math.max(1,Math.min(this.deadlineMs,expires-started-3_000)));});
@@ -302,6 +319,7 @@ export class ContinuousSnapshotService {
         controller.signal.throwIfAborted();return this.collect(controller.signal,previous);
       };
       const collected=await Promise.race([acquire(),timeout]);clearTimeout(timer);controller.abort();
+      phase='snapshot-validate';
       const collection='snapshot' in collected?collected:null,snapshot=collection?collection.snapshot:collected as IceoSnapshot;
       failure='invalid-snapshot';
       if(!validDailySnapshot(snapshot,this.clock())||snapshot.state==='unavailable'
@@ -309,20 +327,27 @@ export class ContinuousSnapshotService {
         ||!snapshot.sources.some(source=>(source.state==='verified'||source.state==='partial')&&source.verifiedAt!==null&&Date.parse(source.verifiedAt)>=started-5_000))throw new Error('CONTINUOUS_SNAPSHOT_INVALID');
       const snapshotDigest=publicSnapshotDigest(snapshot);failure='publish-unavailable';
       if(collection&&!this.corpusStore)throw new Error('CONTINUOUS_CORPUS_NOT_CONFIGURED');
+      phase='corpus-stage';
       const staged=collection?await this.corpusStore!.stage(claim,collection.corpus,collection.diagnostics):null;
+      phase='snapshot-publish';
       const published=await this.ledger.publish(claim,snapshot,snapshotDigest);
+      phase='snapshot-readback';
       const confirmed=await this.ledger.read();
       this.publicView(published);const result=this.publicView(confirmed);
       if(published.digest!==snapshotDigest||confirmed.revision<published.revision
         ||confirmed.revision===published.revision&&confirmed.digest!==snapshotDigest)throw new Error('CONTINUOUS_READBACK_FAILED');
+      phase='corpus-readback';
       if(staged){
         const corpus=await this.corpusStore!.read(staged.epoch);
         if(!corpus||corpus.epoch!==staged.epoch||corpus.digest!==staged.digest||corpus.revision!==published.revision||corpus.generatedAt!==snapshot.generatedAt)throw new Error('CONTINUOUS_CORPUS_READBACK_FAILED');
       }
+      phase='receipt';
       this.memory=undefined;this.remember(result);
       // SQL owns the snapshot and receipt. Runtime cache writes never decide scheduler success.
       return this.receipt('published',trigger,claim.slot,published,true,published.retryAt);
     }catch(error){
+      // Phase and bounded code only. No source URLs, data, credentials or stack traces.
+      console.warn('DLKT_ICEO_REFRESH_PHASE_FAILED',phase,safeRefreshFailureCode(error));
       try{await this.ledger.fail(claim,failure);}catch{/* Lease expiry remains the durable recovery path when persistence is unavailable. */}
       throw error;
     }finally{clearTimeout(timer);controller.abort();}
