@@ -3,7 +3,7 @@
   "product": "dlkt-info",
   "version": "0.9.46",
   "manifestPath": "RELEASE-0.9.46.json",
-  "sourceSha256": "b5d6369f2c5e4400d60b5b3c6804a53ce1807bc9519171aac95a2084c69bf006",
+  "sourceSha256": "77158e417af8d80f791bc662736976a002fd290c6dd8524924a5b016c19c66da",
   "files": {
     "ACCOUNT-EDITION-BRIDGE.md": "39ad69d9c61c8281d1fc9f65ed31a6208af6b60872b3cf6e9087fbcbb0475f5b",
     "ACTION-INBOX-FOLLOW-UP.md": "4c0912d248892ab24f5850ac2a95e541e2ff1c1e81133c7dff0861325a9377b7",
@@ -113,7 +113,7 @@
     "RELEASE-0.9.43.json": "693bb7cfb43f38814553d5f9641fb6c64b58aebfb5df6f9ad87a0ab08f971b27",
     "RELEASE-0.9.44.json": "92d767a0e09dad0ae43d31514bede761fc03b84821dadeb981e7a5ed8c8f1f23",
     "RELEASE-0.9.45.json": "450a0801ab6f4a0413340f34d5fefc30900d359439256e314d315038ce3ea8e5",
-    "RELEASE-0.9.46.json": "32952be0bc36e0b3bc42765a819638a9d9e6c9808aa198ec11423db035f948b0",
+    "RELEASE-0.9.46.json": "9ec2a877f6bfcf195a4a7811d8bb83421256206caaf83d77da0cd713b35a6731",
     "RELEASE-0.9.5.json": "d15bfa9d650d5f63f7d5dff2bbb1e07506cccd08e7b54e8f4dd6c461cfbef8db",
     "RELEASE-0.9.6.json": "d71dc7a8157b26f8a9ff0b333988c9ebe81cc07a88c0f2dab0d0058840d0899a",
     "RELEASE-0.9.7.json": "72e761c2172da09d2bf265b37900d257a781ec8ff2afc9442d86a299f61cce36",
@@ -965,7 +965,7 @@
     "tsconfig.build.json": "057767fbae50960a626ae050fdfcbd0224a8665bcbdf2d74d9a12b88d0b6a80c",
     "tsconfig.json": "a6fe6af5c5cee7adc34f2441b6dc72ea311da623378df0240f39a389a2a13d36",
     "vercel.json": "33c38fc50e8e528a56cda7d75a528447132f667e2732b60db909340fb4e91407",
-    "vercel.public.json": "895512eb115e4d2b8bac51631492918638c37d1f22fc6a321e973c593253bf94",
-    "verify-release.mjs": "0e392d4d7aa36fbf1af2904f7ef23757a50a1206e864bc802d438e4e0bc2294d"
+    "vercel.public.json": "a69ada3e523cd4be2537ce9c533f8d417369d21d76e2aecd2306008e35b4cbf1",
+    "verify-release.mjs": "ea9dc2b673a18692094506b05a1217aeaf530b8f8e764c132db2536eb08cadad"
   }
 }
