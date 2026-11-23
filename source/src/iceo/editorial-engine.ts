@@ -4,7 +4,7 @@ import {discoverNewsWithDiagnostics,type NewsCandidate} from './news-discovery.j
 import type {NewsDiagnostics} from './news-diagnostics.js';
 import {createNewsCandidateStore} from './news-store.js';
 import {newsBackoffFetch} from './news-backoff.js';
-import {buildNewsCorpus,collectCorpusLocalNews,type NewsCorpus,type NewsCorpusLocal} from './news-corpus.js';
+import {buildNewsCorpus,collectCorpusLocalNews,type NewsCorpus,type NewsCorpusLocal,type NewsCorpusEpoch} from './news-corpus.js';
 import {createNewsCorpusStore} from './news-corpus-store.js';
 
 export interface EditorialCollection {readonly snapshot:IceoSnapshot;readonly corpus:NewsCorpus;readonly diagnostics:NewsDiagnostics}
@@ -49,14 +49,32 @@ export function publicEditorialSnapshot(signal?:AbortSignal,previousSnapshot?:Ic
  pending??=collectEditorialSnapshot(fetch,Date.now,undefined,process.env,signal,previousSnapshot).finally(()=>{pending=undefined;});
  return pending;
 }
+/**
+ * An expired/invalid shared snapshot cannot justify reading its entire durable
+ * article corpus before each new collection. This removes unnecessary backend
+ * I/O on cold recovery, without changing any retention path for eligible data.
+ */
+export async function retainedEditorialCards(
+ previousSnapshot:Pick<IceoSnapshot,'cards'>|undefined,
+ signal:AbortSignal,
+ readFull:()=>Promise<NewsCorpusEpoch|null|undefined>,
+):Promise<Pick<IceoSnapshot,'cards'>|undefined>{
+ signal.throwIfAborted();
+ if(!previousSnapshot)return undefined;
+ try{
+  const previous=await readFull();
+  signal.throwIfAborted();
+  if(previous)return {cards:previous.corpus.cards};
+ }catch{/* An outage never makes old records current or bypasses source checks. */}
+ signal.throwIfAborted();
+ return previousSnapshot;
+}
 let pendingCollection:Promise<EditorialCollection>|undefined;
 /** Only the authenticated durable lease holder invokes source collection and corpus staging. */
 export function publicEditorialCollection(signal:AbortSignal,previousSnapshot?:IceoSnapshot):Promise<EditorialCollection>{
  signal.throwIfAborted();
  pendingCollection??=(async()=>{
-  let retained:Pick<IceoSnapshot,'cards'>|undefined=previousSnapshot;
-  try{const previous=await createNewsCorpusStore(process.env)?.read();if(previous)retained={cards:previous.corpus.cards};}
-  catch{/* A store outage does not turn candidates into verified records. Fresh acquisition can still run. */}
+  const retained=await retainedEditorialCards(previousSnapshot,signal,async()=>createNewsCorpusStore(process.env)?.read());
   signal.throwIfAborted();
   const [collected,local]=await Promise.all([collectEditorialData(fetch,Date.now,undefined,process.env,signal,retained),collectCorpusLocalNews(signal)]);
   signal.throwIfAborted();
