@@ -81,6 +81,7 @@ export const NEWS_PUBLISHERS:readonly NewsPublisher[]=Object.freeze([
   // Exact primary feed origins checked 2026-11-22; discovery does not grant republication rights.
   publisher('digi24','Digi24','www.digi24.ro'),
   publisher('hotnews','HotNews.ro','hotnews.ro'),
+  publisher('stirile-protv','Știrile ProTV','stirileprotv.ro'),
   // Official RSS/blog distribution page and two original articles checked 2026-11-22.
   publisher('repubblica','la Repubblica','www.repubblica.it'),
 ]);
@@ -110,6 +111,7 @@ export const NEWS_PUBLICATION_SCOPES:readonly PublicationScope[]=Object.freeze([
   // Romanian primary editions: exact publisher RSS channel identities verified 2026-11-22.
   publication('digi24','RO','Romania','Romania and global reporting',['/stiri/','ro']),
   publication('hotnews','RO','Romania','Romania and global reporting',['/','ro']),
+  publication('stirile-protv','RO','Romania','Romania and global reporting',['/stiri/','ro']),
   // The Italian RSS also links the publisher's explicit English edition; the article path takes precedence.
   publication('repubblica','IT','Italy','Italy and global reporting',['/en/','en'],['/','it']),
   publication('ap','US','United States','Global reporting',['/article/','en']),
@@ -199,8 +201,10 @@ export function sourceEditionCountryCode(value:PublicationSource):string|null{
 }
 /** Strip only known tracking fields; preserve URL parameters that identify the article. */
 export function canonicalNewsUrl(value:string):string|null{
-  if(!publisherForNewsUrl(value))return null;
+  const publisher=publisherForNewsUrl(value);if(!publisher)return null;
   const url=new URL(value);url.hash='';
+  // ProTV admission covers reviewed news paths only, not /virale/ or /cautare/.
+  if(publisher.id==='stirile-protv'&&!url.pathname.startsWith('/stiri/'))return null;
   // Encoded values are valid; encoded parameter names are intentionally rejected,
   // matching the public archive SQL instead of guessing their decoded meaning.
   if(url.search.slice(1).split('&').some(parameter=>parameter.split('=')[0]?.includes('%')))return null;
@@ -222,6 +226,10 @@ export const NEWS_DISCOVERY_INDEXES:readonly NewsDiscoveryIndex[]=Object.freeze(
   // the reviewed Romanian website edition supplies that provenance, not automatic text detection.
   {id:'digi24-ro-news',publisherId:'digi24',url:'https://www.digi24.ro/rss',format:'rss',language:'ro',feedTitle:'Digi24',feedHome:'https://www.digi24.ro/',articlePath:'/stiri/',allowMissingLanguage:true},
   {id:'hotnews-ro-news',publisherId:'hotnews',url:'https://hotnews.ro/feed',format:'rss',language:'ro',feedTitle:'HotNews.ro',feedHome:'https://hotnews.ro',articlePath:'/'},
+  // Official RSS guidance: https://ilikeit.stirileprotv.ro/smart-nation/cele-mai-bune-aplicatii-de-stiri-online-cum-te-informezi-in-doi-timpi-si-trei-miscari.html
+  // Exact feed identity and canonical original metadata checked2026-11-23, Actions45272649682.
+  // Headline/date/link only; the feed grants no article-body or image reuse licence.
+  {id:'stirile-protv-ro-news',publisherId:'stirile-protv',url:'https://rss.stirileprotv.ro/',format:'rss',language:'ro',feedTitle:'Știrile ProTV',feedHome:'https://stirileprotv.ro',articlePath:'/stiri/'},
   // Primary receipt: Actions 45070034177 / job 137354713875. Channel identity is exact;
   // bare channel home is metadata only, not an additional article origin.
   // Distribution guidance: https://www.repubblica.it/static/servizi/rss/

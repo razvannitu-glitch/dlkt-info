@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {completeDigi24TruncatedHeadline} from './digi24-metadata.js';
 import {XMLParser,XMLValidator} from 'fast-xml-parser';
 import {parseDocument,DomUtils} from 'htmlparser2';
 import type {ArticleSubjectMetadata,EvidenceCard,SourceResult} from './contracts.js';
@@ -256,16 +257,12 @@ export function newsAcquisitionOrder(values:readonly NewsCandidate[],limit:numbe
  const unknownSubjects=limit<4?[]:ordered.filter(row=>sourceLanguage(row.sourceUrl)!==null
   &&classifyNewsSubject(row.title,row.sourceUrl)===null&&!unchanged(row));
  const unknown=unknownSubjects.length?unknownSubjects[slot%unknownSubjects.length]:undefined;
- // Preserve the strongest new developments and observed homepage opportunities.
- for(const row of ordered){
-  if(selected.length>=Math.min(4,limit-(unknown?1:0)))break;
-  if(!unchanged(row)&&(candidatePriority(row)===2||featuredUrls.has(row.sourceUrl)))take(row);
- }
- if(unknown)take(unknown);
  const languages=[...byLanguage.keys()],start=slot%languages.length,languageOrder=[...languages.slice(start),...languages.slice(0,start)];
- // No reviewed edition loses its opportunity to a larger-language deficit.
+ // Give reviewed editions their first opportunity before a larger language can
+ // occupy the leading request slots with urgent headlines. Reserve the bounded
+ // unknown-subject opportunity when the batch has room for it.
  for(const language of languageOrder){
-  if(selected.length>=limit)break;
+  if(selected.length>=limit-(unknown?1:0))break;
   if(selected.some(row=>sourceLanguage(row.sourceUrl)===language))continue;
   const rows=byLanguage.get(language)!;
   const row=nextGap(language,NEWS_CATEGORY_ACQUISITION_POLICY.minimum)
@@ -273,6 +270,13 @@ export function newsAcquisitionOrder(values:readonly NewsCandidate[],limit:numbe
    ??rows.find(candidate=>!selectedUrls.has(candidate.sourceUrl)&&!unchanged(candidate))
    ??rows.find(candidate=>!selectedUrls.has(candidate.sourceUrl));
   if(row)take(row);
+ }
+ if(unknown)take(unknown);
+ // Keep up to four additional strong developments inside the same finite budget.
+ let prioritySelections=0;
+ for(const row of ordered){
+  if(prioritySelections>=4||selected.length>=limit)break;
+  if(!unchanged(row)&&(candidatePriority(row)===2||featuredUrls.has(row.sourceUrl))&&take(row))prioritySelections++;
  }
  for(const ceiling of [NEWS_CATEGORY_ACQUISITION_POLICY.minimum,NEWS_CATEGORY_ACQUISITION_POLICY.target]){
   for(;;){
@@ -488,8 +492,14 @@ export function readNewsArticleMetadata(html:string,candidate:NewsCandidate,fina
       if(same&&explicitBinding&&publisher.id==='digi24'&&canonicalLinks.length===1
         &&canonicalInHead&&canonicalNewsUrl(candidate.sourceUrl)===canonical
         &&typeof value.datePublished==='string'&&/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/u.test(value.datePublished)){
-        const headline=titleText(value.headline);
-        if(headline&&matchingNewsHeadline(candidate.title,headline,publisher.label,'ro')){
+        const abbreviated=titleText(value.headline);
+        const headline=abbreviated&&matchingNewsHeadline(candidate.title,abbreviated,publisher.label,'ro')?abbreviated
+          :abbreviated&&candidateTitle?completeDigi24TruncatedHeadline({
+            articleHeadline:abbreviated,candidateTitle,canonicalUrl:canonical,
+            headTitles:meta.filter(node=>(node.attribs.property??node.attribs.name??'').toLowerCase()==='og:title'&&inHead(node)).map(node=>titleText(node.attribs.content)),
+            headUrls:meta.filter(node=>(node.attribs.property??node.attribs.name??'').toLowerCase()==='og:url'&&inHead(node)).map(node=>node.attribs.content),
+          }):null;
+        if(headline){
           const subject=articleSubject(value,canonical);digi24Bindings.push({headline,localDate:value.datePublished,...(subject===undefined?{}:{subject})});
         }
       }

@@ -7,17 +7,22 @@ import {NEWS_DISCOVERY_INDEXES, publisherForNewsUrl} from '../source/.build/src/
 // Observational evidence only. Never changes a registry, publishes a card,
 // follows a redirect, bypasses a denial or uses credentials.
 const SOURCES=Object.freeze([
-  {id:'digi24-google-news',feed:'https://www.digi24.ro/rss_files/google_news.xml',format:'news-sitemap',
-    origin:'https://www.digi24.ro',articlePath:'/stiri/',robots:'https://www.digi24.ro/robots.txt'},
-  {id:'basilica-ro-news',feed:'https://basilica.ro/feed/',format:'rss',
-    origin:'https://basilica.ro',articlePath:'/',robots:'https://basilica.ro/robots.txt'},
+  {id:'digi24-ro-news',feed:'https://www.digi24.ro/rss',format:'rss',
+    origin:'https://www.digi24.ro',articlePath:'/stiri/',robots:'https://www.digi24.ro/robots.txt',
+    productionRequired:true,knownOriginals:["https://www.digi24.ro/stiri/actualitate/sanatate/ce-scade-cu-adevarat-tensiunea-arteriala-cercetatorii-au-analizat-efectele-cafelei-sarii-alimentatiei-si-exercitiilor-fizice-4050049","https://www.digi24.ro/stiri/sci-tech/lumea-digitala/seful-onu-cere-un-mecanism-international-pentru-controlul-riscurilor-inteligentei-artificiale-trebuie-sa-actionam-pana-anul-viitor-4050023"]},
   {id:'protv-ro-news',feed:'https://rss.stirileprotv.ro/',format:'rss',
-    origin:'https://stirileprotv.ro',articlePath:'/stiri/',robots:'https://stirileprotv.ro/robots.txt'},
+    origin:'https://stirileprotv.ro',articlePath:'/stiri/',robots:'https://stirileprotv.ro/robots.txt',
+    feedRobots:'https://rss.stirileprotv.ro/robots.txt',productionRequired:true},
+  // Official /rss page declares /rss.xml. Article paths are read from that feed;
+  // /stiri is an editorial listing, not an assumed article URL prefix.
+  {id:'doxologia-ro-diagnostic',feed:'https://doxologia.ro/rss.xml',format:'rss',
+    origin:'https://doxologia.ro',articlePath:'/',robots:'https://doxologia.ro/robots.txt',
+    productionRequired:false},
 ]);
 const USER_AGENT='DLKT-Info-ICEO/1.0 (+https://www.dlkt.ee)';
 const BYTE_LIMIT=1_048_576,DAY=86_400_000;
 const startedAt=Date.now(),deadline=startedAt+210_000;
-const attempts={robots:0,feed:0,article:0},limits={robots:3,feed:3,article:6};
+const attempts={robots:0,feed:0,article:0},limits={robots:4,feed:3,article:6};
 const object=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 const list=value=>value===undefined?[]:Array.isArray(value)?value:[value];
 const plain=value=>typeof value==='string'?value:object(value)&&typeof value['#text']==='string'?value['#text']:null;
@@ -140,15 +145,16 @@ function parseFeed(xml,source,now){
   const rows=rawRows.map(row=>({...row,url:safeUrl(row.url,source.origin,source.articlePath),stamp:timestamp(row.date)}));
   const recent=rows.filter(row=>row.url&&row.title&&row.stamp.iso&&Date.parse(row.stamp.iso)>now-DAY&&Date.parse(row.stamp.iso)<=now+300_000);
   const unique=[...new Map(recent.map(row=>[row.url,row])).values()].sort((a,b)=>b.stamp.iso.localeCompare(a.stamp.iso));
-  return {identity,entryCount:entries.length,currentUniqueCandidates:unique.length,timestamps:rows.slice(0,3).map(row=>row.stamp),samples:unique.slice(0,2)};
+  return {identity,entryCount:entries.length,currentUniqueCandidates:unique.length,timestamps:rows.slice(0,3).map(row=>row.stamp),samples:source.knownOriginals?source.knownOriginals.flatMap(url=>unique.filter(row=>row.url===url)).slice(0,2):unique.slice(0,2)};
 }
 function metadataEvidence(html){
   const document=parseDocument(html,{decodeEntities:true,withStartIndices:true,withEndIndices:true});
   const complete=(node,script=false)=>node.startIndex!==null&&node.endIndex!==null&&(script?/<\/script\s*>$/iu.test(html.slice(node.startIndex,node.endIndex+1)):html.slice(node.startIndex,node.endIndex+1).endsWith('>'));
+  const inHead=node=>node.parent?.type==='tag'&&node.parent.name==='head'&&node.parent.parent?.type==='tag'&&node.parent.parent.name==='html'&&node.parent.parent.parent?.type==='root';
   const fields=[];
   for(const node of DomUtils.getElementsByTagName('meta',document,true).filter(node=>complete(node))){
     const name=(node.attribs.property??node.attribs.name??'').toLowerCase();
-    if(['og:title','og:url','article:published_time','article:modified_time','publish-date','date','article:section'].includes(name))fields.push({name,value:clean(node.attribs.content)});
+    if(['og:title','og:url','article:published_time','article:modified_time','publish-date','date','article:section'].includes(name))fields.push({name,value:clean(node.attribs.content),inHead:inHead(node)});
   }
   const canonicals=DomUtils.getElementsByTagName('link',document,true).filter(node=>complete(node)&&(node.attribs.rel??'').toLowerCase().split(/\s+/u).includes('canonical')).map(node=>clean(node.attribs.href)).slice(0,5);
   const articles=[];let nodes=0;
@@ -175,11 +181,18 @@ function metadataEvidence(html){
   return {canonical:canonicals,meta:fields.slice(0,24),jsonLdArticles:articles};
 }
 async function inspectSource(source){
-  const result={id:source.id,status:'incomplete',feedUrl:source.feed,observedAt:new Date().toISOString(),articles:[]};
+  const result={id:source.id,productionRequired:source.productionRequired,status:'incomplete',feedUrl:source.feed,observedAt:new Date().toISOString(),articles:[]};
   const robotResponse=await boundedGet(source.robots,'robots'),policy=robotsPolicy(robotResponse);
   result.robots={...publicResponse(robotResponse),policy:{...policy,rules:policy.rules.slice(0,40),omittedRules:Math.max(0,policy.rules.length-40)}};
+  if(policy.state==='unavailable'){result.error='original-robots-unavailable';return result;}
   const sameFeedOrigin=new URL(source.feed).origin===source.origin;
-  const feedDecision=sameFeedOrigin?robotsDecision(policy,source.feed):{allowed:policy.state!=='unavailable',reason:'explicit-publisher-rss-on-separate-origin-policy-not-inferred'};
+  let feedPolicy=policy;
+  if(!sameFeedOrigin){
+    if(!source.feedRobots||new URL(source.feedRobots).origin!==new URL(source.feed).origin){result.error='feed-origin-robots-not-declared';return result;}
+    const response=await boundedGet(source.feedRobots,'robots');feedPolicy=robotsPolicy(response);
+    result.feedRobots={...publicResponse(response),policy:{...feedPolicy,rules:feedPolicy.rules.slice(0,40),omittedRules:Math.max(0,feedPolicy.rules.length-40)}};
+  }
+  const feedDecision=robotsDecision(feedPolicy,source.feed);
   result.feedRobotsDecision=feedDecision;
   if(!feedDecision.allowed){result.error=feedDecision.reason;return result;}
   const feedResponse=await boundedGet(source.feed,'feed');result.feed=publicResponse(feedResponse);
@@ -188,9 +201,12 @@ async function inspectSource(source){
   try{feed=parseFeed(feedResponse.text,source,now);}catch(error){result.error=error instanceof Error?error.message:'feed-parse-failed';return result;}
   result.feedIdentity=feed.identity;result.entryCount=feed.entryCount;result.currentUniqueCandidates=feed.currentUniqueCandidates;result.feedTimestampSamples=feed.timestamps;
   const registered=NEWS_DISCOVERY_INDEXES.find(index=>index.url===source.feed);
+  let productionCandidates=[];
   if(registered){
-    try{result.productionFeedParser={state:'accepted',candidateCount:readPublisherNewsCandidates(feedResponse.text,registered,now).length};}
-    catch(error){result.productionFeedParser={state:'rejected',error:clean(error instanceof Error?error.message:'unknown')};}
+    try{
+      productionCandidates=readPublisherNewsCandidates(feedResponse.text,registered,now);
+      result.productionFeedParser={state:productionCandidates.length?'accepted':'rejected',candidateCount:productionCandidates.length};
+    }catch(error){result.productionFeedParser={state:'rejected',error:clean(error instanceof Error?error.message:'unknown')};}
   }else result.productionFeedParser={state:'not-registered',note:'Probe metadata only; production allowlist remains unchanged.'};
   for(const row of feed.samples){
     const decision=robotsDecision(policy,row.url);
@@ -201,15 +217,18 @@ async function inspectSource(source){
       observation.metadata=metadataEvidence(response.text);
       const publisher=publisherForNewsUrl(row.url);
       if(publisher){
-        const parsed=readNewsArticleMetadata(response.text,{sourceUrl:row.url,title:row.title,publisher:publisher.label,indexedAt:new Date(now).toISOString(),category:null},row.url,now);
-        observation.productionArticleParser=parsed?{state:'accepted',sourceUrl:parsed.sourceUrl,title:clean(parsed.title),date:parsed.date,articleSubject:parsed.articleSubject??null}:{state:'rejected'};
+        const candidate=productionCandidates.find(entry=>entry.sourceUrl===row.url);
+        if(candidate){
+          const parsed=readNewsArticleMetadata(response.text,candidate,row.url,now);
+          observation.productionArticleParser=parsed?{state:'accepted',sourceUrl:parsed.sourceUrl,title:clean(parsed.title),date:parsed.date,articleSubject:parsed.articleSubject??null}:{state:'rejected'};
+        }else observation.productionArticleParser={state:'candidate-not-admitted',note:'No original metadata admission attempted without the production feed candidate.'};
       }else observation.productionArticleParser={state:'publisher-not-registered',note:'Observed declarations do not establish production admission.'};
     }
     result.articles.push(observation);
     if([401,402,403,429].includes(response.status))break;
   }
   result.status='observed';
-  if(!feed.samples.length)result.error='no-current-candidates';
+  if(feed.samples.length!==2)result.error='two-current-reviewed-samples-unavailable';
   return result;
 }
 const reports=[];
@@ -217,10 +236,12 @@ for(const source of SOURCES){
   try{reports.push(await inspectSource(source));}
   catch(error){reports.push({id:source.id,status:'incomplete',error:clean(error instanceof Error?error.message:'unknown')});}
 }
-const incomplete=reports.some(report=>report.status!=='observed'||report.error||!report.articles.some(article=>article.request?.ok));
-console.log(JSON.stringify({probe:'dlkt-category-source-compatibility-1',commit:process.env.GITHUB_SHA??null,
+const incomplete=reports.some(report=>report.status!=='observed'||report.error||report.articles.length!==2
+  ||report.articles.some(article=>!article.request?.ok)
+  ||report.productionRequired&&(report.productionFeedParser?.state!=='accepted'||report.articles.some(article=>article.productionArticleParser?.state!=='accepted')));
+console.log(JSON.stringify({probe:'dlkt-category-source-compatibility-2',commit:process.env.GITHUB_SHA??null,
   startedAt:new Date(startedAt).toISOString(),finishedAt:new Date().toISOString(),attempts,limits,
   outcome:incomplete?'incomplete-evidence':'observations-collected',
-  boundary:'Metadata observations only. No new source registered; no content published; no assertion of publisher reuse rights.',
+  boundary:'Metadata observations only. This script changes no source registry, publishes no content and makes no assertion of publisher reuse rights.',
   reports},null,2));
 if(incomplete)process.exitCode=1;

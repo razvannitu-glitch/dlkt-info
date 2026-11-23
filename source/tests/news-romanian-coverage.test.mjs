@@ -6,6 +6,9 @@ import {classifyNewsSubject as browserSubject,classifyEvidenceCard as browserEvi
 const sourceUrl='https://hotnews.ro/controlled-current-report';
 const card=(title,extra={})=>({title,sourceUrl,sourceIds:['news-unclassified'],topic:'other',...extra});
 const fixtures=[
+ ['Ultima săptămână de colectare a deșeurilor voluminoase în Sectorul 6. Unde se găsesc containerele','06000000'],
+ ['Deșeuri medicale periculoase descoperite de Garda de Mediu','06000000'],
+ ['Momentul în care Călin Georgescu iese din arest, în uralele susținătorilor: „Dumnezeu m-a născut om liber și liber voi rămâne”','02000000'],
  ['Schimbări majore la vârful DNA, anunțate de procurorul șef Viorel Cerbu, după șase luni de mandat','02000000'],
  ['Procurorul general indică cinci domenii cu rezultate slabe','02000000'],
  ['Curtea de Apel București a respins contestația DIICOT','02000000'],
