@@ -8,18 +8,36 @@ const TIMEOUT_MS = 8_000;
 async function readBoundedJson(response: Response): Promise<unknown> {
   const length = response.headers.get('content-length');
   if (length !== null && (!/^\d+$/u.test(length) || Number(length) > MAX_RESPONSE_BYTES)) {
+    await response.body?.cancel();
     throw new Error('DLKT_INFO_IDENTITY_RESPONSE_TOO_LARGE');
   }
   const contentType = response.headers.get('content-type') ?? '';
   if (!/^application\/json(?:\s*;|$)/iu.test(contentType)) {
+    await response.body?.cancel();
     throw new Error('DLKT_INFO_IDENTITY_RESPONSE_CONTENT_TYPE_INVALID');
   }
-  const text = await response.text();
-  if (Buffer.byteLength(text, 'utf8') > MAX_RESPONSE_BYTES) throw new Error('DLKT_INFO_IDENTITY_RESPONSE_TOO_LARGE');
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('DLKT_INFO_IDENTITY_RESPONSE_INVALID');
+  const chunks: Uint8Array[] = [];
+  let receivedBytes = 0;
+  try {
+    for (;;) {
+      const part = await reader.read();
+      if (part.done) break;
+      receivedBytes += part.value.byteLength;
+      if (receivedBytes > MAX_RESPONSE_BYTES) {
+        await reader.cancel();
+        throw new Error('DLKT_INFO_IDENTITY_RESPONSE_TOO_LARGE');
+      }
+      chunks.push(part.value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
   if (!response.ok) throw new Error(`DLKT_INFO_IDENTITY_HTTP_${response.status}`);
-  try { return JSON.parse(text) as unknown; } catch { throw new Error('DLKT_INFO_IDENTITY_RESPONSE_INVALID'); }
+  try { return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown; }
+  catch { throw new Error('DLKT_INFO_IDENTITY_RESPONSE_INVALID'); }
 }
-
 export class SupabaseIdentityTransport {
   readonly #configuration: ReadyPersistenceConfiguration;
   readonly #fetch: IdentityFetch;
