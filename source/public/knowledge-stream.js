@@ -1,7 +1,35 @@
 import { selectKnowledgeCards, validateKnowledgeCatalog } from './knowledge.js';
-/** A knowledge card follows each complete group of 22 original news records. */
-export const INLINE_KNOWLEDGE_INTERVAL = 23;
+/** Exactly eleven news reports appear between distinct reviewed knowledge cards. */
+export const INLINE_KNOWLEDGE_INTERVAL = 12;
 const NEWS_PER_KNOWLEDGE = INLINE_KNOWLEDGE_INTERVAL - 1;
+/** Local-only reading history; no device identifier, account token or network request. */
+export const KNOWLEDGE_SEEN_KEY = 'dlkt-info-knowledge-seen-v1';
+const KNOWLEDGE_ID = /^[a-z][a-z0-9-]{2,79}$/u;
+export function readKnowledgeSeen(storage) {
+    try {
+        const raw = storage().getItem(KNOWLEDGE_SEEN_KEY);
+        if (raw === null || raw.length > 450_000)
+            return new Set();
+        const value = JSON.parse(raw);
+        if (!Array.isArray(value) || value.length > 5000 || value.some(id => typeof id !== 'string' || !KNOWLEDGE_ID.test(id)))
+            return new Set();
+        return new Set(value);
+    }
+    catch {
+        return new Set();
+    }
+}
+export function writeKnowledgeSeen(seen, storage) {
+    if (seen.size > 5000 || [...seen].some(id => !KNOWLEDGE_ID.test(id)))
+        return false;
+    try {
+        storage().setItem(KNOWLEDGE_SEEN_KEY, JSON.stringify([...seen]));
+        return true;
+    }
+    catch {
+        return false;
+    }
+}
 function validContext(context) {
     return context !== null && typeof context === 'object' &&
         (context.countryCode === null || typeof context.countryCode === 'string' && /^[A-Z]{2}$/u.test(context.countryCode)) &&
@@ -33,14 +61,19 @@ export function selectInlineKnowledge(cards, context, now, seed) {
         for (const card of selectKnowledgeCards(tiers[scope], 'all', now, seed, context.timeZone ?? 'UTC'))
             result.push({ card, scope });
     }
-    // An independent help spotlight occupies the first existing knowledge slot.
-    // Keep its verified geographic scope; never label a national cause as local.
-    const spotlight = result.findIndex(entry => entry.card.format === 'care');
-    if (spotlight > 0) {
-        const [entry] = result.splice(spotlight, 1);
+    // Independent care information retains its first slot. A calendar-confirmed
+    // fact then takes priority, followed by a source-reviewed recipe, if available.
+    const elevate = (format, position) => {
+        const index = result.findIndex(entry => entry.card.format === format);
+        if (index < 0)
+            return;
+        const [entry] = result.splice(index, 1);
         if (entry)
-            result.unshift(entry);
-    }
+            result.splice(Math.min(position, result.length), 0, entry);
+    };
+    elevate('care', 0);
+    elevate('on-this-day', result[0]?.card.format === 'care' ? 1 : 0);
+    elevate('recipe', result[0]?.card.format === 'care' ? (result[1]?.card.format === 'on-this-day' ? 2 : 1) : result[0]?.card.format === 'on-this-day' ? 1 : 0);
     return result;
 }
 /**
