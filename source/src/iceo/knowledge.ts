@@ -3,9 +3,11 @@ import {isNewsCategoryId,type NewsCategoryId} from './news-taxonomy.js';
 export const KNOWLEDGE_VERSION='dlkt-knowledge-1' as const;
 export type KnowledgeLanguage='en'|'ro'|'it';
 export type KnowledgeFilter='all'|NewsCategoryId;
+export type KnowledgeFormat='did-you-know'|'on-this-day'|'recipe';
 export interface KnowledgeCopy {readonly title:string;readonly explanation:string;readonly connection:string}
 export interface KnowledgeCard {
  readonly kind:'knowledge';readonly id:string;readonly revision:number;readonly category:NewsCategoryId;
+ readonly format?:KnowledgeFormat;readonly calendarDay?:string;
  readonly topic:Readonly<Record<KnowledgeLanguage,string>>;
  readonly source:Readonly<{publisher:string;url:string}>;
  readonly geography?:Readonly<{countryCode:string;cityIds:readonly string[];label:Readonly<Record<KnowledgeLanguage,string>>}>;
@@ -21,6 +23,7 @@ const origins=new Set([
  'https://oceanservice.noaa.gov','https://weather.metoffice.gov.uk','https://www.qrcode.com',
  'https://www.nps.gov','https://www.ecb.europa.eu','https://www.olympics.com','https://www.afb.org',
  'https://www.museoegizio.it','https://www.filarmonicaenescu.ro',
+ 'https://www.computerhistory.org','https://foodhero.org',
 ]);
 function object(value:unknown):value is Record<string,unknown>{return typeof value==='object'&&value!==null&&!Array.isArray(value);}
 function text(value:unknown,max:number):value is string{return typeof value==='string'&&value.trim().length>0&&value.length<=max&&!/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f<>]/u.test(value);}
@@ -42,6 +45,9 @@ export function validKnowledgeCard(value:unknown):value is KnowledgeCard {
   !Number.isSafeInteger(value.revision)||Number(value.revision)<1||!isNewsCategoryId(value.category)||
   !object(value.source)||!text(value.source.publisher,100)||!safeKnowledgeSource(value.source.url)||
   value.geography!==undefined&&!validKnowledgeGeography(value.geography)||
+  value.format!==undefined&&!['did-you-know','on-this-day','recipe'].includes(String(value.format))||
+  value.format==='on-this-day'&&(!/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/u.test(String(value.calendarDay))||!Number.isFinite(Date.parse('2024-'+String(value.calendarDay)+'T12:00:00.000Z'))||new Date('2024-'+String(value.calendarDay)+'T12:00:00.000Z').toISOString().slice(5,10)!==value.calendarDay)||
+  value.format!=='on-this-day'&&value.calendarDay!==undefined||
   !instant(value.reviewedAt)||!instant(value.reviewBy)||Date.parse(value.reviewBy)<=Date.parse(value.reviewedAt)||
   Date.parse(value.reviewBy)-Date.parse(value.reviewedAt)>366*86400000||!object(value.copy)||!object(value.topic))return false;
  return languages.every(language=>{
@@ -63,10 +69,11 @@ export function knowledgeLanguage(locale:string):KnowledgeLanguage{
 }
 function score(value:string):number{let hash=2166136261;for(const c of value){hash=Math.imul(hash^c.charCodeAt(0),16777619);}return hash>>>0;}
 /** Stable category rounds. The finite catalogue is never recycled to imitate new facts. */
-export function selectKnowledgeCards(cards:readonly KnowledgeCard[],filter:KnowledgeFilter,now:number,seed:string):readonly KnowledgeCard[]{
+export function selectKnowledgeCards(cards:readonly KnowledgeCard[],filter:KnowledgeFilter,now:number,seed:string,timeZone='UTC'):readonly KnowledgeCard[]{
  if(filter!=='all'&&!isNewsCategoryId(filter))throw Error('KNOWLEDGE_CATEGORY_INVALID');
  if(!Number.isFinite(now)||typeof seed!=='string'||seed.length>100)throw Error('KNOWLEDGE_CONTEXT_INVALID');
- const valid=validateKnowledgeCatalog(cards).filter(card=>Date.parse(card.reviewedAt)<=now&&now<Date.parse(card.reviewBy)&&(filter==='all'||card.category===filter));
+ let day:string;try{const parts=new Intl.DateTimeFormat('en-US',{timeZone,month:'2-digit',day:'2-digit'}).formatToParts(now);day=parts.find(part=>part.type==='month')?.value+'-'+parts.find(part=>part.type==='day')?.value;}catch{throw Error('KNOWLEDGE_TIMEZONE_INVALID');}
+ const valid=validateKnowledgeCatalog(cards).filter(card=>Date.parse(card.reviewedAt)<=now&&now<Date.parse(card.reviewBy)&&(filter==='all'||card.category===filter)&&(card.format!=='on-this-day'||card.calendarDay===day));
  const groups=new Map<NewsCategoryId,KnowledgeCard[]>();
  for(const card of valid){const group=groups.get(card.category)??[];group.push(card);groups.set(card.category,group);}
  for(const group of groups.values())group.sort((a,b)=>score(seed+a.id)-score(seed+b.id)||a.id.localeCompare(b.id));

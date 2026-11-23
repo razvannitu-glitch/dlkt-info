@@ -5,7 +5,8 @@ const NEWS_PER_KNOWLEDGE = INLINE_KNOWLEDGE_INTERVAL - 1;
 function validContext(context) {
     return context !== null && typeof context === 'object' &&
         (context.countryCode === null || typeof context.countryCode === 'string' && /^[A-Z]{2}$/u.test(context.countryCode)) &&
-        (context.cityId === null || typeof context.cityId === 'string' && context.cityId.length > 0 && context.cityId.length <= 80 && context.cityId.trim() === context.cityId);
+        (context.cityId === null || typeof context.cityId === 'string' && context.cityId.length > 0 && context.cityId.length <= 80 && context.cityId.trim() === context.cityId) &&
+        (context.timeZone === undefined || typeof context.timeZone === 'string' && context.timeZone.length <= 70);
 }
 /**
  * Geography belongs to the reviewed fact, never to its publisher.
@@ -29,7 +30,7 @@ export function selectInlineKnowledge(cards, context, now, seed) {
     }
     const result = [];
     for (const scope of ['city', 'country', 'global']) {
-        for (const card of selectKnowledgeCards(tiers[scope], 'all', now, seed))
+        for (const card of selectKnowledgeCards(tiers[scope], 'all', now, seed, context.timeZone ?? 'UTC'))
             result.push({ card, scope });
     }
     return result;

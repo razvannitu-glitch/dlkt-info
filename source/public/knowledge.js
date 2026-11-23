@@ -9,6 +9,7 @@ const origins = new Set([
     'https://oceanservice.noaa.gov', 'https://weather.metoffice.gov.uk', 'https://www.qrcode.com',
     'https://www.nps.gov', 'https://www.ecb.europa.eu', 'https://www.olympics.com', 'https://www.afb.org',
     'https://www.museoegizio.it', 'https://www.filarmonicaenescu.ro',
+    'https://www.computerhistory.org', 'https://foodhero.org',
 ]);
 function object(value) { return typeof value === 'object' && value !== null && !Array.isArray(value); }
 function text(value, max) { return typeof value === 'string' && value.trim().length > 0 && value.length <= max && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f<>]/u.test(value); }
@@ -42,6 +43,9 @@ export function validKnowledgeCard(value) {
         !Number.isSafeInteger(value.revision) || Number(value.revision) < 1 || !isNewsCategoryId(value.category) ||
         !object(value.source) || !text(value.source.publisher, 100) || !safeKnowledgeSource(value.source.url) ||
         value.geography !== undefined && !validKnowledgeGeography(value.geography) ||
+        value.format !== undefined && !['did-you-know', 'on-this-day', 'recipe'].includes(String(value.format)) ||
+        value.format === 'on-this-day' && (!/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/u.test(String(value.calendarDay)) || !Number.isFinite(Date.parse('2024-' + String(value.calendarDay) + 'T12:00:00.000Z')) || new Date('2024-' + String(value.calendarDay) + 'T12:00:00.000Z').toISOString().slice(5, 10) !== value.calendarDay) ||
+        value.format !== 'on-this-day' && value.calendarDay !== undefined ||
         !instant(value.reviewedAt) || !instant(value.reviewBy) || Date.parse(value.reviewBy) <= Date.parse(value.reviewedAt) ||
         Date.parse(value.reviewBy) - Date.parse(value.reviewedAt) > 366 * 86400000 || !object(value.copy) || !object(value.topic))
         return false;
@@ -70,12 +74,20 @@ function score(value) { let hash = 2166136261; for (const c of value) {
     hash = Math.imul(hash ^ c.charCodeAt(0), 16777619);
 } return hash >>> 0; }
 /** Stable category rounds. The finite catalogue is never recycled to imitate new facts. */
-export function selectKnowledgeCards(cards, filter, now, seed) {
+export function selectKnowledgeCards(cards, filter, now, seed, timeZone = 'UTC') {
     if (filter !== 'all' && !isNewsCategoryId(filter))
         throw Error('KNOWLEDGE_CATEGORY_INVALID');
     if (!Number.isFinite(now) || typeof seed !== 'string' || seed.length > 100)
         throw Error('KNOWLEDGE_CONTEXT_INVALID');
-    const valid = validateKnowledgeCatalog(cards).filter(card => Date.parse(card.reviewedAt) <= now && now < Date.parse(card.reviewBy) && (filter === 'all' || card.category === filter));
+    let day;
+    try {
+        const parts = new Intl.DateTimeFormat('en-US', { timeZone, month: '2-digit', day: '2-digit' }).formatToParts(now);
+        day = parts.find(part => part.type === 'month')?.value + '-' + parts.find(part => part.type === 'day')?.value;
+    }
+    catch {
+        throw Error('KNOWLEDGE_TIMEZONE_INVALID');
+    }
+    const valid = validateKnowledgeCatalog(cards).filter(card => Date.parse(card.reviewedAt) <= now && now < Date.parse(card.reviewBy) && (filter === 'all' || card.category === filter) && (card.format !== 'on-this-day' || card.calendarDay === day));
     const groups = new Map();
     for (const card of valid) {
         const group = groups.get(card.category) ?? [];

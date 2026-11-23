@@ -1,9 +1,9 @@
 import { getLocale } from './i18n-browser.js';
 import { knowledgeLanguage } from './knowledge.js';
 const labels = {
-    en: { know: 'Did you know?', context: 'The useful bit', source: 'Open source', checked: 'Checked', global: 'General knowledge' },
-    ro: { know: 'Stiati ca?', context: 'Ce merita retinut', source: 'Deschide sursa', checked: 'Verificat', global: 'Fapt general' },
-    it: { know: 'Lo sapevi?', context: 'Da ricordare', source: 'Apri la fonte', checked: 'Verificato', global: 'Conoscenza generale' },
+    en: { know: 'Did you know?', history: 'On this day', recipe: 'Recipe idea', context: 'The useful bit', source: 'Open source', checked: 'Checked', global: 'General knowledge' },
+    ro: { know: 'Stiati ca?', history: 'S-a intamplat azi', recipe: 'Idee de reteta', context: 'Ce merita retinut', source: 'Deschide sursa', checked: 'Verificat', global: 'Fapt general' },
+    it: { know: 'Lo sapevi?', history: 'Accadde oggi', recipe: 'Idea ricetta', context: 'Da ricordare', source: 'Apri la fonte', checked: 'Verificato', global: 'Conoscenza generale' },
 };
 function make(tag, className, text = '') {
     const node = document.createElement(tag);
@@ -26,7 +26,7 @@ export function knowledgeCardNode(card, scope) {
     article.dir = 'auto';
     article.tabIndex = -1;
     const meta = make('div', 'knowledge-card-meta');
-    meta.append(make('span', 'knowledge-category-tag', copy.know), make('span', 'knowledge-topic', scope === 'global' ? copy.global : (card.geography?.label[language] ?? copy.global)));
+    meta.append(make('span', 'knowledge-category-tag', card.format === 'on-this-day' ? copy.history : card.format === 'recipe' ? copy.recipe : copy.know), make('span', 'knowledge-topic', scope === 'global' ? copy.global : (card.geography?.label[language] ?? copy.global)));
     const title = make('h3', 'knowledge-card-title', value.title);
     title.id = 'news-know-title-' + card.id;
     article.setAttribute('aria-labelledby', title.id);

@@ -464,6 +464,77 @@ const reviewed = [
         "revision": 1,
         "reviewedAt": "2026-11-22T22:36:16.000Z",
         "reviewBy": "2027-05-21T22:36:16.000Z"
+    },
+    {
+        "id": "computer-industry-1992-nov-23",
+        "category": "13000000",
+        "format": "on-this-day",
+        "calendarDay": "11-23",
+        "topic": {
+            "en": "Technology history",
+            "ro": "Istoria tehnologiei",
+            "it": "Storia della tecnologia"
+        },
+        "source": {
+            "publisher": "Computer History Museum",
+            "url": "https://www.computerhistory.org/tdih/november/23/"
+        },
+        "copy": {
+            "en": {
+                "title": "23 November 1992: the computer industry was considered in crisis.",
+                "explanation": "Business Week described severe pressure on computer makers, including expected losses at IBM and layoffs across the sector. The Computer History Museum documents the episode in its November 23 timeline.",
+                "connection": "A historic forecast is not a verified future. Compare predictions with later outcomes."
+            },
+            "ro": {
+                "title": "23 noiembrie 1992: industria calculatoarelor era considerata in criza.",
+                "explanation": "Business Week descria dificultatile industriei, pierderile estimate la IBM si concedierile din sector. Computer History Museum documenteaza episodul in cronologia zilei de 23 noiembrie.",
+                "connection": "O prognoza istorica nu este un viitor cert. Merita comparata cu evolutia ulterioara."
+            },
+            "it": {
+                "title": "23 novembre 1992: il settore dei computer era ritenuto in crisi.",
+                "explanation": "Business Week descriveva le difficolta dei produttori, perdite previste per IBM e licenziamenti nel settore. Il Computer History Museum documenta questo episodio nella cronologia del 23 novembre.",
+                "connection": "Una previsione storica non equivale a un futuro accertato."
+            }
+        },
+        "kind": "knowledge",
+        "revision": 1,
+        "reviewedAt": "2026-11-23T09:00:00.000Z",
+        "reviewBy": "2027-05-20T09:00:00.000Z"
+    },
+    {
+        "id": "apple-cinnamon-oats",
+        "category": "10000000",
+        "format": "recipe",
+        "topic": {
+            "en": "Everyday cooking",
+            "ro": "Gastronomie practica",
+            "it": "Cucina quotidiana"
+        },
+        "source": {
+            "publisher": "Food Hero / Oregon State University",
+            "url": "https://foodhero.org/recipes/apple-spice-oatmeal"
+        },
+        "copy": {
+            "en": {
+                "title": "Warm apple and cinnamon oats.",
+                "explanation": "Cook oats with chopped apple and water or milk; finish with cinnamon and adjust the sweetness. Cooking time depends on the type of oats. See the original Food Hero recipe for tested quantities and instructions.",
+                "connection": "A simple breakfast idea. Refrigerate leftovers within two hours."
+            },
+            "ro": {
+                "title": "Ovaz cald cu mar si scortisoara.",
+                "explanation": "Fierbe ovazul cu mar taiat si apa sau lapte, apoi adauga scortisoara. Timpul depinde de tipul de ovaz. Reteta originala Food Hero include cantitatile si instructiunile verificate.",
+                "connection": "O idee practica pentru micul dejun. Pune resturile la frigider in cel mult doua ore."
+            },
+            "it": {
+                "title": "Porridge caldo con mela e cannella.",
+                "explanation": "Cuoci avena, mela a pezzi e acqua o latte; completa con cannella. I tempi dipendono dal tipo di avena. La ricetta originale Food Hero contiene dosi e istruzioni.",
+                "connection": "Una colazione semplice. Conserva gli avanzi in frigorifero entro due ore."
+            }
+        },
+        "kind": "knowledge",
+        "revision": 1,
+        "reviewedAt": "2026-11-23T09:00:00.000Z",
+        "reviewBy": "2027-05-20T09:00:00.000Z"
     }
 ];
 export const KNOWLEDGE_CARDS = Object.freeze(validateKnowledgeCatalog(reviewed));
