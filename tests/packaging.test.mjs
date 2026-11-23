@@ -4,7 +4,7 @@ import {mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {assertSourcePath, copyVerifiedSource, createSourcePin, sha256, verifySource} from '../lib/source-integrity.mjs';
-import {attestProduction, verifyDatabaseReadiness, requestDatabaseReadiness} from '../lib/production-attestation.mjs';
+import {attestProduction, verifyDatabaseReadiness, requestDatabaseReadiness, classifyReadinessTransport} from '../lib/production-attestation.mjs';
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'dlkt-packaging-'));
   t.after(() => rmSync(root, {recursive: true, force: true}));
@@ -101,4 +101,18 @@ test('readiness exhausts finite retries instead of declaring an unavailable data
   await assert.rejects(requestDatabaseReadiness(async()=>{count++;throw Object.assign(new Error('network'),{name:'TimeoutError'});},
     endpoint,'sb_publishable_fixture'),/BUILD_DATABASE_ATTESTATION_UNAVAILABLE/);
   assert.equal(count,3);
+});
+
+
+test('transport failure diagnostics are bounded and never expose credentials or private exception bodies',()=>{
+  const secret='sb_publishable_SHOULD_NEVER_BE_LOGGED';
+  const nested=Object.assign(new Error('URL https://private.example/?key='+secret),{code:'UND_ERR_CONNECT_TIMEOUT'});
+  assert.equal(classifyReadinessTransport(new TypeError('fetch failed',{cause:nested})),'UND_ERR_CONNECT_TIMEOUT');
+  assert.equal(classifyReadinessTransport(Object.assign(new Error(secret),{name:'TimeoutError'})),'ABORT_TIMEOUT');
+  assert.equal(classifyReadinessTransport(new TypeError('fetch failed',{cause:Object.assign(new Error(secret),{code:secret})})),'UNCLASSIFIED_TRANSPORT');
+  assert.equal(classifyReadinessTransport(new TypeError('fetch failed',{cause:Object.assign(new Error('dns'),{code:'EAI_AGAIN'})})),'EAI_AGAIN');
+  assert.equal(classifyReadinessTransport(new TypeError('fetch failed',{cause:new AggregateError([
+    Object.assign(new Error('disconnected'),{code:'ENETUNREACH'}),
+  ],'connect failed')})),'ENETUNREACH');
+  assert.equal(classifyReadinessTransport(null),'UNCLASSIFIED_TRANSPORT');
 });
