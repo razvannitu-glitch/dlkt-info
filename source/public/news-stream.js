@@ -96,23 +96,130 @@ export function newsStreamPage(selection, visible = NEWS_PAGE_SIZE) {
         throw Error('NEWS_STREAM_PAGE_INVALID');
     return Object.freeze(selection.filtered.slice(0, visible));
 }
-/** One observer per rendered page. The manual button remains usable when observation is unavailable. */
+/** Proximity alone never loads a page: each rendered sentinel needs fresh downward reader intent. */
 export function observeNewsStream(sentinel, next) {
     if (typeof IntersectionObserver !== 'function')
         return () => { };
-    let done = false;
+    const doc = sentinel.ownerDocument, win = doc.defaultView;
+    if (win === null)
+        return () => { };
+    let done = false, near = false, intentUntil = 0, intentTop = 0, intentNear = false, touchX = null, touchY = null;
+    let observer = null;
+    const interactive = (event, keyboard = false) => event.target instanceof Element
+        && event.target.closest(keyboard ? 'dialog,[role="dialog"],[role="alertdialog"],input,textarea,select,button,a[href],summary,[contenteditable],[role="button"],[role="link"],[role="textbox"],[role="listbox"],[role="combobox"]'
+            : 'dialog,[role="dialog"],[role="alertdialog"],input,textarea,select,[contenteditable],[role="textbox"],[role="listbox"],[role="combobox"]') !== null;
+    const stop = () => {
+        done = true;
+        intentUntil = 0;
+        touchX = null;
+        touchY = null;
+        observer?.disconnect();
+        win.removeEventListener('wheel', wheel);
+        win.removeEventListener('keydown', key);
+        win.removeEventListener('touchstart', touchStart);
+        win.removeEventListener('touchmove', touchMove);
+        win.removeEventListener('touchend', touchEnd);
+        win.removeEventListener('touchcancel', touchEnd);
+        win.removeEventListener('blur', touchEnd);
+        doc.removeEventListener('visibilitychange', touchEnd);
+    };
+    const advance = () => {
+        const active = doc.activeElement;
+        if (active instanceof Element && active.closest('dialog,[role="dialog"],[role="alertdialog"]') !== null) {
+            intentUntil = 0;
+            return;
+        }
+        if (done || !near || !sentinel.isConnected || doc.visibilityState !== 'visible' || intentUntil <= win.performance.now()
+            || !intentNear && win.scrollY <= intentTop)
+            return;
+        stop();
+        next();
+    };
+    const arm = () => {
+        if (done || doc.visibilityState !== 'visible')
+            return;
+        intentUntil = win.performance.now() + 1000;
+        intentTop = win.scrollY;
+        intentNear = near;
+        advance();
+    };
+    const wheel = (event) => {
+        if (!event.isTrusted)
+            return;
+        if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || interactive(event)) {
+            intentUntil = 0;
+            return;
+        }
+        if (event.deltaY <= 0 || Math.abs(event.deltaX) > event.deltaY) {
+            intentUntil = 0;
+            return;
+        }
+        arm();
+    };
+    const key = (event) => {
+        if (!event.isTrusted)
+            return;
+        if (event.defaultPrevented || event.repeat || event.ctrlKey || event.metaKey || event.altKey || interactive(event, true)) {
+            intentUntil = 0;
+            return;
+        }
+        if (event.shiftKey || ['ArrowUp', 'PageUp', 'Home'].includes(event.key)) {
+            intentUntil = 0;
+            return;
+        }
+        if (['ArrowDown', 'PageDown', 'End', ' '].includes(event.key))
+            arm();
+    };
+    const touchStart = (event) => {
+        const point = event.isTrusted && !event.defaultPrevented && !event.ctrlKey && !event.metaKey && !event.altKey && !interactive(event) && event.touches.length === 1 ? event.touches[0] : undefined;
+        touchX = point?.clientX ?? null;
+        touchY = point?.clientY ?? null;
+        intentUntil = 0;
+    };
+    const touchMove = (event) => {
+        if (!event.isTrusted || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || interactive(event) || event.touches.length !== 1) {
+            touchX = null;
+            touchY = null;
+            intentUntil = 0;
+            return;
+        }
+        const point = event.touches[0];
+        if (touchX === null || touchY === null || point === undefined)
+            return;
+        const delta = touchY - point.clientY, sideways = Math.abs(touchX - point.clientX);
+        if (Math.max(Math.abs(delta), sideways) < 8)
+            return;
+        if (delta <= 0 || sideways > delta) {
+            touchX = null;
+            touchY = null;
+            intentUntil = 0;
+            return;
+        }
+        touchX = point.clientX;
+        touchY = point.clientY;
+        arm();
+    };
+    const touchEnd = () => { touchX = null; touchY = null; intentUntil = 0; };
     try {
-        const observer = new IntersectionObserver(entries => {
-            if (done || !entries.some(entry => entry.isIntersecting))
+        observer = new IntersectionObserver(entries => {
+            if (done)
                 return;
-            done = true;
-            observer.disconnect();
-            next();
+            near = entries.some(entry => entry.target === sentinel && entry.isIntersecting);
+            advance();
         }, { rootMargin: '600px 0px' });
+        win.addEventListener('wheel', wheel, { passive: true });
+        win.addEventListener('keydown', key, { passive: true });
+        win.addEventListener('touchstart', touchStart, { passive: true });
+        win.addEventListener('touchmove', touchMove, { passive: true });
+        win.addEventListener('touchend', touchEnd, { passive: true });
+        win.addEventListener('touchcancel', touchEnd, { passive: true });
+        win.addEventListener('blur', touchEnd);
+        doc.addEventListener('visibilitychange', touchEnd);
         observer.observe(sentinel);
-        return () => { done = true; observer.disconnect(); };
+        return stop;
     }
     catch {
+        stop();
         return () => { };
     }
 }

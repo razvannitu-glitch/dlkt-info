@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
-import {selectNewsStream,newsStreamPage,observeNewsStream,NEWS_PAGE_SIZE} from '../.build/src/iceo/news-stream.js';
+import {selectNewsStream,newsStreamPage,NEWS_PAGE_SIZE} from '../.build/src/iceo/news-stream.js';
 import {NEWS_CATEGORIES,newsCategory} from '../.build/src/iceo/news-taxonomy.js';
 import {selectContextualToday} from '../.build/src/iceo/contextual-today.js';
 import {selectNewsLanguage} from '../.build/src/iceo/news-sources.js';
@@ -126,18 +126,7 @@ test('native language and freshness remain eligibility gates before the complete
  const expired=selectContextualToday(selectNewsLanguage(records,'ro'),context,now+3_600_000);
  assert.equal(selectNewsStream(expired,[],now+3_600_000).total,0);
 });
-test('automatic paging observes once, disconnects after advancement and leaves the manual page function available',t=>{
- const descriptor=Object.getOwnPropertyDescriptor(globalThis,'IntersectionObserver'),instances=[];
- class Observer {constructor(callback,options){this.callback=callback;this.options=options;this.disconnected=false;instances.push(this);}observe(target){this.target=target;}disconnect(){this.disconnected=true;}}
- Object.defineProperty(globalThis,'IntersectionObserver',{configurable:true,value:Observer});
- t.after(()=>descriptor?Object.defineProperty(globalThis,'IntersectionObserver',descriptor):delete globalThis.IntersectionObserver);
- let pages=0;const sentinel={},stop=observeNewsStream(sentinel,()=>pages++),observer=instances[0];
- assert.equal(observer.target,sentinel);assert.equal(observer.options.rootMargin,'600px 0px');
- observer.callback([{isIntersecting:false}]);assert.equal(pages,0);
- observer.callback([{isIntersecting:true}]);observer.callback([{isIntersecting:true}]);assert.equal(pages,1);assert.equal(observer.disconnected,true);
- stop();
- Object.defineProperty(globalThis,'IntersectionObserver',{configurable:true,value:undefined});
- assert.doesNotThrow(()=>observeNewsStream(sentinel,()=>pages++)());assert.equal(pages,1);
+test('manual page projection remains available independently of scroll observation',()=>{
  const selection=selectNewsStream({first:Array.from({length:45},(_,i)=>view(global(500+i))),more:[]},[],now);
  assert.equal(newsStreamPage(selection).length,20);assert.equal(newsStreamPage(selection,40).length,40);assert.equal(newsStreamPage(selection,60).length,45);
 });
@@ -272,3 +261,143 @@ test('empty editions, single categories and exact duplicates stay complete witho
  assert.deepEqual(newsStreamPage(selection,60).map(item=>item.view.card),records);
  assert.deepEqual(selectNewsStream(today,[],now,'other','edition:another-seed').filtered.map(item=>item.view.card),records);
 });
+
+
+// Progressive continuation intent: execute actual typed and public implementations.
+const implementations=[['typed',readFileSync('.build/src/iceo/news-stream.js','utf8')],['public',readFileSync('public/news-stream.js','utf8')]];
+const browser=readFileSync('.build/src/iceo/browser.js','utf8');
+class Element {
+ constructor(tag='body',attributes={},parent=null){this.tag=tag;this.attributes=attributes;this.parent=parent;this.isConnected=true;}
+ closest(selectors){
+  const matches=selector=>{
+   const attribute=/^\[([^=\]]+)(?:="([^"]*)")?\]$/u.exec(selector);
+   if(attribute)return Object.hasOwn(this.attributes,attribute[1])&&(attribute[2]===undefined||this.attributes[attribute[1]]===attribute[2]);
+   if(selector==='a[href]')return this.tag==='a'&&Object.hasOwn(this.attributes,'href');
+   return selector===this.tag;
+  };
+  return selectors.split(',').some(matches)?this:this.parent?.closest(selectors)??null;
+ }
+}
+function events(){
+ const listeners=new Map();
+ return {
+  addEventListener(type,listener){if(!listeners.has(type))listeners.set(type,new Set());listeners.get(type).add(listener);},
+  removeEventListener(type,listener){listeners.get(type)?.delete(listener);},
+  emit(type,properties={}){const event={isTrusted:true,defaultPrevented:false,ctrlKey:false,metaKey:false,altKey:false,shiftKey:false,repeat:false,deltaX:0,deltaY:120,key:'PageDown',target:new Element(),touches:[],...properties};for(const listener of [...listeners.get(type)??[]])listener(event);},
+  listenerCount(){return [...listeners.values()].reduce((sum,set)=>sum+set.size,0);},
+ };
+}
+function harness(source,{missing=false,broken=false}={}){
+ let now=1000,pages=0;const observers=[],win={...events(),performance:{now:()=>now},scrollY:80721},doc={...events(),defaultView:win,visibilityState:'visible'};
+ class Observer {
+  constructor(callback,options){if(broken)throw Error('observation unavailable');this.callback=callback;this.options=options;this.disconnected=false;observers.push(this);}
+  observe(target){this.target=target;}
+  disconnect(){this.disconnected=true;}
+  fire(isIntersecting=true,target=this.target){this.callback([{target,isIntersecting}]);}
+ }
+ const start=source.indexOf('export function observeNewsStream(');assert.ok(start>=0,'actual shipped observer function exists');
+ const observe=runInNewContext('('+source.slice(start).replace(/^export /u,'').replace(/^\/\/# sourceMappingURL=.*$/gmu,'')+')',{IntersectionObserver:missing?undefined:Observer,Element});
+ const mount=(next=()=>pages++)=>{
+  const sentinel=new Element('button',{'data-public-more':'true'});sentinel.ownerDocument=doc;
+  const stop=observe(sentinel,next);return {sentinel,stop,observer:observers.at(-1)};
+ };
+ return {win,doc,mount,advanceTime:ms=>{now+=ms;},pages:()=>pages,observers};
+}
+
+for(const [name,source] of implementations){
+ test(name+': reload, programmatic scrolling and repeated intersecting renders cannot load a page without input',()=>{
+  const h=harness(source);let previous;
+  for(let index=0;index<8;index++){
+   previous?.stop();previous=h.mount();previous.observer.fire();
+   h.win.scrollY+=2000;h.win.emit('scroll');previous.observer.fire();h.advanceTime(100);
+   assert.equal(h.pages(),0,'restored footer remains visible without authorizing another page');
+  }
+  previous.stop();assert.equal(h.win.listenerCount()+h.doc.listenerCount(),0);
+ });
+ test(name+': a fresh downward wheel can load once and the replacement observer starts unarmed',()=>{
+  const h=harness(source);let current,pages=0;
+  const render=()=>{current?.stop();if(pages>=5)return;current=h.mount(()=>{pages++;render();current.observer.fire();});current.observer.fire();};
+  render();assert.equal(pages,0);h.win.emit('wheel');assert.equal(pages,1);
+  for(let index=0;index<5;index++){current.observer.fire();h.win.scrollY+=500;h.win.emit('scroll');}
+  assert.equal(pages,1);h.win.emit('wheel');assert.equal(pages,2);current.stop();
+ });
+ test(name+': scroll intent before intersection needs actual downward movement and expires',()=>{
+  const h=harness(source),first=h.mount();first.observer.fire(false);h.win.emit('wheel');first.observer.fire();assert.equal(h.pages(),0);
+  h.win.scrollY+=200;first.observer.fire();assert.equal(h.pages(),1);
+  const next=h.mount();next.observer.fire(false);h.win.emit('wheel');h.win.scrollY+=200;h.advanceTime(1001);next.observer.fire();assert.equal(h.pages(),1);
+  h.win.emit('wheel');assert.equal(h.pages(),2);next.stop();
+ });
+ test(name+': upward, horizontal, zoom and synthetic wheel input cannot authorize continuation',()=>{
+  const h=harness(source),current=h.mount();current.observer.fire();
+  for(const properties of [{deltaY:-100},{deltaY:0},{deltaY:4,deltaX:100},{ctrlKey:true},{metaKey:true},{altKey:true},{shiftKey:true},{isTrusted:false},{defaultPrevented:true}])h.win.emit('wheel',properties);
+  current.observer.fire();assert.equal(h.pages(),0);h.win.emit('wheel');assert.equal(h.pages(),1);
+ });
+ test(name+': keyboard scrolling works outside controls without treating activation or repeat as scrolling',()=>{
+  for(const key of ['ArrowDown','PageDown','End',' ']){const h=harness(source),current=h.mount();current.observer.fire();h.win.emit('keydown',{key});assert.equal(h.pages(),1,key);}
+  const h=harness(source),current=h.mount();current.observer.fire();
+  for(const properties of [{key:'Enter'},{key:'ArrowUp'},{key:'PageUp'},{key:'Home'},{key:' ',shiftKey:true},{key:'PageDown',repeat:true},{key:'PageDown',isTrusted:false}])h.win.emit('keydown',properties);
+  assert.equal(h.pages(),0);current.stop();
+ });
+ test(name+': controls, editable regions and dialogs do not trigger background page loading',()=>{
+  const h=harness(source),current=h.mount();current.observer.fire();
+  const controls=[new Element('input'),new Element('textarea'),new Element('select'),new Element('button'),new Element('a',{href:'/'}),new Element('summary'),new Element('div',{contenteditable:'true'}),new Element('div',{role:'button'}),new Element('div',{role:'listbox'})];
+  for(const target of controls)for(const key of [' ','Enter','PageDown'])h.win.emit('keydown',{target,key});
+  for(const target of [controls[0],controls[1],controls[2],controls[6],controls[8]])h.win.emit('wheel',{target});
+  for(const modal of [new Element('dialog'),new Element('div',{role:'dialog'}),new Element('div',{role:'alertdialog'})]){
+   const target=new Element('p',{},modal);h.win.emit('wheel',{target});h.win.emit('keydown',{target});
+   h.win.emit('touchstart',{target,touches:[{clientX:100,clientY:200}]});h.win.emit('touchmove',{target,touches:[{clientX:100,clientY:100}]});
+  }
+  assert.equal(h.pages(),0);current.stop();
+ });
+ test(name+': a later rejected trusted input cancels pending intent before delayed intersection',()=>{
+  for(const [type,properties] of [
+   ['wheel',{ctrlKey:true}],['wheel',{defaultPrevented:true}],['wheel',{target:new Element('input')}],
+   ['wheel',{target:new Element('p',{},new Element('dialog'))}],
+   ['keydown',{target:new Element('button'),key:' '}],['keydown',{target:new Element('select')}],
+   ['keydown',{ctrlKey:true}],['keydown',{defaultPrevented:true}],
+  ]){
+   const h=harness(source),current=h.mount();current.observer.fire(false);h.win.emit('wheel');h.win.scrollY+=100;
+   h.win.emit(type,properties);current.observer.fire();assert.equal(h.pages(),0,type);current.stop();
+  }
+ });
+ test(name+': opening a dialog cancels pending intent even before another input event',()=>{
+  const h=harness(source),current=h.mount();current.observer.fire(false);h.win.emit('wheel');h.win.scrollY+=100;
+  h.doc.activeElement=new Element('button',{},new Element('dialog'));current.observer.fire();assert.equal(h.pages(),0);
+  h.doc.activeElement=new Element();current.observer.fire();assert.equal(h.pages(),0);h.win.emit('wheel');assert.equal(h.pages(),1);
+ });
+ test(name+': a new single-finger upward swipe authorizes only one page',()=>{
+  const h=harness(source),current=h.mount();current.observer.fire();h.win.emit('touchstart',{touches:[{clientX:100,clientY:200}]});
+  h.win.emit('touchmove',{touches:[{clientX:102,clientY:190}]});assert.equal(h.pages(),1);current.observer.fire();assert.equal(h.pages(),1);
+  const next=h.mount();next.observer.fire();h.win.emit('touchmove',{touches:[{clientX:102,clientY:150}]});assert.equal(h.pages(),1,'the old gesture cannot arm a new observer');
+  h.win.emit('touchstart',{touches:[{clientX:100,clientY:200}]});h.win.emit('touchmove',{touches:[{clientX:100,clientY:180}]});assert.equal(h.pages(),2);
+ });
+ test(name+': pinch, horizontal swipes, upward page movement and cancelled touch are not continuation',()=>{
+  for(const [start,move] of [
+   [[{clientX:100,clientY:200}],[{clientX:300,clientY:190}]],
+   [[{clientX:100,clientY:200}],[{clientX:100,clientY:220}]],
+   [[{clientX:100,clientY:200}],[{clientX:100,clientY:196}]],
+   [[{clientX:100,clientY:200},{clientX:200,clientY:200}],[{clientX:100,clientY:100},{clientX:250,clientY:100}]],
+  ]){
+   const h=harness(source),current=h.mount();current.observer.fire();h.win.emit('touchstart',{touches:start});h.win.emit('touchmove',{touches:move});assert.equal(h.pages(),0);current.stop();
+  }
+  const h=harness(source),current=h.mount();current.observer.fire(false);h.win.emit('touchstart',{touches:[{clientX:100,clientY:200}]});h.win.emit('touchmove',{touches:[{clientX:100,clientY:180}]});h.win.emit('touchcancel');h.win.scrollY+=50;current.observer.fire();assert.equal(h.pages(),0);current.stop();
+ });
+ test(name+': hidden documents, focus loss and disconnected sentinels do not use queued intent',()=>{
+  const h=harness(source),current=h.mount();current.observer.fire(false);h.win.emit('wheel');h.doc.visibilityState='hidden';h.doc.emit('visibilitychange');h.win.scrollY+=200;current.observer.fire();h.win.emit('wheel');assert.equal(h.pages(),0);
+  h.doc.visibilityState='visible';h.doc.emit('visibilitychange');current.observer.fire();assert.equal(h.pages(),0);
+  current.observer.fire(false);h.win.emit('wheel');h.win.emit('blur');h.win.scrollY+=200;current.observer.fire();assert.equal(h.pages(),0);
+  current.sentinel.isConnected=false;h.win.emit('wheel');assert.equal(h.pages(),0);current.stop();
+ });
+ test(name+': cleanup removes all listeners and queued observer callbacks stay inert',()=>{
+  const h=harness(source),current=h.mount();current.observer.fire(false);h.win.emit('wheel');current.stop();current.stop();h.win.scrollY+=200;current.observer.fire();h.win.emit('wheel');
+  assert.equal(h.pages(),0);assert.equal(current.observer.disconnected,true);assert.equal(h.win.listenerCount()+h.doc.listenerCount(),0);
+  for(const options of [{missing:true},{broken:true}]){const unavailable=harness(source,options),watch=unavailable.mount();watch.stop();assert.equal(unavailable.pages(),0);assert.equal(unavailable.win.listenerCount()+unavailable.doc.listenerCount(),0);}
+ });
+ test(name+': the actual manual click handler remains independent of automatic intent',()=>{
+  const h=harness(source),current=h.mount();current.observer.fire();let click,manual=0;
+  const registration=browser.match(/required\s*\('#discovery'\)\.addEventListener\('click',\s*event\s*=>\s*\{[\s\S]*?\n\}\);/u)?.[0];assert.ok(registration,'actual browser click registration');
+  runInNewContext(registration,{Element,required:()=>({addEventListener(type,handler){assert.equal(type,'click');click=handler;}}),showNewsPage:focus=>{assert.equal(focus,true);manual++;}});
+  h.win.emit('keydown',{key:' ',target:current.sentinel});click({target:current.sentinel});current.observer.fire();
+  assert.equal(manual,1);assert.equal(h.pages(),0,'button activation cannot also arm automatic continuation');current.stop();
+ });
+}
