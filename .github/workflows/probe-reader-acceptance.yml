@@ -1,0 +1,41 @@
+name: DLKT public reader acceptance probe
+
+on:
+  push:
+    branches:
+      - codex/iceo-reader-acceptance-20261124
+    paths:
+      - scripts/probe-reader-acceptance.mjs
+      - .github/workflows/probe-reader-acceptance.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dlkt-reader-acceptance-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    name: Observe bounded public reader acceptance
+    if: github.ref == 'refs/heads/codex/iceo-reader-acceptance-20261124'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out exact probe source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Compile real page validators and city catalog
+        run: npm run build
+      - name: Observe public reader without credentials
+        run: node scripts/probe-reader-acceptance.mjs
+
