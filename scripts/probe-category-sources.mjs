@@ -7,15 +7,52 @@ import {NEWS_DISCOVERY_INDEXES, publisherForNewsUrl} from '../source/.build/src/
 
 // Observational evidence only. Never changes a registry, publishes a card,
 // follows a redirect, bypasses a denial or uses credentials.
-const SOURCES=Object.freeze([
-  {id:'protv-ro-news',feed:'https://rss.stirileprotv.ro/',format:'rss',
-    origin:'https://stirileprotv.ro',articlePath:'/stiri/',robots:'https://stirileprotv.ro/robots.txt',
-    feedRobots:'https://rss.stirileprotv.ro/robots.txt',productionRequired:true},
-]);
+const PROBE_GROUPS=Object.freeze({
+  'protv-compatibility':Object.freeze({
+    id:'dlkt-protv-robots-compatibility-3',duration:65_000,limits:Object.freeze({robots:2,feed:1,article:2}),
+    sources:Object.freeze([
+      {id:'protv-ro-news',feed:'https://rss.stirileprotv.ro/',format:'rss',
+        origin:'https://stirileprotv.ro',articlePath:'/stiri/',robots:'https://stirileprotv.ro/robots.txt',
+        feedRobots:'https://rss.stirileprotv.ro/robots.txt',productionRequired:true},
+    ]),
+  }),
+  'ro-admitted':Object.freeze({
+    id:'dlkt-ro-admitted-parser-1',duration:70_000,limits:Object.freeze({robots:2,feed:2,article:4}),
+    sources:Object.freeze([
+      {id:'descopera-ro',feed:'https://www.descopera.ro/feed',format:'rss',
+        origin:'https://www.descopera.ro',articlePath:'/',robots:'https://www.descopera.ro/robots.txt',productionRequired:true},
+      {id:'spotmedia-ro',feed:'https://spotmedia.ro/feed',format:'rss',
+        origin:'https://spotmedia.ro',articlePath:'/stiri/',robots:'https://spotmedia.ro/robots.txt',productionRequired:true},
+    ]),
+  }),
+  'ro-additional':Object.freeze({
+    id:'dlkt-ro-additional-metadata-1',duration:40_000,limits:Object.freeze({robots:1,feed:1,article:2}),
+    sources:Object.freeze([
+      {id:'spotmedia-ro',feed:'https://spotmedia.ro/feed',format:'rss',
+        origin:'https://spotmedia.ro',articlePath:'/stiri/',robots:'https://spotmedia.ro/robots.txt',productionRequired:false},
+    ]),
+  }),
+  'ro-specialists':Object.freeze({
+    id:'dlkt-ro-specialist-metadata-1',duration:150_000,limits:Object.freeze({robots:4,feed:4,article:8}),
+    sources:Object.freeze([
+      {id:'edupedu-ro',feed:'https://www.edupedu.ro/feed/',format:'rss',
+        origin:'https://www.edupedu.ro',articlePath:'/',robots:'https://www.edupedu.ro/robots.txt',productionRequired:false},
+      {id:'descopera-ro',feed:'https://www.descopera.ro/feed',format:'rss',
+        origin:'https://www.descopera.ro',articlePath:'/',robots:'https://www.descopera.ro/robots.txt',productionRequired:false},
+      {id:'economedia-ro',feed:'https://economedia.ro/feed',format:'rss',
+        origin:'https://economedia.ro',articlePath:'/',robots:'https://economedia.ro/robots.txt',productionRequired:false},
+      {id:'g4media-ro',feed:'https://www.g4media.ro/feed',format:'rss',
+        origin:'https://www.g4media.ro',articlePath:'/',robots:'https://www.g4media.ro/robots.txt',productionRequired:false},
+    ]),
+  }),
+});
+const probeGroup=process.env.DLKT_SOURCE_PROBE_GROUP??'protv-compatibility';
+if(!Object.hasOwn(PROBE_GROUPS,probeGroup))throw new Error('PROBE_GROUP_NOT_ALLOWLISTED');
+const configuration=PROBE_GROUPS[probeGroup],SOURCES=configuration.sources;
 const USER_AGENT='DLKT-Info-ICEO/1.0 (+https://www.dlkt.ee)';
 const BYTE_LIMIT=1_048_576,DAY=86_400_000;
-const startedAt=Date.now(),deadline=startedAt+65_000;
-const attempts={robots:0,feed:0,article:0},limits={robots:2,feed:1,article:2};
+const startedAt=Date.now(),deadline=startedAt+configuration.duration;
+const attempts={robots:0,feed:0,article:0},limits=configuration.limits;
 const object=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 const list=value=>value===undefined?[]:Array.isArray(value)?value:[value];
 const plain=value=>typeof value==='string'?value:object(value)&&typeof value['#text']==='string'?value['#text']:null;
@@ -46,7 +83,12 @@ async function boundedGet(url,kind){
       headers:{'User-Agent':USER_AGENT,Accept:kind==='article'?'text/html, application/xhtml+xml':kind==='robots'?'text/plain':'application/rss+xml, application/xml, text/xml'}});
     const type=(response.headers.get('content-type')??'').split(';')[0].trim().toLowerCase();
     const base={url,status:response.status,contentType:type};
-    if(response.status>=300&&response.status<400){await response.body?.cancel();return {...base,ok:false,error:'redirect-not-followed'};}
+    if(response.status>=300&&response.status<400){
+      const location=response.headers.get('location');
+      let redirectLocation=null;
+      try{const target=new URL(location??'',url);if(location&&target.protocol==='https:'&&!target.username&&!target.password&&!target.search&&!target.hash)redirectLocation=clean(target.href,1000);}catch{/* Record only an uncredentialed public URL. */}
+      await response.body?.cancel();return {...base,ok:false,error:'redirect-not-followed',redirectLocation};
+    }
     if(!response.ok){await response.body?.cancel();return {...base,ok:false,error:'http-status'};}
     const accepted=kind==='article'?['text/html','application/xhtml+xml']:kind==='robots'?['text/plain']:['application/rss+xml','application/xml','text/xml'];
     if(kind!=='robots'&&!accepted.includes(type)){await response.body?.cancel();return {...base,ok:false,error:'content-type'};}
@@ -163,7 +205,8 @@ function parseFeed(xml,source,now){
     if(!object(parsed)||!object(parsed.rss)||!object(parsed.rss.channel))throw new Error('PROBE_RSS_SCHEMA');
     const channel=parsed.rss.channel;entries=list(channel.item);
     identity={title:clean(plain(channel.title)),link:clean(plain(channel.link)),language:clean(plain(channel.language),100),lastBuildDate:clean(plain(channel.lastBuildDate),100)};
-    rawRows=entries.filter(object).map(row=>({url:plain(row.link),title:plain(row.title),date:plain(row.pubDate)}));
+    rawRows=entries.filter(object).map(row=>({url:plain(row.link),title:plain(row.title),date:plain(row.pubDate),
+      categories:list(row.category).slice(0,12).map(value=>clean(plain(value),100)).filter(Boolean)}));
   }else{
     if(!object(parsed)||!object(parsed.urlset))throw new Error('PROBE_SITEMAP_SCHEMA');
     entries=list(parsed.urlset.url);
@@ -242,7 +285,7 @@ async function inspectSource(source){
     const decision=robotsDecision(policy,row.url);
     if(!decision.allowed){result.articles.push({url:row.url,status:'not-requested',robotsDecision:decision});continue;}
     const response=await boundedGet(row.url,'article');
-    const observation={url:row.url,candidateTitle:clean(row.title),candidateTitleLength:row.title.length,feedPublished:row.stamp,request:publicResponse(response),robotsDecision:decision};
+    const observation={url:row.url,candidateTitle:clean(row.title),candidateTitleLength:row.title.length,feedPublished:row.stamp,feedCategories:row.categories??[],request:publicResponse(response),robotsDecision:decision};
     if(response.ok){
       observation.metadata=metadataEvidence(response.text);
       const publisher=publisherForNewsUrl(row.url);
@@ -287,7 +330,7 @@ for(const source of SOURCES){
 const incomplete=reports.some(report=>report.status!=='observed'||report.error||report.articles.length!==2
   ||report.articles.some(article=>!article.request?.ok)
   ||report.productionRequired&&(report.productionFeedParser?.state!=='accepted'||report.articles.some(article=>article.productionArticleParser?.state!=='accepted')));
-console.log(JSON.stringify({probe:'dlkt-protv-robots-compatibility-3',commit:process.env.GITHUB_SHA??null,
+console.log(JSON.stringify({probe:configuration.id,probeGroup,commit:process.env.GITHUB_SHA??null,
   startedAt:new Date(startedAt).toISOString(),finishedAt:new Date().toISOString(),attempts,limits,robotsParserChecks,
   outcome:incomplete?'incomplete-evidence':'observations-collected',
   boundary:'Metadata observations only. This script changes no source registry, publishes no content and makes no assertion of publisher reuse rights.',

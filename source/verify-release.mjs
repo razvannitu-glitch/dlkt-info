@@ -65,7 +65,7 @@ if (manifest.product !== 'dlkt-info'
   || manifest.iceoVersion !== 'iceo-primary-mesh-1'
   || manifest.publicSourceCount !== 51
   || manifest.publicPublisherCount !== 25
-  || manifest.reviewedNewsPublisherFamilies !== 75
+  || manifest.reviewedNewsPublisherFamilies !== 77
   || manifest.publicEditorialCategoryCount !== 20
   || manifest.publicDailyTarget !== 30 || manifest.publicDailyMaximum !== 40
   || manifest.publicDailyRefreshSchedule !== '*/2 * * * *'

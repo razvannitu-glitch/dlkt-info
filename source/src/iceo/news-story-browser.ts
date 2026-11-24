@@ -2,6 +2,7 @@ import {validNewsPage,validNewsStorySourcesPage,newsOriginalLanguage,NEWS_SOURCE
 import {fetchNewsStorySources,NewsStorySourcesError} from './news-continuation.js';
 import {resolveLocale,t,type Locale} from '../i18n/locale.js';
 import type {City} from '../local/contracts.js';
+import {pressReviewCitation} from './source-links.js';
 
 const CONTEXT_FIELDS=['epoch','revision','generatedAt','startedAt','expiresAt','language','cityId','countryCode','period','filter'] as const;
 type NewsStoryContext=Pick<NewsPage,typeof CONTEXT_FIELDS[number]|'day'|'sourceScope'>;
@@ -55,6 +56,8 @@ function publishedAt(source:NewsStorySource):string {
 function sourceNode(source:NewsStorySource,locale:Locale,timeZone:string):HTMLLIElement {
  const row=document.createElement('li'),meta=document.createElement('p'),publisher=document.createElement('strong'),date=document.createElement('time'),link=document.createElement('a');
  meta.className='news-story-source-meta';publisher.textContent=source.card.publisher;publisher.dir='auto';
+ const citation=pressReviewCitation(source.card.sourceUrl);
+ if(citation){const credit=document.createElement('a');credit.className='publisher-citation';credit.textContent=citation.label;credit.href=citation.homeUrl;credit.target='_blank';credit.rel='noopener noreferrer';publisher.textContent='';publisher.append(credit);}
  date.dateTime=publishedAt(source);
  date.textContent=new Intl.DateTimeFormat(locale,{dateStyle:'medium',timeStyle:'short',timeZone}).format(new Date(date.dateTime));
  date.title=date.dateTime;date.setAttribute('aria-label',t(locale,'published')+': '+date.textContent);
@@ -64,7 +67,9 @@ function sourceNode(source:NewsStorySource,locale:Locale,timeZone:string):HTMLLI
  link.lang=originalLanguage??'';link.setAttribute('translate','no');
  language.dataset.originalLanguage=originalLanguage??'unknown';
  language.textContent=originalLanguage?(new Intl.DisplayNames([locale],{type:'language'}).of(originalLanguage)??originalLanguage):locale==='ro'?'Limba sursei neprecizata':locale==='it'?'Lingua della fonte non specificata':'Source language unspecified';
- meta.append(publisher,document.createTextNode(' · '),date,document.createTextNode(' · '),language);row.append(meta,link);return row;
+ meta.append(publisher,document.createTextNode(' · '),date,document.createTextNode(' · '),language);row.append(meta,link);
+ if(citation){const original=document.createElement('a');original.className='text-button';original.href=source.card.sourceUrl;original.textContent=citation.originalLabel;original.target='_blank';original.rel='noopener noreferrer';row.append(original);}
+ return row;
 }
 
 /** Inert until the reader explicitly requests more originals from a connected, open disclosure. */
