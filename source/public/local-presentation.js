@@ -40,6 +40,35 @@ function eventTime(at, city, now, from) {
     const date = day(Date.parse(at), city) === day(now, city) ? 'Today' : new Intl.DateTimeFormat('en-GB', { timeZone: city.timezone, day: 'numeric', month: 'long' }).format(new Date(at));
     return `${date} ${from ? 'from' : 'at'} ${clock(at, city)} (${city.name} time)`;
 }
+/** Condense only the known generated summary; unexpected source wording remains intact. */
+function compactEventReading(card, city, locale) {
+    const context = card.context;
+    if (!context?.datePrecision || !context.startsAt || context.documentUrl !== card.sourceUrl)
+        return null;
+    const start = Date.parse(context.startsAt);
+    const end = context.datePrecision === 'day' ? Date.parse(context.endsAt ?? '') - 1 : start;
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start || start % 60000 !== 0)
+        return null;
+    if (context.datePrecision === 'day' && (context.endsAt === undefined || (end + 1) % 60000 !== 0 || clock(context.startsAt, city) !== '00:00' || clock(context.endsAt, city) !== '00:00'))
+        return null;
+    const first = day(start, city);
+    const last = day(end, city);
+    const when = context.datePrecision === 'day'
+        ? first + (first === last ? '' : ' to ' + last) + ' · dates only; check opening hours'
+        : first + ' · ' + clock(context.startsAt, city) + ' (' + city.timezone + ')';
+    if (context.when !== when
+        || card.text !== `${context.place}. Published schedule: ${when}. Check the organiser for current admission and availability.`
+        || context.action !== 'Check the organiser for opening hours, admission and any schedule changes.')
+        return null;
+    const ro = locale === 'ro';
+    const date = new Intl.DateTimeFormat(ro ? 'ro-RO' : 'en-GB', { timeZone: city.timezone, day: 'numeric', month: 'short', year: 'numeric' });
+    const period = (ro ? 'Cand: ' : 'When: ') + date.formatRange(start, end)
+        + (context.datePrecision === 'minute' ? ' · ' + clock(context.startsAt, city) + (ro ? ' (ora locala)' : ' (local time)') : '');
+    const nextStep = context.datePrecision === 'day'
+        ? (ro ? 'Datele nu confirma orele de acces. Verifica programul, biletele si disponibilitatea la organizator.' : 'Dates do not confirm opening hours. Check the organiser for the current schedule, tickets and availability.')
+        : (ro ? 'Verifica eventualele modificari de program, biletele si disponibilitatea la organizator.' : 'Check the organiser for schedule changes, tickets and availability.');
+    return { title: card.title, paragraphs: [context.place], period, nextStep };
+}
 /** Presentation never changes the source record, its timing, saved signature or evidence. */
 export function localReading(card, city, now, locale = 'en') {
     if (locale === 'ro' && card.kind === 'forecast') {
@@ -62,7 +91,7 @@ export function localReading(card, city, now, locale = 'en') {
         return { title: card.title, paragraphs: card.news.summary ? [card.news.summary] : [], period: 'Published ' + published + ' (' + city.name + ' time)', nextStep: null };
     }
     if (card.kind === 'event' && card.context?.datePrecision) {
-        return { title: card.title, paragraphs: [card.text], period: card.context.when, nextStep: card.context.action };
+        return compactEventReading(card, city, locale) ?? { title: card.title, paragraphs: [card.text], period: card.context.when, nextStep: card.context.action };
     }
     if (card.kind === 'event' && card.context?.startsAt) {
         const prefix = 'Listed admission terms: ', terms = card.facts.find(f => f.startsWith(prefix))?.slice(prefix.length);

@@ -34,7 +34,7 @@ export interface NewsCategoryDefinition {
  readonly id:NewsCategoryId; readonly qcode:`medtop:${NewsCategoryId}`; readonly uri:string;
  readonly iptcLabel:string; readonly label:string; readonly labelRo:string;
 }
-export const NEWS_TAXONOMY_VERSION='iptc-media-topics-top-level-2026-10-16-dlkt-5' as const;
+export const NEWS_TAXONOMY_VERSION='iptc-media-topics-top-level-2026-10-16-dlkt-6' as const;
 export const NEWS_CATEGORIES:readonly NewsCategoryDefinition[]=Object.freeze(DEFINITIONS.map(([id,iptcLabel,label,labelRo])=>
  Object.freeze({id,qcode:('medtop:'+id) as `medtop:${NewsCategoryId}`,uri:'http://cv.iptc.org/newscodes/mediatopic/'+id,iptcLabel,label,labelRo})));
 const ids:ReadonlySet<string>=new Set(NEWS_CATEGORIES.map(category=>category.id));
@@ -103,7 +103,7 @@ function sectionCategory(url:URL):NewsCategoryId|null {
 }
 const FINANCIAL=/\b(?:quarterly (?:earnings|profits|results)|earnings|profits? (?:rise|fall|jump|drop)|revenue|stock market|share price|venture capital|startup funding|ipo|interest rates?|inflation|rezultate financiare|profit(?:ul|uri)?|cifra de afaceri|inflatie|dobanzi)\b/u;
 const MARKET_SUBJECT=/\b(?:s\s*&\s*p\s*500|nasdaq|dow jones|ftse 100|nikkei 225|cryptocurrenc(?:y|ies)|crypto|bitcoin|ethereum|bursa de valori|indici bursieri|piete bursiere|criptomonede(?:le)?|fonduri de investitii)\b/u;
-const MEDICAL=/\b(?:retail medicine|healthcare|health care|health insurance|asigurari de sanatate|veterinary|veterinar(?:i|e)?|medical treatment|medicine|medicines|vaccines?|vaccination|hospitals?|patients?|cancer|diabetes|sanatate|medicina|medicamente|vaccin(?:uri|are)?|spital(?:ul|e|ele)?|pacienti|tratament(?:e|ul)?)\b/u;
+const MEDICAL=/\b(?:retail medicine|healthcare|health care|health insurance|asigurari de sanatate|veterinary|veterinar(?:i|e)?|medical treatment|general practitioners?|(?:gp|general practice) surger(?:y|ies)|medicine|medicines|vaccines?|vaccination|hospitals?|patients?|cancer|diabetes|sanatate|medicina|medicamente|vaccin(?:uri|are)?|spital(?:ul|e|ele)?|pacienti|tratament(?:e|ul)?)\b/u;
 const TECH=/\b(?:machine learning|deep learning|artificial intelligence|inteligenta artificiala|semiconductors?|software|web development|software development|programming languages?|javascript|typescript|devops|information technology|cybersecurity|dezvoltare web|limbaje de programare|securitate cibernetica|quantum computing)\b/u;
 // Explicit sector context is needed: a hobby, personal story or legal action is not an industry report.
 // IPTC animal (including pets) sits under environment/nature; industry regulation sits under government.
@@ -129,11 +129,33 @@ const DIRECT:readonly (readonly [NewsCategoryId,RegExp])[]=[
  ['13000000',/\b(?:cosmos|astronomie|astronauti|galaxii|exoplanete|telescop(?:ul)?|cercetatori(?:i|lor)?|studiu stiintific|biologie|botanica)\b/u],
  ['06000000',/\b(?:pet[- ]care|pet adoption|dog training|cat care|animale de companie|ingrijirea (?:cainilor|pisicilor))\b/u],
 ];
+// Mask an explicitly figurative wave only for subject inference; stored evidence is untouched.
+function literalHeadline(title:string):string {
+ return title.replace(/\btsunami(?=["'’”]?\s+of\s+(?:demand|requests|calls|appointments|paperwork)\b)/giu,' ');
+}
+// A bounded capitalized name plus an edition marker can identify a title in explicit game release coverage.
+function crimeSubjectText(title:string):string {
+ const normalized=fold(title);
+ const game=/\b(?:video games?|videogames?|gaming|gameplay|playstation|xbox|nintendo)\b/u.test(normalized);
+ const release=/\b(?:launch(?:es|ed|ing)?|release(?:s|d)?|debut(?:s|ed)?|trailers?|dlc|expansion packs?)\b/u.test(normalized);
+ const reported=/\b(?:police|officers?|suspects?|victims?|stolen|steal(?:s|ing)?|charges?|lawsuits?|trials?|courts?|arrests?|investigations?|fraud|spree|rampant)\b/u.test(normalized)
+  ||/^(?:(?:a|an|the|another|suspected|alleged)\s+)*theft\b|\btheft\s+(?:of|from|at|near|during|outside|inside|in|on|by|after|before|reported|suspected|alleged|delays?|disrupts?|hits?|rises?|surges?|falls?|increases?|decreases?|sparks?|prompts?|causes?|remains?)\b/u.test(normalized);
+ return game&&release&&!reported?title.replace(/\b(\p{Lu}[\p{L}’'-]{1,60})\s+Theft\s+(\p{Lu}[\p{L}’'-]{1,60})\s+([IVX]{1,6}|\d{1,2})(?=\s|[.,:;!?'"’”]|$)/gu,'$1 $2 $3'):title;
+}
+// Humanitarian disruption provides explicit warfare context; commercial and fictional wars do not.
+function humanitarianWar(title:string):boolean {
+ return /\bwars?\b/u.test(title)
+  &&/\b(?:humanitarian|aid|relief|civilians?|refugees?|displaced|food (?:routes|supplies|shipments)|supply routes)\b/u.test(title)
+  &&/\b(?:chok(?:e|es|ed|ing)|disrupt(?:s|ed|ing)?|threaten(?:s|ed|ing)?|block(?:s|ed|ing)?|halt(?:s|ed|ing)?|cut(?:s|ting)?|displac(?:e|es|ed|ing)|leave|leaves|left)\b/u.test(title)
+  &&!/\b(?:(?:trade|price|culture|console|streaming|tariff|currency|bidding|brand) wars?|wars? of words|war on (?:drugs|poverty)|films?|movies?|novels?|fiction(?:al)?|video games?|videogames?|gaming|gameplay|playstation|xbox|nintendo)\b/u.test(title);
+}
 // A newly recognized shooting must not turn explicit warfare or a fictional depiction into crime reporting.
 const REPORTED_SHOOTING=/\b(?:a|au) fost impuscat(?:a|e|i)?\b/u;
 const FICTIONAL_SHOOTING=/\b(?:in|din) (?:(?:noul|acest|un) )?(?:film(?:ul)?|serial(?:ul)?|roman(?:ul)?)\b/u;
-function headlineCategory(title:string):NewsCategoryId|null {
- const event=DIRECT.slice(0,3).find(([,pattern])=>pattern.test(title));
+function headlineCategory(title:string,originalTitle:string):NewsCategoryId|null {
+ const crimeTitle=fold(crimeSubjectText(originalTitle)),war=humanitarianWar(title);
+ const matches=(category:NewsCategoryId,pattern:RegExp):boolean=>pattern.test(category==='02000000'?crimeTitle:title)||(category==='16000000'&&war);
+ const event=DIRECT.slice(0,3).find(([category,pattern])=>matches(category,pattern));
  if(event)return event[0];
  if(REPORTED_SHOOTING.test(title)&&!FICTIONAL_SHOOTING.test(title)&&!/\bnu (?:a|au) fost impuscat(?:a|e|i)?\b/u.test(title))return '02000000';
  // Commercial vocabulary cannot turn care delivery into shopping; financial results remain economy.
@@ -147,7 +169,7 @@ function headlineCategory(title:string):NewsCategoryId|null {
  if(TECH.test(title))return '13000000';
  if(MEDICAL.test(title)&&!/\b(?:medical school|medical students?|medical education|facultatea de medicina)\b/u.test(title))return '07000000';
  if(CELEBRITY.test(title)&&PERSONAL_LIFE.test(title))return '08000000';
- const direct=DIRECT.find(([,pattern])=>pattern.test(title));
+ const direct=DIRECT.find(([category,pattern])=>matches(category,pattern));
  return direct?.[0]??(INDUSTRY.test(title)?'04000000':null);
 }
 
@@ -161,17 +183,17 @@ export function classifyNewsSubject(title:string,sourceUrl:string):NewsClassific
  if(!title.trim()||title.length>4000||/[\u0000-\u001f\u007f]/u.test(title))return null;
  let url:URL;try{url=new URL(sourceUrl);}catch{return null;}
  if(url.protocol!=='https:'||url.username||url.password||url.port)return null;
- const normalized=fold(title),section=sectionCategory(url);
+ const headline=literalHeadline(title),normalized=fold(headline),section=sectionCategory(url);
  // This care-delivery subject is explicit even when a publisher files it on a broad business desk.
  if(retailCare(normalized))return result('07000000','headline');
  if(section!==null)return result(section,'publisher-section');
- const direct=headlineCategory(normalized);
+ const direct=headlineCategory(normalized,headline);
  if(direct!==null)return result(direct,'headline');
  // Preserve the existing reviewed FR/DE/ES/PT/AR/JA and English semantic safeguards.
  // Legacy semantics use the edition language and publisher, never the article slug or a generic place desk.
  const semanticUrl=new URL(url.href),language=/^\/(fr|de|es|pt-br|pt-002|ar|japanese)(?:\/|$)/u.exec(url.pathname)?.[1];
  semanticUrl.pathname=language?'/'+language+'/':'/';semanticUrl.search='';semanticUrl.hash='';
- const legacy=classifyNewsHeadline(title,semanticUrl.href);
+ const legacy=classifyNewsHeadline(headline,semanticUrl.href);
  if(legacy===null)return null;
  if(legacy==='world')return result('11000000','headline'); // International relations, not presumed warfare.
  if(legacy==='housing')return null; // Needs explicit commercial, planning or welfare evidence above.
@@ -212,9 +234,9 @@ export function classifyEvidenceCard(card:EvidenceInput):NewsClassification|null
  if(card.sourceIds.includes('news-unclassified'))return null;
  // A specific, agreed discovery hint can support an otherwise terse headline.
  // Generic world/housing/other/topic defaults cannot classify an unknown article.
- const contradicted=contradictedHeadlineHints(card.title),leisure=LEISURE_TRAVEL.test(fold(card.title));
+ const contradicted=contradictedHeadlineHints(card.title),leisure=LEISURE_TRAVEL.test(fold(card.title)),metaphor=literalHeadline(card.title)!==card.title;
  const hints=new Set(card.sourceIds.map(newsCategoryFromSourceId)
-  .filter(value=>value!==null&&value!=='world'&&value!=='housing'&&!contradicted.includes(value)&&!(value==='travel'&&!leisure))
+  .filter(value=>value!==null&&value!=='world'&&value!=='housing'&&!contradicted.includes(value)&&!(value==='travel'&&!leisure)&&!(value==='weather'&&metaphor))
   .map(value=>value===null?null:legacyCategoryToNewsCategory(value)).filter(isNewsCategoryId));
  if(hints.size===1){const category=[...hints][0];if(category)return result(category,'legacy-topic');}
  return null;
