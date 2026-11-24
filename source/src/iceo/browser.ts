@@ -389,8 +389,11 @@ function cardNode(view:ReadingCard,index:number,total:number,saved?:SavedCard,au
   const node=fragment.querySelector<HTMLElement>('article');if(!node)throw new Error('READER_TEMPLATE_INVALID');
   node.classList.add('editorial-card');
   const put=(selector:string,value:string):void=>{const el=node.querySelector<HTMLElement>(selector);if(el)el.textContent=value;};
-  const photograph=photoNode(view.card);if(photograph)node.querySelector('header')?.after(photograph);
-  const card=view.card,presentation=editorialCardPresentation(view,saved!==undefined);node.dataset.notice=view.noticeState;node.dataset.cardId=card.id;
+  const card=view.card,citation=pressReviewCitation(card.sourceUrl);
+  // These reviewed press-review sources are title/date/link only. Avoid photo
+  // requests and keep the required source citation ahead of the original title.
+  const photograph=citation===null?photoNode(card):null;if(photograph)node.querySelector('header')?.after(photograph);
+  const presentation=editorialCardPresentation(view,saved!==undefined);node.dataset.notice=view.noticeState;node.dataset.cardId=card.id;
   if(view.storyKey)node.dataset.storyKey=view.storyKey;
   const originalText=(element:HTMLElement,record:EvidenceCard=card):void=>{element.dir='auto';element.lang=sourceLanguage(record)??'';element.setAttribute('translate','no');};
   const evidence=node.querySelector<HTMLElement>('.evidence');
@@ -404,7 +407,7 @@ function cardNode(view:ReadingCard,index:number,total:number,saved?:SavedCard,au
   if(editorialCategory)node.dataset.editorialCategory=editorialCategory;put('.card-index',`${String(index+1).padStart(2,'0')} / ${String(total).padStart(2,'0')}`);
   put('.card-kind',presentation.kindLabel);const kind=node.querySelector<HTMLElement>('.card-kind');if(kind)kind.hidden=!presentation.kindLabel;
   put('h3',presentation.headline);
-  const title=node.querySelector<HTMLElement>('h3'),sourceUrl=safeLink(card.sourceUrl),citation=pressReviewCitation(card.sourceUrl);
+  const title=node.querySelector<HTMLElement>('h3'),sourceUrl=safeLink(card.sourceUrl);
   if(title&&citation){const credit=make('a','privacy-note publisher-citation',citation.label);credit.href=citation.homeUrl;credit.target='_blank';credit.rel='noopener noreferrer';title.before(credit);}
   for(const original of node.querySelectorAll<HTMLElement>('h3,.card-publisher'))originalText(original);
   if(title&&sourceUrl){const titleLink=make('a','card-title-link',presentation.headline);titleLink.href=sourceUrl;titleLink.target='_blank';titleLink.rel='noopener noreferrer';title.replaceChildren(titleLink);}

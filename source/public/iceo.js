@@ -712,10 +712,13 @@ function cardNode(view, index, total, saved, automaticInsights = true, followPre
     node.classList.add('editorial-card');
     const put = (selector, value) => { const el = node.querySelector(selector); if (el)
         el.textContent = value; };
-    const photograph = photoNode(view.card);
+    const card = view.card, citation = pressReviewCitation(card.sourceUrl);
+    // These reviewed press-review sources are title/date/link only. Avoid photo
+    // requests and keep the required source citation ahead of the original title.
+    const photograph = citation === null ? photoNode(card) : null;
     if (photograph)
         node.querySelector('header')?.after(photograph);
-    const card = view.card, presentation = editorialCardPresentation(view, saved !== undefined);
+    const presentation = editorialCardPresentation(view, saved !== undefined);
     node.dataset.notice = view.noticeState;
     node.dataset.cardId = card.id;
     if (view.storyKey)
@@ -741,7 +744,7 @@ function cardNode(view, index, total, saved, automaticInsights = true, followPre
     if (kind)
         kind.hidden = !presentation.kindLabel;
     put('h3', presentation.headline);
-    const title = node.querySelector('h3'), sourceUrl = safeLink(card.sourceUrl), citation = pressReviewCitation(card.sourceUrl);
+    const title = node.querySelector('h3'), sourceUrl = safeLink(card.sourceUrl);
     if (title && citation) {
         const credit = make('a', 'privacy-note publisher-citation', citation.label);
         credit.href = citation.homeUrl;

@@ -68,6 +68,7 @@ test('bounded acquisition admits originals and each share page keeps linked sour
   assert.ok(links.some(link=>link.attribs.href===citation.homeUrl&&DomUtils.textContent(link)===citation.label));
   assert.ok(links.some(link=>link.attribs.href===card.sourceUrl&&DomUtils.textContent(link)===citation.originalLabel));
   assert.ok(html.indexOf(citation.label)<html.indexOf('<h1>'),'source citation precedes reused headline');
+  assert.equal(DomUtils.getElementsByTagName('img',doc,true).filter(node=>node.attribs['data-article-photo']).length,0,'title/date/link-only sources request no original photograph');
   assert.equal(card.summary,undefined);assert.equal(card.byline,undefined);assert.equal(card.licenseUrl,undefined);
  }
  for(const url of ['https://www.descopera.ro.attacker.invalid/stiinta/story','https://user@www.descopera.ro/stiinta/story','http://spotmedia.ro/stiri/story','https://spotmedia.ro/api/story','https://www.descopera.ro/'])

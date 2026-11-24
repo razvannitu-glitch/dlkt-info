@@ -121,9 +121,10 @@ async function loaded(call){
 
 /** Controlled evidence exercises the real page service; it is never a claim of a live source check. */
 async function newsFixture(){
- const [{NewsPageService,parseNewsPageRequest,parseNewsSourcesRequest},{article,epoch,CorpusMemoryStore,snapshot,hash},{cardContent},{findCity}]=await Promise.all([
+ const [{NewsPageService,parseNewsPageRequest,parseNewsSourcesRequest},{article,epoch,CorpusMemoryStore,snapshot,hash},{cardContent},{findCity},{SPECIALIST_ROWS},{pressReviewCitation}]=await Promise.all([
   import('../source/.build/src/iceo/news-page.js'),import('../source/tests/fixtures/news-corpus.mjs'),
   import('../source/.build/src/iceo/card-validation.js'),import('../source/.build/src/local/cities.js'),
+  import('../source/tests/fixtures/romanian-specialists.mjs'),import('../source/.build/src/iceo/source-links.js'),
  ]);
  const now=Date.now(),city=findCity('683506');assert.ok(city,'controlled Bucharest city is registered');
  const observed=[
@@ -144,18 +145,30 @@ async function newsFixture(){
   title:'O cântăreață iraniană a primit 75 de lovituri de bici pentru un concert in Teheran',
   boundary:'Synthetic negative-control event for browser QA; not live reporting.'};
  distinct.contentHash=hash(cardContent(distinct));
- const english=article(960,{now,language:'en',category:'13000000'}),cards=[...reports,distinct,english];
+ const specialists=SPECIALIST_ROWS.map((row,index)=>{
+  const card={...article(1000+index,{now,language:'ro',published:now-20_000-index*1000}),
+   title:row.title,publisher:row.publisher,sourceUrl:row.url,identity:row.url,id:hash(row.url).slice(0,24),
+   articleSubject:{basis:'publisher-jsonld',sections:row.sections,keywords:[],articleUrl:row.url},
+   boundary:'Controlled browser QA evidence; source-check and publication dates are fixtures.',
+   attribution:'Controlled QA fixture from observed publisher headline and URL.'};
+  card.contentHash=hash(cardContent(card));return card;
+ });
+ const sourceOnly=specialists.map(card=>{
+  const citation=pressReviewCitation(card.sourceUrl);assert.ok(citation,'reviewed source citation is available');
+  return {id:card.id,title:card.title,sourceUrl:card.sourceUrl,...citation};
+ });
+ const english=article(960,{now,language:'en',category:'13000000'}),cards=[...reports,distinct,english,...specialists];
  const stored=epoch(cards,[],{now}),before=JSON.stringify(stored),service=new NewsPageService(new CorpusMemoryStore([stored]),'test-only-browser-qa-cursor-key-123456789012345678901234567890');
  const selected=await service.read({language:'ro',cityId:city.id,filter:'all',cursor:null,period:'recent',sourceScope:'all'});
- assert.equal(selected.articleTotal,5,'all five originals are eligible before testing layout');
- assert.equal(selected.total,3,'three reports share one event; two distinct reports remain separate');
+ assert.equal(selected.articleTotal,9,'all nine originals are eligible before testing layout');
+ assert.equal(selected.total,7,'three reports share one event; six distinct reports remain separate');
  const groups=selected.items.filter(item=>item.story?.sourceTotal===3);assert.equal(groups.length,1);
  const grouped=groups[0],groupOriginals=[{kind:grouped.kind,card:grouped.card},...grouped.story.related];
  assert.deepEqual(new Set(groupOriginals.map(item=>item.card.sourceUrl)),new Set(reports.map(card=>card.sourceUrl)));
  assert.equal(selected.items.some(item=>item.card.id===distinct.id),true,'the different penalty cannot be silently merged');
  assert.equal(selected.items.some(item=>item.card.id===english.id),true,'all-source scope must include the English original');
  assert.equal(JSON.stringify(stored),before,'the reader cannot restamp the stored evidence');
- return {city,groupKey:grouped.story.key,urls:reports.map(card=>card.sourceUrl),titles:reports.map(card=>card.title),storyCount:selected.total,articleTotal:selected.articleTotal,
+ return {city,groupKey:grouped.story.key,urls:reports.map(card=>card.sourceUrl),titles:reports.map(card=>card.title),storyCount:selected.total,articleTotal:selected.articleTotal,sourceOnly,
   async response(url){
    if(url.pathname==='/api/iceo')return {status:200,value:snapshot(cards,now)};
    if(url.pathname==='/api/news-page'){
@@ -194,6 +207,14 @@ function readerProbe(expected){
  const expectedCountry=new Intl.DisplayNames(['ro'],{type:'region'}).of(expected.city.countryCode);
  const cards=[...document.querySelectorAll('#discovery-cards article[data-news-stream-key]')],groups=cards.filter(node=>node.dataset.storyKey===expected.groupKey),group=groups[0];
  const originals=group?[...group.querySelectorAll('.news-story-source-link')]:[];
+ const sourceOnly=expected.sourceOnly.map(expectedCard=>{
+  const card=cards.find(node=>node.dataset.cardId===expectedCard.id),citation=card?.querySelector('.publisher-citation'),title=card?.querySelector('h3'),original=card?.querySelector('.source-link');
+  return {id:expectedCard.id,found:Boolean(card),citationVisible:visible(citation),title:title?.textContent??'',
+   citationLabel:citation?.textContent??'',citationUrl:citation?.href??'',originalLabel:original?.textContent?.trim()??'',originalUrl:original?.href??'',
+   citationBeforeTitle:Boolean(citation&&title&&(citation.compareDocumentPosition(title)&Node.DOCUMENT_POSITION_FOLLOWING)),
+   citationAboveTitle:Boolean(citation&&title&&rect(citation).bottom<=rect(title).top+1),
+   photographCount:card?.querySelectorAll('figure.card-photo,img[data-article-photo],img[data-reviewed-photo],img[src*="/api/article-photo"]').length??0};
+ });
  const languageLabels=cards.map(card=>({id:card.dataset.cardId,labels:[...card.querySelectorAll('[data-original-language]')].filter(visible).map(node=>({language:node.dataset.originalLanguage,text:node.textContent}))}));
  const controls=[...document.querySelectorAll('#glance-city,#reader-language,#reader-theme-toggle,#home-news-source-scope,#home-news-english,#home-news-period,#home-news-category,#discovery-cards .card-actions > button,#discovery-cards .card-actions > a,#discovery-cards .evidence > summary,#discovery-cards .news-story-sources > summary')].filter(visible);
  return {scope:document.querySelector('#discovery-cards')?.dataset.sourceScope,documentWidth:document.documentElement.scrollWidth,
@@ -202,7 +223,7 @@ function readerProbe(expected){
   cityComplete:city?.textContent===expected.city.name&&textFits(city,cityButton),
   countryComplete:normalized(country?.textContent??'')===normalized(expectedCountry??'')&&textFits(country,cityButton),
   cityButton:cityButton?rect(cityButton):null,storyCount:cards.length,groupCount:groups.length,
-  groupUrls:originals.map(node=>node.href),groupTitles:originals.map(node=>node.textContent),languageLabels,
+  groupUrls:originals.map(node=>node.href),groupTitles:originals.map(node=>node.textContent),languageLabels,sourceOnly,
   controls:controls.map(node=>({id:node.id||node.className,tag:node.tagName,...rect(node)}))};
 }
 function assertReaderGeometry(measured,format,fixture){
@@ -219,6 +240,18 @@ function assertReaderGeometry(measured,format,fixture){
  assert.deepEqual(new Set(measured.groupTitles),new Set(fixture.titles),'the three publisher headlines stay exact');
  assert.ok(measured.languageLabels.every(card=>card.labels.length>0),'every card has a visible original-language label');
  assert.deepEqual(new Set(measured.languageLabels.flatMap(card=>card.labels.map(label=>label.language))),new Set(['ro','en']),'all preserves both original languages');
+ assert.equal(measured.sourceOnly.length,fixture.sourceOnly.length,'all reviewed-source cards are measured');
+ for(const expected of fixture.sourceOnly){
+  const card=measured.sourceOnly.find(value=>value.id===expected.id);assert.ok(card);
+  assert.equal(card.found,true,'reviewed-source card is present at '+width+'px');
+  assert.equal(card.title,expected.title,'original title stays unchanged');
+  assert.equal(card.citationVisible,true,'source citation stays visible at '+width+'px');
+  assert.equal(card.citationLabel,expected.label);assert.equal(card.citationUrl,expected.homeUrl);
+  assert.equal(card.originalLabel,expected.originalLabel);assert.equal(card.originalUrl,expected.sourceUrl);
+  assert.equal(card.citationBeforeTitle,true,'source citation precedes title in the actual DOM at '+width+'px');
+  assert.equal(card.citationAboveTitle,true,'source citation appears above title at '+width+'px');
+  assert.equal(card.photographCount,0,'title/date/link-only source creates no photograph request at '+width+'px');
+ }
  assert.ok(measured.controls.length>=10,'reader and card controls were actually measured');
  for(const control of measured.controls){
   assert.ok(control.width>=43.5&&control.height>=43.5,'tap target must be at least 44px at '+width+'px: '+JSON.stringify(control));
@@ -261,7 +294,7 @@ async function run(){
    await loaded(cdp);await pause(400);
    await selectControlledEdition(cdp,fixture);
    await evaluate(cdp,'(()=>{window.scrollTo(0,0);return true;})()');
-   const news=await evaluate(cdp,'('+readerProbe.toString()+')('+JSON.stringify({city:fixture.city,groupKey:fixture.groupKey,urls:fixture.urls,titles:fixture.titles})+')');
+   const news=await evaluate(cdp,'('+readerProbe.toString()+')('+JSON.stringify({city:fixture.city,groupKey:fixture.groupKey,urls:fixture.urls,titles:fixture.titles,sourceOnly:fixture.sourceOnly})+')');
    writeFileSync(join(outputDir,'measured-'+f.width+'.json'),JSON.stringify(news,null,2)+'\n',{mode:0o600});
    try{assertReaderGeometry(news,f,fixture);}catch(error){
     const failedImage=(await cdp('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false})).data;
@@ -297,9 +330,9 @@ async function run(){
    observations.push({viewport:f.width,documentWidth:m.scroll,menuTested:f.mobile,brandVisible:true,reducedMotion:true,screenshot,cardScreenshot,news});
   }
   const result={version:'dlkt-info-offline-browser-smoke-1',status:'OFFLINE_BROWSER_PASS',
-   scope:'local-built-reader-with-controlled-news-corpus',viewports:observations,fixture:{storyCount:fixture.storyCount,articleTotal:fixture.articleTotal,groupOriginals:fixture.urls.length},
+   scope:'local-built-reader-with-controlled-news-corpus',viewports:observations,fixture:{storyCount:fixture.storyCount,articleTotal:fixture.articleTotal,groupOriginals:fixture.urls.length,sourceOnlyOriginals:fixture.sourceOnly.length},
    limitations:['News pages use the actual service over controlled corpus fixtures; no external publisher request, authenticated user, payment or production runtime availability is tested.',
-    'The three publisher headlines and URLs reproduce an observed case; source-check and publication dates are controlled fixtures.',
+    'The three grouped publisher headlines and four reviewed-source originals reproduce observed metadata; source-check and publication dates are controlled fixtures.',
     'Programmatic layout metrics and screenshots do not replace manual visual review.']};
   writeFileSync(join(outputDir,'report.json'),JSON.stringify(result,null,2)+'\n',{mode:0o600});
   console.log('DLKT_UI_BROWSER_QA '+JSON.stringify(result));

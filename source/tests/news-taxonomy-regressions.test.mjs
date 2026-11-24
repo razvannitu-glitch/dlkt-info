@@ -104,3 +104,32 @@ test('new shooting recognition preserves explicit warfare, fictional depictions 
  assert.equal(category('Un barbat nu a fost impuscat'),null);
  assert.equal(category('生成aiの新製品','https://www.bbc.com/japanese/articles/reported-story'),'13000000');
 });
+
+test('Romanian era wording is not weather and cannot revive a stale discovery hint',()=>{
+ // This title, URL and section were observed in the public reader on 2026-11-24.
+ const sourceUrl='https://www.descopera.ro/istorie/21160837-un-lant-muntos-din-vremea-gondwanei-se-ascunde-sub-gheata-din-antarctica';
+ const title='Un lanț muntos din vremea Gondwanei se ascunde sub gheața din Antarctica';
+ const articleSubject={basis:'publisher-jsonld',sections:['Istorie'],keywords:[],articleUrl:sourceUrl};
+ for(const sourceIds of [['news-unclassified'],['news-weather']]){
+  const card=sourceCard(title,sourceUrl,{sourceIds,topic:'weather',articleSubject}),before=JSON.stringify(card);
+  assert.equal(classifyNewsSubject(title,sourceUrl),null);
+  assert.equal(classifyEvidenceCard(card),null,'unsupported Istorie does not supply a forced quota category');
+  assert.equal(JSON.stringify(card),before,'original metadata is not rewritten');
+ }
+ for(const headline of ['Obiecte din vremea romanilor au fost gasite','O amintire DIN VREMEA copilariei','Un obiect din   vremea bunicilor']){
+  assert.equal(category(headline),null,headline);
+  assert.equal(classifyEvidenceCard(sourceCard(headline,generic,{sourceIds:['news-weather'],topic:'weather'})),null,headline);
+ }
+});
+
+test('genuine weather wording and explicit source evidence survive Romanian era masking',()=>{
+ for(const headline of ['Vremea se schimba maine','Pe vremea rea se circula greu','In vremea rece drumurile raman alunecoase',
+  'În vremea rece drumurile rămân alunecoase','Prognoza meteo anunta temperaturi scazute',
+  'Cum era clima din vremea romanilor: meteorologii publica o analiza']){
+  assert.equal(category(headline),'17000000',headline);
+ }
+ const title='O inregistrare din vremea bunicilor',sourceUrl='https://www.theguardian.com/weather/2026/nov/24/reported-story';
+ const section=classifyNewsSubject(title,sourceUrl);assert.equal(section?.category,'17000000');assert.equal(section?.basis,'publisher-section');
+ const bound=sourceCard(title,generic,{articleSubject:{basis:'publisher-jsonld',sections:['Weather'],keywords:[],articleUrl:generic}});
+ assert.equal(classifyEvidenceCard(bound)?.category,'17000000');assert.equal(classifyEvidenceCard(bound)?.basis,'publisher-metadata');
+});
