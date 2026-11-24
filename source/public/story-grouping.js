@@ -371,8 +371,7 @@ function reviewedArticleAnchor(card, title) {
         const match = /^\/news\/articles\/(c[a-z0-9]{12})$/u.exec(url.pathname);
         if (!match)
             return null;
-        return { key: key('publisher-article', 'bbc', match[1], title, card.date,
-                card.summary === undefined ? '' : text(card.summary), countries(card)), basis: 'matching-headlines', strong: false };
+        return { key: key('publisher-article', 'bbc', match[1], title, card.date, card.summary === undefined ? '' : text(card.summary), countries(card)), basis: 'matching-headlines', strong: false };
     }
     catch {
         return null;
@@ -457,4 +456,3 @@ export function groupStories(records, compare = defaultOrder) {
     }
     return Object.freeze(groups.sort((a, b) => order(compare, a.card, b.card) || lexical(a.key, b.key)));
 }
-

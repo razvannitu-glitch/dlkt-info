@@ -63,10 +63,16 @@ const SECTIONS = Object.freeze({
     lifestyle: '10000000', leisure: '10000000', travel: '10000000', tourism: '10000000', vacations: '10000000', gardening: '10000000', hobbies: '10000000', motoring: '10000000', food: '10000000', recipes: '10000000', turism: '10000000', vacante: '10000000', gradinarit: '10000000',
     politics: '11000000', government: '11000000', politica: '11000000', politic: '11000000', politique: '11000000', politik: '11000000',
     religion: '12000000', religie: '12000000',
+    // Exact subject keyword observed on the bound original France24 Spanish article; place names alone never imply war.
+    'guerra-en-ucrania': '16000000',
     science: '13000000', technology: '13000000', tech: '13000000', software: '13000000', programming: '13000000', 'software-development': '13000000', 'web-development': '13000000', astronomy: '13000000', space: '13000000', 'science-and-technology': '13000000', stiinta: '13000000', tehnologie: '13000000', wissenschaft: '13000000', tecnologia: '13000000',
     society: '14000000', societate: '14000000', familie: '14000000', societe: '14000000', gesellschaft: '14000000',
     sport: '15000000', sports: '15000000', football: '15000000', soccer: '15000000', motorsport: '15000000', motogp: '15000000', deportes: '15000000', fotbal: '15000000',
     weather: '17000000', meteo: '17000000',
+});
+// Exact observed publisher sections; these labels do not classify URL paths or article keywords.
+const PUBLISHER_SECTION_LABELS = Object.freeze({
+    'fotbal-intern': '15000000', 'liga-1': '15000000', superliga: '15000000',
 });
 function sectionCategory(url) {
     // A place/country and words inside an article slug are not publisher subject metadata.
@@ -194,21 +200,22 @@ function publisherSubject(card) {
     const metadata = card.articleSubject;
     if (!validArticleSubject(metadata, card.sourceUrl))
         return null;
-    const termCategory = (term) => {
+    const termCategory = (term, section) => {
         const normalized = fold(term), key = normalized.replaceAll(' ', '-');
         const definition = NEWS_CATEGORIES.find(category => [category.iptcLabel, category.label, category.labelRo, category.qcode, category.uri].some(label => fold(label) === normalized));
-        return definition?.id ?? (Object.hasOwn(SECTIONS, key) ? SECTIONS[key] ?? null : null);
+        return definition?.id ?? (Object.hasOwn(SECTIONS, key) ? SECTIONS[key] ?? null : null)
+            ?? (section && Object.hasOwn(PUBLISHER_SECTION_LABELS, key) ? PUBLISHER_SECTION_LABELS[key] ?? null : null);
     };
     // Some publishers encode a section hierarchy as "Actualitate, Politic".
     // Keep complete IPTC labels intact, then inspect explicit separated section terms.
     // Multiple distinct subjects remain ambiguous; a quota never supplies a subject.
-    const mapped = (values) => new Set(values.flatMap(term => {
-        const whole = termCategory(term);
+    const mapped = (values, section) => new Set(values.flatMap(term => {
+        const whole = termCategory(term, section);
         if (whole)
             return [whole];
-        return term.split(/[,;|]/u).map(termCategory).filter(isNewsCategoryId);
+        return term.split(/[,;|]/u).map(part => termCategory(part, section)).filter(isNewsCategoryId);
     }));
-    const sections = mapped(metadata.sections), keywords = mapped(metadata.keywords);
+    const sections = mapped(metadata.sections, true), keywords = mapped(metadata.keywords, false);
     // A precise section takes precedence over broad keywords. Conflicting sections are not collapsed into one label.
     if (sections.size > 1)
         return null;
