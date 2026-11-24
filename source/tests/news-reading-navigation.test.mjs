@@ -9,7 +9,8 @@ const end=reader.indexOf("required('#discovery').addEventListener('click'",start
 assert.ok(start>=0&&end>start,'test executes the actual compiled progressive-loading handler');
 const handler=reader.slice(start,end).trim();
 function harness(){
- let release,renders=0,focus=0,calls=0;const state={items:[{key:'old'}],loading:false,error:null,page:{nextCursor:'next'}};
+ let release,renders=0,focus=0,calls=0;const state={items:[{key:'old'}],loading:false,error:null,page:{nextCursor:'next'},initialized:true,
+  activeReceivedCount:1,retainedCount:0,manualContinuation:false,limitReached:false,canContinue:true};
  const title={tabIndex:0,focus(){focus++;},getBoundingClientRect(){return {top:100,bottom:140};},scrollIntoView(){}};
  const old={dataset:{newsStreamKey:'old'}},added={dataset:{newsStreamKey:'new'},querySelector(){return title;}};
  const root={querySelectorAll(){return state.items.length>1?[old,added]:[old];}};
@@ -17,7 +18,7 @@ function harness(){
   document:{visibilityState:'visible',body:{dataset:{entryView:'start'}}},innerHeight:800,
   announcement:{textContent:''},required(){return root;},getLocale(){return context.language;},
   renderDiscovery(){renders++;},
-  newsContinuation:{view(){return state;},next(){calls++;return new Promise(resolve=>{release=()=>{state.items.push({key:'new'});resolve();};});}},
+  newsContinuation:{view(){return state;},next(){calls++;return new Promise(resolve=>{release=()=>{state.items.push({key:'new'});state.activeReceivedCount=state.items.length;resolve();};});}},
  };
  const run=vm.runInNewContext('('+handler+')',context);
  return {context,run,release(){release();},result(){return {renders,focus,calls,announcement:context.announcement.textContent};}};

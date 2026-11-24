@@ -55,7 +55,7 @@ test('date-only documents, closing dates and explicit UTC source checks keep the
  assert.equal(formatted(stamp,false,true,'America/New_York'),formatted(stamp,false,true),'an explicit UTC source check is unaffected by publication formatting');
 });
 
-test('the compiled news renderer passes the validated edition zone before the city fallback and UTC',()=>{
+test('the compiled news renderer keeps the original edition zone and accumulated reading total before city and UTC fallbacks',()=>{
  const renderStart=source.indexOf('function renderDiscovery()'),renderEnd=source.indexOf('async function showNewsPage(',renderStart);
  assert.ok(renderStart>=0&&renderEnd>renderStart);
  const call=source.slice(renderStart,renderEnd).match(/node = cardNode\([^;]+;/u)?.[0];
@@ -68,10 +68,10 @@ test('the compiled news renderer passes the validated edition zone before the ci
   [{day:null},null,'UTC'],
  ]){
   const view={card:{id:'original-publication'}},calls=[];
-  const context={server:{page},contextualCity:city,newsSourceScope,item:{view},index:3,topCount:40,node:null,
+  const context={server:{page:{day:{timeZone:'Pacific/Auckland'}}},originalPage:page,contextualCity:city,newsSourceScope,item:{view},index:3,topCount:40,readingTotal:64,node:null,
    cardNode:(...args)=>{calls.push(args);return {dataset:{}};}};
   runInNewContext(call,context);
   assert.equal(calls.length,1);assert.strictEqual(calls[0][0],view);
-  assert.deepEqual(calls[0].slice(1),[3,40,undefined,false,'related',expected,newsSourceScope==='all']);
+  assert.deepEqual(calls[0].slice(1),[3,64,undefined,false,'related',expected,newsSourceScope==='all']);
  }
 });

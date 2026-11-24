@@ -119,12 +119,12 @@ test('manual continuation awaits its page and focuses after final placement whil
   scrollIntoView(options){assert.equal(options.block,'nearest');assert.equal(options.behavior,'auto');scrolls++;}};
  const added={dataset:{newsStreamKey:'new-manual'},height:160,querySelector(selector){assert.equal(selector,'h3');return heading;}};
  const automatic={dataset:{newsStreamKey:'new-auto'},height:200,querySelector(){throw Error('automatic continuation must not move focus');}};
- let nodes=[old],state={loading:false,error:null,page:{nextCursor:'next'},items:[old]};
+ let nodes=[old],state={loading:false,error:null,canContinue:true,limitReached:false,manualContinuation:false,activeReceivedCount:1,retainedCount:0,page:{nextCursor:'next'},items:[old]};
  let placements=newsMasonryPositions(nodes.map(node=>node.height),2),language='en';
  const announcement={textContent:''};
  const context={document:{visibilityState:'visible',body:{dataset:{entryView:'start'}}},innerHeight:700,newsSourceScope:'all',newsFilter:'all',newsPeriod:'today',newsInteractionRevision:0,contextualCity:{id:'683506'},
-  newsContinuation:{view:()=>state,next(){
-   requests++;state={...state,loading:true};return new Promise(resolve=>{finishNext=items=>{state={...state,loading:false,items};resolve();};});
+  newsContinuation:{view:()=>state,next(recoverExpired){
+   assert.equal(recoverExpired,true);requests++;state={...state,loading:true};return new Promise(resolve=>{finishNext=items=>{state={...state,loading:false,activeReceivedCount:items.length,items};resolve();};});
   }},
   required:selector=>{assert.equal(selector,'#discovery-cards');return {querySelectorAll:()=>nodes};},
   renderDiscovery:()=>{
@@ -185,10 +185,11 @@ test('compiled inline rendering preserves 11-plus-1 cadence, append prefixes and
    return {fixtureKind:'news',card,dataset:{},querySelector:selector=>selector==='h3'?heading:selector==='.card-topic'?topic:selector==='.card-content > .source-link'?link:selector==='.evidence > summary'?details:null};
   }
   const context={
-   server:{page:{epoch:17,revision:9,startedAt:new Date(now).toISOString(),language:'en',sourceScope:'all',cityId:'683506',countryCode:'RO',filter:'all',period:'today',day:{date:'2026-11-23'}}},
-   now,language:'en',newsSourceScope:'all',topCount:80,visible:[],host,document:{body:{dataset:{}}},
+   server:{retainedCount:0,page:{epoch:17,revision:9,startedAt:new Date(now).toISOString(),language:'en',sourceScope:'all',cityId:'683506',countryCode:'RO',filter:'all',period:'today',day:{date:'2026-11-23'}}},
+   now,language:'en',newsSourceScope:'all',topCount:80,readingTotal:80,visible:[],host,document:{body:{dataset:{}}},
    contextualCity:{id:'683506',name:'Bucharest',countryCode:'RO'},inlineKnowledgeSeen:new Set(),inlineKnowledgeContext:'',inlineKnowledgeSelection:[],
    pageItemByKey:new Map(originals.map(item=>[item.key,{kind:item.kind,key:item.key,category:item.category,card:originalCard(item)}])),
+   newsContinuation:{editionFor:key=>{assert.ok(context.pageItemByKey.has(key));return context.server.page;}},
    newsStorySourcesNode(){throw Error('Ungrouped originals must not create a source-group disclosure');},
    KNOWLEDGE_CARDS:catalog,selectInlineKnowledge,interleaveKnowledge,
    writeKnowledgeSeen:seen=>{assert.ok(seen instanceof Set);return true;},

@@ -134,7 +134,7 @@ test('homepage renders all server-ordered native pages and keeps operational rec
   assert.doesNotMatch(body,/\b(?:selectNewsStream|newsStreamPage|continuationCount)\b/u,'page appends must preserve the server order and totals');
   assert.match(body,/newsReading.present\(today,local.cards,contextKey,language,now,applyPublicUpdate\)/u);
   assert.match(body,/liveEdition.present\(candidate,contextKey,now,applyPublicUpdate,newsReading.hasVisibleLocal\(now\)\)/u);
-  assert.match(body,/if\(sentinel&&!server.loading&&!server.error&&server.page\?\.nextCursor\)/u);
+  assert.match(body,/if\(sentinel&&!server.loading&&\(server.error===null\|\|server.error==='expired'\)&&!server.manualContinuation&&!server.limitReached&&server.canContinue&&server.page\?\.nextCursor\)/u);
   assert.match(body,/observeNewsStream\(sentinel,\(\)=>\{void showNewsPage\(false\);\}\)/u);
   assert.match(body,/showNewsPage\(true\)/u);assert.match(body,/home-news-category/u);
   assert.match(body,/newsCategoryLabel\(category.id,language\)/u);assert.match(body,/stream.counts\[category.id\]/u);
