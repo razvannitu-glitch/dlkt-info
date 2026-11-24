@@ -303,6 +303,24 @@ function reportedPenaltyAnchor(card:EvidenceCard,title:string):ThreadAnchor|null
   basis:'matching-headlines',strong:false};
 }
 
+/** Identical checked BBC article editions retain their original URLs and metadata.
+ * Observed in public corpus1589: www.bbc.com and www.bbc.co.uk /news/articles/
+ * use the same explicit article ID, headline and publication time.
+ * This fallback is narrower than lowering headline-length safety thresholds.
+ */
+function reviewedArticleAnchor(card:EvidenceCard,title:string):ThreadAnchor|null {
+ if(card.publisher!=='BBC'||card.identity!==card.sourceUrl)return null;
+ try{
+  const url=new URL(card.sourceUrl);
+  if(url.protocol!=='https:'||url.username||url.password||url.port||url.search||url.hash
+   ||!['www.bbc.com','www.bbc.co.uk'].includes(url.hostname))return null;
+  const match=/^\/news\/articles\/(c[a-z0-9]{12})$/u.exec(url.pathname);
+  if(!match)return null;
+  return {key:key('publisher-article','bbc',match[1],title,card.date,
+   card.summary===undefined?'':text(card.summary),countries(card)),basis:'matching-headlines',strong:false};
+ }catch{return null;}
+}
+
 function anchor(card:EvidenceCard):ThreadAnchor|null {
   if(card.kind!=='publication'||!card.title.trim()||card.title.length>4000||!Number.isFinite(Date.parse(card.date)))return null;
   const title=text(card.title),revenue=launchRevenueAnchor(card,title);if(revenue)return revenue;
@@ -315,7 +333,7 @@ function anchor(card:EvidenceCard):ThreadAnchor|null {
     if(vulnerability.length>1)return headlineAnchor(card,title);
     const named=numberedEventAnchor(card,title)??stormAnchor(card,title)??productAnchor(card,title);if(named)return named;
   }
-  return headlineAnchor(card,title);
+  return headlineAnchor(card,title)??reviewedArticleAnchor(card,title);
 }
 
 function anchoredKey(subject:ThreadAnchor,card:EvidenceCard):string {
@@ -366,3 +384,4 @@ export function groupStories(records:readonly EvidenceCard[],compare:StoryOrder=
   }
   return Object.freeze(groups.sort((a,b)=>order(compare,a.card,b.card)||lexical(a.key,b.key)));
 }
+

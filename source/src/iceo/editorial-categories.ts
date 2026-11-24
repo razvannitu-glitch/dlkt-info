@@ -327,8 +327,17 @@ function educationInstitutionMerger(title:string):boolean {
     &&!FINANCIAL_DEVELOPMENT.test(title);
 }
 
+/** Preserve the AI acronym before case folding: Romanian "ai" alone is not technology evidence. */
+function subjectTitle(title:string):string {
+  const raw=title.normalize('NFKC');
+  const explicitAi=/\bAI\b/u.test(raw)||/\b(?:generative|agentic|conversational) ai\b|\bai(?:[- ]powered| (?:models?|assistants?|chatbots?|tools?|systems?|agents?|software))\b/iu.test(raw);
+  return (explicitAi?raw:raw.replace(/(?<!\p{L})ai(?!\p{L})/giu,' ')).toLowerCase();
+}
+
 /** The same subject rules repair proven stale hints and classify newly discovered headlines. */
 function englishHeadlineSubject(title:string):PublicEditorialCategory|null {
+  // Role vacancies describe employment even when the employer is a science or technology institution.
+  if(/\b(?:job|staff|management) vacancies\b/u.test(title))return 'work';
   const financial=FINANCIAL_DEVELOPMENT.test(title);
   const merger=/\b(?:mergers?|acquisitions?)\b/u.test(title)&&!ASTRONOMICAL_MERGER.test(title);
   if(educationInstitutionMerger(title))return 'education';
@@ -343,8 +352,10 @@ function englishHeadlineSubject(title:string):PublicEditorialCategory|null {
 }
 
 /** Only explicit contrary subjects invalidate existing discovery provenance. */
-export function contradictedHeadlineHints(title:string):readonly PublicEditorialCategory[] {
-  const rejected:PublicEditorialCategory[]=[];
+export function contradictedHeadlineHints(headline:string):readonly PublicEditorialCategory[] {
+  const title=subjectTitle(headline),rejected:PublicEditorialCategory[]=[];
+  // A previous lowercase ai match cannot keep a disproven technology hint alive.
+  if(/\bai\b/iu.test(headline)&&!NEWS_SUBJECTS.some(([category,pattern])=>category==='technology'&&matchesSubject(category,pattern,title)))rejected.push('technology');
   // Do not let an earlier discovery label restore the same geographic bank false positive.
   if(/\bwest bank\b/u.test(title)&&englishHeadlineSubject(title)!=='business'
     &&!NEWS_SUBJECTS.some(([category,pattern])=>category==='business'&&matchesSubject(category,pattern,title)))rejected.push('business');
@@ -363,7 +374,7 @@ export function classifyNewsHeadline(title:string,sourceUrl:string):PublicEditor
   let url:URL;
   try{url=new URL(sourceUrl);}catch{return null;}
   if(url.protocol!=='https:'||url.username||url.password||url.port)return null;
-  const normalized=title.normalize('NFKC').toLowerCase();
+  const normalized=subjectTitle(title);
   const localized=localizedNewsSubject(normalized,url);if(localized!==undefined)return localized;
   // An editorial cartoon is commentary, not a new diplomatic event or a quota-filling news item.
   if(/\s[–—-]\s*cartoon\s*$/u.test(normalized))return null;
@@ -398,10 +409,10 @@ const LEGACY:Readonly<Partial<Record<Topic,PublicEditorialCategory>>>=Object.fre
  */
 export function classifyEditorialCard(card:Pick<EvidenceCard,'sourceIds'|'title'|'topic'>):EditorialClassification|null {
   if(card.sourceIds.includes('news-unclassified'))return null;
-  const title=card.title.normalize('NFKC').toLowerCase();
+  const title=subjectTitle(card.title);
   const subjects=SUBJECTS.filter(([category,pattern])=>matchesSubject(category,pattern,title)).map(([category])=>category);
   const discovered=PUBLIC_EDITORIAL_CATEGORIES.filter(category=>card.sourceIds.some(id=>newsCategoryFromSourceId(id)===category));
-  const contradicted=contradictedHeadlineHints(title),hints=discovered.filter(category=>!contradicted.includes(category));
+  const contradicted=contradictedHeadlineHints(card.title),hints=discovered.filter(category=>!contradicted.includes(category));
   // Apply the shared semantic correction in the reading view as well, without
   // mutating original titles, IDs, hashes, provenance or saved preferences.
   if(!hints.length&&(discovered.length>0||contradicted.some(category=>category===card.topic))){
@@ -433,7 +444,7 @@ export function editorialCategory(card:Pick<EvidenceCard,'sourceIds'|'title'|'to
 /** Match corrected discovery hints without rewriting card identity or saved Topics. */
 export function editorialInterestTopic(card:Pick<EvidenceCard,'sourceIds'|'title'|'topic'>):Topic {
   if(!card.sourceIds.includes('news-unclassified')){
-    const contradicted=contradictedHeadlineHints(card.title.normalize('NFKC').toLowerCase());
+    const contradicted=contradictedHeadlineHints(card.title);
     if(contradicted.some(category=>card.sourceIds.includes(`news-${category}`))){
       const category=classifyEditorialCard(card)?.category;
       return category===undefined?'other':EDITORIAL_CATEGORY_TOPICS[category];

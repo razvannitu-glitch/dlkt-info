@@ -26,7 +26,7 @@ const DEFINITIONS = [
     ['16000000', 'conflict, war and peace', 'War & peace', 'Razboi si pace'],
     ['17000000', 'weather', 'Weather', 'Vreme'],
 ];
-export const NEWS_TAXONOMY_VERSION = 'iptc-media-topics-top-level-2026-10-16-dlkt-4';
+export const NEWS_TAXONOMY_VERSION = 'iptc-media-topics-top-level-2026-10-16-dlkt-5';
 export const NEWS_CATEGORIES = Object.freeze(DEFINITIONS.map(([id, iptcLabel, label, labelRo]) => Object.freeze({ id, qcode: ('medtop:' + id), uri: 'http://cv.iptc.org/newscodes/mediatopic/' + id, iptcLabel, label, labelRo })));
 const ids = new Set(NEWS_CATEGORIES.map(category => category.id));
 export function isNewsCategoryId(value) { return typeof value === 'string' && ids.has(value); }
@@ -103,7 +103,7 @@ const DIRECT = [
     ['02000000', /\b(?:charged with|convicted|sentenced|arrested|murder|homicide|police investigat\w*|court (?:rules|ruling|orders|judgment)|criminal trial|crime rates?|robber(?:y|ies)|burglar(?:y|ies)|thefts?|criminalitate|furt(?:ul|uri)?|jaf(?:ul|uri)?|sentinta|condamnat\w*|arestat\w*|arest(?:ul|ului)?|dosar penal|ancheta penala|urmarire penala|justitie|coruptie|tribunal|diicot|curtea de apel|inalta curte|procuror(?:ul|ului|i|ii|ilor)?|magistrat(?:ul|ului|i|ii|ilor)?|judecator(?:ul|ului|i|ii|ilor)?|meurtre|verurteilt|asesinato)\b/u],
     ['03000000', /\b(?:earthquakes?|tsunami|wildfires?|(?:plane|train|car|road|traffic|motorcycle|bus) (?:crash(?:es)?|accidents?|collisions?)|train derailment|building collapse|flash floods?|cutremur\w*|incendiu\w*|inundatii\w*|accident(?:ul|e|ele)? (?:rutier|rutiere|feroviar|feroviare|aviatic|aviatice)|coliziune rutiera|coliziuni rutiere|munitie neexplodata|bomba de aviatie|deraiere|terremoto|erdbeben|seisme)\b|地震|津波|زلزال/u],
     ['16000000', /\b(?:ceasefire|airstrikes?|air strikes?|armed conflict|peace talks|war in|war against|invasion|razboi(?:ul)?|bombardamente|armistitiu|conflict armat|incetarea focului|cessez-le-feu|waffenstillstand|alto el fuego)\b|停戦|空爆|وقف إطلاق النار/u],
-    ['09000000', /\b(?:workers? strike|teachers? strike|industrial action|trade unions?|layoffs?|unemployment|workforce|job vacancies|hiring|recruitment|labour market|labor market|greva|grevis\w*|sindicat\w*|concedieri|somaj|angajari|recrutare|posturi vacante|locuri de munca|salarizar(?:e|ea|ii)|salari(?:u|ul|ului) minim|majorari salariale|ministrul muncii)\b/u],
+    ['09000000', /\b(?:workers? strike|teachers? strike|industrial action|trade unions?|layoffs?|unemployment|workforce|(?:job|staff|management) vacancies|hiring|recruitment|labour market|labor market|greva|grevis\w*|sindicat\w*|concedieri|somaj|angajari|recrutare|posturi vacante|locuri de munca|salarizar(?:e|ea|ii)|salari(?:u|ul|ului) minim|majorari salariale|ministrul muncii)\b/u],
     ['14000000', /\b(?:homelessness|social services|public housing|human rights|child protection|parenting|childcare|saracie|asistenta sociala|protectia copilului|drepturile omului|locuinte sociale|persoane fara adapost)\b/u],
     ['11000000', /\b(?:elections?|parliament|prime minister|prim[- ]ministru(?:l)?|premier(?:ul)? desemnat|government policy|city council|urban planning|election results|alegeri(?:le|lor)?|politicien(?:i|ii|ilor)|referendum(?:ul|uri)?|parlament\w*|primari[ae]|primarul|consiliul local|consiliul general|consilierii locali|politic[ai]|guvern(?:ul)?|plan urbanistic)\b/u],
     ['05000000', /\b(?:education|schools?|universit(?:y|ies)|students?|curriculum|tuition|scholarships?|educatie|scoal[ai]|scoli|liceu(?:l)?|elevi(?:i|lor)?|gradinit[ae]|universitat\w*|burse scolare|invatamant|bacalaureat)\b/u],
@@ -116,10 +116,15 @@ const DIRECT = [
     ['13000000', /\b(?:cosmos|astronomie|astronauti|galaxii|exoplanete|telescop(?:ul)?|cercetatori(?:i|lor)?|studiu stiintific|biologie|botanica)\b/u],
     ['06000000', /\b(?:pet[- ]care|pet adoption|dog training|cat care|animale de companie|ingrijirea (?:cainilor|pisicilor))\b/u],
 ];
+// A newly recognized shooting must not turn explicit warfare or a fictional depiction into crime reporting.
+const REPORTED_SHOOTING = /\b(?:a|au) fost impuscat(?:a|e|i)?\b/u;
+const FICTIONAL_SHOOTING = /\b(?:in|din) (?:(?:noul|acest|un) )?(?:film(?:ul)?|serial(?:ul)?|roman(?:ul)?)\b/u;
 function headlineCategory(title) {
     const event = DIRECT.slice(0, 3).find(([, pattern]) => pattern.test(title));
     if (event)
         return event[0];
+    if (REPORTED_SHOOTING.test(title) && !FICTIONAL_SHOOTING.test(title) && !/\bnu (?:a|au) fost impuscat(?:a|e|i)?\b/u.test(title))
+        return '02000000';
     // Commercial vocabulary cannot turn care delivery into shopping; financial results remain economy.
     const adultBusiness = ADULT_BUSINESS.test(title);
     if (adultBusiness && SECTOR_REGULATION.test(title))
@@ -142,6 +147,8 @@ function headlineCategory(title) {
     const direct = DIRECT.find(([, pattern]) => pattern.test(title));
     return direct?.[0] ?? (INDUSTRY.test(title) ? '04000000' : null);
 }
+// Operational transport alone does not establish an IPTC lifestyle or leisure subject.
+const LEISURE_TRAVEL = /\b(?:tourism|tourists?|vacations?|holiday destinations?|city breaks?|backpacking|cruises?|getaways?|(?:solo|family|budget|leisure) travel|travel (?:guides?|tips|destinations?|itineraries|inspiration)|turism|turisti|vacante|calatorii de agrement|destinatii turistice|ghid turistic)\b/u;
 const retailCare = (title) => /\bretail medicine\b/u.test(title) && !FINANCIAL.test(title);
 /** DLKT classification, not an IPTC-provided classifier. No summaries, place names or invented tags. */
 export function classifyNewsSubject(title, sourceUrl) {
@@ -178,6 +185,8 @@ export function classifyNewsSubject(title, sourceUrl) {
         return result('11000000', 'headline'); // International relations, not presumed warfare.
     if (legacy === 'housing')
         return null; // Needs explicit commercial, planning or welfare evidence above.
+    if (legacy === 'travel' && !LEISURE_TRAVEL.test(normalized))
+        return null;
     const category = legacyCategoryToNewsCategory(legacy);
     return category === null ? null : result(category, 'headline');
 }
@@ -220,9 +229,9 @@ export function classifyEvidenceCard(card) {
         return null;
     // A specific, agreed discovery hint can support an otherwise terse headline.
     // Generic world/housing/other/topic defaults cannot classify an unknown article.
-    const unsupportedBusiness = contradictedHeadlineHints(fold(card.title)).includes('business');
+    const contradicted = contradictedHeadlineHints(card.title), leisure = LEISURE_TRAVEL.test(fold(card.title));
     const hints = new Set(card.sourceIds.map(newsCategoryFromSourceId)
-        .filter(value => value !== null && value !== 'world' && value !== 'housing' && !(value === 'business' && unsupportedBusiness))
+        .filter(value => value !== null && value !== 'world' && value !== 'housing' && !contradicted.includes(value) && !(value === 'travel' && !leisure))
         .map(value => value === null ? null : legacyCategoryToNewsCategory(value)).filter(isNewsCategoryId));
     if (hints.size === 1) {
         const category = [...hints][0];
