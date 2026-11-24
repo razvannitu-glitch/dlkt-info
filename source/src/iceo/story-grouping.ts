@@ -1,6 +1,7 @@
 import type {EvidenceCard} from './contracts.js';
 import {contextForCard} from './context.js';
 import {validArticleSubject} from './article-subject.js';
+import {canonicalNewsUrl,publisherForNewsUrl} from './news-sources.js';
 
 export interface StoryGroup {
   /** Presentation identity, independent of the selected publisher or representative. */
@@ -34,14 +35,27 @@ function countries(card:EvidenceCard):string {
   return contextForCard(card).countries.map(country=>country.code).sort().join(',');
 }
 
+/** Only the verified original publisher's separated terminal label is decoration. */
+function groupingHeadline(card:EvidenceCard,title:string):string {
+  const publisher=publisherForNewsUrl(card.sourceUrl);
+  if(!publisher||publisher.label!==card.publisher||canonicalNewsUrl(card.sourceUrl)!==card.sourceUrl)return title;
+  const label=text(publisher.label);
+  for(const separator of [' - ',' | ']){
+    const suffix=separator+label;
+    if(title.endsWith(suffix))return title.slice(0,-suffix.length).trim();
+  }
+  return title;
+}
+
 /** Exact fallback retains punctuation, numbers, negation, excerpt and geography. */
 function headlineAnchor(card:EvidenceCard,title:string):ThreadAnchor|null {
-  const words=title.match(/[\p{L}\p{N}]+(?:'[\p{L}\p{N}]+)*/gu)??[];
-  const informative=title.length>=55&&words.length>=8&&new Set(words.filter(word=>word.length>2&&!STOP_WORDS.has(word))).size>=7;
-  const cjk=/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Hangul}]/u.test(title)
-    &&title.length>=30&&new Set(title.match(/\p{L}/gu)??[]).size>=14;
+  const comparison=groupingHeadline(card,title);
+  const words=comparison.match(/[\p{L}\p{N}]+(?:'[\p{L}\p{N}]+)*/gu)??[];
+  const informative=comparison.length>=55&&words.length>=8&&new Set(words.filter(word=>word.length>2&&!STOP_WORDS.has(word))).size>=7;
+  const cjk=/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Hangul}]/u.test(comparison)
+    &&comparison.length>=30&&new Set(comparison.match(/\p{L}/gu)??[]).size>=14;
   if(!informative&&!cjk)return null;
-  return {key:key('headline',title,card.summary===undefined?'':text(card.summary),countries(card)),basis:'matching-headlines',strong:false};
+  return {key:key('headline',comparison,card.summary===undefined?'':text(card.summary),countries(card)),basis:'matching-headlines',strong:false};
 }
 
 /** Preserve the existing narrow, exact reported launch-revenue equivalence. */
