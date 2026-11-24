@@ -38,7 +38,7 @@ export function localCardNode(card:LocalCard,c:City,now=Date.now(),options:{read
   if(card.context){details.append(node('p',card.context.when,'card-boundary'),node('p',card.context.why,'card-boundary'),node('p',card.context.action,'card-boundary'));const evidence=node('a','Checked evidence document','source-link');evidence.href=card.context.documentUrl;evidence.target='_blank';evidence.rel='noopener noreferrer';details.append(evidence,node('p',`Evidence SHA-256: ${card.context.documentHash}`,'card-boundary'));}
   for(const fact of card.facts)details.append(node('p',fact,'card-boundary'));
   if(card.news)details.append(node('p',card.news.attribution,'card-boundary'));
-  const source=node('a',ro?(card.news?'Citeste articolul integral':'Deschide sursa oficiala'):(card.news?'Read the full report':'Open official source'),'source-link');source.href=card.sourceUrl;source.target='_blank';source.rel='noopener noreferrer';body.append(source);
+  const source=node('a',ro?(card.news?'Citeste articolul integral':'Deschide sursa oficiala'):(card.news?'Read the full report':'Open official source'),'source-link');source.href=card.sourceUrl;source.target='_blank';source.rel='noopener noreferrer';if(!compact)body.append(source);
   if(localEventCalendar(card,c,now)){
     const calendar=node('button',ro?'Adauga in calendar':'Add to calendar','text-button');calendar.type='button';calendar.dataset.calendarEvent=card.id;
     const feedback=node('p','','card-boundary');feedback.hidden=true;feedback.setAttribute('role','status');
@@ -60,5 +60,5 @@ export function localCardNode(card:LocalCard,c:City,now=Date.now(),options:{read
   const category=localCardCategory(card);a.dataset.editorialCategory=category;
   a.append(head);
   const photo=contextPhotoNode({title:reading.title,sourceUrl:card.sourceUrl,editorialCategory:category},now,card.kind==='local-news'&&card.news?{id:card.news.id,revision:card.news.documentHash,cityId:c.id}:undefined);if(photo)a.append(photo);
-  a.append(body,details);return a;
+  if(compact){const actions=node('div','','local-utility-actions');actions.append(source,details);a.append(body,actions);}else a.append(body,details);return a;
  }

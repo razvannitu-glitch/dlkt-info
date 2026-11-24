@@ -447,16 +447,17 @@ html[data-reader-theme=night] #discovery :is(#home-news-category,#home-news-peri
 #home-local-cards .local-utility h3{display:block;-webkit-line-clamp:unset;overflow:visible;max-height:none;height:auto;margin:0 0 10px;font-size:20px;line-height:1.25;letter-spacing:-.03em}
 #home-local-cards .local-utility :is(.card-context,.card-date){display:block;-webkit-line-clamp:unset;max-height:none;overflow:visible;margin:8px 0;font-size:14px;line-height:1.5;color:var(--reader-ink)}
 #home-local-cards .local-utility .card-boundary{font-size:12px;line-height:1.5;margin:8px 0}
-#home-local-cards .local-utility .card-content>.source-link{display:inline-flex;align-items:center;justify-content:center;min-height:44px;margin:8px 0 0;padding:10px 12px;border-radius:10px;font-size:14px;line-height:1.4}
+#home-local-cards .local-utility .local-utility-actions{display:flex;align-items:flex-start;flex-wrap:wrap;gap:0 8px;padding:0 18px 10px;min-width:0}
+#home-local-cards .local-utility .local-utility-actions>.source-link{display:inline-flex;flex:1 1 130px;align-items:center;justify-content:center;min-width:0;min-height:44px;margin:0;padding:10px 12px;border-radius:10px;font-size:14px;line-height:1.4;white-space:normal;text-align:center}
 #home-local-cards .local-utility .weather-motion{gap:12px;margin:4px 0 8px}
 #home-local-cards .local-utility .weather-graphic{flex-basis:60px;width:60px;height:44px}
 #home-local-cards .local-utility .weather-motion-copy small{font-size:12px}
 #home-local-cards .local-utility .weather-motion-copy strong{font-size:14px}
-#home-local-cards .local-utility .local-reading{padding:0 18px;border-top:1px solid var(--reader-hairline)}
-#home-local-cards .local-utility .local-reading>summary{min-height:44px;padding:12px 0;font-size:13px;line-height:1.5}
+#home-local-cards .local-utility .local-reading{flex:1 1 100px;min-width:0;padding:0;border:0}
+#home-local-cards .local-utility .local-reading>summary{min-height:44px;padding:12px 4px;font-size:13px;line-height:1.5;overflow-wrap:anywhere}
 #home-local-cards .local-utility .local-reading .card-context{font-size:16px;line-height:1.55}
 #home-local-cards .local-utility .local-reading a{max-width:100%;overflow-wrap:anywhere}
-#home-local-cards .local-utility .local-reading[open]{padding-bottom:14px}
+#home-local-cards .local-utility .local-reading[open]{flex-basis:100%;margin-top:10px;padding-bottom:6px;border-top:1px solid var(--reader-hairline)}
 
 /* News uses paper; position colors remain small accents, while owned cards retain their palette.
    Explicit role pairs prevent a former navy surface from leaving pale text on paper. */
@@ -562,7 +563,7 @@ html:is([data-reader-theme=prism],[data-reader-theme=night]) #discovery-cards>.i
  .site-header .brand-header .brand-tagline{font-size:10.5px;line-height:15px}
  #home-local-cards .local-utility>header{padding:14px 16px 0}
  #home-local-cards .local-utility .card-content{padding:8px 16px 12px}
- #home-local-cards .local-utility .local-reading{padding-inline:16px}
+ #home-local-cards .local-utility .local-utility-actions{padding-inline:16px}
 }
 @media(max-width:360px){
  html{--reader-gutter:14px}
