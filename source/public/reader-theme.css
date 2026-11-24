@@ -447,7 +447,7 @@ html[data-reader-theme=night] #discovery :is(#home-news-category,#home-news-peri
 #home-local-cards .local-utility h3{display:block;-webkit-line-clamp:unset;overflow:visible;max-height:none;height:auto;margin:0 0 10px;font-size:20px;line-height:1.25;letter-spacing:-.03em}
 #home-local-cards .local-utility :is(.card-context,.card-date){display:block;-webkit-line-clamp:unset;max-height:none;overflow:visible;margin:8px 0;font-size:14px;line-height:1.5;color:var(--reader-ink)}
 #home-local-cards .local-utility .card-boundary{font-size:12px;line-height:1.5;margin:8px 0}
-#home-local-cards .local-utility .local-utility-actions{display:flex;align-items:flex-start;flex-wrap:wrap;gap:0 8px;padding:0 18px 10px;min-width:0}
+#home-local-cards .local-utility .local-utility-actions{display:flex;align-items:flex-start;flex-wrap:wrap;gap:0 8px;padding:0 18px 8px;min-width:0}
 #home-local-cards .local-utility .local-utility-actions>.source-link{display:inline-flex;flex:1 1 130px;align-items:center;justify-content:center;min-width:0;min-height:44px;margin:0;padding:10px 12px;border-radius:10px;font-size:14px;line-height:1.4;white-space:normal;text-align:center}
 #home-local-cards .local-utility .weather-motion{gap:12px;margin:4px 0 8px}
 #home-local-cards .local-utility .weather-graphic{flex-basis:60px;width:60px;height:44px}

@@ -586,6 +586,7 @@ async function run(){
    assert.ok(fixture.localRequests>previousLocalRequests,'each page loads the local fixture through the actual API path');
    await evaluate(cdp,'(()=>{window.scrollTo(0,0);return true;})()');
    const news=await measureReader(cdp,fixture);
+   await emitVisualPreview(cdp,'top',f.width);
    writeFileSync(join(outputDir,'measured-'+f.width+'.json'),JSON.stringify(news,null,2)+'\n',{mode:0o600});
    try{assertReaderGeometry(news,f,fixture);assertReadingLayout(news,f,fixture);}catch(error){
     console.error('DLKT_READER_GEOMETRY_FAILURE',JSON.stringify({viewport:f.width,date:news.date,city:news.city,country:news.country,expectedCountry:news.expectedCountry,cityComplete:news.cityComplete,countryComplete:news.countryComplete,cityButton:news.cityButton,firstUsefulTop:news.firstUsefulTop,firstEditorialTop:news.firstEditorialTop,layout:news.layout,controls:news.controls.filter(c=>c.width<43.5||c.height<43.5),titles:news.titles.filter(t=>!t.fits),local:news.local}));
@@ -609,7 +610,6 @@ async function run(){
    if(typeof image!=='string'||image.length<1000)throw Error('DLKT_UI_EMPTY_SCREENSHOT');
    const screenshot='dlkt-'+f.label+'-'+f.width+'.png';
    writeFileSync(join(outputDir,screenshot),Buffer.from(image,'base64'),{mode:0o600});
-   await emitVisualPreview(cdp,'top',f.width);
    await evaluate(cdp,"(()=>{document.querySelector('#discovery-cards article[data-news-stream-key]')?.scrollIntoView({block:'start'});return true;})()");
    const cardImage=(await cdp('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false})).data;
    assert.ok(typeof cardImage==='string'&&cardImage.length>=1000,'card screenshot is present');

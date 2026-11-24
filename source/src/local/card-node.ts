@@ -28,7 +28,7 @@ export function localCardNode(card:LocalCard,c:City,now=Date.now(),options:{read
   const details=node('details','',compact?'evidence local-reading':'evidence');
   const scope=ro&&card.kind==='forecast'?'Prognoza pentru centrul orasului, nu masuratori sau avertizari oficiale. Valorile prognozate se pot schimba.'
    :ro&&card.kind==='utility-notice'&&c.id==='683506'?'Sinteza din evidenta oficiala CMTEB. Nu confirma ca imobilul tau este afectat. Orele de remediere sunt estimative.':card.boundary;
-  details.append(node('summary',compact?(ro?'Detalii si sursa':'Details and source'):(ro?'Sursa si acoperire':'Source and coverage')));
+  details.append(node('summary',compact?(ro?'Detalii':'Details'):(ro?'Sursa si acoperire':'Source and coverage')));
   if(compact)details.append(expanded);
   details.append(
    node('p',(ro?'Sursa verificata: ':'Source checked ')+format(card.checkedAt,c.timezone,locale),'card-boundary'),
@@ -38,7 +38,7 @@ export function localCardNode(card:LocalCard,c:City,now=Date.now(),options:{read
   if(card.context){details.append(node('p',card.context.when,'card-boundary'),node('p',card.context.why,'card-boundary'),node('p',card.context.action,'card-boundary'));const evidence=node('a','Checked evidence document','source-link');evidence.href=card.context.documentUrl;evidence.target='_blank';evidence.rel='noopener noreferrer';details.append(evidence,node('p',`Evidence SHA-256: ${card.context.documentHash}`,'card-boundary'));}
   for(const fact of card.facts)details.append(node('p',fact,'card-boundary'));
   if(card.news)details.append(node('p',card.news.attribution,'card-boundary'));
-  const source=node('a',ro?(card.news?'Citeste articolul integral':'Deschide sursa oficiala'):(card.news?'Read the full report':'Open official source'),'source-link');source.href=card.sourceUrl;source.target='_blank';source.rel='noopener noreferrer';if(!compact)body.append(source);
+  const source=node('a',ro?(card.news?'Citeste articolul integral':compact?'Sursa oficiala':'Deschide sursa oficiala'):(card.news?'Read the full report':compact?'Official source':'Open official source'),'source-link');source.href=card.sourceUrl;source.target='_blank';source.rel='noopener noreferrer';if(!compact)body.append(source);
   if(localEventCalendar(card,c,now)){
     const calendar=node('button',ro?'Adauga in calendar':'Add to calendar','text-button');calendar.type='button';calendar.dataset.calendarEvent=card.id;
     const feedback=node('p','','card-boundary');feedback.hidden=true;feedback.setAttribute('role','status');
