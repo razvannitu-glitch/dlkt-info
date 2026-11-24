@@ -393,7 +393,7 @@ function rssPublicationDate(value:unknown):string|null{
   return publicationDate(`${match[3]}-${String(month).padStart(2,'0')}-${match[1]!.padStart(2,'0')}T${match[4]}:${match[5]}:${match[6]}${zone}`);
 }
 /** Index dates only filter candidates. The bound original headline and publication date must still agree. */
-export function readPublisherNewsCandidates(xml:string,index:NewsDiscoveryIndex,now:number):readonly NewsCandidate[]{
+export function readPublisherNewsCandidates(xml:string,index:NewsDiscoveryIndex,now:number,onPromotionalOriginal?:(url:string)=>void):readonly NewsCandidate[]{
   const registered=NEWS_DISCOVERY_INDEXES.find(row=>row.id===index.id);
   if(!registered||(['url','publisherId','format','language','feedTitle','feedHome','articlePath','allowMissingLanguage'] as const).some(key=>registered[key]!==index[key]))throw new Error('NEWS_INDEX_NOT_REGISTERED');
   if(Buffer.byteLength(xml)>HTML_BYTES||/<!\s*(?:DOCTYPE|ENTITY)/iu.test(xml)||XMLValidator.validate(xml)!==true)throw new Error('NEWS_INDEX_XML_INVALID');
@@ -409,10 +409,11 @@ export function readPublisherNewsCandidates(xml:string,index:NewsDiscoveryIndex,
     if(entries.length>5000)throw new Error('NEWS_INDEX_TOO_MANY_ITEMS');
     const candidates:NewsCandidate[]=[];
     for(const entry of entries){
-      if(!object(entry)||typeof entry.link!=='string'||promotionalSection(entry.category))continue;
+      if(!object(entry)||typeof entry.link!=='string')continue;
       const sourceUrl=canonicalNewsUrl(entry.link),publisher=publisherForNewsUrl(entry.link),title=titleText(entry.title),date=rssPublicationDate(entry.pubDate);
       if(!sourceUrl||!publisher||publisher.id!==registered.publisherId||!title||!date||Date.parse(date)<now-DAY||Date.parse(date)>now+300_000)continue;
       if(!registered.articlePath||!new URL(sourceUrl).pathname.startsWith(registered.articlePath))continue;
+      if(promotionalSection(entry.category)){onPromotionalOriginal?.(sourceUrl);continue;}
       candidates.push({sourceUrl,title,publisher:publisher.label,indexedAt:new Date(now).toISOString(),category:classifyNewsHeadline(title,sourceUrl)});
     }
     return mergeNewsCandidates(candidates,now);
@@ -692,16 +693,20 @@ export async function discoverNewsWithDiagnostics(fetcher:typeof fetch,now:numbe
     return Object.freeze({sources,diagnostics:diagnostics.finish()});
   }
   const budget:Budget={deadline:Date.now()+bounded(options.deadlineMs,35_000,35_000),timeout:bounded(options.requestTimeoutMs,4000,4000),remaining:bounded(options.maxArticleRequests,80,80),blocked:options.originBackoff??new Map()};
+  const promotionalOriginals=new Set<string>();
   let incoming:NewsCandidate[]=[],indexError:string|null=null,indexRetry:string|null=null,successfulIndexes=0,indexCursor=0;
   const indexWorker=async():Promise<void>=>{for(;;){const index=indexes[indexCursor++];if(index===undefined)return;
     let attempted=false;
     try{
       const response=await fetchText(fetcher,index?.url??NEWS_INDEX_URL,index?HTML_BYTES:INDEX_BYTES,budget,false,now,()=>{attempted=true;});
-      incoming.push(...(index?readPublisherNewsCandidates(response.text,index,now):readNewsCandidates(response.text,now)));successfulIndexes++;diagnostics.index(index,attempted,null);
+      incoming.push(...(index?readPublisherNewsCandidates(response.text,index,now,url=>{promotionalOriginals.add(url);}):readNewsCandidates(response.text,now)));successfulIndexes++;diagnostics.index(index,attempted,null);
     }catch(error){indexError=error instanceof NewsRequestError?error.code:error instanceof Error&&/^NEWS_/u.test(error.message)?error.message:'NEWS_INDEX_UNAVAILABLE';indexRetry=error instanceof NewsRequestError?error.retryAt:null;diagnostics.index(index,attempted,indexError);}
   }};
   await Promise.all(Array.from({length:Math.min(4,indexes.length)},()=>indexWorker()));
-  const pool=mergeNewsCandidates([...incoming,...seedCandidates.slice(0,MAX_CANDIDATES)],now);
+  // An explicit current RSS rejection also vetoes the same original from GAL,
+  // stored seeds and retained cards. Absence from a feed is never a veto.
+  incoming=incoming.filter(candidate=>!promotionalOriginals.has(candidate.sourceUrl));
+  const pool=mergeNewsCandidates([...incoming,...seedCandidates.slice(0,MAX_CANDIDATES)],now).filter(candidate=>!promotionalOriginals.has(candidate.sourceUrl));
   diagnostics.discovered(incoming);diagnostics.pool(pool);
   const unavailableFrontpages={urls:[] as readonly string[],checkedAt:new Date(now).toISOString(),available:false,rejected:4};
   // Homepage inspection and the durable candidate write share the same bounded phase.
@@ -716,7 +721,7 @@ export async function discoverNewsWithDiagnostics(fetcher:typeof fetch,now:numbe
   if(onCandidates){let timer:ReturnType<typeof setTimeout>|undefined;try{await Promise.race([onCandidates(pool),new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error('NEWS_STORE_TIMEOUT')),Math.max(1,Math.min(3000,budget.deadline-Date.now())));})]);}catch{storeError=true;diagnostics.issue('candidate-store');}finally{if(timer)clearTimeout(timer);}}
   const frontpages=await frontpagePromise,knownCandidateUrls=new Set(pool.map(row=>row.sourceUrl));
   const featuredUrls=new Set(frontpages.urls.filter(url=>knownCandidateUrls.has(url)));
-  const eligibleRetained=eligibleRetainedNewsCards(options.retainedCards??[],now);
+  const eligibleRetained=eligibleRetainedNewsCards(options.retainedCards??[],now).filter(card=>!promotionalOriginals.has(card.sourceUrl));
   // Keep the full durable pool, but reserve original-request opportunities only
   // for origins available after index and homepage checks have completed.
   const deferredOrigins:NewsCandidate[]=[];

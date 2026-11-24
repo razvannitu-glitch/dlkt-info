@@ -8,6 +8,7 @@ import {NewsPageService,parseNewsPageRequest} from '../.build/src/iceo/news-page
 import {validNewsPage,newsOriginalLanguage} from '../.build/src/iceo/news-page-contracts.js';
 import {createNewsStorySourcesState} from '../.build/src/iceo/news-story-browser.js';
 import {cardContent,safeLink} from '../.build/src/iceo/card-validation.js';
+import {pressReviewCitation} from '../.build/src/iceo/source-links.js';
 import {storyThreadKey} from '../.build/src/iceo/story-grouping.js';
 import {NEWS_CATEGORIES} from '../.build/src/iceo/news-taxonomy.js';
 import {findCity} from '../.build/src/local/cities.js';
@@ -113,7 +114,7 @@ test('three originals becoming one keep the original expired source context and 
   append(...nodes){this.children.push(...nodes);}
   setAttribute(name,value){this.attributes[name]=value;}
  }
- const environment={item:first,page:receipt,language:'ro',Intl,Date:class extends Date{static now(){return NOW+2000;}},safeLink,newsOriginalLanguage,
+ const environment={item:first,page:receipt,language:'ro',Intl,Date:class extends Date{static now(){return NOW+2000;}},safeLink,pressReviewCitation,newsOriginalLanguage,
   tr:()=> 'Surse',document:{createElement:tag=>new Element(tag),createTextNode:text=>({tag:'#text',textContent:text})},
   make:(tag,className,text)=>Object.assign(new Element(tag),{className,textContent:text})};
  runInNewContext(source.slice(start,end)+'\nthis.result=retainedNewsSourcesNode(item,page,language);',environment);

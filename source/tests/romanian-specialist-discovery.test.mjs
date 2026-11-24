@@ -73,3 +73,34 @@ test('bounded acquisition admits originals and each share page keeps linked sour
  for(const url of ['https://www.descopera.ro.attacker.invalid/stiinta/story','https://user@www.descopera.ro/stiinta/story','http://spotmedia.ro/stiri/story','https://spotmedia.ro/api/story','https://www.descopera.ro/'])
   assert.equal(pressReviewCitation(url),null,url);
 });
+
+test('a current explicit RSS promotion veto survives GAL, stored seeds and retained observations',async()=>{
+ const row=rows[0],seed=candidate(row);
+ const previous=await discoverNewsWithDiagnostics(specialistFetcher,now,[],undefined,{frontpageHighlights:false,maxArticleRequests:4});
+ const retained=previous.sources.flatMap(source=>source.cards),before=JSON.stringify(retained);
+ let requests=0,persisted;
+ const fetcher=async input=>{
+  const url=String(input);
+  if(url===feeds[row.publisherId].url)return new Response(specialistFeed(row.publisherId,rows.filter(value=>value.publisherId===row.publisherId).map(value=>value.url===row.url?{...value,categories:['Advertorial']}:value)),{headers:{'content-type':'application/rss+xml'}});
+  if(url==='https://data.gdeltproject.org/gdeltv3/gal/feed.rss')return new Response('<rss><channel><title>GDELT Article List RSS Feed</title><link>'+url+'</link><lastBuildDate>'+new Date(now).toUTCString()+'</lastBuildDate><item><title>'+row.title+'</title><link>'+row.url+'</link></item></channel></rss>',{headers:{'content-type':'application/rss+xml'}});
+  if(url===row.url)requests++;
+  return specialistFetcher(input);
+ };
+ const result=await discoverNewsWithDiagnostics(fetcher,now,[seed],async values=>{persisted=values;},{frontpageHighlights:false,maxArticleRequests:1,retainedCards:retained});
+ assert.equal(requests,0,'the known promotional original is never revalidated or reintroduced');
+ assert.ok(persisted);assert.equal(persisted.some(value=>value.sourceUrl===row.url),false);
+ const cards=result.sources.flatMap(source=>source.cards);
+ assert.equal(cards.some(value=>value.sourceUrl===row.url),false);
+ assert.ok(cards.some(value=>value.sourceUrl!==row.url),'distinct legitimate originals remain available');
+ assert.equal(JSON.stringify(retained),before,'retained source timestamps and records are not mutated');
+ assert.ok(validNewsDiagnostics(result.diagnostics,now));
+});
+test('only a valid current exact-origin RSS entry can declare a promotional original',()=>{
+ const row=rows[0],config=index(row.publisherId),rejected=[];
+ const callback=url=>rejected.push(url);
+ const invalidRows=[{...row,url:row.url.replace('www.descopera.ro','attacker.invalid'),categories:['Advertorial']},{...row,rssDate:'Mon, 23 Nov 2026 18:00:00 +0000',categories:['Advertorial']}];
+ assert.equal(readPublisherNewsCandidates(specialistFeed(row.publisherId,invalidRows),config,now,callback).length,0);
+ assert.deepEqual(rejected,[]);
+ assert.throws(()=>readPublisherNewsCandidates(specialistFeed(row.publisherId,[{...row,categories:['Advertorial']}]).replace('<title>Descopera</title>','<title>Forged</title>'),config,now,callback),/IDENTITY_INVALID/);
+ assert.deepEqual(rejected,[]);
+});

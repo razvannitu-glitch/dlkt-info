@@ -113,7 +113,7 @@ test('SAnews retains its existing reviewed-feed provenance without enabling a ne
  assert.deepEqual(profile.configuredPublisherIds,['sanews']);assert.deepEqual(profile.countryEditionLanguages,['en']);
  assert.deepEqual(profile.configuredIndexIds,[]);assert.equal(profile.state,'currentNoArticles');
  assert.equal(NEWS_PUBLISHERS.some(source=>source.id==='sanews'),false);
- assert.equal(NEWS_PUBLISHERS.length,75);assert.equal(NEWS_PUBLICATION_SCOPES.length,24);assert.equal(NEWS_DISCOVERY_INDEXES.length,29);
+ assert.equal(NEWS_PUBLISHERS.length,77);assert.equal(NEWS_PUBLICATION_SCOPES.length,26);assert.equal(NEWS_DISCOVERY_INDEXES.length,31);
 });
 
 test('country and coverage inputs are bounded, immutable and fail closed on malformed data',()=>{
