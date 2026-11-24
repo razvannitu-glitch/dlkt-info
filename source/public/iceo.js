@@ -39,6 +39,7 @@ import { setupEdition } from './edition-browser.js';
 import { captureCheckpoint, compareCheckpoint, focusedSnapshot, compareFocusedCheckpoint } from './comparison.js';
 import { DeviceMemory, memoryError } from './device-memory.js';
 import { safeLink, validCard } from './card-validation.js';
+import { pressReviewCitation } from './source-links.js';
 import { attachInsight, pruneInsights } from './insight-browser.js';
 import { selectReadingCards, savedReadingCards } from './reader.js';
 const TOPICS = PUBLIC_TOPICS;
@@ -740,7 +741,14 @@ function cardNode(view, index, total, saved, automaticInsights = true, followPre
     if (kind)
         kind.hidden = !presentation.kindLabel;
     put('h3', presentation.headline);
-    const title = node.querySelector('h3'), sourceUrl = safeLink(card.sourceUrl);
+    const title = node.querySelector('h3'), sourceUrl = safeLink(card.sourceUrl), citation = pressReviewCitation(card.sourceUrl);
+    if (title && citation) {
+        const credit = make('a', 'privacy-note publisher-citation', citation.label);
+        credit.href = citation.homeUrl;
+        credit.target = '_blank';
+        credit.rel = 'noopener noreferrer';
+        title.before(credit);
+    }
     for (const original of node.querySelectorAll('h3,.card-publisher'))
         originalText(original);
     if (title && sourceUrl) {
@@ -815,7 +823,7 @@ function cardNode(view, index, total, saved, automaticInsights = true, followPre
     if (link) {
         link.href = safeLink(card.sourceUrl) ?? '#';
         const icon = link.querySelector('svg');
-        link.replaceChildren(document.createTextNode(tr('openSource') + ' '));
+        link.replaceChildren(document.createTextNode((citation?.originalLabel ?? tr('openSource')) + ' '));
         if (icon)
             link.append(icon);
     }
@@ -857,7 +865,22 @@ function cardNode(view, index, total, saved, automaticInsights = true, followPre
             a.rel = 'noopener noreferrer';
             row.dataset.relatedCardId = item.id;
             currentCardByNode.set(row, item);
+            const citation = pressReviewCitation(item.sourceUrl);
+            if (citation) {
+                const credit = make('a', 'publisher-citation', citation.label);
+                credit.href = citation.homeUrl;
+                credit.target = '_blank';
+                credit.rel = 'noopener noreferrer';
+                row.append(credit, document.createTextNode(' · '));
+            }
             row.append(a, make('p', 'privacy-note', formatted(item.date)));
+            if (citation) {
+                const original = make('a', 'text-button', citation.originalLabel);
+                original.href = url;
+                original.target = '_blank';
+                original.rel = 'noopener noreferrer';
+                row.append(original);
+            }
             if (saved) {
                 const archived = deviceState.cards.find(entry => entry.id === item.id);
                 if (archived)
@@ -1143,6 +1166,14 @@ function retainedNewsSourcesNode(item, page, language) {
         if (!url)
             continue;
         const row = document.createElement('li'), meta = make('p', 'news-story-source-meta', source.card.publisher), link = document.createElement('a'), date = document.createElement('time');
+        const citation = pressReviewCitation(url);
+        if (citation) {
+            const credit = make('a', 'publisher-citation', citation.label);
+            credit.href = citation.homeUrl;
+            credit.target = '_blank';
+            credit.rel = 'noopener noreferrer';
+            meta.replaceChildren(credit);
+        }
         date.dateTime = source.kind === 'global' ? source.card.date : source.card.news.publishedAt;
         date.title = date.dateTime;
         date.textContent = new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'short', timeZone: page.day?.timeZone ?? 'UTC' }).format(new Date(date.dateTime));
@@ -1156,6 +1187,13 @@ function retainedNewsSourcesNode(item, page, language) {
         link.lang = newsOriginalLanguage(source) ?? '';
         link.setAttribute('translate', 'no');
         row.append(meta, link);
+        if (citation) {
+            const original = make('a', 'text-button', citation.originalLabel);
+            original.href = url;
+            original.target = '_blank';
+            original.rel = 'noopener noreferrer';
+            row.append(original);
+        }
         list.append(row);
     }
     const note = make('p', 'news-story-sources-status', language === 'ro'

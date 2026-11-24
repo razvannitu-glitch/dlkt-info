@@ -81,6 +81,8 @@ export const NEWS_PUBLISHERS = Object.freeze([
     publisher('stirile-protv', 'Știrile ProTV', 'stirileprotv.ro'),
     // Exact primary RSS origin and two canonical originals observed2026-11-23, Actions45286173292.
     publisher('prosport', 'ProSport', 'www.prosport.ro'),
+    publisher('descopera', 'Descopera', 'www.descopera.ro'),
+    publisher('spotmedia', 'Spotmedia.ro', 'spotmedia.ro'),
     // Official RSS/blog distribution page and two original articles checked 2026-11-22.
     publisher('repubblica', 'la Repubblica', 'www.repubblica.it'),
 ]);
@@ -118,6 +120,8 @@ export const NEWS_PUBLICATION_SCOPES = Object.freeze([
     publication('hotnews', 'RO', 'Romania', 'Romania and global reporting', ['/', 'ro']),
     publication('stirile-protv', 'RO', 'Romania', 'Romania and global reporting', ['/stiri/', 'ro']),
     publication('prosport', 'RO', 'Romania', 'Romanian and international sports reporting', ['/', 'ro']),
+    publication('descopera', 'RO', 'Romania', 'Romanian science, nature and history reporting', ['/', 'ro']),
+    publication('spotmedia', 'RO', 'Romania', 'Romanian national reporting', ['/stiri/', 'ro']),
     // The Italian RSS also links the publisher's explicit English edition; the article path takes precedence.
     publication('repubblica', 'IT', 'Italy', 'Italy and global reporting', ['/en/', 'en'], ['/', 'it']),
     publication('ap', 'US', 'United States', 'Global reporting', ['/article/', 'en']),
@@ -208,8 +212,8 @@ export function canonicalNewsUrl(value) {
         return null;
     const url = new URL(value);
     url.hash = '';
-    // ProTV admission covers reviewed news paths only, not /virale/ or /cautare/.
-    if (publisher.id === 'stirile-protv' && !url.pathname.startsWith('/stiri/'))
+    // These Romanian editions admit only their reviewed /stiri/ originals.
+    if (['stirile-protv', 'spotmedia'].includes(publisher.id) && !url.pathname.startsWith('/stiri/'))
         return null;
     // Encoded values are valid; encoded parameter names are intentionally rejected,
     // matching the public archive SQL instead of guessing their decoded meaning.
@@ -237,6 +241,13 @@ export const NEWS_DISCOVERY_INDEXES = Object.freeze([
     // Declared by https://www.prosport.ro/; robots and two canonical originals observed2026-11-23,
     // Actions45286173292 / job138082948684. Metadata only; no article-body/image reuse licence.
     { id: 'prosport-ro-news', publisherId: 'prosport', url: 'https://www.prosport.ro/feed', format: 'rss', language: 'ro', feedTitle: 'Prosport', feedHome: 'https://www.prosport.ro', articlePath: '/' },
+    // Metadata receipt: Actions45467805296 / job138707282525, 2026-11-24.
+    // Title/date/canonical only; specific press-review attribution is rendered.
+    // No article bodies, logos, images or excerpts are enabled by this registration.
+    { id: 'descopera-ro-news', publisherId: 'descopera', url: 'https://www.descopera.ro/feed', format: 'rss', language: 'ro', feedTitle: 'Descopera', feedHome: 'https://www.descopera.ro/', articlePath: '/', requireCurrentFeed: true },
+    // Metadata receipt: Actions45469244043 / job138712368119, 2026-11-24.
+    // Short headline and linked lead attribution only; no licensed images or full text.
+    { id: 'spotmedia-ro-news', publisherId: 'spotmedia', url: 'https://spotmedia.ro/feed', format: 'rss', language: 'ro', feedTitle: 'spotmedia.ro', feedHome: 'https://spotmedia.ro/', articlePath: '/stiri/', requireCurrentFeed: true },
     // Primary receipt: Actions 45070034177 / job 137354713875. Channel identity is exact;
     // bare channel home is metadata only, not an additional article origin.
     // Distribution guidance: https://www.repubblica.it/static/servizi/rss/

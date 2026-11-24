@@ -82,7 +82,7 @@ export function localReading(card, city, now, locale = 'en') {
         const overview = card.id === 'bucharest:cmteb:overview', sectors = overview ? /sectors ([1-6](?:, [1-6])*)$/u.exec(card.context?.place ?? '')?.[1] : undefined;
         const sector = overview ? sectors : card.id.startsWith('bucharest:cmteb:sector-') ? card.id.slice(-1) : undefined;
         if (sector)
-            return { title: (overview ? 'Situatia incalzirii si apei calde in ' : 'Termoficare si apa calda in ') +(city.id === '683506' ? 'Bucuresti' : city.name),
+            return { title: (overview ? 'Situatia incalzirii si apei calde in ' : 'Termoficare si apa calda in ') + (city.id === '683506' ? 'Bucuresti' : city.name),
                 paragraphs: [`Lista oficiala CMTEB include interventii sau intreruperi ale incalzirii ori apei calde pentru sectorul sau sectoarele ${sector}. Consulta documentul operatorului pentru strazile afectate si orele estimate.`],
                 period: null, nextStep: 'Verifica strada si imobilul in lista oficiala CMTEB.' };
     }

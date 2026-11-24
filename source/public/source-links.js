@@ -1,4 +1,4 @@
-import { publisherForNewsUrl } from './news-sources.js';
+import { publisherForNewsUrl, canonicalNewsUrl } from './news-sources.js';
 function string(value, max) { return typeof value === 'string' && value.length <= max; }
 export function safeLink(value) {
     if (!string(value, 3000))
@@ -10,4 +10,16 @@ export function safeLink(value) {
     catch {
         return null;
     }
+}
+/** Exact publisher presentation requirements; never a generic reuse licence. */
+export function pressReviewCitation(sourceUrl) {
+    const publisher = publisherForNewsUrl(sourceUrl);
+    if (publisher?.id !== 'descopera' && publisher?.id !== 'spotmedia')
+        return null;
+    const url = canonicalNewsUrl(sourceUrl);
+    if (!url)
+        return null;
+    if (publisher.id === 'spotmedia')
+        return Object.freeze({ label: 'SURSA: Spotmedia.ro', homeUrl: 'https://spotmedia.ro/', originalLabel: 'Integral pe Spotmedia.ro' });
+    return Object.freeze({ label: 'SURSA: DESCOPERA.ro', homeUrl: 'https://www.descopera.ro/', originalLabel: 'Integral pe DESCOPERA.ro' });
 }
