@@ -40,6 +40,7 @@ import {setupEdition} from '../edition/browser.js';
 import {captureCheckpoint,compareCheckpoint,focusedSnapshot,compareFocusedCheckpoint,type ComparisonCheckpoint,type ComparedCard,type MetadataField} from './comparison.js';
 import {DeviceMemory,memoryError,type DeviceSnapshot,type SavedCard} from './device-memory.js';
 import {safeLink,validCard} from './card-validation.js';
+import {pressReviewCitation} from './source-links.js';
 import {attachInsight,pruneInsights} from './insight-browser.js';
 import { selectReadingCards, savedReadingCards, type ReaderSettings, type ReadingCard } from './reader.js';
 import type { EvidenceCard, IceoSnapshot, SourceHealth, Topic } from './contracts.js';
@@ -403,7 +404,8 @@ function cardNode(view:ReadingCard,index:number,total:number,saved?:SavedCard,au
   if(editorialCategory)node.dataset.editorialCategory=editorialCategory;put('.card-index',`${String(index+1).padStart(2,'0')} / ${String(total).padStart(2,'0')}`);
   put('.card-kind',presentation.kindLabel);const kind=node.querySelector<HTMLElement>('.card-kind');if(kind)kind.hidden=!presentation.kindLabel;
   put('h3',presentation.headline);
-  const title=node.querySelector<HTMLElement>('h3'),sourceUrl=safeLink(card.sourceUrl);
+  const title=node.querySelector<HTMLElement>('h3'),sourceUrl=safeLink(card.sourceUrl),citation=pressReviewCitation(card.sourceUrl);
+  if(title&&citation){const credit=make('a','privacy-note publisher-citation',citation.label);credit.href=citation.homeUrl;credit.target='_blank';credit.rel='noopener noreferrer';title.before(credit);}
   for(const original of node.querySelectorAll<HTMLElement>('h3,.card-publisher'))originalText(original);
   if(title&&sourceUrl){const titleLink=make('a','card-title-link',presentation.headline);titleLink.href=sourceUrl;titleLink.target='_blank';titleLink.rel='noopener noreferrer';title.replaceChildren(titleLink);}
   const credit=cardCreditsNode(card);if(credit)node.querySelector('.card-meta')?.after(credit);
@@ -436,7 +438,7 @@ function cardNode(view:ReadingCard,index:number,total:number,saved?:SavedCard,au
     readingContext?.after(excerpt);
   }
   evidence?.append(guide);
-  const link=node.querySelector<HTMLAnchorElement>('.source-link');if(link){link.href=safeLink(card.sourceUrl)??'#';const icon=link.querySelector('svg');link.replaceChildren(document.createTextNode(tr('openSource')+' '));if(icon)link.append(icon);}
+  const link=node.querySelector<HTMLAnchorElement>('.source-link');if(link){link.href=safeLink(card.sourceUrl)??'#';const icon=link.querySelector('svg');link.replaceChildren(document.createTextNode((citation?.originalLabel??tr('openSource'))+' '));if(icon)link.append(icon);}
   const deadline=node.querySelector<HTMLElement>('.card-deadline');
   if(deadline&&card.deadline){deadline.hidden=false;deadline.textContent=`Listed closing date: ${formatted(card.deadline,true)}${view.noticeState==='awarded'?' · not an application deadline for this award':''}`;}
   const details=node.querySelector<HTMLElement>('.evidence dl');
@@ -453,7 +455,11 @@ function cardNode(view:ReadingCard,index:number,total:number,saved?:SavedCard,au
     for(const item of view.related){
       const url=safeLink(item.sourceUrl);if(!url)continue;
       const row=make('li',''),a=make('a','',`${item.publisher}: ${item.title}`);originalText(a,item);a.href=url;a.target='_blank';a.rel='noopener noreferrer';
-      row.dataset.relatedCardId=item.id;currentCardByNode.set(row,item);row.append(a,make('p','privacy-note',formatted(item.date)));
+      row.dataset.relatedCardId=item.id;currentCardByNode.set(row,item);
+      const citation=pressReviewCitation(item.sourceUrl);
+      if(citation){const credit=make('a','publisher-citation',citation.label);credit.href=citation.homeUrl;credit.target='_blank';credit.rel='noopener noreferrer';row.append(credit,document.createTextNode(' · '));}
+      row.append(a,make('p','privacy-note',formatted(item.date)));
+      if(citation){const original=make('a','text-button',citation.originalLabel);original.href=url;original.target='_blank';original.rel='noopener noreferrer';row.append(original);}
       if(saved){const archived=deviceState.cards.find(entry=>entry.id===item.id);if(archived)row.append(make('p','saved-copy-note',`Saved here ${formatted(archived.savedAt)}. Original source check ${formatted(item.observedAt)}. This saved copy is retained.`));}
       const credits=cardCreditsNode(item);if(credits)row.append(credits);
       const saveRelated=make('button','text-button',tr('saveCard'));saveRelated.type='button';saveRelated.dataset.saveCard=item.id;
@@ -574,12 +580,16 @@ function retainedNewsSourcesNode(item:NewsPageItem,page:NewsPage,language:string
   for(const source of originals){
     const url=safeLink(source.card.sourceUrl);if(!url)continue;
     const row=document.createElement('li'),meta=make('p','news-story-source-meta',source.card.publisher),link=document.createElement('a'),date=document.createElement('time');
+    const citation=pressReviewCitation(url);
+    if(citation){const credit=make('a','publisher-citation',citation.label);credit.href=citation.homeUrl;credit.target='_blank';credit.rel='noopener noreferrer';meta.replaceChildren(credit);}
     date.dateTime=source.kind==='global'?source.card.date:source.card.news!.publishedAt;date.title=date.dateTime;
     date.textContent=new Intl.DateTimeFormat(language,{dateStyle:'medium',timeStyle:'short',timeZone:page.day?.timeZone??'UTC'}).format(new Date(date.dateTime));
     meta.append(document.createTextNode(' · '),date);
     link.className='news-story-source-link';link.href=url;link.target='_blank';link.rel='noopener noreferrer';link.textContent=source.card.title;
     link.dir='auto';link.lang=newsOriginalLanguage(source)??'';link.setAttribute('translate','no');
-    row.append(meta,link);list.append(row);
+    row.append(meta,link);
+    if(citation){const original=make('a','text-button',citation.originalLabel);original.href=url;original.target='_blank';original.rel='noopener noreferrer';row.append(original);}
+    list.append(row);
   }
   const note=make('p','news-story-sources-status',language==='ro'
     ?'Linkuri pastrate din lectura anterioara. Verificarea acestei editii a expirat.'

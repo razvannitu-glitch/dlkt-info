@@ -16,6 +16,15 @@ const PROBE_GROUPS=Object.freeze({
         feedRobots:'https://rss.stirileprotv.ro/robots.txt',productionRequired:true},
     ]),
   }),
+  'ro-admitted':Object.freeze({
+    id:'dlkt-ro-admitted-parser-1',duration:70_000,limits:Object.freeze({robots:2,feed:2,article:4}),
+    sources:Object.freeze([
+      {id:'descopera-ro',feed:'https://www.descopera.ro/feed',format:'rss',
+        origin:'https://www.descopera.ro',articlePath:'/',robots:'https://www.descopera.ro/robots.txt',productionRequired:true},
+      {id:'spotmedia-ro',feed:'https://spotmedia.ro/feed',format:'rss',
+        origin:'https://spotmedia.ro',articlePath:'/stiri/',robots:'https://spotmedia.ro/robots.txt',productionRequired:true},
+    ]),
+  }),
   'ro-additional':Object.freeze({
     id:'dlkt-ro-additional-metadata-1',duration:40_000,limits:Object.freeze({robots:1,feed:1,article:2}),
     sources:Object.freeze([

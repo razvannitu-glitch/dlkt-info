@@ -22,7 +22,7 @@ jobs:
     name: Bounded publisher metadata observations
     if: github.ref == 'refs/heads/codex/iceo-category-coverage-20261123' || github.ref == 'refs/heads/codex/iceo-ro-source-supply-20261124'
     env:
-      DLKT_SOURCE_PROBE_GROUP: ${{ github.ref == 'refs/heads/codex/iceo-ro-source-supply-20261124' && 'ro-additional' || 'protv-compatibility' }}
+      DLKT_SOURCE_PROBE_GROUP: ${{ github.ref == 'refs/heads/codex/iceo-ro-source-supply-20261124' && 'ro-admitted' || 'protv-compatibility' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:

@@ -24,6 +24,24 @@ export const NEWS_ACQUISITION_ROTATION_MS=120_000;
 export const NEWS_CATEGORY_ACQUISITION_POLICY=Object.freeze({minimum:7,target:10});
 const promotionMarker=/^\s*(?:\[(?:p|advertorial|publicitate)\]|\((?:p|advertorial|publicitate)\))|^\s*(?:advertorial|publicitate)\s*[:–—-]|(?:\[(?:p|advertorial|publicitate)\]|\((?:p|advertorial|publicitate)\))\s*$/iu;
 function explicitlyPromotional(title:string):boolean{return promotionMarker.test(title);}
+const promotionalSections=new Set(['advertorial','advertoriale','publicitate','material publicitar','articol publicitar',
+ 'continut sponsorizat','material sponsorizat','articol sponsorizat','sponsored','sponsored content','sponsored post',
+ 'paid content','paid post','partner content','branded content','parteneriat comercial']);
+/** Only explicit section labels; ordinary reporting about advertising remains eligible. */
+function promotionalSection(value:unknown):boolean{
+ const values=Array.isArray(value)?value:[value];
+ return values.some(entry=>{
+  const raw=typeof entry==='string'?entry:object(entry)&&typeof entry['#text']==='string'?entry['#text']:null;
+  if(raw===null||raw.length>200)return false;
+  const normalized=raw.normalize('NFKD').replace(/\p{M}+/gu,'').toLowerCase().replace(/\s+/gu,' ').trim();
+  return promotionalSections.has(normalized)||promotionMarker.test(normalized);
+ });
+}
+function declaredSponsor(value:unknown):boolean{
+ const values=Array.isArray(value)?value:[value];
+ return values.some(entry=>typeof entry==='string'&&entry.trim().length>0
+  ||object(entry)&&['name','url','@id'].some(key=>typeof entry[key]==='string'&&String(entry[key]).trim().length>0));
+}
 const headlineIdentity=(title:string):string=>title.normalize('NFKC').toLowerCase().replace(/\s+/gu,' ').trim();
 
 /** Only this exact reviewed publisher's separated suffix is decoration. */
@@ -42,7 +60,7 @@ function eligibleRetainedNewsCards(values:readonly EvidenceCard[],now:number):re
  return consistentCards(values.slice(0,5000).filter(validCard)).filter(card=>{
   if(card.id!==digest(card.identity).slice(0,24)||card.contentHash!==digest(cardContent(card))
    ||Object.keys(card).some(key=>!['id','identity','title','topic','kind','sourceUrl','publisher','sourceIds','date','dateLabel','observedAt','contentHash','boundary','deadline','version','attribution','sourceState','summary','byline','licenseUrl','context','articleSubject'].includes(key))
-   ||card.kind!=='publication'||card.dateLabel!=='Published'||card.sourceState==='stale'||explicitlyPromotional(card.title))return false;
+   ||card.kind!=='publication'||card.dateLabel!=='Published'||card.sourceState==='stale'||explicitlyPromotional(card.title)||promotionalSection(card.articleSubject?.sections))return false;
   const published=Date.parse(card.date),observed=Date.parse(card.observedAt),publisher=publisherForNewsUrl(card.sourceUrl);
   const categoryIds=card.sourceIds.filter(id=>id===NEWS_UNCLASSIFIED_SOURCE.id||NEWS_CATEGORY_SOURCES.some(source=>source.id===id));
   return publisher?.label===card.publisher&&canonicalNewsUrl(card.sourceUrl)===card.sourceUrl&&card.identity===card.sourceUrl
@@ -391,7 +409,7 @@ export function readPublisherNewsCandidates(xml:string,index:NewsDiscoveryIndex,
     if(entries.length>5000)throw new Error('NEWS_INDEX_TOO_MANY_ITEMS');
     const candidates:NewsCandidate[]=[];
     for(const entry of entries){
-      if(!object(entry)||typeof entry.link!=='string')continue;
+      if(!object(entry)||typeof entry.link!=='string'||promotionalSection(entry.category))continue;
       const sourceUrl=canonicalNewsUrl(entry.link),publisher=publisherForNewsUrl(entry.link),title=titleText(entry.title),date=rssPublicationDate(entry.pubDate);
       if(!sourceUrl||!publisher||publisher.id!==registered.publisherId||!title||!date||Date.parse(date)<now-DAY||Date.parse(date)>now+300_000)continue;
       if(!registered.articlePath||!new URL(sourceUrl).pathname.startsWith(registered.articlePath))continue;
@@ -492,6 +510,7 @@ export function readNewsArticleMetadata(html:string,candidate:NewsCandidate,fina
     try{return canonicalNewsUrl(new URL(href,finalUrl).href)===canonical;}catch{return false;}
   });
   const titles:string[]=[],dates:string[]=[],boundAlternativeTitles:string[]=[];
+  let promotionalOriginal=false;
   const subjectBindings:{readonly headline:string;readonly date:string;readonly subject:ArticleSubjectMetadata|null}[]=[];
   const digi24Bindings:{readonly headline:string;readonly localDate:string;readonly subject?:ArticleSubjectMetadata|null}[]=[];
   const titleKey=(value:string):string=>value.normalize('NFKC').toLowerCase(),candidateTitle=titleText(candidate.title);
@@ -520,6 +539,8 @@ export function readNewsArticleMetadata(html:string,candidate:NewsCandidate,fina
       for(const binding of declared){try{if(canonicalNewsUrl(new URL(binding,finalUrl).href)!==canonical)same=false;}catch{same=false;}}
       const explicitBinding=declared.length>0&&(entity===undefined||typeof entity==='string'||object(entity))
         &&bindings.every(binding=>binding===undefined||typeof binding==='string'&&binding.length>0&&!/[\u0000-\u0020\u007f<>\\]/u.test(binding));
+      if(same&&explicitBinding&&canonicalNewsUrl(candidate.sourceUrl)===canonical
+        &&(promotionalSection(value.articleSection)||declaredSponsor(value.sponsor)))promotionalOriginal=true;
       // Digi24's reviewed page binds an Article with local date text and
       // publishes its explicit offset separately in head meta[name=publish-date].
       // Keep the two declarations bound; never infer a timezone from the publisher.
@@ -554,6 +575,13 @@ export function readNewsArticleMetadata(html:string,candidate:NewsCandidate,fina
     const raw=DomUtils.textContent(script);if(raw.length>200_000)continue;
     try{inspect(JSON.parse(raw) as unknown);}catch{/* Other metadata can still provide a complete published record. */}
   }
+  // Article-bound declarations veto fallback metadata; an unrelated sponsored
+  // recommendation or an ad widget cannot label the candidate article.
+  const headUrls=meta.filter(node=>inHead(node)&&(node.attribs.property??node.attribs.name??'').toLowerCase()==='og:url').map(node=>node.attribs.content);
+  const boundHead=canonicalInHead&&canonicalNewsUrl(candidate.sourceUrl)===canonical&&headUrls.length>0
+    &&headUrls.every(value=>typeof value==='string'&&canonicalNewsUrl(value)===canonical);
+  if(promotionalOriginal||boundHead&&meta.some(node=>inHead(node)
+    &&(node.attribs.property??node.attribs.name??'').toLowerCase()==='article:section'&&promotionalSection(node.attribs.content)))return null;
   const fields=new Map<string,string[]>();
   for(const node of meta){const key=(node.attribs.property??node.attribs.name??'').toLowerCase(),value=node.attribs.content;if(value){const previous=fields.get(key)??[];previous.push(value);fields.set(key,previous);}}
   if(digi24Bindings.length){

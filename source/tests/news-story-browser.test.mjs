@@ -9,6 +9,7 @@ import {findCity} from '../.build/src/local/cities.js';
 import {newsCard} from '../.build/src/local/service.js';
 import {NOW,iso,hash,article,local} from './fixtures/news-corpus.mjs';
 import {cardContent} from '../.build/src/iceo/card-validation.js';
+import {pressReviewCitation} from '../.build/src/iceo/source-links.js';
 
 const TIME=NOW+1000,cursor=id=>'Y3Vyc29y'+id+'.'+'a'.repeat(43);
 function fixture(count=27,{city,language='en',sources,sourceScope}={}){
@@ -242,4 +243,25 @@ test('all-source disclosures label every original language without rewriting or 
  assert.deepEqual(labels.map(node=>node.dataset.originalLanguage),languages);
  assert.ok(labels.every(node=>node.textContent.length>0));
  assert.equal(JSON.stringify(value),before);assert.equal(document.body.children.length,1);
+});
+
+test('Romanian press-review citations stay visible and linked in grouped originals without automatic requests',t=>{
+ let requests=0;const document=dom(t,()=>{requests++;throw Error('Unexpected source request');});
+ const sources=[['Descopera','https://www.descopera.ro/stiinta/controlled-source'],['Spotmedia.ro','https://spotmedia.ro/stiri/stiinta/controlled-source']].map(([publisher,sourceUrl],index)=>{
+  // Synthetic rendering record at the existing controlled test clock.
+  const original=article(600+index,{language:'ro'}),card={...original,publisher,sourceUrl,identity:sourceUrl};
+  card.id=hash(card.identity).slice(0,24);card.contentHash=hash(cardContent(card));
+  return {kind:'global',card};
+ });
+ const value=fixture(2,{language:'ro',sources}),before=JSON.stringify(value);
+ const details=newsStorySourcesNode(value.item,value.page,'ro');assert.ok(details);document.body.append(details);
+ const rendered=details.querySelectorAll('li');assert.equal(rendered.length,2);
+ for(let index=0;index<2;index++){
+  const source=sources[index],citation=pressReviewCitation(source.card.sourceUrl),links=rendered[index].querySelectorAll('a');
+  assert.ok(links.some(link=>link.textContent===citation.label&&link.href===citation.homeUrl));
+  assert.ok(links.some(link=>link.textContent===source.card.title&&link.href===source.card.sourceUrl));
+  assert.ok(links.some(link=>link.textContent===citation.originalLabel&&link.href===source.card.sourceUrl));
+  assert.ok(links.every(link=>link.target==='_blank'&&link.rel==='noopener noreferrer'));
+ }
+ assert.equal(requests,0);assert.equal(JSON.stringify(value),before);
 });
