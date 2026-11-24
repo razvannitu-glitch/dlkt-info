@@ -1,5 +1,6 @@
 import type {EvidenceCard} from './contracts.js';
 import {contextForCard} from './context.js';
+import {validArticleSubject} from './article-subject.js';
 
 export interface StoryGroup {
   /** Presentation identity, independent of the selected publisher or representative. */
@@ -303,6 +304,65 @@ function reportedPenaltyAnchor(card:EvidenceCard,title:string):ThreadAnchor|null
   basis:'matching-headlines',strong:false};
 }
 
+/**
+ * A discovery thread needs the same explicit named trench as well as the rare
+ * reported record. Publisher subject metadata is accepted only for its bound
+ * original URL. Generic ocean/underwater labels never supply a named location.
+ */
+function deepestVolcanicDiscoveryAnchor(card:EvidenceCard,title:string):ThreadAnchor|null {
+ if(!/\bworld'?s deepest explosive volcanic (?:activity|eruptions?)\b/u.test(title)
+  ||!/\b(?:finds?|found|discover(?:s|ed)|uncover(?:s|ed))\b/u.test(title)
+  ||/\b(?:not|never|no|may|might|could|would|possible|possibly|potential|expected|proposed|search|searches|searching|seeks|seeking|claims?|claimed|alleged|disputed|challenged|false|falsely|simulation|simulated|modelled|modeled|fiction|fictional|second|another|additional|previously|earlier|old|historic|historical|revisited|already|decades?|years?)\b/u.test(title)
+  ||/\b(?:18|19|20)\d{2}\b/u.test(title))return null;
+ const generic=new Set(['ocean','oceanic','deep','deepest','deep ocean','deep-sea','deep sea','sea','undersea','underwater','deepwater','submarine','volcanic','active','remote','unnamed','unknown','unidentified','ancient']);
+ const names=new Set<string>();
+ const add=(value:string):void=>{
+  const name=text(value).replace(/^(?:the|an?) /u,'');
+  if(name.length>=3&&name.length<=60&&name.split(' ').length<=5&&!generic.has(name)
+   &&!name.replace(/-/gu,' ').split(' ').every(word=>generic.has(word))
+   &&/^[\p{L}][\p{L}' -]+$/u.test(name))names.add(name);
+ };
+ const printed=card.title.normalize('NFKC').replace(/\s+/gu,' ').trim();
+ for(const match of printed.matchAll(/\b(?:[Ii]n|[Aa]t|[Bb]eneath|[Nn]ear) (?:the |an? )?(\p{Lu}[\p{L}\p{M}'’.-]*(?: \p{Lu}[\p{L}\p{M}'’.-]*){0,4}) [Tt]rench\b/gu))add(match[1]??'');
+ if(validArticleSubject(card.articleSubject,card.sourceUrl)){
+  for(const keyword of card.articleSubject.keywords){
+   const match=/^([\p{L}][\p{L}' -]{1,60}) trench$/u.exec(text(keyword));if(match)add(match[1]??'');
+  }
+ }
+ if(names.size!==1)return null;
+ return {key:key('volcanic-discovery','world-deepest-explosive',[...names][0],countries(card),card.summary===undefined?'':text(card.summary)),
+  basis:'shared-event',strong:false};
+}
+function aidParty(value:string):string|null {
+ const printed=value.normalize('NFKC').trim();
+ return /^\p{Lu}[\p{L}\p{M}'’.-]*(?: \p{Lu}[\p{L}\p{M}'’.-]*){0,4}$/u.test(printed)?text(printed):null;
+}
+/**
+ * Same-day aid-pledge coverage is an event thread, not an assertion that quoted
+ * sums or currencies agree. Keep every original sum; never convert currencies.
+ * Separate/additional rounds, a different donor/recipient/disaster or phase
+ * cannot borrow this key.
+ */
+function disasterAidPledgeAnchor(card:EvidenceCard,title:string):ThreadAnchor|null {
+ if(/\b(?:not|never|no|denies?|denied|false|falsely|alleged|reportedly|may|might|could|would|conditional|conditionally|additional|another|second|third|separate|extra|more|further|renewed|renewal|reiterates|reiterated|repeat|repeated|fresh|loan|loans|military|weapons|insurance)\b/u.test(title))return null;
+ const printed=card.title.normalize('NFKC').replace(/\s+/gu,' ').trim();
+ const lead=/^(.{2,70}?) pledges ((?:US\$|USD|EUR|GBP|\$|€|£)\s*(\d+(?:\.\d+)?)\s*(?:bn|billion|m|million)) (.+)$/u.exec(printed);
+ if(!lead||!Number.isFinite(Number(lead[3]))||Number(lead[3])<=0)return null;
+ const donor=aidParty(lead[1]??'');if(donor===null)return null;
+ const tail=lead[4]??'';
+ const relief=/^in (flood|earthquake|wildfire|tsunami) relief for (.{2,70}?)(?: as (.{2,70}?) visits (.{2,70}?))?[.!]?$/u.exec(tail);
+ const rebuild=/^to help (.{2,70}?) rebuild after (?:a |the )?(?:(?:deadly|devastating|catastrophic) )?(?:glacier )?(flood|earthquake|wildfire|tsunami)[.!]?$/u.exec(tail);
+ let recipient:string|null=null,hazard:string|null=null;
+ if(relief){
+  recipient=aidParty(relief[2]??'');hazard=relief[1]??null;
+  if(relief[3]!==undefined&&(aidParty(relief[3])===null||aidParty(relief[4]??'')===null))return null;
+ }else if(rebuild){recipient=aidParty(rebuild[1]??'');hazard=rebuild[2]??null;}
+ if(recipient===null||hazard===null||recipient===donor)return null;
+ const day=new Date(card.date).toISOString().slice(0,10);
+ return {key:key('disaster-aid-pledge',donor,recipient,hazard,day,countries(card),card.summary===undefined?'':text(card.summary)),
+  basis:'shared-event',strong:false};
+}
+
 /** Identical checked BBC article editions retain their original URLs and metadata.
  * Observed in public corpus1589: www.bbc.com and www.bbc.co.uk /news/articles/
  * use the same explicit article ID, headline and publication time.
@@ -321,11 +381,110 @@ function reviewedArticleAnchor(card:EvidenceCard,title:string):ThreadAnchor|null
  }catch{return null;}
 }
 
+/** Bounded Romanian incident threads. Missing details are never written into an original. */
+export interface RomanianIncidentRecord {
+ readonly recordKey:string;readonly title:string;readonly date:string;readonly countries:string;
+}
+interface RomanianObservedIncident {readonly base:string;readonly completeKey:string|null;readonly anchorKey:string|null}
+const ROMANIAN_OBSERVED_NAME="\\p{Lu}[\\p{L}\\p{M}'’-]+(?:[ -]\\p{Lu}[\\p{L}\\p{M}'’-]+){1,3}";
+const ROMANIAN_OBSERVED_PLACE="\\p{Lu}[\\p{L}\\p{M}'’-]+(?:[ -]\\p{Lu}[\\p{L}\\p{M}'’-]+){0,3}";
+const ROMANIAN_OBSERVED_UNCERTAIN=/\b(?:nu|nici|fals|falsa|zvon|zvonuri|neaga|dezminte|daca|ar|poate|posibil|posibila|urmeaza|va|vor|asteptat|asteptata|asteapta|retrospectiva|aniversare)\b/u;
+const ROMANIAN_OBSERVED_OTHER=/\b(?:alt|alta|altul|nou|noua|al doilea|a doua|din nou|inca un|anul trecut|in urma cu)\b/u;
+function romanianObservedPrinted(value:string):string {
+ return value.normalize('NFKC').normalize('NFKD').replace(/(\p{Script=Latin})\p{M}+/gu,'$1').normalize('NFC').replace(/\s+/gu,' ').trim();
+}
+function romanianObservedIdentity(record:RomanianIncidentRecord,kind:string,core:string,detail:string|null):RomanianObservedIncident {
+ const window=Math.floor(Date.parse(record.date)/WINDOW_MS),printedDate=explicitDrawDate(text(record.title))?.date??'';
+ const anchorKey=detail===null?null:key('ro-explicit-incident',kind,core,detail,record.countries,printedDate);
+ return {base:key('ro-incident-candidate',kind,core,record.countries,printedDate,window),anchorKey,
+  completeKey:anchorKey===null?null:key('window',anchorKey,window)};
+}
+function romanianObservedCourt(record:RomanianIncidentRecord,printed:string,title:string):RomanianObservedIncident|null {
+ if(ROMANIAN_OBSERVED_UNCERTAIN.test(title)||ROMANIAN_OBSERVED_OTHER.test(title)
+  ||/\b(?:control judiciar|revocat|revocare|achitat|achitare|amanat|amanare|prelungit|prelungire|mentinut|mentine|rejudecare|a depus|a formulat|contesta|ataca decizia|a admis contestatia)\b/u.test(title))return null;
+ const courts=[...printed.matchAll(new RegExp('\\b[Cc]urtea de [Aa]pel(?: (?:din )?('+ROMANIAN_OBSERVED_PLACE+'))?','gu'))];
+ if(courts.length!==1||!/\barest(?:ul)? la domiciliu\b/u.test(title))return null;
+ const front=new RegExp('^('+ROMANIAN_OBSERVED_NAME+'),\\s*(?:(?:a fost )?plasat in|in) arest la domiciliu[.!]','u').exec(printed);
+ const subject=new RegExp('\\bin cazul lui ('+ROMANIAN_OBSERVED_NAME+')(?:[.!]|$)','u').exec(printed);
+ const names=[...new Set([front?.[1],subject?.[1]].filter((name):name is string=>name!==undefined).map(text))];
+ if(names.length!==1)return null;
+ const court=courts[0]!,after=text(printed.slice((court.index??0)+court[0].length));
+ const replacement=/^a decis(?:, definitiv,)? sa inlocuiasca arestul preventiv cu arestul la domiciliu\b/u.test(after)&&subject!==null;
+ const release=/^a decis(?:, definitiv,)? sa-l elibereze din arestul central\b/u.test(after)&&front!==null;
+ // A dismissed challenge is part of the same explicitly printed positive custody outcome;
+ // filing/admitting a challenge or an unspecified appeal never supplies this anchor.
+ const rejectedChallenge=/^a respins contestatia\b/u.test(after)&&front!==null;
+ if(!replacement&&!release&&!rejectedChallenge)return null;
+ return romanianObservedIdentity(record,'appeal-court-house-arrest',names[0]!,court[1]===undefined?null:text(court[1]));
+}
+function romanianObservedHotelFire(record:RomanianIncidentRecord,printed:string,title:string):RomanianObservedIncident|null {
+ const status=title.replace(/\bnu se mai manifesta cu flacara deschisa\b/u,'fara flacara deschisa');
+ if(ROMANIAN_OBSERVED_UNCERTAIN.test(status)||ROMANIAN_OBSERVED_OTHER.test(title)
+  ||/\b(?:alarma falsa|exercitiu|simulare|anchet\w*|investig\w*|redeschid\w*|renov\w*|reconstr\w*|despagub\w*|asigur\w*|proces|procese|arestat\w*)\b/u.test(title)
+  ||(title.match(/\bhotel(?:ul)?\b/gu)??[]).length!==1)return null;
+ const match=new RegExp('\\b[Hh]otel(?:ul)? (?:(('+ROMANIAN_OBSERVED_PLACE+')) )?din ('+ROMANIAN_OBSERVED_PLACE+')','u').exec(printed);
+ if(!match)return null;
+ const after=text(printed.slice(match.index+match[0].length));
+ const burning=/^hotelul\b/u.test(title)&&/^(?:inca )?arde\b/u.test(after);
+ const reported=/^incendiu(?:l)?(?: puternic)?(?: de)? la (?:un )?hotel(?:ul)?\b/u.test(title);
+ if(!burning&&!reported)return null;
+ return romanianObservedIdentity(record,'hotel-fire',text(match[3]??''),match[1]===undefined?null:text(match[1]));
+}
+function romanianObservedIncident(record:RomanianIncidentRecord):RomanianObservedIncident|null {
+ if(!record.title.trim()||record.title.length>4000||!Number.isFinite(Date.parse(record.date))
+  ||!/^(?:[A-Z]{2}(?:,[A-Z]{2})*)?$/u.test(record.countries))return null;
+ const title=text(record.title);if(EXPLANATORY.test(title))return null;
+ // A partial, historical, invalid or conflicting printed date is not an undated current event.
+ if(/\b(?:18|19|20)\d{2}\b/u.test(title)&&explicitDrawDate(title)===null)return null;
+ const printed=romanianObservedPrinted(record.title);
+ return romanianObservedCourt(record,printed,title)??romanianObservedHotelFire(record,printed,title);
+}
+export function romanianIncidentRecord(card:EvidenceCard):RomanianIncidentRecord {
+ return {recordKey:'global:'+card.id,title:card.title,date:card.date,countries:countries(card)};
+}
+/** A standalone original can claim only its complete printed identity, never a resolved partial. */
+export function romanianIncidentThreadKey(record:RomanianIncidentRecord):string|null {
+ return romanianObservedIncident(record)?.completeKey??null;
+}
+/** Preserve the existing local/global printed-place guard for the reader and server. */
+export function printedLocalIncidentPlace(title:string,geoAnchors:readonly string[]):boolean {
+ const normalized=(value:string):string=>value.normalize('NFKC').toLowerCase().replace(/[‘’]/gu,"'").replace(/[‐‑‒–—]/gu,'-').replace(/\s+/gu,' ').trim();
+ const headline=' '+normalized(title).replace(/[^\p{L}\p{N}]+/gu,' ')+' ';
+ return geoAnchors.some(anchor=>{
+  const place=normalized(anchor).replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+  return place.length>=3&&headline.includes(' '+place+' ');
+ });
+}
+/** One indexed base can resolve a missing detail only to one complete identity.
+ * This is a shared-event inference, not fact equivalence. A partial never supplies a target.
+ */
+export function resolvedRomanianIncidentKeys(records:readonly RomanianIncidentRecord[]):ReadonlyMap<string,string> {
+ if(!Array.isArray(records)||records.length>MAX_RECORDS)throw Error('STORY_INPUT_INVALID');
+ const variants=new Map<string,Set<string>>();
+ for(const record of records){const values=variants.get(record.recordKey)??new Set<string>();values.add(JSON.stringify(record));variants.set(record.recordKey,values);}
+ const parsed=records.flatMap(record=>{const incident=variants.get(record.recordKey)?.size===1?romanianObservedIncident(record):null;return incident?[{record,incident}]:[];});
+ const identities=new Map<string,Set<string>>();
+ for(const {incident}of parsed){if(incident.completeKey===null)continue;const values=identities.get(incident.base)??new Set<string>();values.add(incident.completeKey);identities.set(incident.base,values);}
+ const resolved=new Map<string,string>();
+ for(const {record,incident}of parsed){
+  const candidates=identities.get(incident.base),target=incident.completeKey??(candidates?.size===1?[...candidates][0]:undefined);
+  if(target!==undefined)resolved.set(record.recordKey,target);
+ }
+ return resolved;
+}
+function identifiedRomanianIncidentAnchor(card:EvidenceCard):ThreadAnchor|null {
+ const incident=romanianObservedIncident(romanianIncidentRecord(card));
+ return incident?.anchorKey?{key:incident.anchorKey,basis:'shared-event',strong:false}:null;
+}
+
 function anchor(card:EvidenceCard):ThreadAnchor|null {
   if(card.kind!=='publication'||!card.title.trim()||card.title.length>4000||!Number.isFinite(Date.parse(card.date)))return null;
   const title=text(card.title),revenue=launchRevenueAnchor(card,title);if(revenue)return revenue;
   const documentary=documentaryNarrativeAnchor(card,title);if(documentary)return documentary;
   if(!EXPLANATORY.test(title)){
+    const discovery=deepestVolcanicDiscoveryAnchor(card,title);if(discovery)return discovery;
+    const aid=disasterAidPledgeAnchor(card,title);if(aid)return aid;
+    const romanian=identifiedRomanianIncidentAnchor(card);if(romanian)return romanian;
     const draw=lotteryDrawAnchor(card,title);if(draw)return draw;
     const penalty=reportedPenaltyAnchor(card,title);if(penalty)return penalty;
     const vulnerability=[...new Set([...title.matchAll(/\bcve-(\d{4})-(\d{4,7})\b/gu)].map(match=>`${match[1]}-${match[2]}`))];
@@ -366,20 +525,26 @@ function consistentRecords(records:readonly EvidenceCard[]):readonly EvidenceCar
 /**
  * Callers supply their already eligible, source-checked records. This function
  * neither fetches nor adds records, and never changes original text or metadata.
- * Every grouped member has the same explicit anchor: no transitive similarity
- * chain can connect two unrelated event identities. Named edition identities
+ * Complete records retain an explicit anchor. A reviewed incomplete incident can
+ * join only one compatible complete identity; partials cannot supply an inference
+ * target or create transitive similarity chains. Named edition identities
  * stay stable through the event; weak matches use fixed two-day windows.
  */
-export function groupStories(records:readonly EvidenceCard[],compare:StoryOrder=defaultOrder):readonly StoryGroup[] {
-  if(!Array.isArray(records)||records.length>MAX_RECORDS)throw Error('STORY_INPUT_INVALID');
-  const buckets=new Map<string,{anchor:ThreadAnchor|null;cards:EvidenceCard[]}>();
-  for(const card of consistentRecords(records)){
-    const subject=anchor(card),id=subject?anchoredKey(subject,card):key('record',card.identity,card.sourceUrl),bucket=buckets.get(id)??{anchor:subject,cards:[]};
+export function groupStories(records:readonly EvidenceCard[],compare:StoryOrder=defaultOrder,incidentContext:readonly RomanianIncidentRecord[]=[]):readonly StoryGroup[] {
+  if(!Array.isArray(records)||!Array.isArray(incidentContext)||records.length+incidentContext.length>MAX_RECORDS)throw Error('STORY_INPUT_INVALID');
+  const consistent=consistentRecords(records),incidents=resolvedRomanianIncidentKeys([...consistent.filter(card=>card.kind==='publication').map(romanianIncidentRecord),...incidentContext]);
+  const completeIncidents=new Set(consistent.filter(card=>card.kind==='publication'&&incidents.has('global:'+card.id)&&romanianIncidentThreadKey(romanianIncidentRecord(card))===incidents.get('global:'+card.id)).map(card=>card.id));
+  const buckets=new Map<string,{anchor:ThreadAnchor|null;cards:EvidenceCard[];incident:boolean}>();
+  for(const card of consistent){
+    const incident=card.kind==='publication'?incidents.get('global:'+card.id):undefined;
+    const subject:ThreadAnchor|null=incident?{key:incident,basis:'shared-event',strong:true}:anchor(card);
+    const id=subject?anchoredKey(subject,card):key('record',card.identity,card.sourceUrl),bucket=buckets.get(id)??{anchor:subject,cards:[],incident:incident!==undefined};
     bucket.cards.push(card);buckets.set(id,bucket);
   }
   const groups:StoryGroup[]=[];
   for(const [id,bucket]of buckets){
-    const ordered=[...bucket.cards].sort((a,b)=>order(compare,a,b)),primary=ordered[0];if(!primary)continue;
+    // A resolved partial remains an original source; the printed complete identity represents the thread.
+    const ordered=[...bucket.cards].sort((a,b)=>(bucket.incident?Number(completeIncidents.has(b.id))-Number(completeIncidents.has(a.id)):0)||order(compare,a,b)),primary=ordered[0];if(!primary)continue;
     groups.push(Object.freeze({key:id,card:primary,related:Object.freeze(ordered.slice(1)),basis:ordered.length>1?(bucket.anchor?.basis??'matching-headlines'):'single'}));
   }
   return Object.freeze(groups.sort((a,b)=>order(compare,a.card,b.card)||lexical(a.key,b.key)));

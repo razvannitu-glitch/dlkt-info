@@ -1,5 +1,5 @@
 import {createHash} from 'node:crypto';
-import {groupStories} from './story-grouping.js';
+import {groupStories,romanianIncidentRecord,romanianIncidentThreadKey,resolvedRomanianIncidentKeys,printedLocalIncidentPlace,type RomanianIncidentRecord} from './story-grouping.js';
 import type {NewsPageOriginal,NewsStorySource} from './news-page-contracts.js';
 
 export interface NewsStoryGroup {
@@ -8,7 +8,7 @@ export interface NewsStoryGroup {
  readonly basis:'single'|'matching-headlines'|'shared-event';
  readonly sources:readonly NewsStorySource[];
 }
-type Bucket={primary:NewsPageOriginal;thread:string;basis:NewsStoryGroup['basis'];members:NewsPageOriginal[]};
+type Bucket={primary:NewsPageOriginal;thread:string;basis:NewsStoryGroup['basis'];members:NewsPageOriginal[];readonly hasGlobal:boolean};
 const normalized=(value:string):string=>value.normalize('NFKC').toLowerCase().replace(/[‘’]/gu,"'").replace(/[‐‑‒–—]/gu,'-').replace(/\s+/gu,' ').trim();
 const lexical=(a:string,b:string):number=>a<b?-1:a>b?1:0;
 const published=(item:NewsPageOriginal):string=>item.kind==='global'?item.card.date:item.card.news!.publishedAt;
@@ -23,17 +23,14 @@ function compatibleSummary(a:NewsPageOriginal,b:NewsPageOriginal):boolean {
  const left=normalized(summary(a)),right=normalized(summary(b));return !left||!right||left===right;
 }
 function printedLocalPlace(item:Extract<NewsPageOriginal,{kind:'local'}>):boolean {
- const title=' '+normalized(item.card.title).replace(/[^\p{L}\p{N}]+/gu,' ')+' ';
- return item.card.news!.geoAnchors.some(anchor=>{
-  const place=normalized(anchor).replace(/[^\p{L}\p{N}]+/gu,' ').trim();
-  return place.length>=3&&title.includes(' '+place+' ');
- });
+ return printedLocalIncidentPlace(item.card.title,item.card.news!.geoAnchors);
 }
 /**
  * Presentation groups preserve checked originals. The existing engine groups an
  * explicitly identified event, never a consensus claim. Local cross-origin
- * matching is narrower: complete informative headline, fixed time window and
- * compatible excerpts; crossing into global reporting also needs a printed place.
+ * matching accepts only a reviewed explicit incident thread or an identical informative
+ * headline with compatible excerpts. Crossing into global reporting needs a printed
+ * place. Missing incident details resolve only to one complete identity in a fixed window.
  */
 export function groupNewsStories(items:readonly NewsPageOriginal[]):readonly NewsStoryGroup[] {
  if(!Array.isArray(items)||items.length>5000)throw Error('NEWS_STORY_INPUT_INVALID');
@@ -41,14 +38,7 @@ export function groupNewsStories(items:readonly NewsPageOriginal[]):readonly New
  const global=items.filter((item):item is Extract<NewsPageOriginal,{kind:'global'}>=>item.kind==='global');
  const globals=new Map(global.map(item=>[item.card.id,item]));
  const buckets:Bucket[]=[],urls=new Map<string,Bucket>(),retained=new Set<string>();
- for(const group of groupStories(global.map(item=>item.card),(a,b)=>(positions.get('article:'+a.id)??5000)-(positions.get('article:'+b.id)??5000))){
-  const members=[group.card,...group.related].flatMap(card=>{const item=globals.get(card.id);return item?[{...item,card}]:[];});
-  const primary=members[0];if(!primary)continue;
-  const bucket:Bucket={primary,thread:group.key,basis:group.basis,members};buckets.push(bucket);
-  for(const member of members){urls.set(member.card.sourceUrl,bucket);retained.add(member.card.id);}
- }
- // A conflicting global record cannot re-enter through its local feed copy.
- const blockedUrls=new Set(global.filter(item=>!retained.has(item.card.id)).map(item=>item.card.sourceUrl));
+ const globalUrls=new Set(global.map(item=>item.card.sourceUrl));
  const locals=items.filter((item):item is Extract<NewsPageOriginal,{kind:'local'}>=>item.kind==='local'&&item.card.kind==='local-news'&&item.card.news!==undefined);
  const idVariants=new Map<string,Set<string>>(),urlVariants=new Map<string,Set<string>>();
  const add=(map:Map<string,Set<string>>,key:string,value:string):void=>{const values=map.get(key)??new Set<string>();values.add(value);map.set(key,values);};
@@ -58,24 +48,55 @@ export function groupNewsStories(items:readonly NewsPageOriginal[]):readonly New
  }
  const uniqueLocal=new Map<string,Extract<NewsPageOriginal,{kind:'local'}>>();
  for(const item of locals){
-  if(blockedUrls.has(item.card.sourceUrl)||idVariants.get(item.card.id)?.size!==1||urlVariants.get(item.card.sourceUrl)?.size!==1)continue;
+  if(globalUrls.has(item.card.sourceUrl)||idVariants.get(item.card.id)?.size!==1||urlVariants.get(item.card.sourceUrl)?.size!==1)continue;
   const prior=uniqueLocal.get(item.card.sourceUrl);
   if(!prior||Date.parse(item.card.checkedAt)>Date.parse(prior.card.checkedAt)||item.card.checkedAt===prior.card.checkedAt&&lexical(item.card.id,prior.card.id)<0)uniqueLocal.set(item.card.sourceUrl,item);
+ }
+ // A local feed copy of any global URL was excluded above, including a conflicting global.
+ // Only a printed local place can contribute a complete target to cross-origin inference.
+ const incidentLocals:readonly RomanianIncidentRecord[]=[...uniqueLocal.values()].filter(printedLocalPlace).map(item=>({
+  recordKey:'local:'+item.card.id,title:item.card.title,date:published(item),countries:'',
+ }));
+ for(const group of groupStories(global.map(item=>item.card),(a,b)=>(positions.get('article:'+a.id)??5000)-(positions.get('article:'+b.id)??5000),incidentLocals)){
+  const members=[group.card,...group.related].flatMap(card=>{const item=globals.get(card.id);return item?[{...item,card}]:[];});
+  const primary=members[0];if(!primary)continue;
+  const bucket:Bucket={primary,thread:group.key,basis:group.basis,members,hasGlobal:true};buckets.push(bucket);
+  for(const member of members){urls.set(member.card.sourceUrl,bucket);retained.add(member.card.id);}
+ }
+ const incidentKeys=resolvedRomanianIncidentKeys([
+  ...global.filter(item=>retained.has(item.card.id)).map(item=>romanianIncidentRecord(item.card)),...incidentLocals,
+ ]);
+ const incidentLocalCities=new Map<string,Set<string>>();
+ for(const item of uniqueLocal.values()){
+  const incident=incidentKeys.get('local:'+item.card.id);if(incident===undefined)continue;
+  const cities=incidentLocalCities.get(incident)??new Set<string>();cities.add(item.card.news!.cityId);incidentLocalCities.set(incident,cities);
  }
  for(const item of [...uniqueLocal.values()].sort((a,b)=>(positions.get(a.key)??5000)-(positions.get(b.key)??5000)||lexical(a.key,b.key))){
   // The original URL is already represented: keep one source link and the
   // directly checked global original, without rewriting either stored record.
   if(urls.has(item.card.sourceUrl))continue;
-  const fingerprint=headline(item);
-  const candidates=fingerprint===null?[]:buckets.filter(bucket=>bucket.primary.kind==='global'
+  const fingerprint=headline(item),incident=incidentKeys.get('local:'+item.card.id);
+  const localIncident=incident!==undefined&&(incidentLocalCities.get(incident)?.size??0)>1?JSON.stringify(['local-incident-city',incident,item.card.news!.cityId]):incident;
+  const candidates=incident!==undefined?buckets.filter(bucket=>(bucket.thread===incident||bucket.thread===localIncident)&&(bucket.hasGlobal
+   ?printedLocalPlace(item):bucket.members.every(member=>member.kind==='local'&&member.card.news!.cityId===item.card.news!.cityId)))
+   :fingerprint===null?[]:buckets.filter(bucket=>bucket.hasGlobal
    ?printedLocalPlace(item)&&bucket.members.some(member=>member.kind==='global'&&headline(member)===fingerprint&&compatibleSummary(member,item))
    :bucket.members.every(member=>member.kind==='local'&&member.card.news!.cityId===item.card.news!.cityId&&headline(member)===fingerprint&&normalized(summary(member))===normalized(summary(item))));
   if(candidates.length===1){
-   const bucket=candidates[0]!;bucket.members.push(item);if(bucket.basis==='single')bucket.basis='matching-headlines';urls.set(item.card.sourceUrl,bucket);
+   const bucket=candidates[0]!;bucket.members.push(item);
+   if(incident!==undefined){
+    bucket.basis='shared-event';
+    const primary=bucket.primary,primaryIncident=primary.kind==='global'?romanianIncidentThreadKey(romanianIncidentRecord(primary.card))
+     :romanianIncidentThreadKey({recordKey:'local:'+primary.card.id,title:primary.card.title,date:published(primary),countries:''});
+    const localComplete=romanianIncidentThreadKey({recordKey:'local:'+item.card.id,title:item.card.title,date:published(item),countries:''});
+    // An incomplete global title must not represent a thread identified only by its local source.
+    if(primaryIncident!==incident&&localComplete===incident){bucket.primary=item;bucket.members=[item,...bucket.members.filter(member=>member!==item)];}
+   }else if(bucket.basis==='single')bucket.basis='matching-headlines';
+   urls.set(item.card.sourceUrl,bucket);
   }else{
    // Ambiguous matches stay separate; no similarity chain joins two groups.
-   const thread=fingerprint===null?JSON.stringify(['local-record',item.card.sourceUrl]):JSON.stringify(['local-headline',item.card.news!.cityId,fingerprint,normalized(summary(item)),...(candidates.length>1?[item.card.sourceUrl]:[])]);
-   const bucket:Bucket={primary:item,thread,basis:'single',members:[item]};buckets.push(bucket);urls.set(item.card.sourceUrl,bucket);
+   const thread=localIncident??(fingerprint===null?JSON.stringify(['local-record',item.card.sourceUrl]):JSON.stringify(['local-headline',item.card.news!.cityId,fingerprint,normalized(summary(item)),...(candidates.length>1?[item.card.sourceUrl]:[])]));
+   const bucket:Bucket={primary:item,thread,basis:'single',members:[item],hasGlobal:false};buckets.push(bucket);urls.set(item.card.sourceUrl,bucket);
   }
  }
  return Object.freeze(buckets.map(bucket=>Object.freeze({

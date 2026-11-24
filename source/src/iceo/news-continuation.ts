@@ -4,7 +4,7 @@ import type {City} from '../local/contracts.js';
 import type {NewsPeriod} from './news-day.js';
 import {readingCard} from './reader.js';
 import {editorialCategory} from './editorial-categories.js';
-import {storyThreadKey} from './story-grouping.js';
+import {storyThreadKey,romanianIncidentRecord,romanianIncidentThreadKey,printedLocalIncidentPlace} from './story-grouping.js';
 
 export interface NewsContinuationContext {readonly language:string;readonly cityId:string|null;readonly filter:NewsStreamFilter;readonly city?:City;readonly period?:NewsPeriod;readonly sourceScope?:NewsSourceScope}
 export interface NewsContinuationView {
@@ -40,20 +40,47 @@ function originals(item:NewsPageItem):readonly NewsStorySource[] {
  const primary:NewsStorySource=item.kind==='global'?{kind:'global',card:item.card}:{kind:'local',card:item.card};
  return [primary,...(item.story?.related??[])];
 }
-function readingKeys(item:NewsPageItem):readonly string[] {
- const keys=['item:'+item.key];
- if(item.story)keys.push('story:'+item.story.key);
- for(const original of originals(item)){
-  const [id,identity,url]=itemIdentity(original);
-  keys.push('id:'+id,'identity:'+identity,'url:'+url);
-  // A singleton has no API story summary. Use the existing conservative event
-  // identity so a different checked representative cannot repeat the same event.
-  if(original.kind==='global'){
-   const thread=storyThreadKey(original.card);
-   if(thread!==null)keys.push('thread:'+thread);
-  }
- }
+function completeIncidentThread(original:NewsStorySource):string|null {
+ if(original.kind==='global')return romanianIncidentThreadKey(romanianIncidentRecord(original.card));
+ const article=original.card.news;
+ return original.card.kind==='local-news'&&article!==undefined&&printedLocalIncidentPlace(article.title,article.geoAnchors)
+  ?romanianIncidentThreadKey({recordKey:'local:'+original.card.id,title:article.title,date:article.publishedAt,countries:''}):null;
+}
+function originalReadingKeys(original:NewsStorySource):readonly string[] {
+ const [id,identity,url]=itemIdentity(original),keys=['id:'+id,'identity:'+identity,'url:'+url];
+ // A singleton has no API story summary. Complete local and global identities
+ // retain the same conservative event alias across publisher changes.
+ const thread=original.kind==='global'?storyThreadKey(original.card):completeIncidentThread(original);
+ if(thread!==null)keys.push('thread:'+thread);
  return keys;
+}
+interface ReadingKeys {readonly aliases:readonly string[];readonly incident:string|null;readonly partialAliases:readonly string[]}
+function readingKeys(item:NewsPageItem):ReadingKeys {
+ const keys=['item:'+item.key],sources=originals(item),complete=sources.map(completeIncidentThread);
+ if(item.story)keys.push('story:'+item.story.key);
+ const incidents=[...new Set(complete.filter((thread):thread is string=>thread!==null))],incident=incidents.length===1?incidents[0]!:null;
+ const partialAliases:string[]=[];
+ for(const [index,original]of sources.entries()){
+  const aliases=originalReadingKeys(original);keys.push(...aliases);
+  if(incident!==null&&complete[index]===null)partialAliases.push(...aliases);
+ }
+ if(incident!==null&&complete[0]===null)partialAliases.push('item:'+item.key);
+ return {aliases:keys,incident,partialAliases};
+}
+const incidentBound=(alias:string):string=>'incident-bound:'+alias;
+const incidentBinding=(incident:string,alias:string):string=>'incident-binding:'+JSON.stringify([incident,alias]);
+function knownReadingKeys(seen:ReadonlySet<string>,reading:ReadingKeys):boolean {
+ return reading.aliases.some(alias=>seen.has(alias)&&(reading.incident===null||!seen.has(incidentBound(alias))
+  ||seen.has(incidentBinding(reading.incident,alias))));
+}
+function retainReadingKeys(seen:Set<string>,reading:ReadingKeys):void {
+ for(const alias of reading.aliases)seen.add(alias);
+ // A missing detail may resolve differently in another edition. Its known URL,
+ // ID or headline cannot carry reading memory into another explicit incident.
+ // Retain one owner per partial alias; later retargets cannot grow a relation set.
+ if(reading.incident!==null)for(const alias of reading.partialAliases)if(!seen.has(incidentBound(alias))){
+  seen.add(incidentBound(alias));seen.add(incidentBinding(reading.incident,alias));
+ }
 }
 /** Fresh editions are validated independently; an explicit refresh preserves the reading prefix. */
 export class NewsContinuation {
@@ -172,9 +199,9 @@ export class NewsContinuation {
      // No rejected or late response can contribute even a deduplication alias.
      const seen=new Set(this.seen),additions:NewsPageItem[]=[];
      for(const item of value.items){
-      const aliases=readingKeys(item),known=aliases.some(alias=>seen.has(alias));
+      const reading=readingKeys(item),known=knownReadingKeys(seen,reading);
       if(!known)additions.push(item);
-      for(const alias of aliases)seen.add(alias);
+      retainReadingKeys(seen,reading);
      }
      if(this.items.length+additions.length>NEWS_READING_MAX_ITEMS||seen.size>NEWS_READING_MAX_KEYS){
       this.limitReached=true;return;
