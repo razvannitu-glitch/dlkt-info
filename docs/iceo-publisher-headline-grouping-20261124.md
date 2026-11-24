@@ -8,4 +8,6 @@ This affects only the exact informative-headline fallback. The comparison still 
 
 Every original card, title, URL, date, attribution and content hash remains unchanged and accessible in the grouped source list. The browser module is generated from the same TypeScript as the server. Tests exercise the positive pair, identity and claim conflicts, short titles, representative changes, paging, source continuation and a subsequent edition. The page/stream expansion that preserves all originals is unchanged.
 
+The signed page/source order version advances from r4 to r5. A cursor issued before this grouping change returns the existing NEWS_EDITION_EXPIRED result before a corpus lookup, preventing an old offset from being applied to a differently grouped edition. Invalid signatures remain invalid, and fresh cursors continue normally. The durable corpus format and SQL version are unchanged.
+
 No request budgets, database schema, permissions, billing or CSS are changed. Publication requires the complete existing release gates, independent review and the official www.dlkt.ee build receipt. Existing improvements that move repeated locale/follow metadata into source details are retained; historical screenshots are not treated as current rendering evidence.

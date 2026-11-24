@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {createHmac} from 'node:crypto';
 import {groupStories,storyThreadKey} from '../.build/src/iceo/story-grouping.js';
 import {groupStories as browserGroups,storyThreadKey as browserKey} from '../public/story-grouping.js';
 import {contextFromPublisherCategories} from '../.build/src/iceo/context.js';
@@ -94,4 +95,32 @@ test('public pagination and source continuation expose one normalized headline w
  do{const page=await service.read({...query,cursor});assert.ok(++count<=3);assert.equal(page.total,25);next.push(...page.items);cursor=page.nextCursor;}while(cursor);
  const changed=next.filter(item=>item.story?.sourceTotal===5);assert.equal(changed.length,1);assert.equal(changed[0].story.key,grouped.story.key);
  assert.notEqual(changed[0].card.id,grouped.card.id);
+});
+
+test('signed page and source cursors from the previous grouping policy expire before reusing their offsets',async()=>{
+ const originals=Array.from({length:6},(_,index)=>index%2?hotnews(200+index):record(200+index));
+ const fillers=Array.from({length:24},(_,index)=>record(300+index,'Autoritatile publica rezultatele controlului tehnic pentru proiectul distinct cu numarul '+index));
+ const store=new CorpusMemoryStore([epoch([...originals,...fillers],[],{now:NOW})]);
+ const service=new NewsPageService(store,KEY,()=>NOW+1000),query={language:'ro',sourceScope:'all',cityId:null,filter:'all',cursor:null};
+ const first=await service.read(query);assert.ok(first.nextCursor);
+ let page=first,sourceCursor=page.items.find(item=>item.story?.nextSourcesCursor)?.story.nextSourcesCursor,scanned=1;
+ while(!sourceCursor&&page.nextCursor){assert.ok(++scanned<=3);page=await service.read({...query,cursor:page.nextCursor});sourceCursor=page.items.find(item=>item.story?.nextSourcesCursor)?.story.nextSourcesCursor;}
+ assert.ok(sourceCursor);
+ const oldCursor=token=>{
+  const [encoded,signature]=token.split('.'),payload=JSON.parse(Buffer.from(encoded,'base64url').toString('utf8'));
+  assert.notEqual(payload.orderVersion,'iptc17-source-scope-publisher-rounds-20261124-r4');
+  payload.orderVersion='iptc17-source-scope-publisher-rounds-20261124-r4';
+  const body=Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const key=createHmac('sha256',KEY).update('dlkt-info/news-page/cursor-key/v1').digest();
+  return {signed:body+'.'+createHmac('sha256',key).update('dlkt-info/news-page/cursor/v1:'+body).digest('base64url'),forged:body+'.'+signature};
+ };
+ const oldPage=oldCursor(first.nextCursor),oldSources=oldCursor(sourceCursor),reads=store.reads.length;
+ await assert.rejects(service.read({...query,cursor:oldPage.signed}),/NEWS_EDITION_EXPIRED/);
+ await assert.rejects(service.readSources(oldSources.signed),/NEWS_EDITION_EXPIRED/);
+ await assert.rejects(service.read({...query,cursor:oldPage.forged}),/NEWS_CURSOR_INVALID/);
+ await assert.rejects(service.readSources(oldSources.forged),/NEWS_CURSOR_INVALID/);
+ assert.equal(store.reads.length,reads,'old offsets are rejected before any corpus lookup');
+ assert.ok(validNewsPage(await service.read({...query,cursor:first.nextCursor}),NOW+1000));
+ assert.ok(validNewsStorySourcesPage(await service.readSources(sourceCursor),NOW+1000));
+ assert.equal((await service.read(query)).total,25,'a fresh edition remains available');
 });
