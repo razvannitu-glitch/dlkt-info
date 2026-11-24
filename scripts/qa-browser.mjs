@@ -121,12 +121,48 @@ async function loaded(call){
 
 /** Controlled evidence exercises the real page service; it is never a claim of a live source check. */
 async function newsFixture(){
- const [{NewsPageService,parseNewsPageRequest,parseNewsSourcesRequest},{article,epoch,CorpusMemoryStore,snapshot,hash},{cardContent},{findCity},{SPECIALIST_ROWS},{pressReviewCitation}]=await Promise.all([
+ const [{NewsPageService,parseNewsPageRequest,parseNewsSourcesRequest},{article,epoch,CorpusMemoryStore,snapshot,hash},{cardContent},{findCity},{SPECIALIST_ROWS},{pressReviewCitation},{currentLocalSnapshot},{selectHomeLocal},{localReading}]=await Promise.all([
   import('../source/.build/src/iceo/news-page.js'),import('../source/tests/fixtures/news-corpus.mjs'),
   import('../source/.build/src/iceo/card-validation.js'),import('../source/.build/src/local/cities.js'),
   import('../source/tests/fixtures/romanian-specialists.mjs'),import('../source/.build/src/iceo/source-links.js'),
+  import('../source/.build/src/local/contracts.js'),import('../source/.build/src/iceo/home-local.js'),import('../source/.build/src/local/presentation.js'),
  ]);
  const now=Date.now(),city=findCity('683506');assert.ok(city,'controlled Bucharest city is registered');
+ const cmtebUrl='https://www.cmteb.ro/functionare_sistem_termoficare.php';
+ const weatherUrl='https://api.met.no/weatherapi/locationforecast/2.0/compact?lat='+city.lat.toFixed(4)+'&lon='+city.lon.toFixed(4);
+ const localIds=['bucharest:cmteb:sector-1','weather:'+city.id];
+ let localRequests=0;
+ function localSnapshot(clock){
+  const checkedAt=new Date(clock).toISOString(),hour=Math.floor(clock/3600000)*3600000;
+  const forecast={id:localIds[1],kind:'forecast',title:'Controlled city-centre forecast',
+   text:'Hourly forecast temperatures 2.0–6.0 °C. Total precipitation 0.8 mm over the six hourly periods. Highest hourly wind-speed forecast 12.6 km/h (not gusts).',
+   publisher:'MET Norway',sourceUrl:weatherUrl,sourceUpdatedAt:new Date(clock-60000).toISOString(),checkedAt,
+   validFrom:new Date(hour).toISOString(),validTo:new Date(hour+6*3600000).toISOString(),
+   weatherSymbols:Array.from({length:6},(_,index)=>({at:new Date(hour+index*3600000).toISOString(),symbol:'cloudy'})),
+   facts:['Controlled browser QA forecast, not a live MET Norway source check.'],
+   boundary:'Controlled forecast fixture for the selected city centre; not observed conditions or an official warning.'};
+  const utility={id:localIds[0],kind:'utility-notice',title:'Controlled CMTEB sector 1 notice',
+   text:'Controlled operator notice for sector 1. Check the official operator document for affected streets and estimated times.',
+   publisher:'Termoenergetica Bucuresti (CMTEB)',sourceUrl:cmtebUrl,sourceUpdatedAt:null,checkedAt,
+   validFrom:checkedAt,validTo:new Date(clock+300000).toISOString(),
+   facts:['Controlled browser QA operator notice, not a live service advisory.'],
+   boundary:'Controlled operator fixture. It does not establish that a reader building is affected.',
+   context:{section:'essential',place:city.name+' · sector 1',when:'Controlled operator check; exact streets and estimated times remain at the source.',
+    why:'The checked fixture contains a service notice for the selected city.',action:'Check the official operator list for your street and building.',
+    sourceDate:checkedAt.slice(0,10),startsAt:null,status:'operator-notice',
+    documentHash:hash('DLKT controlled browser QA CMTEB fixture'),documentUrl:cmtebUrl}};
+  const value={version:'dlkt-local-1',city,checkedAt,state:'partial',weatherState:'ready',transportState:'not-covered',
+   cards:[forecast,utility],coverage:[{domain:'utilities',state:'partial',checkedAt,sourceUrl:cmtebUrl,
+    note:'Controlled CMTEB browser fixture; not a complete or live city service check.'}]};
+  assert.equal(currentLocalSnapshot(value,city,clock),true,'local browser fixture passes the actual source identity and freshness contract');
+  assert.deepEqual(selectHomeLocal(value,city,clock).cards.map(card=>card.id),localIds,'the real homepage selector retains both utility kinds');
+  return value;
+ }
+ let servedLocal=localSnapshot(now);
+ const localExpected=()=>selectHomeLocal(servedLocal,city,Date.parse(servedLocal.checkedAt)).cards.map(card=>({
+  id:card.id,publisher:card.publisher,sourceUrl:card.sourceUrl,reading:localReading(card,city,Date.parse(servedLocal.checkedAt),'ro'),
+  documentHash:card.context?.documentHash??null,facts:card.facts,
+ }));
  const observed=[
   {title:'O cântăreață iraniană și membrii trupei sale, pedepsiți cu 74 de lovituri de bici pentru un concert - HotNews.ro',publisher:'HotNews.ro',
    sourceUrl:'https://hotnews.ro/o-cantareata-iraniana-si-membrii-trupei-sale-pedepsiti-cu-74-de-lovituri-de-bici-pentru-un-concert-2412112'},
@@ -169,7 +205,14 @@ async function newsFixture(){
  assert.equal(selected.items.some(item=>item.card.id===english.id),true,'all-source scope must include the English original');
  assert.equal(JSON.stringify(stored),before,'the reader cannot restamp the stored evidence');
  return {city,groupKey:grouped.story.key,urls:reports.map(card=>card.sourceUrl),titles:reports.map(card=>card.title),storyCount:selected.total,articleTotal:selected.articleTotal,sourceOnly,
+  localIds,get localExpected(){return localExpected();},get localRequests(){return localRequests;},
   async response(url){
+   if(url.pathname==='/api/places'&&url.searchParams.get('hint')==='1')return {status:200,value:{city,countryCode:city.countryCode,estimated:true}};
+   if(url.pathname==='/api/places'&&url.searchParams.get('id')===city.id)return {status:200,value:{cities:[city],cityAliases:[]}};
+   if(url.pathname==='/api/local'){
+    if(url.searchParams.get('city')!==city.id)return {status:400,value:{error:'DLKT_QA_LOCAL_CITY_INVALID'}};
+    servedLocal=localSnapshot(Date.now());localRequests++;return {status:200,value:servedLocal};
+   }
    if(url.pathname==='/api/iceo')return {status:200,value:snapshot(cards,now)};
    if(url.pathname==='/api/news-page'){
     const cursor=parseNewsSourcesRequest(url);
@@ -185,10 +228,10 @@ async function selectControlledEdition(call,fixture){
   if(await evaluate(call,"Boolean(document.querySelector('#reader-language option[value=\"ro\"]')&&document.querySelector('#home-news-source-scope'))"))break;
   if(attempt===59)throw Error('DLKT_UI_READER_CONTROLS_TIMEOUT');await pause(100);
  }
- await evaluate(call,'(()=>{const picker=document.querySelector("#reader-language");picker.value="ro";picker.dispatchEvent(new Event("change",{bubbles:true}));document.dispatchEvent(new CustomEvent("dlkt:city-selected",{detail:{city:'+JSON.stringify(fixture.city)+'}}));return true;})()');
+ await evaluate(call,'(()=>{const picker=document.querySelector("#reader-language");picker.value="ro";picker.dispatchEvent(new Event("change",{bubbles:true}));return true;})()');
  for(let attempt=0;attempt<80;attempt++){
-  const current=await evaluate(call,'(()=>{const root=document.querySelector("#discovery-cards");return {scope:root?.dataset.sourceScope,count:root?.querySelectorAll("article[data-news-stream-key]").length,city:document.querySelector("#glance-city-label")?.textContent};})()');
-  if(current.scope==='all'&&current.count===fixture.storyCount&&current.city===fixture.city.name)return;
+  const current=await evaluate(call,'(()=>{const root=document.querySelector("#discovery-cards");return {scope:root?.dataset.sourceScope,count:root?.querySelectorAll("article[data-news-stream-key]").length,city:document.querySelector("#glance-city-label")?.textContent,localIds:[...document.querySelectorAll("#home-local-cards article[data-local-id]")].map(card=>card.dataset.localId)};})()');
+  if(current.scope==='all'&&current.count===fixture.storyCount&&current.city===fixture.city.name&&JSON.stringify(current.localIds)===JSON.stringify(fixture.localIds))return;
   if(attempt===79)throw Error('DLKT_UI_NEWS_FIXTURE_TIMEOUT_'+JSON.stringify(current));await pause(100);
  }
 }
@@ -201,6 +244,11 @@ function readerProbe(expected){
   const range=document.createRange();range.selectNodeContents(node);const text=range.getBoundingClientRect(),bound=container.getBoundingClientRect();
   return text.left>=bound.left-1&&text.right<=bound.right+1&&text.top>=bound.top-1&&text.bottom<=bound.bottom+1
    &&(node.clientWidth===0||node.scrollWidth<=node.clientWidth+1)&&(node.clientHeight===0||node.scrollHeight<=node.clientHeight+1);
+ };
+ const titleReport=node=>{
+  const style=node?getComputedStyle(node):null;
+  return {text:node?.textContent??'',visible:visible(node),fits:Boolean(node&&textFits(node,node)),lineClamp:style?.webkitLineClamp??'',
+   overflow:style?.textOverflow??'',...(node?rect(node):{})};
  };
  const calendar=document.querySelector('#glance-date'),city=document.querySelector('#glance-city-label'),country=document.querySelector('#glance-zone'),cityButton=document.querySelector('#glance-city');
  const normalized=value=>value.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase().trim();
@@ -216,7 +264,18 @@ function readerProbe(expected){
    photographCount:card?.querySelectorAll('figure.card-photo,img[data-article-photo],img[data-reviewed-photo],img[src*="/api/article-photo"]').length??0};
  });
  const languageLabels=cards.map(card=>({id:card.dataset.cardId,labels:[...card.querySelectorAll('[data-original-language]')].filter(visible).map(node=>({language:node.dataset.originalLanguage,text:node.textContent}))}));
- const controls=[...document.querySelectorAll('#glance-city,#reader-language,#reader-theme-toggle,#home-news-source-scope,#home-news-english,#home-news-period,#home-news-category,#discovery-cards .card-actions > button,#discovery-cards .card-actions > a,#discovery-cards .evidence > summary,#discovery-cards .news-story-sources > summary')].filter(visible);
+ const localCards=[...document.querySelectorAll('#home-local-cards article[data-local-id]')];
+ const local=expected.localExpected.map(expectedCard=>{
+  const card=localCards.find(node=>node.dataset.localId===expectedCard.id),reading=card?.querySelector('details.local-reading');
+  const source=card?[...card.querySelectorAll('a.source-link')].find(node=>node.href===expectedCard.sourceUrl&&!node.closest('details')):null;
+  const credit=card?[...card.querySelectorAll('.card-boundary')].find(node=>node.textContent===expectedCard.publisher&&!node.closest('details')):null;
+  return {id:expectedCard.id,found:Boolean(card),title:titleReport(card?.querySelector('h3')),
+   readingExists:Boolean(reading),readingOpen:reading?.open??null,summaryVisible:visible(reading?.querySelector('summary')),
+   sourceVisible:visible(source),sourceUrl:source?.href??'',sourceTarget:source?.target??'',sourceRel:source?.rel??'',
+   creditVisible:visible(credit),creditText:credit?.textContent??'',...(card?rect(card):{})};
+ });
+ const useful=[...localCards,...cards].filter(visible);
+ const controls=[...document.querySelectorAll('#glance-city,#glance-read,#reader-language,#reader-theme-toggle,#home-news-source-scope,#home-news-english,#home-news-period,#home-news-category,#discovery-cards .card-actions > button,#discovery-cards .card-actions > a,#discovery-cards .evidence > summary,#discovery-cards .news-story-sources > summary,#header-menu,#header-navigation button,#header-navigation a,#discovery-refresh,#home-city,#glance-weather-quick,#glance-forex-quick,#home-news-options-toggle,#discovery-details > summary,#home-local-cards .source-link,#home-local-cards .local-reading > summary,#home-local-cards .evidence > summary')].filter(visible);
  return {scope:document.querySelector('#discovery-cards')?.dataset.sourceScope,documentWidth:document.documentElement.scrollWidth,
   date:calendar?.textContent??'',dateValue:calendar?.dateTime??'',dateAfter:calendar?getComputedStyle(calendar,'::after').content:null,dateVisible:visible(calendar),
   city:city?.textContent??'',country:country?.textContent??'',expectedCountry,
@@ -224,6 +283,12 @@ function readerProbe(expected){
   countryComplete:normalized(country?.textContent??'')===normalized(expectedCountry??'')&&textFits(country,cityButton),
   cityButton:cityButton?rect(cityButton):null,storyCount:cards.length,groupCount:groups.length,
   groupUrls:originals.map(node=>node.href),groupTitles:originals.map(node=>node.textContent),languageLabels,sourceOnly,
+  titles:cards.map(card=>({id:card.dataset.cardId,...titleReport(card.querySelector('h3'))})),local,localIds:localCards.map(card=>card.dataset.localId),
+  firstUsefulTop:useful.length?Math.min(...useful.map(node=>rect(node).top)):null,
+  firstEditorialTop:cards.length?rect(cards[0]).top:null,
+  layout:{header:rect(document.querySelector('.site-header')),glance:rect(document.querySelector('#today-glance')),
+   toolbar:rect(document.querySelector('#home-news-toolbar')),filtersOpen:document.querySelector('#home-news-options')?.open??null,
+   categoryVisible:visible(document.querySelector('#home-news-category')),filtersToggleVisible:visible(document.querySelector('#home-news-options-toggle'))},
   controls:controls.map(node=>({id:node.id||node.className,tag:node.tagName,...rect(node)}))};
 }
 function assertReaderGeometry(measured,format,fixture){
@@ -259,6 +324,214 @@ function assertReaderGeometry(measured,format,fixture){
  }
 }
 
+function assertFullTitle(title,label){
+ assert.equal(title.visible,true,label+' is visible');
+ assert.ok(title.text.trim().length>0,label+' has text');
+ assert.equal(title.fits,true,label+' keeps its complete painted text: '+JSON.stringify(title));
+ assert.ok(['','none','0','normal'].includes(title.lineClamp),label+' must not be line-clamped');
+ assert.notEqual(title.overflow,'ellipsis',label+' must not use ellipsis');
+}
+function assertReadingLayout(measured,format,fixture,{compact=true}={}){
+ for(const title of measured.titles)assertFullTitle(title,'editorial title '+title.id+' at '+format.width+'px');
+ assert.deepEqual(measured.localIds,fixture.localIds,'both real local fixture cards are present in homepage order');
+ for(const expected of fixture.localExpected){
+  const card=measured.local.find(value=>value.id===expected.id);assert.ok(card);
+  assert.equal(card.found,true,'local fixture card is rendered');assertFullTitle(card.title,'local title '+card.id);
+  assert.equal(card.title.text,expected.reading.title,'the production local reading title is retained');
+  assert.equal(card.readingExists,true,'local information has an accessible disclosure');
+  assert.equal(card.summaryVisible,true,'local reading action stays visible');
+  assert.equal(card.sourceVisible,true,'official source action stays outside collapsed details');
+  assert.equal(card.sourceUrl,expected.sourceUrl);assert.equal(card.sourceTarget,'_blank');
+  assert.ok(card.sourceRel.split(/\s+/u).includes('noopener')&&card.sourceRel.split(/\s+/u).includes('noreferrer'));
+  assert.equal(card.creditVisible,true,'local publisher credit stays visible outside details');
+  assert.equal(card.creditText,expected.publisher);
+  if(compact)assert.equal(card.readingOpen,false,'utility starts compact without removing its information');
+ }
+ assert.equal(measured.layout.categoryVisible,true,'primary category stays immediately available');
+ assert.equal(measured.layout.filtersToggleVisible,true,'secondary filters have a visible action');
+ if(compact){
+  assert.equal(measured.layout.filtersOpen,false,'initial geometry measures the closed filters');
+  assert.ok(measured.firstUsefulTop!==null,'a useful card is measured');
+  if(format.width===320)assert.ok(measured.firstUsefulTop<=620,'first useful card must begin within 620px at 320px: '+measured.firstUsefulTop);
+  if(format.width===390){
+   assert.ok(measured.firstUsefulTop<=550,'first useful card must begin within 550px at 390px: '+measured.firstUsefulTop);
+   assert.ok(measured.firstEditorialTop!==null&&measured.firstEditorialTop<=1100,'first editorial follows two compact utilities within 1100px: '+measured.firstEditorialTop);
+  }
+  assert.ok(measured.local.every(card=>card.bottom<=measured.firstEditorialTop+1),'the two local utilities precede the editorial feed');
+ }
+}
+function expectedReader(fixture){
+ return {city:fixture.city,groupKey:fixture.groupKey,urls:fixture.urls,titles:fixture.titles,sourceOnly:fixture.sourceOnly,localExpected:fixture.localExpected};
+}
+async function measureReader(call,fixture){
+ return evaluate(call,'('+readerProbe.toString()+')('+JSON.stringify(expectedReader(fixture))+')');
+}
+async function keyboard(call,key){
+ const code={Enter:13,Escape:27,Tab:9}[key];assert.ok(code,'only the tested keyboard actions are used');
+ await call('Input.dispatchKeyEvent',{type:'keyDown',key,code:key,windowsVirtualKeyCode:code,...(key==='Enter'?{text:'\r',unmodifiedText:'\r'}:{})});
+ await call('Input.dispatchKeyEvent',{type:'keyUp',key,code:key,windowsVirtualKeyCode:code});
+ await pause(30);
+}
+async function focusSelector(call,selector){
+ assert.equal(await evaluate(call,'(()=>{const node=document.querySelector('+JSON.stringify(selector)+');if(!node)return false;node.scrollIntoView({block:"center"});node.focus();return document.activeElement===node;})()'),true,'keyboard target exists and receives focus: '+selector);
+}
+async function toggleDetails(call,selector,open){
+ if(await evaluate(call,'document.querySelector('+JSON.stringify(selector)+')?.open')===open)return;
+ const summary=selector+' > summary';await focusSelector(call,summary);await keyboard(call,'Enter');
+ assert.equal(await evaluate(call,'document.querySelector('+JSON.stringify(selector)+')?.open'),open,'native disclosure responds to Enter: '+selector);
+}
+async function verifyNavigation(call,format){
+ const compact=await evaluate(call,"matchMedia('(max-width:1152px)').matches");
+ if(!compact){
+  assert.equal(await evaluate(call,"getComputedStyle(document.getElementById('header-navigation')).display!=='none'"),true,'desktop navigation remains visible');
+  return {compact:false,keyboard:false};
+ }
+ await focusSelector(call,'#header-menu');await keyboard(call,'Enter');
+ assert.equal(await evaluate(call,"document.getElementById('header-menu').getAttribute('aria-expanded')"),'true','keyboard opens the compact menu at '+format.width+'px');
+ assert.equal(await evaluate(call,"getComputedStyle(document.getElementById('header-navigation')).display!=='none'"),true,'expanded navigation remains visible');
+ assert.equal(await evaluate(call,"Boolean(document.activeElement?.closest('#header-navigation'))"),true,'opening the menu moves focus into its links');
+ const targets=await evaluate(call,"[...document.querySelectorAll('#header-navigation a,#header-navigation button')].filter(node=>node.getClientRects().length>0&&getComputedStyle(node).visibility!=='hidden').map(node=>{const r=node.getBoundingClientRect();return {id:node.id||node.textContent,width:r.width,height:r.height,left:r.left,right:r.right};})");
+ assert.ok(targets.length>=5,'the compact navigation exposes its actions');
+ for(const target of targets)assert.ok(target.width>=43.5&&target.height>=43.5&&target.left>=-1&&target.right<=format.width+1,'compact navigation controls remain accessible 44px targets: '+JSON.stringify(target));
+ await keyboard(call,'Tab');
+ assert.equal(await evaluate(call,"Boolean(document.activeElement?.closest('#header-navigation'))"),true,'Tab reaches another navigation action');
+ await keyboard(call,'Escape');
+ assert.equal(await evaluate(call,"document.getElementById('header-menu').getAttribute('aria-expanded')"),'false','Escape closes the menu');
+ assert.equal(await evaluate(call,"document.activeElement===document.getElementById('header-menu')"),true,'Escape restores focus to the menu control');
+ await evaluate(call,'(()=>{window.scrollTo(0,0);return true;})()');return {compact:true,keyboard:true};
+}
+function disclosureTextProbe(expected){
+ const visible=node=>Boolean(node)&&node.getClientRects().length>0&&getComputedStyle(node).visibility!=='hidden'&&getComputedStyle(node).display!=='none';
+ const fits=node=>{
+  if(!visible(node))return false;const range=document.createRange();range.selectNodeContents(node);
+  const text=range.getBoundingClientRect(),bound=node.getBoundingClientRect(),style=getComputedStyle(node);
+  return text.left>=bound.left-1&&text.right<=bound.right+1&&text.top>=bound.top-1&&text.bottom<=bound.bottom+1
+   &&node.scrollWidth<=node.clientWidth+1&&node.scrollHeight<=node.clientHeight+1
+   &&['','none','0','normal'].includes(style.webkitLineClamp)&&style.textOverflow!=='ellipsis';
+ };
+ const card=[...document.querySelectorAll('#home-local-cards article[data-local-id]')].find(node=>node.dataset.localId===expected.id);
+ const reading=card?.querySelector('details.local-reading');
+ const wanted=[...expected.reading.paragraphs,...(expected.reading.period?[expected.reading.period]:[]),...(expected.reading.nextStep?[expected.reading.nextStep]:[])];
+ const paragraphs=[...(reading?.querySelectorAll('p')??[])],evidence=card?.querySelector('.evidence');
+ const evidenceParagraphs=[...(evidence?.querySelectorAll('p')??[])];
+ return {open:reading?.open??false,evidenceOpen:evidence?.open??false,
+  evidenceFacts:expected.facts.map(text=>evidenceParagraphs.some(node=>node.textContent===text&&fits(node))),
+  documentHashVisible:expected.documentHash===null||evidenceParagraphs.some(node=>node.textContent.includes(expected.documentHash)&&fits(node)),paragraphs:wanted.map(text=>({found:paragraphs.some(node=>node.textContent===text),fits:paragraphs.some(node=>node.textContent===text&&fits(node))})),
+  evidenceExists:Boolean(card?.querySelector('.evidence')),documentHashRetained:expected.documentHash===null||Boolean(card?.textContent.includes(expected.documentHash)),
+  factsRetained:expected.facts.every(text=>card?.textContent.includes(text))};
+}
+function expandedSourcesProbe(groupKey){
+ const card=[...document.querySelectorAll('#discovery-cards article[data-news-stream-key]')].find(node=>node.dataset.storyKey===groupKey);
+ return [...(card?.querySelectorAll('.news-story-source-link')??[])].map(node=>{
+  const style=getComputedStyle(node),range=document.createRange();range.selectNodeContents(node);
+  const text=range.getBoundingClientRect(),bound=node.getBoundingClientRect();
+  return {title:node.textContent,url:node.href,visible:node.getClientRects().length>0&&style.visibility!=='hidden',
+   fits:text.left>=bound.left-1&&text.right<=bound.right+1&&text.top>=bound.top-1&&text.bottom<=bound.bottom+1
+    &&node.scrollWidth<=node.clientWidth+1&&node.scrollHeight<=node.clientHeight+1,
+   lineClamp:style.webkitLineClamp,overflow:style.textOverflow,width:bound.width,height:bound.height};
+ });
+}
+async function verifyDisclosures(call,format,fixture){
+ await toggleDetails(call,'#home-news-options',true);
+ const expanded=await measureReader(call,fixture);assertReaderGeometry(expanded,format,fixture);assertReadingLayout(expanded,format,fixture,{compact:false});
+ assert.ok(expanded.controls.some(control=>control.id==='home-news-period'),'period control is available in the open filters');
+ assert.ok(expanded.controls.some(control=>control.id==='home-news-source-scope'),'source-scope control is available in the open filters');
+ // Leaving the non-modal filter panel must not strand focus under its overlay.
+ await focusSelector(call,'#home-news-english');await keyboard(call,'Tab');
+ assert.equal(await evaluate(call,"document.getElementById('home-news-options').open"),false,'Tab out closes the filter overlay');
+ const outside=await evaluate(call,"(()=>{const n=document.activeElement,r=n?.getBoundingClientRect();return Boolean(n&&r&&r.width>0&&r.height>0&&!n.closest('#home-news-options')&&document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)?.closest('a,button,summary,select')===n);})()");
+ assert.equal(outside,true,'the focused control after the filters is visible and uncovered');
+ await toggleDetails(call,'#home-news-options',true);
+ await focusSelector(call,'#home-news-period');await keyboard(call,'Escape');
+ assert.equal(await evaluate(call,"document.getElementById('home-news-options').open"),false,'Escape closes the filter panel');
+ assert.equal(await evaluate(call,"document.activeElement?.id"),'home-news-options-toggle','Escape restores the filter action');
+
+ // The static information action replaces the old ticker route to sources/preferences.
+ await focusSelector(call,'#glance-read');await keyboard(call,'Enter');
+ assert.equal(await evaluate(call,"document.getElementById('glance-list').open"),true,'visible context action opens sources and preferences');
+ await keyboard(call,'Escape');
+ assert.equal(await evaluate(call,"document.getElementById('glance-list').open"),false);
+ assert.equal(await evaluate(call,"document.activeElement?.id"),'glance-read','context dialog restores its visible trigger');
+ assert.equal(await evaluate(call,"document.getElementById('glance-ribbon').hidden"),true,'ordinary headlines are not repeated in the moving ribbon');
+ const local=[];
+ for(const expected of fixture.localExpected){
+  const selector='#home-local-cards article[data-local-id="'+expected.id+'"] details.local-reading';
+  await toggleDetails(call,selector,true);
+  const details=await evaluate(call,'('+disclosureTextProbe.toString()+')('+JSON.stringify(expected)+')');
+  assert.equal(details.open,true);assert.ok(details.paragraphs.length>0,'local reading contains useful information');
+  assert.ok(details.paragraphs.every(value=>value.found&&value.fits),'every local reading paragraph and period is accessible without clipping: '+expected.id);
+  assert.equal(details.evidenceExists,true,'local source provenance remains available');
+  assert.equal(details.documentHashRetained,true,'operator evidence identity is retained');assert.equal(details.factsRetained,true,'local evidence facts are retained');
+  const provenance='#home-local-cards article[data-local-id="'+expected.id+'"] .evidence';
+  await toggleDetails(call,provenance,true);
+  const evidence=await evaluate(call,'('+disclosureTextProbe.toString()+')('+JSON.stringify(expected)+')');
+  assert.equal(evidence.evidenceOpen,true,'local provenance opens with the keyboard');
+  assert.equal(evidence.documentHashVisible,true,'operator evidence identity is readable when expanded');
+  assert.ok(evidence.evidenceFacts.every(Boolean),'local evidence facts are readable when expanded');
+  assertReaderGeometry(await measureReader(call,fixture),format,fixture);
+  await toggleDetails(call,provenance,false);
+  await toggleDetails(call,selector,false);local.push({id:expected.id,paragraphs:details.paragraphs.length,evidence:true});
+ }
+ const groupSelector='#discovery-cards article[data-story-key="'+fixture.groupKey+'"] .news-story-sources';
+ const sourcesWereOpen=await evaluate(call,'document.querySelector('+JSON.stringify(groupSelector)+')?.open');
+ if(sourcesWereOpen===true)await toggleDetails(call,groupSelector,false);
+ await toggleDetails(call,groupSelector,true);
+ const originals=await evaluate(call,'('+expandedSourcesProbe.toString()+')('+JSON.stringify(fixture.groupKey)+')');
+ assert.deepEqual(new Set(originals.map(value=>value.url)),new Set(fixture.urls),'expanded sources expose every original URL');
+ assert.deepEqual(new Set(originals.map(value=>value.title)),new Set(fixture.titles),'expanded sources keep every exact original title');
+ for(const original of originals){
+  assert.equal(original.visible,true);assert.equal(original.fits,true,'expanded source headline is complete');
+  assert.ok(['','none','0','normal'].includes(original.lineClamp));assert.notEqual(original.overflow,'ellipsis');
+  assert.ok(original.width>=43.5&&original.height>=43.5,'expanded original source links remain 44px targets');
+ }
+ if(sourcesWereOpen!==true)await toggleDetails(call,groupSelector,false);
+ await evaluate(call,'(()=>{window.scrollTo(0,0);return true;})()');return {filters:true,local,originals:originals.length};
+}
+function contrastProbe(){
+ const rgba=value=>{
+  const match=/^rgba?\(([^)]+)\)$/u.exec(value);if(!match)return null;
+  const parts=match[1].split(/[,\s/]+/u).filter(Boolean).map(Number);
+  return parts.length>=3&&parts.every(Number.isFinite)?[parts[0],parts[1],parts[2],parts[3]??1]:null;
+ };
+ const blend=(front,back)=>front.slice(0,3).map((channel,index)=>channel*front[3]+back[index]*(1-front[3]));
+ const luminance=color=>color.map(channel=>{const c=channel/255;return c<=.04045?c/12.92:((c+.055)/1.055)**2.4;}).reduce((value,c,index)=>value+c*[.2126,.7152,.0722][index],0);
+ const background=node=>{
+  const ancestors=[];for(let current=node;current;current=current.parentElement)ancestors.push(current);
+  let result=[255,255,255];for(const current of ancestors.reverse()){const color=rgba(getComputedStyle(current).backgroundColor);if(!color)return null;result=blend(color,result);}return result;
+ };
+ const card=document.querySelector('#discovery-cards article[data-news-stream-key]');
+ const nodes=[...new Set(card?.querySelectorAll('h3,.publisher-citation,.card-publisher,.card-date,[data-original-language],.card-actions .source-link')??[])].filter(node=>node.getClientRects().length>0&&getComputedStyle(node).visibility!=='hidden');
+ return {theme:document.documentElement.dataset.readerTheme,page:background(document.body),
+  samples:nodes.map(node=>{
+   const style=getComputedStyle(node),foreground=rgba(style.color),back=background(node);
+   const fontSize=parseFloat(style.fontSize),weight=parseInt(style.fontWeight,10),large=fontSize>=24||(fontSize>=18.66&&weight>=700);
+   const painted=foreground&&back?blend(foreground,back):null,a=painted?luminance(painted):null,b=back?luminance(back):null;
+   return {tag:node.tagName,className:node.className,text:node.textContent?.slice(0,100),foreground:style.color,background:back,
+    ratio:a!==null&&b!==null?(Math.max(a,b)+.05)/(Math.min(a,b)+.05):null,minimum:large?3:4.5};
+  })};
+}
+async function verifyNight(call,format,fixture,outputDir){
+ const before=await evaluate(call,'('+contrastProbe.toString()+')()');assert.equal(before.theme,'prism','day layout is the baseline');
+ await focusSelector(call,'#reader-theme-toggle');await keyboard(call,'Enter');
+ await evaluate(call,'(()=>{window.scrollTo(0,0);return true;})()');
+ const measured=await measureReader(call,fixture);assertReaderGeometry(measured,format,fixture);assertReadingLayout(measured,format,fixture);
+ const contrast=await evaluate(call,'('+contrastProbe.toString()+')()');
+ assert.equal(contrast.theme,'night');assert.notDeepEqual(contrast.page,before.page,'night changes the effective computed page background');
+ assert.ok(contrast.samples.length>=3,'night reads actual title, attribution and action colors');
+ for(const sample of contrast.samples)assert.ok(sample.ratio!==null&&sample.ratio+.01>=sample.minimum,'night text contrast falls below its readable threshold: '+JSON.stringify(sample));
+ const screenshots=[];
+ for(const section of ['top','cards']){
+  if(section==='cards')await evaluate(call,"(()=>{document.querySelector('#discovery-cards article[data-news-stream-key]').scrollIntoView({block:'start'});return true;})()");
+  const data=(await call('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false})).data;
+  assert.ok(typeof data==='string'&&data.length>=1000,'night screenshot is present');
+  const filename='dlkt-night-'+section+'-'+format.width+'.png';writeFileSync(join(outputDir,filename),Buffer.from(data,'base64'),{mode:0o600});screenshots.push(filename);
+ }
+ await focusSelector(call,'#reader-theme-toggle');await keyboard(call,'Enter');
+ assert.equal(await evaluate(call,'document.documentElement.dataset.readerTheme'),'prism','theme action restores day mode');
+ await evaluate(call,'(()=>{window.scrollTo(0,0);return true;})()');
+ return {contrast,screenshots};
+}
+
 async function run(){
  if(typeof WebSocket!=='function')throw Error('DLKT_UI_NODE_WEBSOCKET_UNAVAILABLE');
  const bin=process.env.DLKT_CHROME_BIN??'/usr/bin/google-chrome';
@@ -289,14 +562,16 @@ async function run(){
   await cdp('Page.enable');await cdp('Runtime.enable');
   const observations=[];
   for(const f of formats){
+   const previousLocalRequests=fixture.localRequests;
    await cdp('Emulation.setDeviceMetricsOverride',{width:f.width,height:f.height,deviceScaleFactor:1,mobile:f.mobile,scale:1});
    await cdp('Page.navigate',{url:'http://'+HOST+':'+binding.port+'/'});
    await loaded(cdp);await pause(400);
    await selectControlledEdition(cdp,fixture);
+   assert.ok(fixture.localRequests>previousLocalRequests,'each page loads the local fixture through the actual API path');
    await evaluate(cdp,'(()=>{window.scrollTo(0,0);return true;})()');
-   const news=await evaluate(cdp,'('+readerProbe.toString()+')('+JSON.stringify({city:fixture.city,groupKey:fixture.groupKey,urls:fixture.urls,titles:fixture.titles,sourceOnly:fixture.sourceOnly})+')');
+   const news=await measureReader(cdp,fixture);
    writeFileSync(join(outputDir,'measured-'+f.width+'.json'),JSON.stringify(news,null,2)+'\n',{mode:0o600});
-   try{assertReaderGeometry(news,f,fixture);}catch(error){
+   try{assertReaderGeometry(news,f,fixture);assertReadingLayout(news,f,fixture);}catch(error){
     const failedImage=(await cdp('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false})).data;
     if(typeof failedImage==='string')writeFileSync(join(outputDir,'failed-'+f.width+'.png'),Buffer.from(failedImage,'base64'),{mode:0o600});
     throw error;
@@ -309,14 +584,8 @@ async function run(){
    assert.equal(m.cardTemplate,true,'card template missing');
    assert.ok(m.scroll<=f.width+2,'horizontal overflow at '+f.width+'px, documentWidth='+m.scroll);
    assert.ok(m.brandRight<=f.width+2,'brand outside viewport at '+f.width+'px');
-   if(f.mobile){
-    assert.equal(m.menu,true,'mobile menu hidden at '+f.width+'px');
-    await cdp('Runtime.evaluate',{expression:"document.getElementById('header-menu').click()",returnByValue:true});
-    assert.equal(await evaluate(cdp,"document.getElementById('header-menu').getAttribute('aria-expanded')"),'true','mobile menu did not open');
-    assert.equal(await evaluate(cdp,"getComputedStyle(document.getElementById('header-navigation')).display!=='none'"),true,'expanded menu inaccessible');
-    await cdp('Runtime.evaluate',{expression:"document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))",returnByValue:true});
-    assert.equal(await evaluate(cdp,"document.getElementById('header-menu').getAttribute('aria-expanded')"),'false','Escape did not close menu');
-   }
+   const navigation=await verifyNavigation(cdp,f);
+   if(navigation.compact)assert.equal(m.menu,true,'compact menu hidden at '+f.width+'px');
    await cdp('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
    assert.equal(await evaluate(cdp,"matchMedia('(prefers-reduced-motion: reduce)').matches"),true);
    const image=(await cdp('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false})).data;
@@ -327,12 +596,23 @@ async function run(){
    const cardImage=(await cdp('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false})).data;
    assert.ok(typeof cardImage==='string'&&cardImage.length>=1000,'card screenshot is present');
    const cardScreenshot='dlkt-cards-'+f.label+'-'+f.width+'.png';writeFileSync(join(outputDir,cardScreenshot),Buffer.from(cardImage,'base64'),{mode:0o600});
-   observations.push({viewport:f.width,documentWidth:m.scroll,menuTested:f.mobile,brandVisible:true,reducedMotion:true,screenshot,cardScreenshot,news});
+   try{
+    const disclosures=await verifyDisclosures(cdp,f,fixture);
+    const night=[390,1440].includes(f.width)?await verifyNight(cdp,f,fixture,outputDir):null;
+    observations.push({viewport:f.width,documentWidth:m.scroll,menuTested:navigation.compact,brandVisible:true,reducedMotion:true,screenshot,cardScreenshot,news,navigation,disclosures,night});
+   }catch(error){
+    try{
+     const failedImage=(await cdp('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false})).data;
+     if(typeof failedImage==='string')writeFileSync(join(outputDir,'failed-interaction-'+f.width+'.png'),Buffer.from(failedImage,'base64'),{mode:0o600});
+    }catch{/* Preserve the original assertion if the browser itself is unavailable. */}
+    throw error;
+   }
   }
-  const result={version:'dlkt-info-offline-browser-smoke-1',status:'OFFLINE_BROWSER_PASS',
-   scope:'local-built-reader-with-controlled-news-corpus',viewports:observations,fixture:{storyCount:fixture.storyCount,articleTotal:fixture.articleTotal,groupOriginals:fixture.urls.length,sourceOnlyOriginals:fixture.sourceOnly.length},
+  const result={version:'dlkt-info-offline-browser-smoke-2',status:'OFFLINE_BROWSER_PASS',
+   scope:'local-built-reader-with-controlled-news-and-local-corpus',viewports:observations,fixture:{storyCount:fixture.storyCount,articleTotal:fixture.articleTotal,groupOriginals:fixture.urls.length,sourceOnlyOriginals:fixture.sourceOnly.length,localCards:fixture.localIds.length,localContract:'currentLocalSnapshot'},
    limitations:['News pages use the actual service over controlled corpus fixtures; no external publisher request, authenticated user, payment or production runtime availability is tested.',
     'The three grouped publisher headlines and four reviewed-source originals reproduce observed metadata; source-check and publication dates are controlled fixtures.',
+    'Local weather and CMTEB records are synthetic controlled fixtures validated by the actual city/source contracts, not live operator or forecast checks.',
     'Programmatic layout metrics and screenshots do not replace manual visual review.']};
   writeFileSync(join(outputDir,'report.json'),JSON.stringify(result,null,2)+'\n',{mode:0o600});
   console.log('DLKT_UI_BROWSER_QA '+JSON.stringify(result));

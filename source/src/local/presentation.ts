@@ -69,11 +69,30 @@ function compactEventReading(card: LocalCard, city: City, locale: string): Local
         : (ro ? 'Verifica eventualele modificari de program, biletele si disponibilitatea la organizator.' : 'Check the organiser for schedule changes, tickets and availability.');
     return { title: card.title, paragraphs: [context.place], period, nextStep };
 }
+const forecastMeasures=(text:string):RegExpExecArray|null=>/^Hourly forecast temperatures (-?\d+(?:\.\d+)?)–(-?\d+(?:\.\d+)?) °C\. Total precipitation (\d+(?:\.\d+)?) mm over the six hourly periods\. Highest hourly wind-speed forecast (\d+(?:\.\d+)?) km\/h \(not gusts\)\.$/u.exec(text);
+
+/** Condense only known generated measurements or identified operator sectors.
+ * Unknown wording stays complete in the primary reading; the original record is never changed. */
+export function localReadingPreview(card:LocalCard,city:City,locale='en'):string|null{
+ const ro=locale==='ro';
+ if(card.kind==='forecast'){
+  const measure=forecastMeasures(card.text);if(!measure)return null;
+  return ro?`Prognoza: ${measure[1]}–${measure[2]} °C · precipitatii ${measure[3]} mm / 6 h.`
+    :`Forecast: ${measure[1]}–${measure[2]} °C · precipitation ${measure[3]} mm / 6 h.`;
+ }
+ if(card.kind==='utility-notice'&&city.id==='683506'){
+  const sectors=card.id==='bucharest:cmteb:overview'?/sectors ([1-6](?:, [1-6])*)$/u.exec(card.context?.place??'')?.[1]
+    :/^bucharest:cmteb:sector-([1-6])$/u.exec(card.id)?.[1];
+  if(sectors)return ro?'CMTEB: anunturi pentru sectoarele '+sectors+'.':'CMTEB: notices for sectors '+sectors+'.';
+ }
+ return null;
+}
+
 /** Presentation never changes the source record, its timing, saved signature or evidence. */
 export function localReading(card:LocalCard,city:City,now:number,locale='en'):LocalReading{
  if(locale==='ro'&&card.kind==='forecast'){
   const cityName=city.id==='683506'?'Bucuresti':city.name;
-  const measure=/^Hourly forecast temperatures ([-0-9.]+)–([-0-9.]+) °C\. Total precipitation ([-0-9.]+) mm over the six hourly periods\. Highest hourly wind-speed forecast ([-0-9.]+) km\/h \(not gusts\)\.$/u.exec(card.text);
+  const measure=forecastMeasures(card.text);
   const summary=measure?`Temperaturi prognozate intre ${measure[1]} si ${measure[2]} °C. Precipitatii estimate: ${measure[3]} mm in sase ore. Viteza maxima orara a vantului: ${measure[4]} km/h (fara rafale).`:card.text;
   const date=new Intl.DateTimeFormat('ro-RO',{timeZone:city.timezone,day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
   return{title:'Vremea in '+cityName,paragraphs:[summary],period:date.format(new Date(card.validFrom))+' – '+date.format(new Date(card.validTo))+' (ora locala)',nextStep:null};

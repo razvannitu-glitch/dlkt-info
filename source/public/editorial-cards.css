@@ -1,9 +1,9 @@
-/* Editorial card geometry. Reader themes supply the final opaque topic surfaces. */
+/* Editorial card geometry. The final theme supplies paper, utility and owned-card roles. */
 :is(#discovery-cards,#home-local-cards,#world-cards,#cards)>.info-card.editorial-card{
  --card-bg:var(--white);--card-ink:var(--black);--card-title:var(--black);
  --card-muted:var(--muted);--card-rule:var(--line);--card-action:var(--black);
  --card-action-ink:var(--white);--card-hover:var(--black);--card-hover-ink:var(--white);
- border-radius:14px;background:var(--white);color:var(--black);align-self:start;
+ border-radius:18px;background:var(--white);color:var(--black);align-self:start;
 }
 .info-card.editorial-card>header{padding:18px 20px 0;font-size:13px;line-height:1.4}
 .info-card.editorial-card .card-index{display:none}
@@ -20,7 +20,7 @@
  background:transparent!important;color:inherit!important;border-color:transparent!important;
  text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:4px;
 }
-.info-card.editorial-card .card-meta{font-size:.8125rem;line-height:1.5;gap:4px 8px;margin:0}
+.info-card.editorial-card .card-meta{font-size:.875rem;line-height:1.5;gap:4px 8px;margin:0}
 .info-card.editorial-card .card-publisher{font-weight:700}
 .info-card.editorial-card .card-kind{font-size:.8125rem;margin:0 0 9px;line-height:1.5}
 .info-card.editorial-card .card-kind:empty{display:none}
@@ -46,7 +46,7 @@
 }
 .info-card.editorial-card .save-card[aria-pressed=true] svg{fill:currentColor}
 .info-card.editorial-card .evidence{padding:0 20px;border-top:1px solid var(--line)}
-.info-card.editorial-card .evidence>summary{font-size:.75rem;min-height:44px;padding-top:11px;padding-bottom:11px}
+.info-card.editorial-card .evidence>summary{font-size:.875rem;min-height:44px;padding-top:11px;padding-bottom:11px}
 .info-card.editorial-card .evidence :is(p,dl,.card-guide){font-size:.875rem;line-height:1.6;overflow-wrap:anywhere}
 .info-card.editorial-card .evidence .contextual-reason{margin:12px 0}
 .info-card.editorial-card .evidence .card-guide{border:0;padding:0;margin:12px 0}
@@ -208,4 +208,29 @@
  .info-card.editorial-card .card-actions{gap:8px!important}
  .info-card.editorial-card .card-actions>.source-link{font-size:.8125rem}
  .info-card.editorial-card .card-photo-label{font-size:.625rem;padding:4px 6px}
+}
+
+/* Readable paper-card rhythm; original titles never use a line clamp. */
+:is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card h3{font-size:clamp(23px,2.2vw,28px);line-height:1.25;letter-spacing:-.035em}
+.info-card.editorial-card .card-content{padding:12px 22px 18px}
+.info-card.editorial-card>header{padding:20px 22px 0}
+.info-card.editorial-card .card-actions{margin-top:16px}
+.info-card.editorial-card .card-actions>:is(.source-link,.save-card,.share-source){border-radius:10px}
+.info-card.editorial-card .card-language{font-size:12px;padding:2px 8px}
+.info-card.editorial-card .photo-editorial .card-photo-visual{padding-top:12px}
+.info-card.editorial-card .card-photo-frame{margin-inline:12px;border-radius:11px}
+.info-card.editorial-card .photo-editorial .card-photo-overline{inset-block-start:24px;inset-inline-start:24px}
+.info-card.editorial-card .photo-editorial .card-photo-headline{padding:16px 22px 2px}
+.info-card.editorial-card .news-story-sources .news-story-publishers{font-size:12px}
+@media(max-width:760px){
+ :is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card h3{font-size:24px}
+ .info-card.editorial-card .card-content{padding:10px 18px 16px}
+ .info-card.editorial-card>header{padding:18px 18px 0}
+ .info-card.editorial-card .photo-editorial .card-photo-headline{padding:16px 18px 2px}
+ .info-card.editorial-card .evidence{padding-inline:18px}
+ .info-card.editorial-card .card-photo-frame{margin-inline:10px}
+}
+@media(max-width:360px){
+ :is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card h3{font-size:22px}
+ .info-card.editorial-card .card-actions>.source-link{font-size:13px}
 }
