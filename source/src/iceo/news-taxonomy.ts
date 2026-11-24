@@ -131,7 +131,10 @@ const DIRECT:readonly (readonly [NewsCategoryId,RegExp])[]=[
 ];
 // Mask an explicitly figurative wave only for subject inference; stored evidence is untouched.
 function literalHeadline(title:string):string {
- return title.replace(/\btsunami(?=["'’”]?\s+of\s+(?:demand|requests|calls|appointments|paperwork)\b)/giu,' ');
+ // Romanian "din vremea" describes an era, not meteorological conditions.
+ // Leave "pe/in vremea rea" and independent forecast evidence untouched.
+ return title.replace(/\btsunami(?=["'’”]?\s+of\s+(?:demand|requests|calls|appointments|paperwork)\b)/giu,' ')
+  .replace(/\bdin\s+vremea\b/giu,' ');
 }
 // A bounded capitalized name plus an edition marker can identify a title in explicit game release coverage.
 function crimeSubjectText(title:string):string {

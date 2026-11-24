@@ -106,20 +106,22 @@ test('signed page and source cursors from the previous grouping policy expire be
  let page=first,sourceCursor=page.items.find(item=>item.story?.nextSourcesCursor)?.story.nextSourcesCursor,scanned=1;
  while(!sourceCursor&&page.nextCursor){assert.ok(++scanned<=3);page=await service.read({...query,cursor:page.nextCursor});sourceCursor=page.items.find(item=>item.story?.nextSourcesCursor)?.story.nextSourcesCursor;}
  assert.ok(sourceCursor);
- const oldCursor=token=>{
+ const oldCursor=(token,version)=>{
   const [encoded,signature]=token.split('.'),payload=JSON.parse(Buffer.from(encoded,'base64url').toString('utf8'));
-  assert.notEqual(payload.orderVersion,'iptc17-source-scope-publisher-rounds-20261124-r4');
-  payload.orderVersion='iptc17-source-scope-publisher-rounds-20261124-r4';
+  assert.notEqual(payload.orderVersion,version);
+  payload.orderVersion=version;
   const body=Buffer.from(JSON.stringify(payload)).toString('base64url');
   const key=createHmac('sha256',KEY).update('dlkt-info/news-page/cursor-key/v1').digest();
   return {signed:body+'.'+createHmac('sha256',key).update('dlkt-info/news-page/cursor/v1:'+body).digest('base64url'),forged:body+'.'+signature};
  };
- const oldPage=oldCursor(first.nextCursor),oldSources=oldCursor(sourceCursor),reads=store.reads.length;
+ for(const version of ['iptc17-source-scope-publisher-rounds-20261124-r4','iptc17-source-scope-publisher-rounds-20261124-r5']){
+ const oldPage=oldCursor(first.nextCursor,version),oldSources=oldCursor(sourceCursor,version),reads=store.reads.length;
  await assert.rejects(service.read({...query,cursor:oldPage.signed}),/NEWS_EDITION_EXPIRED/);
  await assert.rejects(service.readSources(oldSources.signed),/NEWS_EDITION_EXPIRED/);
  await assert.rejects(service.read({...query,cursor:oldPage.forged}),/NEWS_CURSOR_INVALID/);
  await assert.rejects(service.readSources(oldSources.forged),/NEWS_CURSOR_INVALID/);
  assert.equal(store.reads.length,reads,'old offsets are rejected before any corpus lookup');
+ }
  assert.ok(validNewsPage(await service.read({...query,cursor:first.nextCursor}),NOW+1000));
  assert.ok(validNewsStorySourcesPage(await service.readSources(sourceCursor),NOW+1000));
  assert.equal((await service.read(query)).total,25,'a fresh edition remains available');

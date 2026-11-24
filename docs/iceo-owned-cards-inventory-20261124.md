@@ -72,7 +72,7 @@ Partajarea cardului DLKT, accesul la sursa originala, detaliile de provenienta s
 
 Cititorul apeleaza Explore, configurarea editiei prin `setupEdition(settings)` si cardul comercial local prin `commercialCardNode()`. Prezenta acestor integrari este verificata in cod; acest inventar nu afirma ca exista oferte platite, inventar publicitar vandut sau incasari.
 
-Cursul valutar este vizibil in captura istorica furnizata de utilizator, dar nu a fost confirmat in auditul de cod al acestui inventar. `source/src/entry/header.ts` implementeaza navigatia responsive, focusul si pagina activa; nu contine serviciul valutar.
+Componenta de curs valutar a fost confirmata vizual pe pagina oficiala in 24 noiembrie 2026: bara de informatii afiseaza perechea EUR/RON, eticheta ECB reference si data. Aceasta observatie confirma prezentarea live, nu un audit al calculului sau al integrarii furnizorului. `source/src/entry/header.ts` implementeaza navigatia responsive, focusul si pagina activa; nu contine serviciul valutar.
 
 My account si Info Wallet sunt module separate, identificate la `source/src/account/browser.ts` si in `source/src/wallet/`. Nu au fost auditate functional in acest lot. Salvatele locale nu trebuie prezentate drept salvate sincronizate, iar existenta modulelor nu confirma integrarea furnizorilor, plati sau functii active ale contului.
 
