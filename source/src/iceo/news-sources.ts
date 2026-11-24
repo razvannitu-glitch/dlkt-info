@@ -82,9 +82,20 @@ export const NEWS_PUBLISHERS:readonly NewsPublisher[]=Object.freeze([
   publisher('digi24','Digi24','www.digi24.ro'),
   publisher('hotnews','HotNews.ro','hotnews.ro'),
   publisher('stirile-protv','Știrile ProTV','stirileprotv.ro'),
+  // Exact primary RSS origin and two canonical originals observed2026-11-23, Actions45286173292.
+  publisher('prosport','ProSport','www.prosport.ro'),
   // Official RSS/blog distribution page and two original articles checked 2026-11-22.
   publisher('repubblica','la Repubblica','www.repubblica.it'),
 ]);
+/**
+ * ProSport's reviewed RSS may prefix an original headline with the exact editorial
+ * label "DECLARAȚII ". Remove that one label for comparison only, never display.
+ * Receipt: Actions45286173292, original20576183. No other prefix, publisher or
+ * inline wording is normalized; Romanian matching remains otherwise exact.
+ */
+export function publisherComparisonHeadline(title:string,publisherId:string):string {
+  return publisherId==='prosport'&&title.startsWith('DECLARAȚII ')?title.slice('DECLARAȚII '.length):title;
+}
 const byOrigin=new Map(NEWS_PUBLISHERS.flatMap(value=>value.origins.map(origin=>[origin,value] as const)));
 export function publisherForNewsUrl(value:string):NewsPublisher|null{
   if(value.length>3000||/[\u0000-\u0020\u007f<>\\]/u.test(value))return null;
@@ -112,6 +123,7 @@ export const NEWS_PUBLICATION_SCOPES:readonly PublicationScope[]=Object.freeze([
   publication('digi24','RO','Romania','Romania and global reporting',['/stiri/','ro']),
   publication('hotnews','RO','Romania','Romania and global reporting',['/','ro']),
   publication('stirile-protv','RO','Romania','Romania and global reporting',['/stiri/','ro']),
+  publication('prosport','RO','Romania','Romanian and international sports reporting',['/','ro']),
   // The Italian RSS also links the publisher's explicit English edition; the article path takes precedence.
   publication('repubblica','IT','Italy','Italy and global reporting',['/en/','en'],['/','it']),
   publication('ap','US','United States','Global reporting',['/article/','en']),
@@ -230,6 +242,9 @@ export const NEWS_DISCOVERY_INDEXES:readonly NewsDiscoveryIndex[]=Object.freeze(
   // Exact feed identity and canonical original metadata checked2026-11-23, Actions45272649682.
   // Headline/date/link only; the feed grants no article-body or image reuse licence.
   {id:'stirile-protv-ro-news',publisherId:'stirile-protv',url:'https://rss.stirileprotv.ro/',format:'rss',language:'ro',feedTitle:'Știrile ProTV',feedHome:'https://stirileprotv.ro',articlePath:'/stiri/'},
+  // Declared by https://www.prosport.ro/; robots and two canonical originals observed2026-11-23,
+  // Actions45286173292 / job138082948684. Metadata only; no article-body/image reuse licence.
+  {id:'prosport-ro-news',publisherId:'prosport',url:'https://www.prosport.ro/feed',format:'rss',language:'ro',feedTitle:'Prosport',feedHome:'https://www.prosport.ro',articlePath:'/'},
   // Primary receipt: Actions 45070034177 / job 137354713875. Channel identity is exact;
   // bare channel home is metadata only, not an additional article origin.
   // Distribution guidance: https://www.repubblica.it/static/servizi/rss/

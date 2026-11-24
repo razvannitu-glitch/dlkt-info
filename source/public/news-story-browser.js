@@ -1,4 +1,4 @@
-import { validNewsPage, validNewsStorySourcesPage, NEWS_SOURCE_PAGE_SIZE } from './news-page-contracts.js';
+import { validNewsPage, validNewsStorySourcesPage, newsOriginalLanguage, NEWS_SOURCE_PAGE_SIZE } from './news-page-contracts.js';
 import { fetchNewsStorySources, NewsStorySourcesError } from './news-continuation.js';
 import { resolveLocale, t } from './i18n-locale.js';
 const CONTEXT_FIELDS = ['epoch', 'revision', 'generatedAt', 'startedAt', 'expiresAt', 'language', 'cityId', 'countryCode', 'period', 'filter'];
@@ -7,11 +7,11 @@ function original(item) {
 }
 function contextOf(page) {
     return Object.freeze({ epoch: page.epoch, revision: page.revision, generatedAt: page.generatedAt, startedAt: page.startedAt, expiresAt: page.expiresAt,
-        language: page.language, cityId: page.cityId, countryCode: page.countryCode, period: page.period, filter: page.filter,
+        language: page.language, cityId: page.cityId, countryCode: page.countryCode, period: page.period, filter: page.filter, sourceScope: page.sourceScope ?? 'edition',
         day: page.day === null ? null : Object.freeze({ ...page.day }) });
 }
 function sameContext(expected, page) {
-    if (CONTEXT_FIELDS.some(key => expected[key] !== page[key]))
+    if ((expected.sourceScope ?? 'edition') !== (page.sourceScope ?? 'edition') || CONTEXT_FIELDS.some(key => expected[key] !== page[key]))
         return false;
     const a = expected.day, b = page.day;
     return a === null ? b === null : b !== null && a.date === b.date && a.timeZone === b.timeZone && a.start === b.start && a.end === b.end;
@@ -69,7 +69,12 @@ function sourceNode(source, locale, timeZone) {
     link.textContent = source.card.title;
     link.title = source.card.sourceUrl;
     link.dir = 'auto';
-    meta.append(publisher, document.createTextNode(' · '), date);
+    const originalLanguage = newsOriginalLanguage(source), language = document.createElement('span');
+    link.lang = originalLanguage ?? '';
+    link.setAttribute('translate', 'no');
+    language.dataset.originalLanguage = originalLanguage ?? 'unknown';
+    language.textContent = originalLanguage ? (new Intl.DisplayNames([locale], { type: 'language' }).of(originalLanguage) ?? originalLanguage) : locale === 'ro' ? 'Limba sursei neprecizata' : locale === 'it' ? 'Lingua della fonte non specificata' : 'Source language unspecified';
+    meta.append(publisher, document.createTextNode(' · '), date, document.createTextNode(' · '), language);
     row.append(meta, link);
     return row;
 }
@@ -84,6 +89,13 @@ export function newsStorySourcesNode(item, page, language, city) {
     details.className = 'news-story-sources';
     details.dataset.storyKey = state.storyKey;
     summary.textContent = t(locale, 'navSources') + ' · ' + new Intl.NumberFormat(locale).format(state.sourceTotal);
+    const publishers = document.createElement('span');
+    publishers.className = 'news-story-publishers';
+    publishers.dir = 'auto';
+    publishers.setAttribute('translate', 'no');
+    publishers.textContent = [...new Set(state.sources.map(source => source.card.publisher))].slice(0, 3).join(' · ');
+    summary.append(publishers);
+    details.dataset.sourceTotal = String(state.sourceTotal);
     note.className = 'news-story-sources-note';
     note.textContent = t(locale, 'storyReportsNote');
     list.className = 'news-story-sources-list';

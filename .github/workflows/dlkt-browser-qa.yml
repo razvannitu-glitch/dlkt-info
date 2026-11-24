@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   browser:
-    name: Browser QA at 320, 390, 768 and 1440px
+    name: Browser QA at 320, 360, 390, 430, 768 and 1440px
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -34,7 +34,7 @@ jobs:
       - name: Install locked dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Build isolated prelaunch surface and attest source pin
-        run: npm run package:local && npm run qa:prelaunch
+        run: npm run package:local && npm run qa:prelaunch && npm run build
       - name: Resolve installed headless browser
         shell: bash
         run: |
@@ -52,3 +52,4 @@ jobs:
           path: ${{ runner.temp }}/dlkt-ui-screenshots
           retention-days: 7
           if-no-files-found: ignore
+

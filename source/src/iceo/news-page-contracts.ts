@@ -9,6 +9,10 @@ import {newsFeed,validLocalNewsArticle,NEWS_WINDOW_MS} from '../local/news-polic
 import {newsPublishedInDay,validNewsDayWindow,validNewsPeriod,type NewsPeriod,type NewsDayWindow} from './news-day.js';
 export type {NewsPeriod,NewsDayWindow} from './news-day.js';
 
+/** Source scope is independent of interface language; missing means the legacy language edition. */
+export type NewsSourceScope='edition'|'all';
+export const validNewsSourceScope=(value:unknown):value is NewsSourceScope=>value==='edition'||value==='all';
+
 export const NEWS_PAGE_VERSION='dlkt-news-page-4' as const;
 export const NEWS_STORY_SOURCES_VERSION='dlkt-news-sources-1' as const;
 export const NEWS_SERVER_PAGE_SIZE=20,NEWS_SOURCE_PAGE_SIZE=20,NEWS_STORY_PREVIEW_SIZE=3,NEWS_MAX_RESPONSE_BYTES=1_048_576;
@@ -29,6 +33,7 @@ export interface NewsPage {
  readonly version:typeof NEWS_PAGE_VERSION;readonly epoch:string;readonly revision:number;
  readonly generatedAt:string;readonly startedAt:string;readonly expiresAt:string;readonly language:Locale;readonly cityId:string|null;readonly countryCode:string|null;
  readonly coverage:NewsCountryCoverage;readonly period:NewsPeriod;readonly day:NewsDayWindow|null;
+ readonly sourceScope?:NewsSourceScope;
  readonly filter:NewsStreamFilter;readonly items:readonly NewsPageItem[];
  readonly total:number;readonly articleTotal:number;readonly filteredTotal:number;readonly counts:Readonly<Record<string,number>>;
  readonly nextCursor:string|null;
@@ -38,6 +43,7 @@ export interface NewsStorySourcesPage {
  readonly generatedAt:string;readonly startedAt:string;readonly expiresAt:string;
  readonly language:Locale;readonly cityId:string|null;readonly countryCode:string|null;
  readonly period:NewsPeriod;readonly day:NewsDayWindow|null;readonly filter:NewsStreamFilter;
+ readonly sourceScope?:NewsSourceScope;
  readonly storyKey:string;readonly sourceTotal:number;readonly offset:number;
  readonly sources:readonly NewsStorySource[];readonly nextCursor:string|null;
 }
@@ -117,18 +123,24 @@ export function validNewsPageItem(value:unknown,now:number,city?:City):value is 
  }
  return distinctSources(originals);
 }
-function sourceInContext(source:NewsStorySource,language:Locale,cityId:string|null,expiresAt:string,day:NewsDayWindow|null):boolean {
- if(source.kind==='global')return newsLanguageMatches(sourceLanguage(source.card),language)
+/** Reviewed original language only; an unknown source is never labelled with the interface locale. */
+export function newsOriginalLanguage(source:NewsStorySource):string|null {
+ if(source.kind==='global')return sourceLanguage(source.card);
+ const sourceId=source.card.news?.sourceId;return sourceId?newsFeed(sourceId)?.language??null:null;
+}
+function sourceInContext(source:NewsStorySource,language:Locale,cityId:string|null,expiresAt:string,day:NewsDayWindow|null,sourceScope:NewsSourceScope='edition'):boolean {
+ if(source.kind==='global')return (sourceScope==='all'||newsLanguageMatches(sourceLanguage(source.card),language))
   &&(day===null||newsPublishedInDay(source.card.date,day))
   &&Date.parse(expiresAt)<=Math.min(Date.parse(source.card.observedAt)+3600000,Date.parse(source.card.date)+86400000);
  const article=source.card.news;
- return article!==undefined&&article.cityId===cityId&&newsLanguageMatches(newsFeed(article.sourceId)?.language??null,language)
+ return article!==undefined&&article.cityId===cityId&&(sourceScope==='all'||newsLanguageMatches(newsFeed(article.sourceId)?.language??null,language))
   &&(day===null||newsPublishedInDay(article.publishedAt,day))
   &&Date.parse(expiresAt)<=Math.min(Date.parse(article.validUntil),Date.parse(article.publishedAt)+NEWS_WINDOW_MS+1);
 }
 /** Browser-safe boundary. Context continuity and cross-page duplicates are checked by the reader controller. */
 export function validNewsPage(value:unknown,now=Date.now(),city?:City):value is NewsPage {
- if(!Number.isFinite(now)||!object(value)||!exact(value,['version','epoch','revision','generatedAt','startedAt','expiresAt','language','cityId','countryCode','coverage','period','day','filter','items','total','articleTotal','filteredTotal','counts','nextCursor'])
+ if(!Number.isFinite(now)||!object(value)||!fields(value,['version','epoch','revision','generatedAt','startedAt','expiresAt','language','cityId','countryCode','coverage','period','day','filter','items','total','articleTotal','filteredTotal','counts','nextCursor'],['sourceScope'])
+  ||value.sourceScope!==undefined&&!validNewsSourceScope(value.sourceScope)
   ||value.version!==NEWS_PAGE_VERSION||!validNewsPeriod(value.period)||!validNewsEpochId(value.epoch)||!integer(value.revision,Number.MAX_SAFE_INTEGER)||value.revision===0
   ||!timestamp(value.generatedAt)||!timestamp(value.startedAt)||!timestamp(value.expiresAt)||Date.parse(value.generatedAt)>now+5000
   ||Date.parse(value.startedAt)>now+5000||Date.parse(value.startedAt)<Date.parse(value.generatedAt)-5000||Date.parse(value.expiresAt)<=Date.parse(value.startedAt)||Date.parse(value.expiresAt)<=now
@@ -162,7 +174,7 @@ export function validNewsPage(value:unknown,now=Date.now(),city?:City):value is 
   for(const source of [primary,...(item.story?.related??[])]){
    const identity=source.kind==='global'?source.card.identity:source.card.sourceUrl;
    if(ids.has(source.card.id)||urls.has(source.card.sourceUrl)||identities.has(identity)
-    ||!sourceInContext(source,language,value.cityId as string|null,value.expiresAt,day))return false;
+    ||!sourceInContext(source,language,value.cityId as string|null,value.expiresAt,day,value.sourceScope as NewsSourceScope|undefined))return false;
    ids.add(source.card.id);urls.add(source.card.sourceUrl);identities.add(identity);
   }
   if(item.kind==='local')observed.local++;
@@ -171,7 +183,8 @@ export function validNewsPage(value:unknown,now=Date.now(),city?:City):value is 
  return declaredSources<=value.articleTotal&&(value.items.length!==value.total||declaredSources===value.articleTotal)&&observed.national<=Number(value.coverage.national)&&observed.local<=Number(value.coverage.local)&&observed.international<=Number(value.coverage.international);
 }
 export function validNewsStorySourcesPage(value:unknown,now=Date.now(),city?:City):value is NewsStorySourcesPage {
- if(!Number.isFinite(now)||!object(value)||!exact(value,['version','epoch','revision','generatedAt','startedAt','expiresAt','language','cityId','countryCode','period','day','filter','storyKey','sourceTotal','offset','sources','nextCursor'])
+ if(!Number.isFinite(now)||!object(value)||!fields(value,['version','epoch','revision','generatedAt','startedAt','expiresAt','language','cityId','countryCode','period','day','filter','storyKey','sourceTotal','offset','sources','nextCursor'],['sourceScope'])
+  ||value.sourceScope!==undefined&&!validNewsSourceScope(value.sourceScope)
   ||value.version!==NEWS_STORY_SOURCES_VERSION||!validNewsPeriod(value.period)||!validNewsEpochId(value.epoch)||!integer(value.revision,Number.MAX_SAFE_INTEGER)||value.revision===0
   ||!timestamp(value.generatedAt)||!timestamp(value.startedAt)||!timestamp(value.expiresAt)||Date.parse(value.generatedAt)>now+5000
   ||Date.parse(value.startedAt)>now+5000||Date.parse(value.startedAt)<Date.parse(value.generatedAt)-5000||Date.parse(value.expiresAt)<=Date.parse(value.startedAt)||Date.parse(value.expiresAt)<=now
@@ -188,7 +201,7 @@ export function validNewsStorySourcesPage(value:unknown,now=Date.now(),city?:Cit
   ||Date.parse(value.expiresAt)>Date.parse(value.day.end))return false;
  const day=value.period==='today'?value.day as NewsDayWindow:null,sources:NewsStorySource[]=[];
  for(const source of value.sources){
-  if(!validNewsStorySource(source,now,city)||!sourceInContext(source,value.language as Locale,value.cityId as string|null,value.expiresAt,day))return false;
+  if(!validNewsStorySource(source,now,city)||!sourceInContext(source,value.language as Locale,value.cityId as string|null,value.expiresAt,day,value.sourceScope as NewsSourceScope|undefined))return false;
   sources.push(source);
  }
  return distinctSources(sources);

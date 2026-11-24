@@ -44,7 +44,7 @@ test('stable supply is traversed across rotation slots within unchanged80-reques
     const selected=newsAcquisitionOrder(rows,80,now+slot*NEWS_ACQUISITION_ROTATION_MS);
     assert.equal(selected.length,80);assert.equal(new Set(selected.map(row=>row.sourceUrl)).size,80);
     for(const row of selected){assert.ok(rows.includes(row));seen.add(row.sourceUrl);}
-    assert.deepEqual(selected.slice(0,4),rows.slice(0,4),'strongest opportunities remain present while remaining capacity progresses');
+    assert.deepEqual(newsAcquisitionOrder(rows,80,now+slot*NEWS_ACQUISITION_ROTATION_MS),selected,'the same slot produces the same bounded schedule');
   }
   assert.equal(seen.size,200,'later valid candidates must not remain permanently behind the same first80');
   assert.throws(()=>newsAcquisitionOrder(rows,81,now),/NEWS_SCHEDULE_INVALID/);
@@ -56,20 +56,27 @@ test('rotation accumulates eligible earlier observations without changing their 
   const next=now+NEWS_ACQUISITION_ROTATION_MS,secondRequests=[];
   const result=await discoverNews(fetcher(rows,next,secondRequests),next,rows,undefined,{...options,retainedCards:first});
   const second=result.flatMap(value=>value.cards);
-  assert.equal(firstRequests.length,80);assert.equal(secondRequests.length,80);assert.equal(second.length,156);
-  for(const old of first.filter(value=>!secondRequests.includes(value.sourceUrl)))assert.deepEqual(second.find(value=>value.identity===old.identity),old);
+  assert.equal(firstRequests.length,80);assert.equal(secondRequests.length,80);assert.equal(second.length,160);
+  assert.ok(secondRequests.every(url=>!firstRequests.includes(url)),'fresh unchanged originals never consume the next verification batch');
+  for(const old of first)assert.deepEqual(second.find(value=>value.identity===old.identity),old);
   const source=result.find(value=>value.health.id==='news-technology');
-  assert.equal(source.health.count,156);assert.match(source.health.scope,/retained without re-dating: 76/u);
+  assert.equal(source.health.count,160);assert.match(source.health.scope,/retained without re-dating: 80/u);
   assert.equal(source.health.verifiedAt,new Date(next).toISOString());
 });
 
 test('a selected original that fails metadata verification is removed instead of revived from retention',async()=>{
   const rows=Array.from({length:200},(_,i)=>candidate(i));
   const first=(await discoverNews(fetcher(rows,now),now,[],undefined,options)).flatMap(result=>result.cards);
-  const next=now+NEWS_ACQUISITION_ROTATION_MS,failed=new Set([newsAcquisitionOrder(mergeNewsCandidates(rows,next),80,next)[0].sourceUrl]);
-  const results=await discoverNews(fetcher(rows,next,[],failed),next,rows,undefined,{...options,retainedCards:first});
+  const next=now+NEWS_ACQUISITION_ROTATION_MS,revisedUrl=first[0].sourceUrl,requests=[];
+  const revisedRows=rows.map(row=>row.sourceUrl===revisedUrl?{...row,title:'Regulator investigates artificial intelligence software maker after new evidence'}:row);
+  const selected=newsAcquisitionOrder(mergeNewsCandidates(revisedRows,next),80,next,new Set(),first);
+  assert.ok(selected.some(row=>row.sourceUrl===revisedUrl),'a substantive revision of a retained original is selected for verification');
+  const failed=new Set([revisedUrl]);
+  const results=await discoverNews(fetcher(revisedRows,next,requests,failed),next,revisedRows,undefined,{...options,retainedCards:first});
   const cards=results.flatMap(result=>result.cards);
-  assert.ok(first.some(value=>failed.has(value.sourceUrl)));assert.ok(cards.every(value=>!failed.has(value.sourceUrl)));
+  assert.ok(first.some(value=>failed.has(value.sourceUrl)));assert.ok(requests.includes(revisedUrl),'the failed original was actually requested');
+  assert.deepEqual(new Set(requests),new Set(selected.map(row=>row.sourceUrl)),'the fixture uses the same retained evidence as the real acquisition');
+  assert.ok(cards.every(value=>!failed.has(value.sourceUrl)));
   assert.equal(results.find(value=>value.health.id==='news-technology').health.rejected,1);
 });
 

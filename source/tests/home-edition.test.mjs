@@ -126,7 +126,7 @@ test('a selection between minimum and target states its target shortfall honestl
 test('homepage renders all server-ordered native pages and keeps operational records separate',()=>{
   const source=readFileSync('src/iceo/browser.ts','utf8');
   const body=source.slice(source.indexOf('function renderDiscovery():void'),source.indexOf('// Automatic location and saved choices'));
-  assert.match(body,/newsContinuation\.start\(\{language,cityId:contextualCity\?\.id\?\?null,filter:newsFilter,/u);
+  assert.match(body,/newsContinuation\.start\(\{language,sourceScope:newsSourceScope,cityId:contextualCity\?\.id\?\?null,filter:newsFilter,/u);
   assert.match(body,/\.\.\.\(contextualCity\?\{city:contextualCity\}:\{\}\)\},restartNewsEdition\)/u);
   assert.match(body,/const server=newsContinuation\.view\(\),visible=continuationItems\(server.items,now\)/u);
   assert.match(body,/total:server.page\?\.total\?\?0,counts:server.page\?\.counts/u);
@@ -134,7 +134,7 @@ test('homepage renders all server-ordered native pages and keeps operational rec
   assert.doesNotMatch(body,/\b(?:selectNewsStream|newsStreamPage|continuationCount)\b/u,'page appends must preserve the server order and totals');
   assert.match(body,/newsReading.present\(today,local.cards,contextKey,language,now,applyPublicUpdate\)/u);
   assert.match(body,/liveEdition.present\(candidate,contextKey,now,applyPublicUpdate,newsReading.hasVisibleLocal\(now\)\)/u);
-  assert.match(body,/if\(sentinel&&!server.loading&&!server.error&&server.page\?\.nextCursor\)/u);
+  assert.match(body,/if\(sentinel&&!server.loading&&\(server.error===null\|\|server.error==='expired'\)&&!server.manualContinuation&&!server.limitReached&&server.canContinue&&server.page\?\.nextCursor\)/u);
   assert.match(body,/observeNewsStream\(sentinel,\(\)=>\{void showNewsPage\(false\);\}\)/u);
   assert.match(body,/showNewsPage\(true\)/u);assert.match(body,/home-news-category/u);
   assert.match(body,/newsCategoryLabel\(category.id,language\)/u);assert.match(body,/stream.counts\[category.id\]/u);

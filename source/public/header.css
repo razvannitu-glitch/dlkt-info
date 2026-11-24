@@ -74,8 +74,8 @@
  #today-glance .glance-shell{padding:8px 16px}
  #today-glance .glance-heading{grid-template-columns:minmax(0,95px) minmax(0,1fr) minmax(0,130px);grid-template-areas:'date utilities utilities' 'city city actions';gap:4px 8px}
  #today-glance .glance-calendar{grid-column:auto;min-width:0}
- #today-glance .glance-calendar time{font-size:0;line-height:1.5}
- #today-glance #glance-date::after{content:attr(data-compact-date);font-size:12px;white-space:nowrap}
+ #today-glance .glance-calendar time{font-size:12px;line-height:1.5}
+ #today-glance #glance-date::after{content:none}
  #today-glance .glance-location{grid-column:auto;min-width:0;padding-inline-start:0;border-inline-start:0}
  #today-glance #glance-city{max-width:100%;padding-inline-start:0;overflow:hidden}
 #today-glance #glance-city .glance-city-copy{overflow:hidden}
@@ -147,3 +147,4 @@
  .site-header .brand-header .kate-mark{width:62px;height:62px}
  .site-header .brand-header .brand-tagline{font-size:12px;line-height:17px}
 }
+

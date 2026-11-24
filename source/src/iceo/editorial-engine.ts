@@ -1,6 +1,6 @@
 import type {IceoSnapshot,SourceResult} from './contracts.js';
 import {iceoEngine,reconcile,fitPublicSnapshot} from './engine.js';
-import {discoverNewsWithDiagnostics,type NewsCandidate} from './news-discovery.js';
+import {discoverNewsWithDiagnostics,mergeNewsCandidates,type NewsCandidate} from './news-discovery.js';
 import type {NewsDiagnostics} from './news-diagnostics.js';
 import {createNewsCandidateStore} from './news-store.js';
 import {newsBackoffFetch} from './news-backoff.js';
@@ -9,6 +9,10 @@ import {createNewsCorpusStore} from './news-corpus-store.js';
 
 export interface EditorialCollection {readonly snapshot:IceoSnapshot;readonly corpus:NewsCorpus;readonly diagnostics:NewsDiagnostics}
 interface EditorialData {readonly full:IceoSnapshot;readonly diagnostics:NewsDiagnostics}
+
+function candidateObservationSignature(candidate:NewsCandidate):string{
+ return JSON.stringify([candidate.sourceUrl,candidate.title,candidate.publisher,candidate.indexedAt,candidate.category]);
+}
 /** Completion time belongs to the union; original source observation times stay intact. */
 export function finalizeEditorialCollection(full:IceoSnapshot,local:readonly NewsCorpusLocal[],diagnostics:NewsDiagnostics,completed:number):EditorialCollection{
  const snapshot:IceoSnapshot=Object.freeze({...full,generatedAt:new Date(completed).toISOString()});
@@ -28,7 +32,11 @@ async function collectEditorialData(
   signal?.throwIfAborted();
   const newsFetch=environment.VERCEL==='1'?newsBackoffFetch(boundedFetch,clock):boundedFetch;
   return discoverNewsWithDiagnostics(newsFetch,now,candidates,async pool=>{
-   if(store?.writable)await store.write(pool,clock());
+   if(!store?.writable)return;
+   const persistAt=clock(),observed=new Map(candidates.map(candidate=>[candidate.sourceUrl,candidateObservationSignature(candidate)]));
+   // A seed can expire while indexes are read; unchanged observations need no write.
+   const changed=mergeNewsCandidates(pool,persistAt).filter(candidate=>observed.get(candidate.sourceUrl)!==candidateObservationSignature(candidate));
+   if(changed.length)await store.write(changed,persistAt);
   },{
     ...(environment.VERCEL==='1'?{publisherIndexBatch:7,deadlineMs:27_000,maxArticleRequests:60}:{}),
     ...(previousSnapshot?{retainedCards:previousSnapshot.cards}:{}),

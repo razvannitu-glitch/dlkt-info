@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 
 const html=readFileSync(new URL('../public/iceo.html',import.meta.url),'utf8');
 const css=readFileSync(new URL('../public/header.css',import.meta.url),'utf8');
+const theme=readFileSync(new URL('../public/reader-theme.css',import.meta.url),'utf8');
 const reader=readFileSync(new URL('../public/iceo.js',import.meta.url),'utf8');
 const glance=readFileSync(new URL('../public/glance-browser.js',import.meta.url),'utf8');
 const source=readFileSync(new URL('../src/glance/browser.ts',import.meta.url),'utf8');
@@ -18,11 +19,12 @@ test('verified local cards precede city and global news in one scroll',()=>{
  assert.match(reader,/extrasHost\.append\(details\)/);
  assert.match(reader,/local\.supporting\.length > 0 \|\| localNewsCount > 0/);
 });
-test('backend completes the full city-country-world order before pagination',()=>{
- assert.match(backend,/scopePriority=\(group:NewsStoryGroup\)/);
- assert.match(backend,/sort\(\(a,b\)=>scopePriority\(a\)-scopePriority\(b\)\)/);
- assert.match(backend,/iptc17-local-city-country-world-20261123/);
- assert.doesNotMatch(backend,/iptc17-country-day-local-first-20261123/);
+test('backend groups and balances the complete edition before projecting category pages',()=>{
+ const grouping=backend.indexOf('groups=groupNewsStories('),balancing=backend.indexOf('balanceNewsEdition(selection.items,');
+ assert.ok(grouping>0&&balancing>grouping,'source groups are complete before their representatives are balanced');
+ assert.match(backend,/iptc17-source-scope-publisher-rounds-20261124/);
+ assert.doesNotMatch(backend,/sort\(\(a,b\)=>scopePriority\(a\)-scopePriority\(b\)\)/,'geography must not rebuild publisher blocks after diversity');
+ assert.match(backend,/this\.orders\.set\(key,result\)/,'the complete order remains immutable between pages');
 });
 test('redundant Use my location button is absent in all supported languages',()=>{
  const heading=html.match(/<div class="glance-heading">([\s\S]*?)<div class="glance-utilities">/u)?.[1];
@@ -35,10 +37,12 @@ test('redundant Use my location button is absent in all supported languages',()=
  assert.doesNotMatch(source,/glance-locate|Foloseste locatia mea|Usa la mia posizione/);
  assert.match(html,/id="glance-city"/);
 });
-test('forecast and EUR controls stay on one bounded row with full values in titles',()=>{
- assert.match(css,/#today-glance \.glance-utilities\{[^}]*flex-wrap:nowrap[^}]*overflow:hidden/);
- assert.match(css,/#today-glance \.glance-utilities \.text-button\{[^}]*white-space:nowrap;overflow:hidden;text-overflow:ellipsis/);
- assert.match(css,/@media\(max-width:600px\)[\s\S]*grid-template-areas:'date utilities utilities' 'city city actions'/);
+test('mobile utility controls use explicit rows and display one date with complete city and values',()=>{
+ assert.match(theme,/@media\(max-width:760px\)[\s\S]*grid-template-areas:'date date' 'city actions' 'utilities utilities'/);
+ assert.match(theme,/#today-glance \.glance-utilities \.text-button\{[^}]*max-width:none[^}]*min-height:44px[^}]*overflow:visible/);
+ assert.match(theme,/#today-glance #glance-city-label\{[^}]*white-space:normal;overflow:visible;text-overflow:clip/);
+ assert.doesNotMatch(css,/content:attr\(data-compact-date\)/,'the date must not be rendered a second time by generated content');
  assert.match(glance,/weatherQuick\.title\s*=\s*get\('glance-weather-note'\)/);
  assert.match(glance,/forexQuick\.title\s*=\s*get\('glance-forex-note'\)/);
 });
+

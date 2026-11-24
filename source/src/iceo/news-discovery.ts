@@ -12,7 +12,7 @@ import {consistentCards} from './evidence-consistency.js';
 import {collectFrontpageHighlights} from './news-frontpages.js';
 import {NewsDiagnosticsBuilder,type NewsDiagnostics} from './news-diagnostics.js';
 import {EDITORIAL_CATEGORY_TOPICS,classifyNewsHeadline,headlineDiscoveryPriority,type PublicEditorialCategory} from './editorial-categories.js';
-import {NEWS_INDEX_URL,NEWS_PUBLISHERS,NEWS_CATEGORY_SOURCES,NEWS_UNCLASSIFIED_SOURCE,NEWS_FEATURED_SOURCE,NEWS_DISCOVERY_INDEXES,NEWS_SOURCES,canonicalNewsUrl,publisherForNewsUrl,sourcePublicationContext,sourceLanguage,type NewsDiscoveryIndex,type NewsSourceLanguage} from './news-sources.js';
+import {NEWS_INDEX_URL,NEWS_PUBLISHERS,NEWS_CATEGORY_SOURCES,NEWS_UNCLASSIFIED_SOURCE,NEWS_FEATURED_SOURCE,NEWS_DISCOVERY_INDEXES,NEWS_SOURCES,canonicalNewsUrl,publisherForNewsUrl,publisherComparisonHeadline,sourcePublicationContext,sourceLanguage,type NewsDiscoveryIndex,type NewsSourceLanguage} from './news-sources.js';
 
 /** Untrusted discovery metadata. indexedAt is never a publisher publication date. */
 export interface NewsCandidate {readonly sourceUrl:string;readonly title:string;readonly publisher:string;readonly indexedAt:string;readonly category:PublicEditorialCategory|null}
@@ -28,8 +28,9 @@ const headlineIdentity=(title:string):string=>title.normalize('NFKC').toLowerCas
 
 /** Only this exact reviewed publisher's separated suffix is decoration. */
 function publisherHeadline(title:string,publisher:string):string{
- const normalized=headlineIdentity(title),label=headlineIdentity(publisher);
- if(!NEWS_PUBLISHERS.some(value=>value.label===publisher))return normalized;
+ const boundPublisher=NEWS_PUBLISHERS.find(value=>value.label===publisher);
+ const normalized=headlineIdentity(boundPublisher?publisherComparisonHeadline(title,boundPublisher.id):title),label=headlineIdentity(publisher);
+ if(!boundPublisher)return normalized;
  for(const separator of [' – ',' — ',' | ',' : ',' - ']){
   const suffix=separator+label;if(normalized.endsWith(suffix))return normalized.slice(0,-suffix.length).trim();
  }
@@ -221,9 +222,7 @@ export function newsAcquisitionOrder(values:readonly NewsCandidate[],limit:numbe
   const queue:CategoryAcquisitionQueue=queues.get(key)??{language,category,rows:[],covered:counts.get(key)?.size??0,attempted:0,cursor:0};
   queue.rows.push(row);queues.set(key,queue);
  }
- // Keep the tested global rotation unchanged when no reviewed-language category
- // opportunity is available, including unknown-language publisher supply.
- if(!queues.size)return Object.freeze(rotatedNewsOrder(ordered,limit,now));
+ // Publisher opportunities also cover reviewed sources whose language remains unknown.
  const slot=Math.floor(now/NEWS_ACQUISITION_ROTATION_MS);
  for(const queue of queues.values()){
   const offset=(slot*Math.max(1,Math.floor(limit/Math.max(1,byLanguage.size))))%queue.rows.length;
@@ -261,7 +260,40 @@ export function newsAcquisitionOrder(values:readonly NewsCandidate[],limit:numbe
  // publication language is unknown; an unknown language never becomes an edition.
  const leadingDevelopment=ordered.find(row=>!unchanged(row)&&candidatePriority(row)===2);
  if(leadingDevelopment)take(leadingDevelopment);
- const languages=[...byLanguage.keys()].filter((language):language is NewsSourceLanguage=>language!==null),start=slot%languages.length,languageOrder=[...languages.slice(start),...languages.slice(0,start)];
+ // Many language editions of one publisher must not consume the first pass.
+ // Reserve at least one quarter of the finite batch for language/category gaps.
+ const publisherCoverage=new Map<string,number>(),byPublisher=new Map<string,NewsCandidate[]>();
+ for(const card of fresh.values()){
+  const publisher=publisherForNewsUrl(card.sourceUrl);if(publisher)publisherCoverage.set(publisher.id,(publisherCoverage.get(publisher.id)??0)+1);
+ }
+ for(const row of ordered){
+  const publisher=publisherForNewsUrl(row.sourceUrl);
+  if(!publisher||publisher.label!==row.publisher||unchanged(row))continue;
+  const rows=byPublisher.get(publisher.id)??[];rows.push(row);byPublisher.set(publisher.id,rows);
+ }
+ const publisherKeys=[...byPublisher.keys()].sort(),publisherOffset=slot%Math.max(1,publisherKeys.length);
+ const publisherOrder=[...publisherKeys.slice(publisherOffset),...publisherKeys.slice(0,publisherOffset)]
+  .sort((a,b)=>(publisherCoverage.get(a)??0)-(publisherCoverage.get(b)??0));
+ const publisherLimit=Math.min(limit-(unknown?1:0),Math.max(1,Math.floor(limit*3/4)));
+ const opportunity=(row:NewsCandidate):number=>{
+  const language=sourceLanguage(row.sourceUrl),subject=classifyNewsSubject(row.title,row.sourceUrl)?.category;
+  const queue=language!==null&&subject!==undefined?queues.get(language+'|'+subject):undefined;
+  return queue?Math.min(NEWS_CATEGORY_ACQUISITION_POLICY.target+1,queue.covered+queue.attempted):NEWS_CATEGORY_ACQUISITION_POLICY.target+1;
+ };
+ for(const publisherId of publisherOrder){
+  if(selected.length>=publisherLimit)break;
+  if(selected.some(row=>publisherForNewsUrl(row.sourceUrl)?.id===publisherId))continue;
+  const rows=byPublisher.get(publisherId)!,offset=slot%rows.length;
+  const available=[...rows.slice(offset),...rows.slice(0,offset)].filter(row=>{
+   if(selectedUrls.has(row.sourceUrl))return false;
+   const language=sourceLanguage(row.sourceUrl),subject=classifyNewsSubject(row.title,row.sourceUrl)?.category;
+   if(language===null||subject===undefined)return true;
+   const key=language+'|'+subject,headline=publisherHeadline(row.title,row.publisher);
+   return !coveredHeadlines.get(key)?.has(headline)&&!plannedSubjects.has(key+'|'+headline);
+  }).sort((a,b)=>opportunity(a)-opportunity(b)||candidatePriority(b)-candidatePriority(a));
+  const row=available[0];if(row)take(row);
+ }
+ const languages=[...byLanguage.keys()].filter((language):language is NewsSourceLanguage=>language!==null),start=languages.length?slot%languages.length:0,languageOrder=[...languages.slice(start),...languages.slice(0,start)];
  // Give reviewed editions their first opportunity before a larger language can
  // occupy the leading request slots with urgent headlines. Reserve the bounded
  // unknown-subject opportunity when the batch has room for it.
@@ -271,8 +303,7 @@ export function newsAcquisitionOrder(values:readonly NewsCandidate[],limit:numbe
   const rows=byLanguage.get(language)!;
   const row=nextGap(language,NEWS_CATEGORY_ACQUISITION_POLICY.minimum)
    ??nextGap(language,NEWS_CATEGORY_ACQUISITION_POLICY.target)
-   ??rows.find(candidate=>!selectedUrls.has(candidate.sourceUrl)&&!unchanged(candidate))
-   ??rows.find(candidate=>!selectedUrls.has(candidate.sourceUrl));
+   ??rows.find(candidate=>!selectedUrls.has(candidate.sourceUrl)&&!unchanged(candidate));
   if(row)take(row);
  }
  if(unknown)take(unknown);
@@ -294,11 +325,8 @@ export function newsAcquisitionOrder(values:readonly NewsCandidate[],limit:numbe
  }
  // Deficit targets guide requests, not admission caps. Unclassified, saturated
  // and unknown-language discoveries retain all spare verification capacity.
- const remaining=ordered.filter(row=>!selectedUrls.has(row.sourceUrl));
- for(const pool of [remaining.filter(row=>!unchanged(row)),remaining.filter(unchanged)]){
-  if(selected.length>=limit)break;
-  for(const row of rotatedNewsOrder(pool,limit-selected.length,now))take(row);
- }
+ const remaining=ordered.filter(row=>!selectedUrls.has(row.sourceUrl)&&!unchanged(row));
+ if(selected.length<limit)for(const row of rotatedNewsOrder(remaining,limit-selected.length,now))take(row);
  return Object.freeze(selected);
 }
 export function mergeNewsCandidates(values:readonly unknown[],now:number):readonly NewsCandidate[]{
@@ -388,10 +416,12 @@ export function readPublisherNewsCandidates(xml:string,index:NewsDiscoveryIndex,
 }
 function tokens(text:string):Set<string>{return new Set(text.normalize('NFKC').toLowerCase().match(/[\p{L}\p{N}]+/gu)?.filter(word=>word.length>1&&!['the','and','with','for','from','this','that','into','of','to','in','on','at','by','an','as','is','a'].includes(word))??[]);}
 export function matchingNewsHeadline(a:string,b:string,publisherLabel?:string,language?:NewsSourceLanguage|null):boolean{
-  if(publisherLabel&&NEWS_PUBLISHERS.some(row=>row.label===publisherLabel)){
+  const boundPublisher=publisherLabel?NEWS_PUBLISHERS.find(row=>row.label===publisherLabel):undefined;
+  if(boundPublisher){
+    a=publisherComparisonHeadline(a,boundPublisher.id);b=publisherComparisonHeadline(b,boundPublisher.id);
     // Remove only an explicitly separated suffix for this bound publisher.
     // This preserves meaningful numbers while accepting the actual brand "France 24".
-    const suffix=new RegExp(`\\s+[–—|:-]\\s+${publisherLabel.replace(/[.*+?^${}()|[\]\\]/gu,'\\$&')}\\s*$`,'iu');
+    const suffix=new RegExp(`\\s+[–—|:-]\\s+${boundPublisher.label.replace(/[.*+?^${}()|[\]\\]/gu,'\\$&')}\\s*$`,'iu');
     a=a.replace(suffix,'');b=b.replace(suffix,'');
   }
   // Additional reviewed editions have no token/negation rules here. Preserve
@@ -710,3 +740,4 @@ export async function discoverNewsWithDiagnostics(fetcher:typeof fetch,now:numbe
 export async function discoverNews(fetcher:typeof fetch,now:number,seedCandidates:readonly NewsCandidate[]=[],onCandidates?:(candidates:readonly NewsCandidate[])=>Promise<void>,options:NewsDiscoveryOptions={}):Promise<readonly SourceResult[]>{
   return (await discoverNewsWithDiagnostics(fetcher,now,seedCandidates,onCandidates,options)).sources;
 }
+

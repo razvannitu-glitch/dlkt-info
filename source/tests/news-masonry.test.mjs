@@ -6,6 +6,7 @@ import {parseDocument,DomUtils} from 'htmlparser2';
 import {NewsMasonry,newsMasonryPositions} from '../.build/src/iceo/news-masonry.js';
 import {KNOWLEDGE_CARDS} from '../.build/src/iceo/knowledge-catalog.js';
 import {selectInlineKnowledge,interleaveKnowledge} from '../.build/src/iceo/knowledge-stream.js';
+import {newsOriginalLanguage} from '../.build/src/iceo/news-page-contracts.js';
 
 test('two hundred variable-height articles retain DOM order and exact gaps beyond grid track limits',()=>{
  const heights=Array.from({length:200},(_,index)=>260.25+(index%7)*67.5),positions=newsMasonryPositions(heights,2);
@@ -118,12 +119,12 @@ test('manual continuation awaits its page and focuses after final placement whil
   scrollIntoView(options){assert.equal(options.block,'nearest');assert.equal(options.behavior,'auto');scrolls++;}};
  const added={dataset:{newsStreamKey:'new-manual'},height:160,querySelector(selector){assert.equal(selector,'h3');return heading;}};
  const automatic={dataset:{newsStreamKey:'new-auto'},height:200,querySelector(){throw Error('automatic continuation must not move focus');}};
- let nodes=[old],state={loading:false,error:null,page:{nextCursor:'next'},items:[old]};
+ let nodes=[old],state={loading:false,error:null,canContinue:true,limitReached:false,manualContinuation:false,activeReceivedCount:1,retainedCount:0,page:{nextCursor:'next'},items:[old]};
  let placements=newsMasonryPositions(nodes.map(node=>node.height),2),language='en';
  const announcement={textContent:''};
- const context={document:{visibilityState:'visible',body:{dataset:{entryView:'start'}}},innerHeight:700,newsFilter:'all',newsPeriod:'today',newsInteractionRevision:0,contextualCity:{id:'683506'},
-  newsContinuation:{view:()=>state,next(){
-   requests++;state={...state,loading:true};return new Promise(resolve=>{finishNext=items=>{state={...state,loading:false,items};resolve();};});
+ const context={document:{visibilityState:'visible',body:{dataset:{entryView:'start'}}},innerHeight:700,newsSourceScope:'all',newsFilter:'all',newsPeriod:'today',newsInteractionRevision:0,contextualCity:{id:'683506'},
+  newsContinuation:{view:()=>state,next(recoverExpired){
+   assert.equal(recoverExpired,true);requests++;state={...state,loading:true};return new Promise(resolve=>{finishNext=items=>{state={...state,loading:false,activeReceivedCount:items.length,items};resolve();};});
   }},
   required:selector=>{assert.equal(selector,'#discovery-cards');return {querySelectorAll:()=>nodes};},
   renderDiscovery:()=>{
@@ -156,12 +157,12 @@ test('manual continuation awaits its page and focuses after final placement whil
 
 test('the English shortcut leaves keyboard focus in the visible toolbar after selecting the language',()=>{
  const source=readFileSync('.build/src/iceo/browser.js','utf8'),start=source.indexOf("required('#home-news-english').addEventListener"),end=source.indexOf('// Automatic location and saved choices',start);
- assert.ok(start>=0&&end>start);let action,focuses=0,changes=0;
+ assert.ok(start>=0&&end>start);let action,focuses=0,changes=0,renders=0;
  const picker={value:'ro',dispatchEvent(event){assert.equal(this.value,'en');assert.equal(event.type,'change');assert.equal(event.bubbles,true);changes++;}};
  const category={focus(){focuses++;}};
- const context={Event:class{constructor(type,options){this.type=type;this.bubbles=options.bubbles;}},
+ const context={newsSourceScope:'all',renderDiscovery(){renders++;},Event:class{constructor(type,options){this.type=type;this.bubbles=options.bubbles;}},
   required:selector=>selector==='#home-news-english'?{addEventListener(type,callback){assert.equal(type,'click');action=callback;}}:selector==='#reader-language'?picker:selector==='#home-news-category'?category:null};
- runInNewContext(source.slice(start,end),context);action();assert.equal(changes,1);assert.equal(focuses,1);
+ runInNewContext(source.slice(start,end),context);action();assert.equal(changes,1);assert.equal(focuses,1);assert.equal(renders,1);assert.equal(context.newsSourceScope,'edition');
 });
 
 test('compiled inline rendering preserves 11-plus-1 cadence, append prefixes and unseen facts without expired slots',()=>{
@@ -180,19 +181,21 @@ test('compiled inline rendering preserves 11-plus-1 cadence, append prefixes and
  function harness(catalog=KNOWLEDGE_CARDS){
   const host={children:[],append(node){this.children.push(node);}};
   function newsNode(card){
-   const heading={setAttribute(){}},topic={},link={},details={};
+   const heading={setAttribute(){},after(){}},topic={},link={},details={};
    return {fixtureKind:'news',card,dataset:{},querySelector:selector=>selector==='h3'?heading:selector==='.card-topic'?topic:selector==='.card-content > .source-link'?link:selector==='.evidence > summary'?details:null};
   }
   const context={
-   server:{page:{epoch:17,revision:9,startedAt:new Date(now).toISOString(),language:'en',cityId:'683506',countryCode:'RO',filter:'all',period:'today',day:{date:'2026-11-23'}}},
-   now,language:'en',topCount:80,visible:[],host,document:{body:{dataset:{}}},
+   server:{retainedCount:0,page:{epoch:17,revision:9,startedAt:new Date(now).toISOString(),language:'en',sourceScope:'all',cityId:'683506',countryCode:'RO',filter:'all',period:'today',day:{date:'2026-11-23'}}},
+   now,language:'en',newsSourceScope:'all',topCount:80,readingTotal:80,visible:[],host,document:{body:{dataset:{}}},
    contextualCity:{id:'683506',name:'Bucharest',countryCode:'RO'},inlineKnowledgeSeen:new Set(),inlineKnowledgeContext:'',inlineKnowledgeSelection:[],
    pageItemByKey:new Map(originals.map(item=>[item.key,{kind:item.kind,key:item.key,category:item.category,card:originalCard(item)}])),
+   newsContinuation:{editionFor:key=>{assert.ok(context.pageItemByKey.has(key));return context.server.page;}},
    newsStorySourcesNode(){throw Error('Ungrouped originals must not create a source-group disclosure');},
    KNOWLEDGE_CARDS:catalog,selectInlineKnowledge,interleaveKnowledge,
    writeKnowledgeSeen:seen=>{assert.ok(seen instanceof Set);return true;},
    knowledgeCardNode:(card,scope)=>({fixtureKind:'knowledge',card,scope,dataset:{}}),
    cardNode:view=>newsNode(view.card),localCardNode:card=>newsNode(card),
+   newsOriginalLanguage,languageLabel:language=>language,make:(_tag,className,textContent)=>({className,textContent,dataset:{}}),
    editionCardSignature:card=>card.id,editionStorySignature:view=>view.card.id,newsCategoryLabel:category=>category,tr:key=>key,
   };
   runInNewContext('function renderInline(){\n'+body+'\n}',context);

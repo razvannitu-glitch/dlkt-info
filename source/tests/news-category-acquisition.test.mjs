@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {NEWS_INDEX_URL,sourceLanguage} from '../.build/src/iceo/news-sources.js';
+import {NEWS_INDEX_URL,sourceLanguage,publisherForNewsUrl} from '../.build/src/iceo/news-sources.js';
 import {classifyNewsHeadline,EDITORIAL_CATEGORY_TOPICS} from '../.build/src/iceo/editorial-categories.js';
 import {classifyNewsSubject} from '../.build/src/iceo/news-taxonomy.js';
 import {cardContent} from '../.build/src/iceo/card-validation.js';
@@ -166,3 +166,72 @@ test('unknown subjects keep an original-metadata opportunity while classified de
  assert.ok(chosen.some(entry=>sourceLanguage(entry.sourceUrl)==='en'));
  assert.ok(chosen.some(entry=>sourceLanguage(entry.sourceUrl)==='ro'));
 });
+
+const publisherFixture=(publisher,origin,path,index,title='Hospital care standards for district '+index)=>{
+ const sourceUrl=origin+path+index;
+ const candidate={sourceUrl,title,publisher,indexedAt:stamp,category:classifyNewsHeadline(title,sourceUrl)};
+ assert.ok(validateNewsCandidate(candidate,now),'fixture is a valid reviewed publisher candidate');
+ return candidate;
+};
+const publisherSamples=[
+ ['The Verge','https://www.theverge.com','/science/coverage-'],
+ ['PC Gamer','https://www.pcgamer.com','/coverage-'],
+ ['Live Science','https://www.livescience.com','/health/coverage-'],
+ ['Education Week','https://www.edweek.org','/coverage-'],
+ ['Știrile ProTV','https://stirileprotv.ro','/stiri/actualitate/coverage-'],
+ ['France 24','https://www.france24.com','/en/coverage-'],
+];
+test('many language editions of one publisher cannot monopolize the distinct publisher first pass',()=>{
+ const dwLanguages=['en','de','fr','es','ar','sw','ro','uk'];
+ const dominant=dwLanguages.flatMap((language,index)=>Array.from({length:8},(_,n)=>publisherFixture('DW','https://www.dw.com','/'+language+'/coverage-',1000+index*8+n)));
+ const alternatives=publisherSamples.map(([publisher,origin,path],index)=>publisherFixture(publisher,origin,path,2000+index));
+ const retained=[
+  ...Array.from({length:85},(_,index)=>evidence(publisherFixture('DW','https://www.dw.com','/en/retained-',3000+index))),
+  ...Array.from({length:61},(_,index)=>evidence(publisherFixture('France 24','https://www.france24.com','/en/retained-',4000+index))),
+ ];
+ const chosen=newsAcquisitionOrder([...dominant,...alternatives],8,now,new Set(),retained);
+ const first=chosen.slice(0,6).map(candidate=>publisherForNewsUrl(candidate.sourceUrl).id);
+ assert.equal(chosen.length,8);
+ assert.equal(new Set(first).size,6,'the six reserved first-pass slots are different publisher families');
+ for(const id of ['the-verge','pcgamer','live-science','edweek','stirile-protv'])assert.ok(first.includes(id),'underrepresented publisher '+id+' receives an opportunity');
+ assert.equal(new Set(chosen.map(candidate=>candidate.sourceUrl)).size,8);
+});
+test('unchanged fresh language representatives never displace new publishers or create redundant requests',()=>{
+ const current=publisherFixture('DW','https://www.dw.com','/sw/coverage-',1);
+ const newcomers=publisherSamples.flatMap(([publisher,origin,path],index)=>Array.from({length:4},(_,n)=>publisherFixture(publisher,origin,path,5000+index*10+n)));
+ for(let slot=0;slot<4;slot++){
+  const chosen=newsAcquisitionOrder([current,...newcomers],8,now+slot*NEWS_ACQUISITION_ROTATION_MS,new Set(),[evidence(current)]);
+  assert.equal(chosen.length,8);
+  assert.ok(chosen.every(candidate=>candidate.sourceUrl!==current.sourceUrl),'one old language anchor cannot be fetched again in each cycle');
+ }
+ assert.deepEqual(newsAcquisitionOrder([current],8,now,new Set(),[evidence(current)]),[],'spare capacity is not a reason to refetch an identical current original');
+ const changed={...current,title:'Hospital care standards changed after new patient safety rules'};
+ changed.category=classifyNewsHeadline(changed.title,changed.sourceUrl);
+ assert.equal(newsAcquisitionOrder([changed],1,now,new Set(),[evidence(current)])[0]?.title,changed.title,'a real headline change remains eligible');
+ const renewalAt=now+3_600_000-2*NEWS_ACQUISITION_ROTATION_MS+1;
+ assert.equal(newsAcquisitionOrder([current],1,renewalAt,new Set(),[evidence(current)])[0]?.sourceUrl,current.sourceUrl,'renewal becomes eligible before the observation expires');
+});
+test('a failed first original cannot pin a sparse publisher queue, including unknown-language publishers',async()=>{
+ const candidates=['A','B','C'].map((suffix,index)=>publisherFixture('IGN','https://www.ign.com','/articles/coverage-',6000+index,'A singular publisher report '+suffix));
+ assert.equal(sourceLanguage(candidates[0].sourceUrl),null,'fixture exercises an admitted publisher without an inferred language profile');
+ const selected=new Set(),verified=new Set(),calls=[];
+ for(let slot=0;slot<3;slot++){
+  const at=now+slot*NEWS_ACQUISITION_ROTATION_MS;
+  const first=newsAcquisitionOrder(candidates,1,at);
+  assert.deepEqual(newsAcquisitionOrder(candidates,1,at),first,'same slot produces the same schedule');
+  first.forEach(candidate=>selected.add(candidate.sourceUrl));
+  const results=await discoverNews(async input=>{
+   const url=String(input);
+   if(url===NEWS_INDEX_URL)return new Response(rss(candidates).replace(new Date(now).toUTCString(),new Date(at).toUTCString()),{headers:{'content-type':'application/rss+xml'}});
+   calls.push(url);
+   const candidate=candidates.find(value=>value.sourceUrl===url);
+   assert.ok(candidate);
+   return new Response(candidate===candidates[0]?'<html><head><title>No eligible original article metadata</title></head></html>':metadata(candidate),{headers:{'content-type':'text/html'}});
+  },at,[],undefined,{...options,maxArticleRequests:1});
+  for(const card of results.flatMap(result=>result.cards)){verified.add(card.sourceUrl);assert.equal(card.date,date,'index rotation never redates the original');}
+ }
+ assert.equal(selected.size,3);assert.equal(calls.length,3);
+ assert.equal(verified.has(candidates[0].sourceUrl),false);
+ assert.deepEqual([...verified].sort(),candidates.slice(1).map(candidate=>candidate.sourceUrl).sort());
+});
+

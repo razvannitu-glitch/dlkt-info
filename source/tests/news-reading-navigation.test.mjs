@@ -9,15 +9,16 @@ const end=reader.indexOf("required('#discovery').addEventListener('click'",start
 assert.ok(start>=0&&end>start,'test executes the actual compiled progressive-loading handler');
 const handler=reader.slice(start,end).trim();
 function harness(){
- let release,renders=0,focus=0,calls=0;const state={items:[{key:'old'}],loading:false,error:null,page:{nextCursor:'next'}};
+ let release,renders=0,focus=0,calls=0;const state={items:[{key:'old'}],loading:false,error:null,page:{nextCursor:'next'},initialized:true,
+  activeReceivedCount:1,retainedCount:0,manualContinuation:false,limitReached:false,canContinue:true};
  const title={tabIndex:0,focus(){focus++;},getBoundingClientRect(){return {top:100,bottom:140};},scrollIntoView(){}};
  const old={dataset:{newsStreamKey:'old'}},added={dataset:{newsStreamKey:'new'},querySelector(){return title;}};
  const root={querySelectorAll(){return state.items.length>1?[old,added]:[old];}};
- const context={language:'en',newsFilter:'all',newsPeriod:'today',contextualCity:{id:'city'},newsInteractionRevision:1,newsInteractionKey:'',restartNewsEdition:false,
+ const context={language:'en',newsFilter:'all',newsPeriod:'today',newsSourceScope:'all',contextualCity:{id:'city'},newsInteractionRevision:1,newsInteractionKey:'',restartNewsEdition:false,
   document:{visibilityState:'visible',body:{dataset:{entryView:'start'}}},innerHeight:800,
   announcement:{textContent:''},required(){return root;},getLocale(){return context.language;},
   renderDiscovery(){renders++;},
-  newsContinuation:{view(){return state;},next(){calls++;return new Promise(resolve=>{release=()=>{state.items.push({key:'new'});resolve();};});}},
+  newsContinuation:{view(){return state;},next(){calls++;return new Promise(resolve=>{release=()=>{state.items.push({key:'new'});state.activeReceivedCount=state.items.length;resolve();};});}},
  };
  const run=vm.runInNewContext('('+handler+')',context);
  return {context,run,release(){release();},result(){return {renders,focus,calls,announcement:context.announcement.textContent};}};
@@ -25,6 +26,7 @@ function harness(){
 test('pending news continuation never focuses or announces a page after changing its period or reading context',async()=>{
  for(const [name,change] of [
   ['period',h=>{h.context.newsPeriod='recent';}],
+  ['source scope',h=>{h.context.newsSourceScope='edition';}],
   ['local view',h=>{h.context.document.body.dataset.entryView='local';}],
   ['Explore',h=>{h.context.document.body.dataset.worldExplore='active';}],
   ['language',h=>{h.context.language='it';}],
@@ -62,6 +64,7 @@ test('returning to the same News context still invalidates a request begun befor
  for(const [name,leave,returnToNews] of [
   ['Explore',h=>{h.context.document.body.dataset.worldExplore='active';},h=>{delete h.context.document.body.dataset.worldExplore;}],
   ['period',h=>{h.context.newsPeriod='recent';},h=>{h.context.newsPeriod='today';}],
+  ['source scope',h=>{h.context.newsSourceScope='edition';},h=>{h.context.newsSourceScope='all';}],
  ]){
   const h=harness();h.context.language='it';
   const update=vm.runInNewContext('(function(){'+contextGuard+'})',h.context);
