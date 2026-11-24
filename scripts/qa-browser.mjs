@@ -372,7 +372,18 @@ async function measureReader(call,fixture){
 }
 /** CSS-pixel geometry: DPR changes raster density, not this padding contract. */
 function readingDetailProbe(){
- const visible=node=>Boolean(node)&&node.getClientRects().length>0&&getComputedStyle(node).visibility!=='hidden'&&getComputedStyle(node).display!=='none';
+ const visible=node=>{
+  if(!node||node.getClientRects().length===0||getComputedStyle(node).visibility==='hidden'||getComputedStyle(node).display==='none')return false;
+  // Closed details can retain layout boxes for descendants that are not painted.
+  // Only their first summary is visible; expanded evidence is still measured.
+  for(let parent=node.parentElement;parent;parent=parent.parentElement){
+   if(parent.tagName==='DETAILS'&&!parent.open){
+    const summary=[...parent.children].find(child=>child.tagName==='SUMMARY');
+    if(!summary?.contains(node))return false;
+   }
+  }
+  return true;
+ };
  const rect=node=>{const r=node.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height};};
  const painted=node=>{
   const range=document.createRange();range.selectNodeContents(node);const text=range.getBoundingClientRect(),box=rect(node),style=getComputedStyle(node);
