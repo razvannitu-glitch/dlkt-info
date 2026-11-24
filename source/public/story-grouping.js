@@ -355,6 +355,28 @@ function reportedPenaltyAnchor(card, title) {
     return { key: key('reported-penalty', 'ro', actor, Number(match[2]), match[3], cause, countries(card), card.summary === undefined ? '' : text(card.summary)),
         basis: 'matching-headlines', strong: false };
 }
+/** Identical checked BBC article editions retain their original URLs and metadata.
+ * Observed in public corpus1589: www.bbc.com and www.bbc.co.uk /news/articles/
+ * use the same explicit article ID, headline and publication time.
+ * This fallback is narrower than lowering headline-length safety thresholds.
+ */
+function reviewedArticleAnchor(card, title) {
+    if (card.publisher !== 'BBC' || card.identity !== card.sourceUrl)
+        return null;
+    try {
+        const url = new URL(card.sourceUrl);
+        if (url.protocol !== 'https:' || url.username || url.password || url.port || url.search || url.hash
+            || !['www.bbc.com', 'www.bbc.co.uk'].includes(url.hostname))
+            return null;
+        const match = /^\/news\/articles\/(c[a-z0-9]{12})$/u.exec(url.pathname);
+        if (!match)
+            return null;
+        return { key: key('publisher-article', 'bbc', match[1], title, card.date, card.summary === undefined ? '' : text(card.summary), countries(card)), basis: 'matching-headlines', strong: false };
+    }
+    catch {
+        return null;
+    }
+}
 function anchor(card) {
     if (card.kind !== 'publication' || !card.title.trim() || card.title.length > 4000 || !Number.isFinite(Date.parse(card.date)))
         return null;
@@ -380,7 +402,7 @@ function anchor(card) {
         if (named)
             return named;
     }
-    return headlineAnchor(card, title);
+    return headlineAnchor(card, title) ?? reviewedArticleAnchor(card, title);
 }
 function anchoredKey(subject, card) {
     // Weak exact-headline/claim matches have fixed two-day epoch windows. This can

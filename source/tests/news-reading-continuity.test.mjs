@@ -279,3 +279,30 @@ test('the public continuation mirror matches the compiled controller exactly',()
  const compiled=readFileSync('.build/src/iceo/news-continuation.js','utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'');
  assert.equal(readFileSync('public/news-continuation.js','utf8'),compiled);
 });
+
+test('a checked BBC article cannot reappear when its alternate publisher host replaces the earlier singleton',async()=>{
+ for(const Controller of [NewsContinuation,BrowserContinuation]){
+  const make=host=>{
+   const sourceUrl='https://'+host+'/news/articles/crgj38le4dz9o';
+   const card={...article(1801,{now:NOW}),id:hash(sourceUrl).slice(0,24),identity:sourceUrl,sourceUrl,publisher:'BBC',
+    title:'Donegal: Pedestrian in his 40s dies in road crash',date:'2026-11-23T08:50:10.599Z',
+    attribution:'Source: BBC. Open the original publication.'};
+   card.contentHash=hash(cardContent(card));return card;
+  };
+  const first=make('www.bbc.com'),alternate=make('www.bbc.co.uk');
+  assert.ok(storyThreadKey(first));assert.equal(storyThreadKey(first),storyThreadKey(alternate));
+  const reading=actualReader([first],{Controller});
+  await reading.model.start(context);const prefix=[...reading.model.view().items],receipt=reading.model.editionFor(prefix[0].key);
+  assert.equal(prefix.length,1);assert.equal(prefix[0].story,undefined);
+  const refreshed={...alternate,observedAt:iso(NOW+2000)};refreshed.contentHash=hash(cardContent(refreshed));
+  reading.publish([refreshed],NOW+2000);await reading.model.start(context,true);
+  assert.equal(reading.model.view().error,null);assert.deepEqual(reading.model.view().items,prefix);
+  assert.strictEqual(reading.model.editionFor(prefix[0].key),receipt);
+  assert.equal(reading.model.view().activeReceivedCount,1);
+  reading.publish([first,alternate,article(1802,{now:NOW+4000})],NOW+4000);await reading.model.start(context,true);
+  assert.equal(reading.model.view().error,null);assert.equal(reading.model.view().items.length,2);
+  assert.deepEqual(reading.model.view().items.slice(0,1),prefix);
+  assert.equal(reading.model.view().items.filter(item=>item.card.title===first.title).length,1);
+ }
+});
+

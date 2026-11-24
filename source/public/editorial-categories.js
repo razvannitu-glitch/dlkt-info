@@ -190,7 +190,7 @@ const SPANISH_SUBJECTS = [
     ['travel', /\b(?:viajes?|turismo|turistas?|vuelos?|aerolineas?|aeropuertos?|aviacion|ferrocarriles?|trenes?|pasaportes?|visados?|cruceros?|transporte|carreteras?)\b/u],
     ['money', /\b(?:finanzas personales|costo de vida|coste de vida|presupuesto familiar|ahorros?|pensiones?|jubilacion|tarjetas de credito|precios al consumidor|impuesto sobre la renta)\b/u],
     ['technology', /\b(?:inteligencia artificial|tecnologia|software|semiconductores?|chips?|robotica|computacion cuantica|telefonos inteligentes|realidad virtual)\b/u],
-    ['business', /\b(?:economia|economico|empresas?|beneficios|ingresos|bolsa de valores|acciones|inversores?|inversiones?|inflacion|tipos de interes|aranceles|acuerdos comerciales|bancos?)\b/u],
+    ['business', /\b(?:economia|economico|empresas?|beneficios|ingresos|bolsa de valores|acciones bursatiles|acciones en bolsa|cotizacion de (?:las )?acciones|inversores?|inversiones?|inflacion|tipos de interes|aranceles|acuerdos comerciales|bancos?)\b/u],
     ['culture', /\b(?:cultura|artes|musica|musicos?|orquestas?|peliculas?|cine|actores?|actrices|television|museos?|patrimonio|festivales?|conciertos?|libros?|novelas?|teatro|exposiciones?)\b/u],
     ['world', /\b(?:guerra|alto el fuego|conflicto armado|invasion|misiles?|ataques? aereos?|ataques? con drones|diplomacia|diplomatic[oa]s?|cumbre bilateral|asuntos exteriores|humanitari[oa]s?|negociaciones de paz|sanciones|relaciones internacionales)\b/u],
     ['public-affairs', /\b(?:politica|elecciones|parlamento|senado|presidente|primer ministro|gobierno|alcalde|justicia|tribunal|leyes?|legislacion|votantes|democracia|derechos civiles|candidatos?|coalicion|manifestaciones?|protestas?)\b/u],
@@ -334,8 +334,17 @@ function educationInstitutionMerger(title) {
         && !ASTRONOMICAL_MERGER.test(title)
         && !FINANCIAL_DEVELOPMENT.test(title);
 }
+/** Preserve the AI acronym before case folding: Romanian "ai" alone is not technology evidence. */
+function subjectTitle(title) {
+    const raw = title.normalize('NFKC');
+    const explicitAi = /\bAI\b/u.test(raw) || /\b(?:generative|agentic|conversational) ai\b|\bai(?:[- ]powered| (?:models?|assistants?|chatbots?|tools?|systems?|agents?|software))\b/iu.test(raw);
+    return (explicitAi ? raw : raw.replace(/(?<!\p{L})ai(?!\p{L})/giu, ' ')).toLowerCase();
+}
 /** The same subject rules repair proven stale hints and classify newly discovered headlines. */
 function englishHeadlineSubject(title) {
+    // Role vacancies describe employment even when the employer is a science or technology institution.
+    if (/\b(?:job|staff|management) vacancies\b/u.test(title))
+        return 'work';
     const financial = FINANCIAL_DEVELOPMENT.test(title);
     const merger = /\b(?:mergers?|acquisitions?)\b/u.test(title) && !ASTRONOMICAL_MERGER.test(title);
     if (educationInstitutionMerger(title))
@@ -354,8 +363,18 @@ function englishHeadlineSubject(title) {
     return NEWS_SUBJECTS.find(([category, pattern]) => matchesSubject(category, pattern, title))?.[0] ?? null;
 }
 /** Only explicit contrary subjects invalidate existing discovery provenance. */
-export function contradictedHeadlineHints(title) {
-    const rejected = [];
+export function contradictedHeadlineHints(headline) {
+    const title = subjectTitle(headline), rejected = [];
+    // A previous lowercase ai match cannot keep a disproven technology hint alive.
+    if (/\bai\b/iu.test(headline) && !NEWS_SUBJECTS.some(([category, pattern]) => category === 'technology' && matchesSubject(category, pattern, title)))
+        rejected.push('technology');
+    // Spanish hostile actions are not shares; retained hints still require independent financial evidence.
+    if (/\bacciones hostiles\b/u.test(title)) {
+        const folded = title.normalize('NFKD').replace(/(\p{Script=Latin})\p{M}+/gu, '$1').normalize('NFC');
+        const financial = SPANISH_SUBJECTS.some(([category, pattern]) => category === 'business' && pattern.test(folded)) || englishHeadlineSubject(title) === 'business';
+        if (!financial)
+            rejected.push('business');
+    }
     // Do not let an earlier discovery label restore the same geographic bank false positive.
     if (/\bwest bank\b/u.test(title) && englishHeadlineSubject(title) !== 'business'
         && !NEWS_SUBJECTS.some(([category, pattern]) => category === 'business' && matchesSubject(category, pattern, title)))
@@ -383,7 +402,7 @@ export function classifyNewsHeadline(title, sourceUrl) {
     }
     if (url.protocol !== 'https:' || url.username || url.password || url.port)
         return null;
-    const normalized = title.normalize('NFKC').toLowerCase();
+    const normalized = subjectTitle(title);
     const localized = localizedNewsSubject(normalized, url);
     if (localized !== undefined)
         return localized;
@@ -425,10 +444,10 @@ const LEGACY = Object.freeze({
 export function classifyEditorialCard(card) {
     if (card.sourceIds.includes('news-unclassified'))
         return null;
-    const title = card.title.normalize('NFKC').toLowerCase();
+    const title = subjectTitle(card.title);
     const subjects = SUBJECTS.filter(([category, pattern]) => matchesSubject(category, pattern, title)).map(([category]) => category);
     const discovered = PUBLIC_EDITORIAL_CATEGORIES.filter(category => card.sourceIds.some(id => newsCategoryFromSourceId(id) === category));
-    const contradicted = contradictedHeadlineHints(title), hints = discovered.filter(category => !contradicted.includes(category));
+    const contradicted = contradictedHeadlineHints(card.title), hints = discovered.filter(category => !contradicted.includes(category));
     // Apply the shared semantic correction in the reading view as well, without
     // mutating original titles, IDs, hashes, provenance or saved preferences.
     if (!hints.length && (discovered.length > 0 || contradicted.some(category => category === card.topic))) {
@@ -462,7 +481,7 @@ export function editorialCategory(card) {
 /** Match corrected discovery hints without rewriting card identity or saved Topics. */
 export function editorialInterestTopic(card) {
     if (!card.sourceIds.includes('news-unclassified')) {
-        const contradicted = contradictedHeadlineHints(card.title.normalize('NFKC').toLowerCase());
+        const contradicted = contradictedHeadlineHints(card.title);
         if (contradicted.some(category => card.sourceIds.includes(`news-${category}`))) {
             const category = classifyEditorialCard(card)?.category;
             return category === undefined ? 'other' : EDITORIAL_CATEGORY_TOPICS[category];
