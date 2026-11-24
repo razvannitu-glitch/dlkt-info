@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {createServer} from 'node:http';
 import {existsSync,mkdtempSync,readFileSync,writeFileSync,mkdirSync,rmSync,statSync} from 'node:fs';
@@ -525,11 +526,26 @@ async function verifyNight(call,format,fixture,outputDir){
   const data=(await call('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false})).data;
   assert.ok(typeof data==='string'&&data.length>=1000,'night screenshot is present');
   const filename='dlkt-night-'+section+'-'+format.width+'.png';writeFileSync(join(outputDir,filename),Buffer.from(data,'base64'),{mode:0o600});screenshots.push(filename);
+  if(section==='top')await emitVisualPreview(call,'night-top',format.width);
  }
  await focusSelector(call,'#reader-theme-toggle');await keyboard(call,'Enter');
  assert.equal(await evaluate(call,'document.documentElement.dataset.readerTheme'),'prism','theme action restores day mode');
  await evaluate(call,'(()=>{window.scrollTo(0,0);return true;})()');
  return {contrast,screenshots};
+}
+
+/** Small fixture-only previews make visual review possible without downloading the ZIP.
+ * Full-resolution PNGs remain in the normal artifact. Four bounded JPEGs at most.
+ */
+async function emitVisualPreview(call,label,width){
+ const selected=(label==='top'&&[390,1440].includes(width))||(width===390&&['cards','night-top'].includes(label));
+ if(!selected)return;
+ const data=(await call('Page.captureScreenshot',{format:'jpeg',quality:72,fromSurface:true,captureBeyondViewport:false})).data;
+ if(typeof data!=='string'||data.length<1000||data.length>160000){console.log('DLKT_UI_VISUAL_SKIPPED',label,width);return;}
+ const bytes=Buffer.from(data,'base64'),sha256=createHash('sha256').update(bytes).digest('hex'),chunks=Math.ceil(data.length/4096);
+ console.log('DLKT_UI_VISUAL_BEGIN '+JSON.stringify({label,width,encoding:'base64',mimeType:'image/jpeg',bytes:bytes.length,sha256,chunks}));
+ for(let i=0;i<chunks;i++)console.log('DLKT_UI_VISUAL_CHUNK '+String(i+1).padStart(4,'0')+' '+data.slice(i*4096,(i+1)*4096));
+ console.log('DLKT_UI_VISUAL_END '+sha256);
 }
 
 async function run(){
@@ -593,10 +609,12 @@ async function run(){
    if(typeof image!=='string'||image.length<1000)throw Error('DLKT_UI_EMPTY_SCREENSHOT');
    const screenshot='dlkt-'+f.label+'-'+f.width+'.png';
    writeFileSync(join(outputDir,screenshot),Buffer.from(image,'base64'),{mode:0o600});
+   await emitVisualPreview(cdp,'top',f.width);
    await evaluate(cdp,"(()=>{document.querySelector('#discovery-cards article[data-news-stream-key]')?.scrollIntoView({block:'start'});return true;})()");
    const cardImage=(await cdp('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false})).data;
    assert.ok(typeof cardImage==='string'&&cardImage.length>=1000,'card screenshot is present');
    const cardScreenshot='dlkt-cards-'+f.label+'-'+f.width+'.png';writeFileSync(join(outputDir,cardScreenshot),Buffer.from(cardImage,'base64'),{mode:0o600});
+   await emitVisualPreview(cdp,'cards',f.width);
    try{
     const disclosures=await verifyDisclosures(cdp,f,fixture);
     const night=[390,1440].includes(f.width)?await verifyNight(cdp,f,fixture,outputDir):null;

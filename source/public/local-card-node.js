@@ -76,7 +76,8 @@ export function localCardNode(card, c, now = Date.now(), options = {}) {
     source.href = card.sourceUrl;
     source.target = '_blank';
     source.rel = 'noopener noreferrer';
-    body.append(source);
+    if (!compact)
+        body.append(source);
     if (localEventCalendar(card, c, now)) {
         const calendar = node('button', ro ? 'Adauga in calendar' : 'Add to calendar', 'text-button');
         calendar.type = 'button';
@@ -133,6 +134,12 @@ export function localCardNode(card, c, now = Date.now(), options = {}) {
     const photo = contextPhotoNode({ title: reading.title, sourceUrl: card.sourceUrl, editorialCategory: category }, now, card.kind === 'local-news' && card.news ? { id: card.news.id, revision: card.news.documentHash, cityId: c.id } : undefined);
     if (photo)
         a.append(photo);
-    a.append(body, details);
+    if (compact) {
+        const actions = node('div', '', 'local-utility-actions');
+        actions.append(source, details);
+        a.append(body, actions);
+    }
+    else
+        a.append(body, details);
     return a;
 }
