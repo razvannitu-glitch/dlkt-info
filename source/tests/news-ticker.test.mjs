@@ -12,10 +12,10 @@ test('ticker groups cover narrow and wide viewports at the same slow reading spe
 test('motion plans reject unmeasurable layouts and pathological copies',()=>{
  for(const [viewport,sequence] of [[0,100],[320,0],[-1,100],[Infinity,100],[320,NaN],[320,-1],[100000,1]])assert.equal(tickerGeometry(viewport,sequence),null);
 });
-test('validated publication ribbon retains an accessible static reading path and no manual ticker controls',()=>{
+test('ordinary headlines stay out of the reserved ribbon and source links retain a visible static reading path',()=>{
  const html=readFileSync('public/iceo.html','utf8');assert.match(html,/id="glance-ticker-track"[^>]*aria-hidden="true"/u);assert.match(html,/id="glance-read"[^>]*aria-controls="glance-list"/u);assert.doesNotMatch(html,/glance-(?:motion-)?pause|glance-motion-note|Pause moving updates|Resume moving updates/u);
  const ribbon=html.match(/<div id="glance-ribbon" class="glance-ribbon" hidden aria-hidden="true">([\s\S]*?)<p id="glance-screen-summary"/u)?.[1];assert.ok(ribbon);assert.doesNotMatch(ribbon,/<button|<input/iu);
- const controller=readFileSync('src/glance/browser.ts','utf8');assert.match(controller,/new NewsTicker/u);assert.match(controller,/ticker\.update\(tickerItems\)/u);
+ const controller=readFileSync('src/glance/browser.ts','utf8');assert.match(controller,/new NewsTicker/u);assert.match(controller,/ticker\.update\(\[\]\)/u);assert.match(controller,/ribbon\.hidden=true/u);assert.match(controller,/ribbon\.setAttribute\('aria-hidden','true'\)/u);
  const custom=html.match(/<dialog id="glance-customize"[\s\S]*?<\/dialog>/u)?.[0];assert.ok(custom);assert.doesNotMatch(custom,/Moving updates|\b(?:Pause|Resume|Play)\b/u);
  for(const id of ['glance-show-weather','glance-show-forex'])assert.match(custom,new RegExp(`id="${id}" type="checkbox"`));
  assert.doesNotMatch(readFileSync('public/iceo.css','utf8'),/\.glance-pause/u);
@@ -32,6 +32,10 @@ test('validated publication ribbon retains an accessible static reading path and
  assert.equal(findId('glance-news-sources',drawer.children).length,1);assert.equal(findId('glance-status',section.children).length,0,'technical source status does not create a third toolbar row');
  assert.equal(findId('glance-status',drawer.children).length,1,'source availability remains visible in the detail drawer');
  assert.equal(findId('glance-read')[0].attribs['aria-describedby'],'glance-status');
+ assert.ok(!findId('glance-read')[0].attribs.class.split(/\s+/u).includes('sr-only'),'the sources action itself is visible');
+ assert.ok(findId('glance-read')[0].attribs['aria-label'],'the icon action has a readable name');
+ assert.equal(findId('glance-read-label',heading.children).length,1,'localization does not replace the button icon');
+
  assert.equal(findId('glance-locate',heading.children).length,0,'redundant location toolbar action is absent');
  assert.equal(findId('glance-city',heading.children)[0].attribs['aria-controls'],'place-dialog');
  for(const id of ['glance-date','glance-city','reader-language','reader-theme-toggle'])assert.equal(findId(id,heading.children).length,1);
