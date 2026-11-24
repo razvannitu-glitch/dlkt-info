@@ -23,7 +23,8 @@ const sources=item=>[{kind:item.kind,card:item.card},...(item.story?.related??[]
 function localCorpus(now=NOW){
  const value=local(0,{now});
  return {city:structuredClone(city),snapshot:{articles:[structuredClone(localRow.original)],
-  sources:value.snapshot.sources.map(source=>({...source,count:source.sourceId===localRow.original.sourceId?1:0}))}};
+  sources:value.snapshot.sources.map(source=>({...source,count:source.sourceId===localRow.original.sourceId?1:0,
+   checkedAt:source.sourceId===localRow.original.sourceId?localRow.original.checkedAt:source.checkedAt}))}};
 }
 function differentIncident(original,index,from,to){
  const sourceUrl='https://www.dw.com/en/controlled-incident-'+index+'/a-'+(12700000+index);

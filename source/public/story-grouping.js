@@ -431,7 +431,6 @@ function disasterAidPledgeAnchor(card, title) {
     return { key: key('disaster-aid-pledge', donor, recipient, hazard, day, countries(card), card.summary === undefined ? '' : text(card.summary)),
         basis: 'shared-event', strong: false };
 }
-
 /** Identical checked BBC article editions retain their original URLs and metadata.
  * Observed in public corpus1589: www.bbc.com and www.bbc.co.uk /news/articles/
  * use the same explicit article ID, headline and publication time.
@@ -454,7 +453,6 @@ function reviewedArticleAnchor(card, title) {
         return null;
     }
 }
-/** Bounded Romanian incident threads. Missing details are never written into an original. */
 const ROMANIAN_OBSERVED_NAME = "\\p{Lu}[\\p{L}\\p{M}'’-]+(?:[ -]\\p{Lu}[\\p{L}\\p{M}'’-]+){1,3}";
 const ROMANIAN_OBSERVED_PLACE = "\\p{Lu}[\\p{L}\\p{M}'’-]+(?:[ -]\\p{Lu}[\\p{L}\\p{M}'’-]+){0,3}";
 const ROMANIAN_OBSERVED_UNCERTAIN = /\b(?:nu|nici|fals|falsa|zvon|zvonuri|neaga|dezminte|daca|ar|poate|posibil|posibila|urmeaza|va|vor|asteptat|asteptata|asteapta|retrospectiva|aniversare)\b/u;
@@ -568,7 +566,6 @@ function identifiedRomanianIncidentAnchor(card) {
     const incident = romanianObservedIncident(romanianIncidentRecord(card));
     return incident?.anchorKey ? { key: incident.anchorKey, basis: 'shared-event', strong: false } : null;
 }
-
 function anchor(card) {
     if (card.kind !== 'publication' || !card.title.trim() || card.title.length > 4000 || !Number.isFinite(Date.parse(card.date)))
         return null;
