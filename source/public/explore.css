@@ -15,7 +15,7 @@ body[data-world-explore=active] .reader-shell>section:not(#world-explore),body[d
 .world-search{position:relative}
 .world-search label,.world-filter-label{display:block;font-size:11px;line-height:1.5;font-weight:700;color:var(--muted);margin-bottom:6px}
 .world-search-field{display:flex;gap:8px}
-.world-search input,.world-filter-label select{width:100%;min-height:46px;border:1px solid var(--line);border-radius:6px;background:var(--white);color:var(--black);padding:10px 12px;font:inherit;font-size:15px;min-width:0}
+.world-search input,.world-filter-label select{width:100%;min-height:46px;border:1px solid var(--line);border-radius:6px;background:var(--white);color:var(--black);padding:10px 12px;font:inherit;font-size:16px;line-height:1.4;min-width:0}
 .world-search input:focus,.world-filter-label select:focus{outline:2px solid var(--coral);outline-offset:2px}
 .world-search-field input{flex:1}
 .world-search-field button{flex:0 0 auto}
@@ -27,9 +27,9 @@ body[data-world-explore=active] .reader-shell>section:not(#world-explore),body[d
 .world-search-status{font-size:12px;line-height:1.5;margin:7px 0 0;color:var(--muted)}
 .world-search-status:empty{display:none}
 .world-destinations{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0 18px}
-.world-destinations button{min-height:40px;padding:8px 11px;border:1px solid var(--line);border-radius:20px;background:var(--white);font-size:12px;color:var(--black);font-weight:600}
+.world-destinations button{min-height:44px;max-inline-size:100%;padding:10px 14px;line-height:1.4;white-space:normal;overflow-wrap:anywhere;border:1px solid var(--line);border-radius:20px;background:var(--white);font-size:12px;color:var(--black);font-weight:600}
 .world-destinations button[aria-pressed=true]{background:var(--black);color:var(--white);border-color:var(--black)}
-.world-filter-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.world-filter-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .world-filter-label{margin:0}.world-filter-label select{display:block;margin-top:6px;font-weight:500}
 .world-results-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin:24px 0 4px}
 .world-results-heading h2{font-size:25px;line-height:1.25;letter-spacing:-.7px;margin:0}
@@ -45,7 +45,7 @@ body[data-world-explore=active] .reader-shell>section:not(#world-explore),body[d
 .world-empty p{font-size:13px;color:var(--muted);line-height:1.65;margin:0 0 12px}
 .world-empty-actions{display:flex;gap:8px;flex-wrap:wrap}
 .world-coverage{border-top:1px solid var(--line);padding-top:16px;margin-top:24px;font-size:12px;line-height:1.65;color:var(--muted)}
-.world-coverage summary{cursor:pointer;min-height:36px;font-weight:600;color:var(--black)}
+.world-coverage summary{cursor:pointer;min-height:44px;padding:12px 0;font-weight:600;line-height:1.5;overflow-wrap:anywhere;color:var(--black)}
 .world-copy-status{margin:5px 0 12px;font-size:12px;color:var(--muted);line-height:1.5}
 .world-copy-status:empty{display:none}
 @media(max-width:700px){#world-cards{grid-template-columns:1fr}.world-launch{padding:14px;gap:10px}.world-launch p{font-size:12px}.world-launch button{font-size:12px;padding:10px}.world-explore-heading h1{letter-spacing:-1px}.world-controls{padding:14px}.world-results-heading h2{font-size:23px}}
