@@ -66,3 +66,7 @@ Existing tests already cover the user's three Iranian-singer originals and prese
 ## Shared account surfaces
 
 The official account baseline was also inspected: main and `.controls` extended from x0 to1363px, including the email field. Account and Wallet omitted the existing appearance bootstrap and final palette. Both now reuse `/reader-theme.js` before CSS and `/reader-theme.css` last, preserving the explicit saved appearance without adding another storage key or authentication behavior. The account gets bounded form width and responsive gutters. Scope includes `source/public/wallet.html` for this shared theme inclusion only.
+
+## Initial verification and corrected contracts
+
+Generation at `ead18c27e2e5e3ec45f275d2c460a1c865483bb0` passed strict TypeScript, 52 packaging tests and 2433 of2436 application tests. Three failures identified stale visual test contracts: the palette token regex read the beginning of `#account` as `#acc`, the authorized shared CSS fingerprint had changed, and Wallet's exact stylesheet list needed the existing reader theme. The fixes retain the palette whitelist and add a negative case for a genuinely new color, update only the independently recalculated CSS fingerprint, and explicitly require synchronous appearance bootstrap plus final stylesheet order. Auth, privacy, Kate and header checks remain intact. A new generation run follows these demonstrated fixes.
