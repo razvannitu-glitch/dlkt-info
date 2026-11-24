@@ -14,7 +14,7 @@ export function setupGlance() {
     const root = get('today-glance'), custom = get('glance-customize'), detail = get('glance-detail'), body = get('glance-detail-body'), status = get('glance-status'), refresh = get('glance-refresh');
     const list = get('glance-list'), read = get('glance-read');
     let detailReturn = null;
-    // Verified news and local information use a non-alert scrolling ribbon.
+    // The reserved ribbon stays empty; ordinary source links use the context dialog.
     const ticker = new NewsTicker(root, kind => { if (kind === 'key') {
         if (!list.open)
             list.showModal();
@@ -110,18 +110,18 @@ export function setupGlance() {
         forexQuick.textContent = n !== undefined ? '1 € = ' + new Intl.NumberFormat(locale, { maximumFractionDigits: 4 }).format(n) + ' ' + q : '';
         forexQuick.title = get('glance-forex-note').textContent ?? '';
         forexQuick.setAttribute('aria-label', forexQuick.textContent + ' · ' + forexQuick.title);
-        read.textContent = locale === 'ro' ? 'Surse si preferinte' : locale === 'it' ? 'Fonti e preferenze' : 'Sources and preferences';
+        get('glance-read-label').textContent = locale === 'ro' ? 'Surse si preferinte' : locale === 'it' ? 'Fonti e preferenze' : 'Sources and preferences';
         read.setAttribute('aria-label', locale === 'ro' ? 'Informatii, surse si setari' : locale === 'it' ? 'Informazioni, fonti e impostazioni' : 'Information, sources and settings');
-        // Local reports first, then verified publisher metadata; no synthetic or stale headlines.
-        const tickerItems = [];
+        read.title = read.getAttribute('aria-label') ?? '';
+        // Source links remain available in the context dialog. Ordinary reports are
+        // read once in the main feed, not repeated in a moving announcement band.
         const seenSources = new Set();
         const newsLinks = get('glance-news-sources');
         newsLinks.replaceChildren();
-        function addNews(title, publisher, url, note) {
-            if (seenSources.has(url) || tickerItems.length >= 12)
+        function addNews(title, publisher, url) {
+            if (seenSources.has(url) || seenSources.size >= 12)
                 return;
             seenSources.add(url);
-            tickerItems.push({ signal: 'key', label: publisher, value: title, note });
             const anchor = link(title, url);
             anchor.classList.add('glance-news-link');
             anchor.setAttribute('aria-label', publisher + ': ' + title);
@@ -129,24 +129,18 @@ export function setupGlance() {
         }
         for (const card of selectHomeLanguage(local, city, now, locale).cards)
             if (card.kind === 'local-news') {
-                addNews(card.title, card.publisher, card.sourceUrl, 'Local · source checked ' + date(card.checkedAt));
+                addNews(card.title, card.publisher, card.sourceUrl);
             }
         for (const publication of snapshot?.publications ?? []) {
             if (!eligiblePublication(publication, now) || !newsLanguageMatches(sourceLanguage(publication), locale))
                 continue;
-            addNews(publication.title, publication.publisher, publication.sourceUrl, 'Published ' + date(publication.date));
+            addNews(publication.title, publication.publisher, publication.sourceUrl);
         }
         newsLinks.hidden = newsLinks.childElementCount === 0;
-        if (tickerItems.length === 0) {
-            if (preferences.weather && forecast && range && city)
-                tickerItems.push({ signal: 'weather', label: city.name + ' · Weather', value: range, note: 'MET Norway · forecast' });
-            if (preferences.forex && n !== undefined && fx)
-                tickerItems.push({ signal: 'forex', label: 'ECB reference', value: '1 EUR = ' + new Intl.NumberFormat(locale, { maximumFractionDigits: 4 }).format(n) + ' ' + q, note: date(fx.date) });
-        }
         const ribbon = get('glance-ribbon');
-        ribbon.hidden = tickerItems.length === 0;
-        ribbon.setAttribute('aria-hidden', String(tickerItems.length === 0));
-        ticker.update(tickerItems);
+        ribbon.hidden = true;
+        ribbon.setAttribute('aria-hidden', 'true');
+        ticker.update([]);
         get('glance-empty').hidden = preferences.weather || preferences.forex;
         refresh.disabled = busy || localBusy;
         if (detail.open)

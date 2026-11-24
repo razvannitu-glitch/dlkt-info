@@ -1313,6 +1313,8 @@ function renderDiscovery() {
     if (recentOption)
         recentOption.textContent = language === 'ro' ? 'Recent' : language === 'it' ? 'Recenti' : 'Recent';
     periodPicker.value = newsPeriod;
+    required('#home-news-options-label').textContent = language === 'ro' ? 'Filtre' : language === 'it' ? 'Filtri' : 'Filters';
+    required('#home-news-options-period').textContent = (newsPeriod === 'today' ? todayOption : recentOption)?.textContent ?? '';
     const day = server.page?.day, dayNote = required('#home-news-day');
     dayNote.textContent = day
         ? new Intl.DateTimeFormat(language, { day: 'numeric', month: 'long', year: 'numeric', timeZone: day.timeZone }).format(new Date(day.start)) + ' · ' + day.timeZone
@@ -1482,13 +1484,30 @@ function renderDiscovery() {
         label.append(make('h2', '', contextualCity ? tr('todayLocalTitle', { city: contextualCity.name }) : tr('navMyCity')));
         supportHost.append(label);
     }
-    for (const item of local.supporting) {
-        if (!contextualCity)
-            break;
-        const node = localCardNode(item, contextualCity, now);
-        node.dataset.homeLocalId = item.id;
-        node.dataset.cityId = contextualCity.id;
-        supportHost.append(node);
+    if (contextualCity) {
+        const localCity = contextualCity;
+        const remainingLocal = local.supporting.slice(2);
+        const more = make('details', 'home-local-more');
+        more.id = 'home-local-more';
+        more.dataset.liveSignature = JSON.stringify([language, remainingLocal]);
+        more.open = support.querySelector('#home-local-more')?.open ?? false;
+        const moreLabel = language === 'ro' ? 'Mai multe informatii locale' : language === 'it' ? 'Altre informazioni locali' : 'More local information';
+        more.append(make('summary', '', moreLabel + ' · ' + new Intl.NumberFormat(language).format(remainingLocal.length)));
+        const moreGrid = make('div', 'home-local-more-grid');
+        local.supporting.forEach((item, index) => {
+            const node = localCardNode(item, localCity, now, { compact: true });
+            node.dataset.homeLocalId = item.id;
+            node.dataset.cityId = localCity.id;
+            node.dataset.liveSignature = JSON.stringify([language, item]);
+            if (index < 2)
+                supportHost.append(node);
+            else
+                moreGrid.append(node);
+        });
+        if (remainingLocal.length) {
+            more.append(moreGrid);
+            supportHost.append(more);
+        }
     }
     if (contextualCity && !suppressLocalPending)
         extrasHost.append(commercialCardNode({ city: contextualCity.name, country: countryLabel(contextualCity.countryCode, contextualCity.country) }, language));
@@ -1652,6 +1671,23 @@ required('#discovery').addEventListener('change', event => {
     renderDiscovery();
     if (restoreFocus)
         required('#home-news-category').focus({ preventScroll: true });
+});
+// The native disclosure is a non-modal filter panel; Escape restores its trigger.
+const newsOptions = required('#home-news-options');
+document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape' || !newsOptions.open)
+        return;
+    event.preventDefault();
+    newsOptions.open = false;
+    required('#home-news-options-toggle').focus();
+});
+document.addEventListener('pointerdown', event => {
+    if (newsOptions.open && event.target instanceof Node && !newsOptions.contains(event.target))
+        newsOptions.open = false;
+});
+document.addEventListener('focusin', event => {
+    if (newsOptions.open && event.target instanceof Node && !newsOptions.contains(event.target))
+        newsOptions.open = false;
 });
 required('#home-news-source-scope').addEventListener('click', () => { newsSourceScope = newsSourceScope === 'all' ? 'edition' : 'all'; renderDiscovery(); });
 required('#home-news-english').addEventListener('click', () => { newsSourceScope = 'edition'; const picker = required('#reader-language'); picker.value = 'en'; picker.dispatchEvent(new Event('change', { bubbles: true })); renderDiscovery(); required('#home-news-category').focus(); });
