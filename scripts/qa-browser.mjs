@@ -20,6 +20,7 @@ const formats=[
  {width:360,height:800,label:'mobile-360',mobile:true},
  {width:390,height:844,label:'mobile',mobile:true},
  {width:430,height:932,label:'mobile-430',mobile:true},
+ {width:440,height:956,label:'mobile-440-dpr3',mobile:true,dpr:3},
  {width:768,height:1024,label:'tablet',mobile:false},
  {width:1440,height:900,label:'desktop',mobile:false},
 ];
@@ -333,6 +334,7 @@ function assertFullTitle(title,label){
  assert.notEqual(title.overflow,'ellipsis',label+' must not use ellipsis');
 }
 function assertReadingLayout(measured,format,fixture,{compact=true}={}){
+ assertReadingDetails(measured,format);
  for(const title of measured.titles)assertFullTitle(title,'editorial title '+title.id+' at '+format.width+'px');
  assert.deepEqual(measured.localIds,fixture.localIds,'both real local fixture cards are present in homepage order');
  for(const expected of fixture.localExpected){
@@ -365,8 +367,88 @@ function expectedReader(fixture){
  return {city:fixture.city,estimatedCity:fixture.estimatedCity,groupKey:fixture.groupKey,urls:fixture.urls,titles:fixture.titles,sourceOnly:fixture.sourceOnly,localExpected:fixture.localExpected};
 }
 async function measureReader(call,fixture){
- return evaluate(call,'('+readerProbe.toString()+')('+JSON.stringify(expectedReader(fixture))+')');
+ const measured=await evaluate(call,'('+readerProbe.toString()+')('+JSON.stringify(expectedReader(fixture))+')');
+ measured.details=await evaluate(call,'('+readingDetailProbe.toString()+')()');return measured;
 }
+/** CSS-pixel geometry: DPR changes raster density, not this padding contract. */
+function readingDetailProbe(){
+ const visible=node=>{
+  if(!node||node.getClientRects().length===0||getComputedStyle(node).visibility==='hidden'||getComputedStyle(node).display==='none')return false;
+  // Closed details can retain layout boxes for descendants that are not painted.
+  // Only their first summary is visible; expanded evidence is still measured.
+  for(let parent=node.parentElement;parent;parent=parent.parentElement){
+   if(parent.tagName==='DETAILS'&&!parent.open){
+    const summary=[...parent.children].find(child=>child.tagName==='SUMMARY');
+    if(!summary?.contains(node))return false;
+   }
+  }
+  return true;
+ };
+ const rect=node=>{const r=node.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height};};
+ const painted=node=>{
+  const range=document.createRange();range.selectNodeContents(node);const text=range.getBoundingClientRect(),box=rect(node),style=getComputedStyle(node);
+  let fits=text.left>=box.left-1&&text.right<=box.right+1&&text.top>=box.top-1&&text.bottom<=box.bottom+1;
+  for(let parent=node.parentElement;parent&&parent!==document.body;parent=parent.parentElement){
+   const parentStyle=getComputedStyle(parent),bound=rect(parent);
+   if(['hidden','clip'].includes(parentStyle.overflowX))fits&&=text.left>=bound.left-1&&text.right<=bound.right+1;
+   if(['hidden','clip'].includes(parentStyle.overflowY))fits&&=text.top>=bound.top-1&&text.bottom<=bound.bottom+1;
+  }
+  return {text:node.textContent?.trim()??'',fits,clamp:style.webkitLineClamp,overflow:style.textOverflow,
+   insetLeft:text.left-box.left,insetRight:box.right-text.right,insetTop:text.top-box.top,insetBottom:box.bottom-text.bottom,...box};
+ };
+ const badges=[...document.querySelectorAll('#discovery-cards .card-topic,#home-local-cards .card-topic')].filter(visible).map(node=>{
+  const style=getComputedStyle(node),background=style.backgroundColor;
+  return {card:node.closest('article')?.dataset.cardId??node.closest('article')?.dataset.localId??'',
+   news:Boolean(node.closest('article[data-news-stream-key]')),photoUnavailable:Boolean(node.closest('.photo-unavailable')),filled:background!=='transparent'&&background!=='rgba(0, 0, 0, 0)',
+   background,paddingInlineStart:parseFloat(style.paddingInlineStart),paddingInlineEnd:parseFloat(style.paddingInlineEnd),
+   paddingBlockStart:parseFloat(style.paddingBlockStart),paddingBlockEnd:parseFloat(style.paddingBlockEnd),...painted(node)};
+ });
+ const actions=[...document.querySelectorAll('#discovery-cards .card-actions>.source-link,#home-local-cards .source-link')].filter(visible).map(node=>({
+  card:node.closest('article')?.dataset.cardId??node.closest('article')?.dataset.localId??'',...painted(node)}));
+ return {viewport:innerWidth,devicePixelRatio,visualScale:visualViewport?.scale??null,badges,actions};
+}
+function assertReadingDetails(measured,format,{requireFallback=false}={}){
+ const details=measured.details;assert.ok(details.badges.length>=fixtureMinimumBadges,'category labels are actually measured');
+ assert.ok(details.actions.length>=7,'source actions are actually measured');
+ for(const badge of details.badges){
+  assert.equal(badge.fits,true,'complete category text stays inside its painted surface: '+JSON.stringify(badge));
+  assert.ok(['','none','0','normal'].includes(badge.clamp));assert.notEqual(badge.overflow,'ellipsis');
+  if(badge.filled||badge.photoUnavailable){
+   assert.ok(badge.paddingInlineStart>=8&&badge.paddingInlineEnd>=8&&badge.paddingBlockStart>=4&&badge.paddingBlockEnd>=4,
+    'filled category badges retain inner spacing, including unavailable photos: '+JSON.stringify(badge));
+   assert.ok(badge.insetLeft>=7&&badge.insetRight>=7&&badge.insetTop>=3&&badge.insetBottom>=3,
+    'category glyphs remain inset from all four surface edges: '+JSON.stringify(badge));
+  }
+ }
+ if(requireFallback){
+  assert.ok(details.badges.some(value=>value.photoUnavailable),'the actual failed-photo layout is exercised');
+  assert.ok(details.badges.some(value=>value.news&&value.text.length>=18),'a long editorial category label is actually exercised');
+ }
+ for(const action of details.actions){
+  assert.equal(action.fits,true,'the full source CTA text fits its wrapping control: '+JSON.stringify(action));
+  assert.ok(['','none','0','normal'].includes(action.clamp));assert.notEqual(action.overflow,'ellipsis');
+  assert.ok(action.width>=43.5&&action.height>=43.5&&action.left>=-1&&action.right<=format.width+1,'source action remains a 44px target inside the CSS viewport');
+ }
+ if(format.dpr===3){
+  assert.equal(details.devicePixelRatio,3,'the 440px scenario actually uses DPR 3');
+  assert.ok(details.visualScale!==null&&Math.abs(details.visualScale-1)<.01,'DPR 3 is measured at normal visual scale, not claimed as zoom');
+ }
+}
+const fixtureMinimumBadges=7;
+/** Trigger the real lazy-image failure path, without replacing card DOM or records. */
+async function settleFixturePhotos(call){
+ const count=await evaluate(call,"document.querySelectorAll('#discovery-cards img[data-article-photo]').length");
+ assert.ok(count>0&&count<=9,'bounded fixture contains normal article-photo requests');
+ for(let index=0;index<count;index++){
+  await evaluate(call,'(()=>{document.querySelectorAll("#discovery-cards img[data-article-photo]")['+index+']?.scrollIntoView({block:"center"});return true;})()');
+  for(let attempt=0;attempt<30;attempt++){
+   const settled=await evaluate(call,'(()=>{const n=document.querySelectorAll("#discovery-cards img[data-article-photo]")['+index+'];return !n||n.complete||n.closest(".card-photo")?.dataset.photoFailed==="true";})()');
+   if(settled)break;if(attempt===29)throw Error('DLKT_QA_PHOTO_FALLBACK_TIMEOUT');await pause(50);
+  }
+ }
+ await evaluate(call,'(()=>{window.scrollTo(0,0);return true;})()');
+}
+
 async function keyboard(call,key){
  const code={Enter:13,Escape:27,Tab:9}[key];assert.ok(code,'only the tested keyboard actions are used');
  await call('Input.dispatchKeyEvent',{type:'keyDown',key,code:key,windowsVirtualKeyCode:code,...(key==='Enter'?{text:'\r',unmodifiedText:'\r'}:{})});
@@ -548,6 +630,109 @@ async function emitVisualPreview(call,label,width){
  console.log('DLKT_UI_VISUAL_END '+sha256);
 }
 
+/** Shared bounded control measurements for Explore and the anonymous account shell. */
+function surfaceProbe(rootSelector,fieldSelector,controlSelector='a[href],button,input,select,textarea,summary'){
+ const visible=node=>Boolean(node)&&node.getClientRects().length>0&&getComputedStyle(node).display!=='none'&&getComputedStyle(node).visibility!=='hidden';
+ const box=node=>{const r=node.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height};};
+ const textFits=node=>{
+  if(['INPUT','SELECT','TEXTAREA'].includes(node.tagName)||!node.textContent?.trim())return true;
+  const r=document.createRange();r.selectNodeContents(node);const t=r.getBoundingClientRect(),b=box(node),s=getComputedStyle(node);
+  return t.left>=b.left-1&&t.right<=b.right+1&&t.top>=b.top-1&&t.bottom<=b.bottom+1&&['','none','0','normal'].includes(s.webkitLineClamp)&&s.textOverflow!=='ellipsis';
+ };
+ const root=document.querySelector(rootSelector),style=root?getComputedStyle(root):null;
+ return {found:visible(root),root:root?box(root):null,documentWidth:document.documentElement.scrollWidth,viewport:innerWidth,
+  contentLeft:root?box(root).left+parseFloat(style.paddingLeft):null,contentRight:root?box(root).right-parseFloat(style.paddingRight):null,
+  controls:[...(root?.querySelectorAll(controlSelector)??[])].filter(visible).map(node=>({id:node.id||node.className,tag:node.tagName,text:node.textContent?.trim().slice(0,100)??'',textFits:textFits(node),...box(node)})),
+  fields:[...document.querySelectorAll(fieldSelector)].filter(visible).map(node=>({id:node.id,fontSize:parseFloat(getComputedStyle(node).fontSize),...box(node)})),
+  headings:[...(root?.querySelectorAll('h1,h2,h3')??[])].filter(visible).map(node=>({text:node.textContent,textFits:textFits(node)}))};
+}
+function assertSurface(measured,format,label){
+ assert.equal(measured.found,true,label+' is visible');assert.ok(measured.documentWidth<=format.width+2,label+' does not introduce horizontal document scrolling');
+ assert.ok(measured.root.left>=-1&&measured.root.right<=format.width+1,label+' fits the CSS viewport');
+ for(const control of measured.controls)assert.ok(control.width>=43.5&&control.height>=43.5&&control.left>=-1&&control.right<=format.width+1&&control.textFits,
+  label+' control keeps its full label and 44px target: '+JSON.stringify(control));
+ for(const field of measured.fields)assert.ok(field.fontSize>=16&&field.width>=43.5&&field.height>=43.5,label+' fields use at least 16px text and 44px targets: '+JSON.stringify(field));
+ for(const heading of measured.headings)assert.equal(heading.textFits,true,label+' heading is complete: '+heading.text);
+}
+async function verifyExploreSurface(call,format,fixture){
+ await focusSelector(call,'#world-open');await keyboard(call,'Enter');
+ assert.equal(await evaluate(call,"document.getElementById('world-explore').hidden"),false,'Explore opens using its real action');
+ const measured=await evaluate(call,'('+surfaceProbe.toString()+')("#world-explore","#world-city-query,#world-country,#world-category",".world-controls button,.world-controls input,.world-controls select,.world-explore-top button,#world-refresh,#world-more,.world-coverage>summary,#world-empty button")');
+ assertSurface(measured,format,'Explore');assert.equal(measured.fields.length,3,'all three Explore fields are measured');
+ await focusSelector(call,'#world-back');await keyboard(call,'Enter');
+ assert.equal(await evaluate(call,"document.getElementById('world-explore').hidden"),true,'Explore returns to the existing reader');
+ assert.equal(await evaluate(call,'document.activeElement?.id'),'world-open','Explore restores its launch action');
+ await evaluate(call,'(()=>{window.scrollTo(0,0);return true;})()');
+ assertReaderGeometry(await measureReader(call,fixture),format,fixture);return measured;
+}
+/** Test-only font-size doubling; explicitly not browser zoom or Safari text autosizing. */
+function startTypographyStress(){
+ if(window.__dlktQaTypography)throw Error('DLKT_QA_TYPOGRAPHY_ALREADY_ACTIVE');
+ const nodes=[...document.querySelectorAll('body *')].filter(node=>node instanceof HTMLElement
+  &&!['SCRIPT','STYLE','NOSCRIPT'].includes(node.tagName)
+  &&(['INPUT','SELECT','TEXTAREA','BUTTON','SUMMARY'].includes(node.tagName)||[...node.childNodes].some(child=>child.nodeType===Node.TEXT_NODE&&child.textContent?.trim())));
+ const saved=nodes.map(node=>({node,fontValue:node.style.getPropertyValue('font-size'),fontPriority:node.style.getPropertyPriority('font-size'),font:parseFloat(getComputedStyle(node).fontSize)})).filter(row=>Number.isFinite(row.font)&&row.font>0);
+ if(saved.length<20||saved.length>5000)throw Error('DLKT_QA_TYPOGRAPHY_SCOPE_INVALID');
+ window.__dlktQaTypography=saved;
+ for(const row of saved)row.node.style.setProperty('font-size',String(row.font*2)+'px','important');
+ const samples=saved.filter(row=>row.node.matches('#discovery-cards h3 a,#discovery-cards .card-topic,#discovery-cards .source-link,#world-city-query,#home-news-category')).map(row=>({
+  tag:row.node.tagName,id:row.node.id||row.node.className,before:row.font,after:parseFloat(getComputedStyle(row.node).fontSize)}));
+ return {mode:'computed-font-size-times-two',nativeBrowserZoom:false,elementCount:saved.length,samples,devicePixelRatio,visualScale:visualViewport?.scale??null};
+}
+function restoreTypographyStress(){
+ const saved=window.__dlktQaTypography;if(!Array.isArray(saved))return false;
+ for(const row of saved){if(row.fontValue==='')row.node.style.removeProperty('font-size');else row.node.style.setProperty('font-size',row.fontValue,row.fontPriority);}
+ delete window.__dlktQaTypography;return true;
+}
+async function verifyTypographyStress(call,format,fixture,outputDir){
+ const scale=await evaluate(call,'('+startTypographyStress.toString()+')()');
+ try{
+  assert.ok(scale.samples.length>=8,'font stress reaches actual headlines, badges and actions');
+  for(const sample of scale.samples)assert.ok(Math.abs(sample.after-sample.before*2)<.02,'the requested text-size stress was applied: '+JSON.stringify(sample));
+  assert.equal(scale.devicePixelRatio,3);assert.ok(scale.visualScale!==null&&Math.abs(scale.visualScale-1)<.01);
+  await evaluate(call,'(()=>{window.scrollTo(0,0);return true;})()');
+  const measured=await measureReader(call,fixture);
+  assertReaderGeometry(measured,format,fixture);
+  // Density budgets belong to the normal layout. Enlarged text may grow vertically.
+  assertReadingLayout(measured,format,fixture,{compact:false});
+  assertReadingDetails(measured,format,{requireFallback:true});
+  const navigation=await verifyNavigation(call,format);
+  const explore=await verifyExploreSurface(call,format,fixture);
+  const disclosures=await verifyDisclosures(call,format,fixture);
+  await evaluate(call,"(()=>{document.querySelector('#discovery-cards .photo-unavailable')?.scrollIntoView({block:'center'});return true;})()");
+  const data=(await call('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false})).data;
+  assert.ok(typeof data==='string'&&data.length>=1000);
+  const screenshot='dlkt-typography-200-percent-440-dpr3.png';writeFileSync(join(outputDir,screenshot),Buffer.from(data,'base64'),{mode:0o600});
+  return {scale,measured,navigation,explore,disclosures,screenshot};
+ }finally{
+  assert.equal(await evaluate(call,'('+restoreTypographyStress.toString()+')()'),true,'the test-only typography override is removed');
+  await evaluate(call,'(()=>{window.scrollTo(0,0);return true;})()');
+ }
+}
+async function verifyAccountSurfaces(call,origin,outputDir){
+ // Establish the preference using the production toggle, before leaving the reader.
+ await focusSelector(call,'#reader-theme-toggle');await keyboard(call,'Enter');
+ const expected=await evaluate(call,'('+contrastProbe.toString()+')()');assert.equal(expected.theme,'night');
+ const observations=[];
+ for(const format of [{width:320,height:750,mobile:true},{width:1440,height:900,mobile:false}]){
+  await call('Emulation.setDeviceMetricsOverride',{width:format.width,height:format.height,deviceScaleFactor:1,mobile:format.mobile,scale:1});
+  await call('Page.navigate',{url:origin+'/account'});await loaded(call);await pause(150);
+  const measured=await evaluate(call,'('+surfaceProbe.toString()+')("main.account-page","#account-email,#account-otp")');
+  assertSurface(measured,format,'anonymous account shell');
+  assert.ok(measured.root.width<=1122,'account container has a bounded reading width');
+  assert.ok(measured.contentLeft>=15&&measured.contentRight<=format.width-15,'account content keeps its responsive side gutters');
+  assert.ok(measured.controls.length>=2,'visible anonymous account controls are actually measured');
+  assert.equal(await evaluate(call,"document.getElementById('account-data').hidden"),true,'offline account data remains inaccessible');
+  const actual=await evaluate(call,'('+contrastProbe.toString()+')()');assert.equal(actual.theme,'night','account bootstrap restores the stored Night preference');
+  assert.deepEqual(actual.page,expected.page,'account uses the actual computed Night page background');
+  const data=(await call('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false})).data;
+  assert.ok(typeof data==='string'&&data.length>=1000);
+  const screenshot='dlkt-account-night-'+format.width+'.png';writeFileSync(join(outputDir,screenshot),Buffer.from(data,'base64'),{mode:0o600});
+  observations.push({viewport:format.width,theme:actual.theme,background:actual.page,measured,screenshot,scope:'unavailable anonymous fixture; no login, OTP or private account data exercised'});
+ }
+ return observations;
+}
+
 async function run(){
  if(typeof WebSocket!=='function')throw Error('DLKT_UI_NODE_WEBSOCKET_UNAVAILABLE');
  const bin=process.env.DLKT_CHROME_BIN??'/usr/bin/google-chrome';
@@ -579,17 +764,18 @@ async function run(){
   const observations=[];
   for(const f of formats){
    const previousLocalRequests=fixture.localRequests;
-   await cdp('Emulation.setDeviceMetricsOverride',{width:f.width,height:f.height,deviceScaleFactor:1,mobile:f.mobile,scale:1});
+   await cdp('Emulation.setDeviceMetricsOverride',{width:f.width,height:f.height,deviceScaleFactor:f.dpr??1,mobile:f.mobile,scale:1});
    await cdp('Page.navigate',{url:'http://'+HOST+':'+binding.port+'/'});
    await loaded(cdp);await pause(400);
    await selectControlledEdition(cdp,fixture);
+   if(f.width===440)await settleFixturePhotos(cdp);
    assert.ok(fixture.localRequests>previousLocalRequests,'each page loads the local fixture through the actual API path');
    await evaluate(cdp,'(()=>{window.scrollTo(0,0);return true;})()');
    const news=await measureReader(cdp,fixture);
    await emitVisualPreview(cdp,'top',f.width);
    writeFileSync(join(outputDir,'measured-'+f.width+'.json'),JSON.stringify(news,null,2)+'\n',{mode:0o600});
-   try{assertReaderGeometry(news,f,fixture);assertReadingLayout(news,f,fixture);}catch(error){
-    console.error('DLKT_READER_GEOMETRY_FAILURE',JSON.stringify({viewport:f.width,date:news.date,city:news.city,country:news.country,expectedCountry:news.expectedCountry,cityComplete:news.cityComplete,countryComplete:news.countryComplete,cityButton:news.cityButton,firstUsefulTop:news.firstUsefulTop,firstEditorialTop:news.firstEditorialTop,layout:news.layout,controls:news.controls.filter(c=>c.width<43.5||c.height<43.5),titles:news.titles.filter(t=>!t.fits),local:news.local}));
+   try{assertReaderGeometry(news,f,fixture);assertReadingLayout(news,f,fixture);if(f.width===440)assertReadingDetails(news,f,{requireFallback:true});}catch(error){
+    console.error('DLKT_READER_GEOMETRY_FAILURE',JSON.stringify({viewport:f.width,date:news.date,city:news.city,country:news.country,expectedCountry:news.expectedCountry,cityComplete:news.cityComplete,countryComplete:news.countryComplete,cityButton:news.cityButton,firstUsefulTop:news.firstUsefulTop,firstEditorialTop:news.firstEditorialTop,layout:news.layout,controls:news.controls.filter(c=>c.width<43.5||c.height<43.5),titles:news.titles.filter(t=>!t.fits),local:news.local,details:news.details}));
     const failedImage=(await cdp('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false})).data;
     if(typeof failedImage==='string')writeFileSync(join(outputDir,'failed-'+f.width+'.png'),Buffer.from(failedImage,'base64'),{mode:0o600});
     throw error;
@@ -618,7 +804,9 @@ async function run(){
    try{
     const disclosures=await verifyDisclosures(cdp,f,fixture);
     const night=[390,1440].includes(f.width)?await verifyNight(cdp,f,fixture,outputDir):null;
-    observations.push({viewport:f.width,documentWidth:m.scroll,menuTested:navigation.compact,brandVisible:true,reducedMotion:true,screenshot,cardScreenshot,news,navigation,disclosures,night});
+    const explore=f.width===440?await verifyExploreSurface(cdp,f,fixture):null;
+    const typography=f.width===440?await verifyTypographyStress(cdp,f,fixture,outputDir):null;
+    observations.push({viewport:f.width,devicePixelRatio:f.dpr??1,visualScale:news.details.visualScale,documentWidth:m.scroll,menuTested:navigation.compact,brandVisible:true,reducedMotion:true,screenshot,cardScreenshot,news,navigation,disclosures,night,explore,typography});
    }catch(error){
     try{
      const failedImage=(await cdp('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false})).data;
@@ -627,11 +815,14 @@ async function run(){
     throw error;
    }
   }
-  const result={version:'dlkt-info-offline-browser-smoke-2',status:'OFFLINE_BROWSER_PASS',
-   scope:'local-built-reader-with-controlled-news-and-local-corpus',viewports:observations,fixture:{storyCount:fixture.storyCount,articleTotal:fixture.articleTotal,groupOriginals:fixture.urls.length,sourceOnlyOriginals:fixture.sourceOnly.length,localCards:fixture.localIds.length,localContract:'currentLocalSnapshot'},
+  const account=await verifyAccountSurfaces(cdp,'http://'+HOST+':'+binding.port,outputDir);
+  const result={version:'dlkt-info-offline-browser-smoke-3',status:'OFFLINE_BROWSER_PASS',
+   scope:'local-built-reader-with-controlled-news-and-local-corpus',viewports:observations,account,fixture:{storyCount:fixture.storyCount,articleTotal:fixture.articleTotal,groupOriginals:fixture.urls.length,sourceOnlyOriginals:fixture.sourceOnly.length,localCards:fixture.localIds.length,localContract:'currentLocalSnapshot'},
    limitations:['News pages use the actual service over controlled corpus fixtures; no external publisher request, authenticated user, payment or production runtime availability is tested.',
     'The three grouped publisher headlines and four reviewed-source originals reproduce observed metadata; source-check and publication dates are controlled fixtures.',
     'Local weather and CMTEB records are synthetic controlled fixtures validated by the actual city/source contracts, not live operator or forecast checks.',
+    'The 440px DPR 3 scenario is Chrome at visual scale 1. Font-size doubling is a test-only typography stress, not physical Safari zoom or Safari text autosizing.',
+    'Account layout is checked only in the existing unavailable anonymous fixture; hidden login and OTP fields are not claimed as verified.',
     'Programmatic layout metrics and screenshots do not replace manual visual review.']};
   writeFileSync(join(outputDir,'report.json'),JSON.stringify(result,null,2)+'\n',{mode:0o600});
   console.log('DLKT_UI_BROWSER_QA '+JSON.stringify(result));

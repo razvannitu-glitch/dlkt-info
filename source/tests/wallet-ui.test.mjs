@@ -120,7 +120,11 @@ test('Wallet surface keeps the canonical branding and CSS, and starts with no ac
   assert.match(html, /id="wallet-delete-confirmation"[^>]* hidden/u);
   assert.match(html, /it does not disconnect an email or social account/u);
   assert.match(html, /Automatic delivery and background alerts are not active/u);
-  assert.deepEqual([...html.matchAll(/<link rel="stylesheet" href="([^"]+)"/gu)].map(match => match[1]), ['/iceo.css', '/header.css', '/wallet.css']);
+  assert.deepEqual([...html.matchAll(/<link rel="stylesheet" href="([^"]+)"/gu)].map(match => match[1]), ['/iceo.css', '/header.css', '/wallet.css', '/reader-theme.css']);
+  assert.match(html, /<html\b[^>]*\bdata-reader-theme="prism"/u);
+  const themeBootstrap = '<script src="/reader-theme.js"></script>';
+  assert.equal(html.split(themeBootstrap).length, 2, 'One synchronous reader theme bootstrap');
+  assert.ok(html.indexOf(themeBootstrap) < html.indexOf('<link rel="stylesheet"'), 'Reader theme bootstrap precedes stylesheets');
   assert.doesNotMatch(html, /<style\b|\bstyle=|type="email"|name="password"|onclick=/iu);
 });
 
