@@ -12,13 +12,17 @@ test('weather and currency details retain distinct click handlers', () => {
   assert.match(browser, /\['glance-forex-quick', 'forex'\]/);
 });
 
-test('source dialog stays accessible without a redundant visible utility button', () => {
+test('source dialog retains a visible, labelled icon control after the moving ribbon is retired', () => {
   assert.match(browser, /read\.addEventListener\('click', \(\) => list\.showModal\(\)\)/);
-  assert.match(browser, /read\.textContent = locale === 'ro' \? 'Surse si preferinte'/);
+  assert.match(browser, /get\('glance-read-label'\)\.textContent = locale === 'ro' \? 'Surse si preferinte'/);
   assert.match(browser, /read\.setAttribute\('aria-label'/);
   assert.doesNotMatch(browser, /read\.textContent = locale === 'ro' \? 'Vreme si curs'/);
   const html=readFileSync(new URL('../public/iceo.html', import.meta.url), 'utf8');
-  assert.match(html, /id="glance-read" type="button" class="text-button sr-only"/);
+  assert.match(html, /id="glance-read" type="button" class="text-button glance-info-button"/);
+  assert.match(html, /id="glance-read-label" class="sr-only"/);
+  assert.match(html, /aria-label="Information, sources and settings"/);
+  assert.match(browser, /ribbon\.hidden = true/);
+  assert.match(browser, /ticker\.update\(\[\]\)/);
   assert.match(browser, /list\.showModal\(\)/);
 });
 

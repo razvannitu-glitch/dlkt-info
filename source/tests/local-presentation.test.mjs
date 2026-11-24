@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {admissionText,localReading,localCoverageReading} from '../.build/src/local/presentation.js';
+import {admissionText,localReading,localReadingPreview,localCoverageReading} from '../.build/src/local/presentation.js';
 import {findCity} from '../.build/src/local/cities.js';
 import {renderLocalPlace} from '../.build/src/local/browser.js';
 import {BUCHAREST_REFERENCES} from '../.build/src/local/reference-places.js';
@@ -105,4 +105,24 @@ test('Romanian rendering uses measured weather numbers and source-backed CMTEB s
  assert.match(local.paragraphs.join(' '),/1, 4, 6/);
  assert.match(local.nextStep,/CMTEB/);
  assert.equal(localReading(weather,roCity,now).title,'Weather in Bucharest');
+});
+
+test('compact local preview carries actual measurements and keeps forecast qualifiers',()=>{
+ const card={...event,kind:'forecast',text:'Hourly forecast temperatures -1.3–0.8 °C. Total precipitation 0.8 mm over the six hourly periods. Highest hourly wind-speed forecast 14.8 km/h (not gusts).'},before=JSON.stringify(card);
+ assert.equal(localReadingPreview(card,city,'ro'),'Prognoza: -1.3–0.8 °C · precipitatii 0.8 mm / 6 h.');
+ assert.equal(localReadingPreview(card,city,'en'),'Forecast: -1.3–0.8 °C · precipitation 0.8 mm / 6 h.');
+ assert.ok(localReading(card,city,now).paragraphs[0].includes('not gusts'));
+ assert.equal(JSON.stringify(card),before);
+ for(const text of ['Forecast unavailable.','Hourly forecast temperatures 1–2 °C. Warning: uncertainty.','Hourly forecast temperatures 1–2 °C. Total precipitation 0 mm over the six hourly periods. Highest hourly wind-speed forecast 3 km/h (not gusts). Additional restriction.']){
+  assert.equal(localReadingPreview({...card,text},city,'ro'),null,'unknown or qualified wording is not silently shortened');
+ }
+});
+test('compact operator preview uses only identified sectors and does not claim a building is affected',()=>{
+ const bucharest=findCity('683506'),card={...event,id:'bucharest:cmteb:overview',kind:'utility-notice',context:{...event.context,place:'Bucharest · sectors 1, 4, 6'}},before=JSON.stringify(card);
+ assert.equal(localReadingPreview(card,bucharest,'ro'),'CMTEB: anunturi pentru sectoarele 1, 4, 6.');
+ assert.equal(localReadingPreview({...card,id:'bucharest:cmteb:sector-2'},bucharest,'en'),'CMTEB: notices for sectors 2.');
+ assert.equal(localReadingPreview(card,city,'ro'),null);
+ assert.equal(localReadingPreview({...card,context:{...card.context,place:'Unknown area'}},bucharest,'ro'),null);
+ assert.equal(localReadingPreview({...card,id:'bucharest:cmteb:sector-7'},bucharest,'ro'),null);
+ assert.equal(JSON.stringify(card),before);
 });

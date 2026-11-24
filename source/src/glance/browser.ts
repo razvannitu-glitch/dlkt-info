@@ -4,7 +4,7 @@ import {currentLocalSnapshot,validCity,type City,type LocalSnapshot,type LocalCa
 import {readPreferences,savePreferences,clearPreferences} from './preferences.js';
 import {weatherMotionNode,updateWeatherMotion} from './weather-motion.js';
 import {getLocale,countryLabel,translate} from '../i18n/browser.js';
-import {NewsTicker,type TickerItem} from './ticker.js';
+import {NewsTicker} from './ticker.js';
 import {selectHomeLanguage} from '../iceo/home-local.js';
 import {sourceLanguage,newsLanguageMatches} from '../iceo/news-sources.js';
 
@@ -14,7 +14,7 @@ export function setupGlance():void {
  const root=get<HTMLElement>('today-glance'),custom=get<HTMLDialogElement>('glance-customize'),detail=get<HTMLDialogElement>('glance-detail'),body=get<HTMLElement>('glance-detail-body'),status=get<HTMLElement>('glance-status'),refresh=get<HTMLButtonElement>('glance-refresh');
  const list=get<HTMLDialogElement>('glance-list'),read=get<HTMLButtonElement>('glance-read');
  let detailReturn:HTMLElement|null=null;
- // Verified news and local information use a non-alert scrolling ribbon.
+ // The reserved ribbon stays empty; ordinary source links use the context dialog.
  const ticker=new NewsTicker(root,kind=>{if(kind==='key'){if(!list.open)list.showModal();return;}openSignal(kind);});
  const weatherMotion=weatherMotionNode(null,Date.now(),true);get<HTMLElement>('glance-weather').append(weatherMotion);
  let preferences:GlancePreferences=readPreferences(()=>localStorage),snapshot:GlanceSnapshot|null=null,city:City|null=null,local:LocalSnapshot|null=null,estimatedCity=false,busy=false,localBusy=false,localTicket=0,attempted=false,timer:ReturnType<typeof setTimeout>|undefined,opened:'weather'|'forex'|'notice'|null=null;
@@ -52,39 +52,33 @@ export function setupGlance():void {
   if(document.activeElement===weatherQuick&&weatherHidden||document.activeElement===forexQuick&&forexHidden)get<HTMLButtonElement>('glance-city').focus({preventScroll:true});
   weatherQuick.hidden=weatherHidden;weatherQuick.textContent=(locale==='ro'?'Vreme':locale==='it'?'Meteo':'Weather')+' '+(range??'');weatherQuick.title=get<HTMLElement>('glance-weather-note').textContent??'';weatherQuick.setAttribute('aria-label',weatherQuick.textContent+' · '+weatherQuick.title);
   forexQuick.hidden=forexHidden;forexQuick.textContent=n!==undefined?'1 € = '+new Intl.NumberFormat(locale,{maximumFractionDigits:4}).format(n)+' '+q:'';forexQuick.title=get<HTMLElement>('glance-forex-note').textContent??'';forexQuick.setAttribute('aria-label',forexQuick.textContent+' · '+forexQuick.title);
-  read.textContent=locale==='ro'?'Surse si preferinte':locale==='it'?'Fonti e preferenze':'Sources and preferences';
+  get<HTMLElement>('glance-read-label').textContent=locale==='ro'?'Surse si preferinte':locale==='it'?'Fonti e preferenze':'Sources and preferences';
   read.setAttribute('aria-label',locale==='ro'?'Informatii, surse si setari':locale==='it'?'Informazioni, fonti e impostazioni':'Information, sources and settings');
-  // Local reports first, then verified publisher metadata; no synthetic or stale headlines.
-  const tickerItems:TickerItem[]=[];
+  read.title=read.getAttribute('aria-label')??'';
+  // Source links remain available in the context dialog. Ordinary reports are
+  // read once in the main feed, not repeated in a moving announcement band.
   const seenSources=new Set<string>();
   const newsLinks=get<HTMLElement>('glance-news-sources');
   newsLinks.replaceChildren();
-  function addNews(title:string,publisher:string,url:string,note:string):void {
-   if(seenSources.has(url)||tickerItems.length>=12)return;
+  function addNews(title:string,publisher:string,url:string):void {
+   if(seenSources.has(url)||seenSources.size>=12)return;
    seenSources.add(url);
-   tickerItems.push({signal:'key',label:publisher,value:title,note});
    const anchor=link(title,url);anchor.classList.add('glance-news-link');
    anchor.setAttribute('aria-label',publisher+': '+title);
    newsLinks.append(anchor);
   }
   for(const card of selectHomeLanguage(local,city,now,locale).cards)if(card.kind==='local-news'){
-   addNews(card.title,card.publisher,card.sourceUrl,'Local · source checked '+date(card.checkedAt));
+   addNews(card.title,card.publisher,card.sourceUrl);
   }
   for(const publication of snapshot?.publications??[]){
    if(!eligiblePublication(publication,now)||!newsLanguageMatches(sourceLanguage(publication),locale))continue;
-   addNews(publication.title,publication.publisher,publication.sourceUrl,'Published '+date(publication.date));
+   addNews(publication.title,publication.publisher,publication.sourceUrl);
   }
   newsLinks.hidden=newsLinks.childElementCount===0;
-  if(tickerItems.length===0){
-   if(preferences.weather&&forecast&&range&&city)
-    tickerItems.push({signal:'weather',label:city.name+' · Weather',value:range,note:'MET Norway · forecast'});
-   if(preferences.forex&&n!==undefined&&fx)
-    tickerItems.push({signal:'forex',label:'ECB reference',value:'1 EUR = '+new Intl.NumberFormat(locale,{maximumFractionDigits:4}).format(n)+' '+q,note:date(fx.date)});
-  }
   const ribbon=get<HTMLElement>('glance-ribbon');
-  ribbon.hidden=tickerItems.length===0;
-  ribbon.setAttribute('aria-hidden',String(tickerItems.length===0));
-  ticker.update(tickerItems);
+  ribbon.hidden=true;
+  ribbon.setAttribute('aria-hidden','true');
+  ticker.update([]);
   get<HTMLElement>('glance-empty').hidden=preferences.weather||preferences.forex;
   refresh.disabled=busy||localBusy;if(detail.open)renderDetail();clearTimeout(timer);if(document.visibilityState==='visible')timer=setTimeout(render,nextGlanceDelay(cards,[],fx??null,now));
  }
