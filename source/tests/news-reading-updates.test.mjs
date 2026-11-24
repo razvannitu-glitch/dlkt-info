@@ -6,6 +6,8 @@ import {NewsContinuation as BrowserContinuation} from '../public/news-continuati
 import {NewsPageService,parseNewsPageRequest} from '../.build/src/iceo/news-page.js';
 import {validNewsPage} from '../.build/src/iceo/news-page-contracts.js';
 import {cardContent} from '../.build/src/iceo/card-validation.js';
+import {validArchiveCard} from '../.build/src/share/archive.js';
+import {ICEO_SOURCES} from '../.build/src/iceo/registry.js';
 import {NEWS_CATEGORIES,newsCategory} from '../.build/src/iceo/news-taxonomy.js';
 import {storyThreadKey} from '../.build/src/iceo/story-grouping.js';
 import {article,epoch,CorpusMemoryStore,hash} from './fixtures/news-corpus.mjs';
@@ -184,11 +186,13 @@ test('a partial original reused for two explicit courts cannot attach an unquali
   const reading=actualReader(Controller,[complete,partial],{now,selected});await reading.model.start(selected);
   assert.equal(reading.model.view().error,null);const first=reading.model.view().items[0];assert.equal(first.card.id,complete.id);
   await reading.refresh([other,partial]);const second=reading.model.view().items[1];assert.ok(second);assert.equal(second.card.id,other.id);
-  await reading.refresh([changed(partial,{summary:'A later clarification still does not identify the court.'})]);
+  await reading.refresh([changed(partial,{title:partial.title.replace('a decis, definitiv,','a decis')})]);
   assert.equal(reading.model.view().items.length,2);
   assert.deepEqual(reading.model.updatesFor(first.key),[]);assert.deepEqual(reading.model.updatesFor(second.key),[]);
-  await reading.refresh([changed(other,{summary:'A correction explicitly about the named second court.'})]);
-  assert.equal(reading.model.updatesFor(second.key).length,1);assert.deepEqual(reading.model.updatesFor(first.key),[]);
+  const correctionTitle=other.title.replace('a decis să','a decis, definitiv, să');
+  await reading.refresh([changed(other,{title:correctionTitle})]);
+  assert.equal(reading.model.updatesFor(second.key).length,1);
+  assert.equal(reading.model.updatesFor(second.key)[0].changes[0].card.title,correctionTitle);assert.deepEqual(reading.model.updatesFor(first.key),[]);
  }
 });
 
@@ -200,8 +204,10 @@ test('different explicit penalty numbers remain separate events with separate up
   await reading.model.start(selected);const first=reading.model.view().items[0];
   await reading.refresh([b]);assert.equal(reading.model.view().items.length,2);
   const second=reading.model.view().items[1];assert.deepEqual(reading.model.updatesFor(first.key),[]);
-  await reading.refresh([changed(b,{summary:'A correction for the separately printed penalty.'})]);
-  assert.equal(reading.model.updatesFor(second.key).length,1);assert.deepEqual(reading.model.updatesFor(first.key),[]);
+  const correctionTitle=observed[1].title.replace('74','75').replace(' - HotNews.ro','');
+  await reading.refresh([changed(b,{title:correctionTitle})]);
+  assert.equal(reading.model.updatesFor(second.key).length,1);
+  assert.equal(reading.model.updatesFor(second.key)[0].changes[0].card.title,correctionTitle);assert.deepEqual(reading.model.updatesFor(first.key),[]);
  }
 });
 
@@ -350,8 +356,8 @@ test('a stable original repurposed to another explicit incident cannot enrich it
  const court=evidence.records.find(row=>row.kind==='global'&&row.original.id==='5f3ceca9b5f185872c85563c').original;
  const courtAt=Date.parse('2026-11-24T00:46:54.000Z');
  const scenarios=[
-  {original:report(0),replacement:changed(report(0),{title:observed[0].title.replace('74','75')}),now:NOW},
-  {original:court,replacement:changed(court,{title:court.title.replaceAll('București','Cluj Napoca')}),now:courtAt},
+  {original:report(0),replacement:changed(report(0),{title:observed[0].title.replace('74','75')}),correctionTitle:observed[1].title.replace(' - HotNews.ro',''),now:NOW},
+  {original:court,replacement:changed(court,{title:court.title.replaceAll('București','Cluj Napoca')}),correctionTitle:court.title.replace('a decis să','a decis, definitiv, să'),now:courtAt},
  ];
  for(const Controller of Controllers)for(const scenario of scenarios){
   const selected={...context,language:'ro'},reading=actualReader(Controller,[scenario.original],{now:scenario.now,selected});
@@ -370,8 +376,30 @@ test('a stable original repurposed to another explicit incident cannot enrich it
   await reading.refresh([independentlyPublished]);
   assert.equal(reading.model.view().items.length,2,'the rejected replacement cannot teach a new incident alias to the old card');
   assert.deepEqual(reading.model.updatesFor(owner.key),[]);
-  await reading.refresh([changed(scenario.original,{summary:'A newer summary correction for the original explicit incident.'})]);
-  assert.equal(reading.model.updatesFor(owner.key).length,1,'a summary-only correction for the original incident remains eligible');
-  assert.equal(reading.model.updatesFor(owner.key)[0].changes[0].card.summary,'A newer summary correction for the original explicit incident.');
+  await reading.refresh([changed(scenario.original,{title:scenario.correctionTitle})]);
+  assert.equal(reading.model.updatesFor(owner.key).length,1,'a wording correction for the original explicit incident remains eligible');
+  assert.equal(reading.model.updatesFor(owner.key)[0].changes[0].card.title,scenario.correctionTitle);
+ }
+});
+
+test('a permitted reviewed-feed excerpt correction passes the real corpus and enriches only its existing card',async()=>{
+ const source=ICEO_SOURCES.find(value=>value.id==='nasa-news');assert.ok(source?.feed);
+ const sourceUrl='https://www.nasa.gov/news-release/controlled-summary-correction/';
+ const first=original(301,{id:hash(sourceUrl).slice(0,24),identity:sourceUrl,sourceUrl,publisher:source.publisher,
+  sourceIds:[source.id],topic:source.topic,title:'NASA publishes a controlled science bulletin for this regression',
+  summary:'Original controlled publisher excerpt.',attribution:source.attribution,boundary:source.feed.boundary});
+ const corrected=changed(first,{summary:'Corrected controlled publisher excerpt with a revised mission detail.'});
+ assert.ok(validArchiveCard(first));assert.ok(validArchiveCard(corrected),'the reviewed feed permits an attributed excerpt');
+ for(const Controller of Controllers){
+  const reading=actualReader(Controller,[first]);await reading.model.start(context);
+  const owner=reading.model.view().items[0],receipt=reading.model.editionFor(owner.key);
+  await reading.refresh([corrected]);
+  assert.equal(reading.model.view().items.length,1);assert.strictEqual(reading.model.view().items[0],owner);
+  assert.strictEqual(reading.model.editionFor(owner.key),receipt);assert.equal(owner.card.summary,first.summary);
+  const history=reading.model.updatesFor(owner.key);assert.equal(history.length,1);
+  assert.equal(history[0].changes.length,1);assert.equal(history[0].changes[0].card.title,first.title);
+  assert.equal(history[0].changes[0].card.summary,corrected.summary);assert.equal(history[0].changes[0].card.date,first.date);
+  assert.equal(history[0].changes[0].card.observedAt,iso(NOW+1000));assert.equal(history[0].edition.epoch,'2');
+  await reading.refresh([corrected]);assert.strictEqual(reading.model.updatesFor(owner.key),history);
  }
 });

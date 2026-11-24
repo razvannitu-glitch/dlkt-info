@@ -722,7 +722,7 @@ async function verifyNight(call,format,fixture,outputDir){
 }
 
 /** Small fixture-only previews make visual review possible without downloading the ZIP.
- * Full-resolution PNGs remain in the normal artifact. Four bounded JPEGs at most.
+ * Full-resolution PNGs remain in the normal artifact. Six bounded JPEGs at most.
  */
 async function emitVisualPreview(call,label,width){
  const selected=(label==='top'&&[390,1440].includes(width))||(width===390&&['cards','night-top'].includes(label))||(label==='reading-updates'&&[390,1440].includes(width));
