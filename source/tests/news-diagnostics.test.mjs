@@ -58,8 +58,8 @@ test('request capacity, metadata rejection and successful original checks are co
 test('an origin blocked before fetch is deferred without inventing an original request or verification',async()=>{
  const rows=[candidate(20)],calls=[];
  const result=await discoverNewsWithDiagnostics(fetcher(rows,{calls}),now,[],undefined,{...options,originBackoff:new Map([['https://www.reuters.com',new Date(now+60_000).toISOString()]])});
- const d=result.diagnostics;clean(d);assert.equal(calls.length,0);assert.equal(d.totals.scheduled,1);
- assert.equal(d.totals.attempted,0);assert.equal(d.totals.requestAttempts,0);assert.equal(d.totals.deferredBeforeAttempt,1);
+ const d=result.diagnostics;clean(d);assert.equal(calls.length,0);assert.equal(d.totals.scheduled,0);
+ assert.equal(d.totals.attempted,0);assert.equal(d.totals.requestAttempts,0);assert.equal(d.totals.deferredBeforeAttempt,0);assert.equal(d.totals.deferredCapacity,1);
  assert.deepEqual(d.groups[0].reasons,[{code:'origin-backoff',count:1}]);assert.equal(d.groups[0].lastAttemptAt,null);assert.equal(d.groups[0].lastVerifiedAt,null);
 });
 test('redirects consume request attempts while the next unattempted original is reported as deferred',async()=>{
@@ -175,4 +175,18 @@ test('reason normalization retains useful bounded causes without copying remote 
  for(const [code,expected] of [['NEWS_HTTP_403','access-denied'],['NEWS_HTTP_429','rate-limited'],['NEWS_HTTP_503','http-unavailable'],
   ['NEWS_INDEX_IDENTITY_INVALID','index-identity'],['NEWS_GLOBAL_DEADLINE','deadline'],['NEWS_REQUEST_TIMEOUT','timeout'],
   ['NEWS_PUBLICATION_METADATA_UNVERIFIED','metadata-unverified'],['Bearer PRIVATE_SENTINEL','request-unavailable']])assert.equal(newsDiagnosticReason(code),expected);
+});
+
+test('blocked pool candidates preserve their reason without occupying the finite schedule',()=>{
+ const builder=new NewsDiagnosticsBuilder(now);
+ const blocked=Array.from({length:100},(_,index)=>candidate(800+index));
+ const available=candidate(999,'The Guardian','https://www.theguardian.com/technology/available-original');
+ builder.pool([...blocked,available]);
+ for(const row of blocked)builder.deferBeforeScheduling(row.sourceUrl,'origin-backoff');
+ builder.scheduled([available]);builder.request(available.sourceUrl);builder.verified(available.sourceUrl);
+ const report=builder.finish();clean(report);
+ assert.equal(report.totals.pool,101);assert.equal(report.totals.scheduled,1);assert.equal(report.totals.requestAttempts,1);
+ assert.equal(report.totals.deferredCapacity,100);
+ assert.deepEqual(report.groups.find(group=>group.publisherId==='reuters').reasons,[{code:'origin-backoff',count:100}]);
+ assert.throws(()=>builder.scheduled([blocked[0]]),/NEWS_DIAGNOSTICS_SEQUENCE_INVALID/u);
 });

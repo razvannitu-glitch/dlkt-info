@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {NEWS_INDEX_URL,sourceLanguage,publisherForNewsUrl} from '../.build/src/iceo/news-sources.js';
+import {NEWS_INDEX_URL,NEWS_DISCOVERY_INDEXES,sourceLanguage,publisherForNewsUrl} from '../.build/src/iceo/news-sources.js';
 import {classifyNewsHeadline,EDITORIAL_CATEGORY_TOPICS} from '../.build/src/iceo/editorial-categories.js';
 import {classifyNewsSubject} from '../.build/src/iceo/news-taxonomy.js';
 import {cardContent} from '../.build/src/iceo/card-validation.js';
 import {groupStories} from '../.build/src/iceo/story-grouping.js';
-import {NEWS_CATEGORY_ACQUISITION_POLICY,NEWS_ACQUISITION_ROTATION_MS,newsAcquisitionOrder,validateNewsCandidate,discoverNews,readNewsArticleMetadata} from '../.build/src/iceo/news-discovery.js';
+import {NEWS_CATEGORY_ACQUISITION_POLICY,NEWS_ACQUISITION_ROTATION_MS,newsAcquisitionOrder,validateNewsCandidate,discoverNews,discoverNewsWithDiagnostics,rotatedPublisherIndexes,readNewsArticleMetadata} from '../.build/src/iceo/news-discovery.js';
 
 const now=Date.parse('2026-11-23T12:00:00.000Z'),stamp=new Date(now).toISOString(),date=new Date(now-60_000).toISOString();
 const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -235,3 +235,94 @@ test('a failed first original cannot pin a sparse publisher queue, including unk
  assert.deepEqual([...verified].sort(),candidates.slice(1).map(candidate=>candidate.sourceUrl).sort());
 });
 
+
+test('an already blocked first choice cannot consume the only verification opportunity',async()=>{
+ const rows=[
+  publisherFixture('The Guardian','https://www.theguardian.com','/health/available-supply-',7100),
+  publisherFixture('BBC','https://www.bbc.com','/news/articles/available-supply-',7101),
+ ];
+ const blocked=newsAcquisitionOrder(rows,1,now)[0],available=rows.find(row=>row!==blocked);
+ const until=new Date(now+60_000).toISOString(),originBackoff=new Map([[new URL(blocked.sourceUrl).origin,until]]),calls=[];
+ let persisted=[];
+ const result=await discoverNewsWithDiagnostics(async input=>{
+  const url=String(input);if(url===NEWS_INDEX_URL)return new Response(rss(rows),{headers:{'content-type':'application/rss+xml'}});
+  calls.push(url);assert.equal(url,available.sourceUrl,'only an available original can reach the network');
+  return new Response(metadata(available),{headers:{'content-type':'text/html'}});
+ },now,[],async rows=>{persisted=rows;},{...options,originBackoff,maxArticleRequests:1,concurrency:1});
+ assert.deepEqual(calls,[available.sourceUrl]);
+ assert.deepEqual(new Set(persisted.map(row=>row.sourceUrl)),new Set(rows.map(row=>row.sourceUrl)),'backoff never deletes discovery candidates');
+ assert.deepEqual(result.sources.flatMap(source=>source.cards).map(card=>card.sourceUrl),[available.sourceUrl]);
+ assert.equal(result.diagnostics.totals.scheduled,1);assert.equal(result.diagnostics.totals.requestAttempts,1);
+ const blockedGroup=result.diagnostics.groups.find(group=>group.publisherId===publisherForNewsUrl(blocked.sourceUrl).id);
+ assert.deepEqual(blockedGroup.reasons,[{code:'origin-backoff',count:1}]);
+ assert.equal(blockedGroup.counts.attempted,0);
+});
+
+test('future and indefinite origin backoff defer originals, while the exact expiry restores eligibility',async()=>{
+ const current=health(7200),origin=new URL(current.sourceUrl).origin;
+ for(const [until,available] of [[new Date(now+1).toISOString(),false],[null,false],[new Date(now).toISOString(),true]]){
+  const originBackoff=new Map([[origin,until]]),calls=[];
+  const result=await discoverNewsWithDiagnostics(async input=>{
+   const url=String(input);if(url===NEWS_INDEX_URL)return new Response(rss([current]),{headers:{'content-type':'application/rss+xml'}});
+   calls.push(url);return new Response(metadata(current),{headers:{'content-type':'text/html'}});
+  },now,[],undefined,{...options,originBackoff,maxArticleRequests:1});
+  assert.equal(calls.length,available?1:0);assert.equal(result.diagnostics.totals.scheduled,available?1:0);
+  const cards=result.sources.flatMap(source=>source.cards);assert.equal(cards.length,available?1:0);
+  if(available){assert.equal(originBackoff.has(origin),false);assert.equal(cards[0].date,date);}
+  else{assert.equal(originBackoff.get(origin),until);assert.equal(result.sources.find(source=>source.health.id==='news-health').health.error,'NEWS_ORIGIN_BLOCKED');}
+ }
+});
+
+test('an index refusal is applied before original allocation in the same acquisition',async()=>{
+ const index=NEWS_DISCOVERY_INDEXES.find(row=>row.id==='guardian-news');assert.ok(index);
+ const slot=Math.floor(now/NEWS_ACQUISITION_ROTATION_MS),count=NEWS_DISCOVERY_INDEXES.length;
+ const indexSlot=NEWS_DISCOVERY_INDEXES.indexOf(index),at=now+((indexSlot-slot%count+count)%count)*NEWS_ACQUISITION_ROTATION_MS;
+ assert.equal(rotatedPublisherIndexes(at,1)[0].id,index.id);
+ const rows=[
+  publisherFixture('The Guardian','https://www.theguardian.com','/health/available-index-',7300),
+  publisherFixture('BBC','https://www.bbc.com','/news/articles/available-index-',7301),
+ ];
+ const calls=[],originBackoff=new Map();
+ const result=await discoverNewsWithDiagnostics(async input=>{
+  const url=String(input);
+  if(url===NEWS_INDEX_URL)return new Response(rss(rows).replace(new Date(now).toUTCString(),new Date(at).toUTCString()),{headers:{'content-type':'application/rss+xml'}});
+  if(url===index.url)return new Response('limited',{status:429,headers:{'retry-after':'600'}});
+  calls.push(url);assert.equal(url,rows[1].sourceUrl,'the refused origin cannot reach an original request');
+  return new Response(metadata(rows[1]),{headers:{'content-type':'text/html'}});
+ },at,[],undefined,{publisherIndexes:true,publisherIndexBatch:1,frontpageHighlights:false,originBackoff,maxArticleRequests:1,concurrency:1});
+ assert.deepEqual(calls,[rows[1].sourceUrl]);assert.equal(result.diagnostics.totals.verifiedNow,1);
+ assert.equal(originBackoff.get('https://www.theguardian.com'),new Date(at+600_000).toISOString());
+ assert.ok(result.diagnostics.groups.find(group=>group.publisherId==='guardian').reasons.some(reason=>reason.code==='origin-backoff'&&reason.count===1));
+});
+
+test('a homepage refusal releases original slots before the bounded worker starts',async()=>{
+ const rows=[
+  publisherFixture('The Guardian','https://www.theguardian.com','/health/available-homepage-',7400),
+  publisherFixture('BBC','https://www.bbc.com','/news/articles/available-homepage-',7401),
+ ],calls=[],originBackoff=new Map();
+ const pages=new Set(['https://apnews.com/','https://www.theguardian.com/international','https://www.pcgamer.com/','https://www.bbc.com/news']);
+ const result=await discoverNewsWithDiagnostics(async input=>{
+  const url=String(input);if(url===NEWS_INDEX_URL)return new Response(rss(rows),{headers:{'content-type':'application/rss+xml'}});
+  if(url==='https://www.theguardian.com/international')return new Response('denied',{status:403});
+  if(pages.has(url))return new Response('<main></main>',{headers:{'content-type':'text/html'}});
+  calls.push(url);assert.equal(url,rows[1].sourceUrl);
+  return new Response(metadata(rows[1]),{headers:{'content-type':'text/html'}});
+ },now,[],undefined,{publisherIndexes:false,frontpageHighlights:true,originBackoff,maxArticleRequests:1,concurrency:1});
+ assert.deepEqual(calls,[rows[1].sourceUrl]);assert.equal(result.diagnostics.totals.verifiedNow,1);
+ assert.ok(originBackoff.has('https://www.theguardian.com'));
+});
+
+test('deferral preserves a still-valid observation without refreshing it and never retains it after expiry',async()=>{
+ const current=health(7500);
+ const old={...evidence(current,{date:new Date(now-3_500_000).toISOString()}),observedAt:new Date(now-3_480_000).toISOString()};
+ const originBackoff=new Map([[new URL(current.sourceUrl).origin,new Date(now+3_600_000).toISOString()]]);
+ const fetcher=async input=>{
+  assert.equal(String(input),NEWS_INDEX_URL,'no original is requested while its origin remains blocked');
+  return new Response(rss([current]),{headers:{'content-type':'application/rss+xml'}});
+ };
+ const result=await discoverNewsWithDiagnostics(fetcher,now,[],undefined,{...options,originBackoff,retainedCards:[old],maxArticleRequests:1});
+ assert.deepEqual(result.sources.flatMap(source=>source.cards),[old]);
+ assert.equal(result.diagnostics.totals.retained,1);assert.equal(result.diagnostics.totals.verifiedNow,0);
+ const expired=await discoverNewsWithDiagnostics(fetcher,now+120_001,[],undefined,{...options,originBackoff,retainedCards:[old],maxArticleRequests:1});
+ assert.equal(expired.sources.flatMap(source=>source.cards).length,0);assert.equal(expired.diagnostics.totals.retained,0);
+});

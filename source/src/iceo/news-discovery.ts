@@ -584,6 +584,13 @@ export function readNewsArticleMetadata(html:string,candidate:NewsCandidate,fina
 }
 class NewsRequestError extends Error {constructor(readonly code:string,readonly retryAt:string|null=null){super(code);}}
 interface Budget {readonly deadline:number;readonly timeout:number;remaining:number;readonly blocked:Map<string,string|null>}
+/** A null deadline remains blocked; only a known expired deadline releases an origin. */
+function originBlocked(budget:Budget,origin:string,now:number):boolean{
+  if(!budget.blocked.has(origin))return false;
+  const until=budget.blocked.get(origin);
+  if(until&&Date.parse(until)<=now){budget.blocked.delete(origin);return false;}
+  return true;
+}
 function retryAt(response:Response,now:number):string|null{
   const raw=response.headers.get('retry-after');if(!raw)return null;const at=/^\d+$/u.test(raw)?now+Number(raw)*1000:Date.parse(raw);
   return Number.isFinite(at)&&at>=now?new Date(Math.min(now+DAY,at)).toISOString():null;
@@ -596,7 +603,7 @@ async function fetchText(fetcher:typeof fetch,url:string,limit:number,budget:Bud
     for(let redirects=0;redirects<=2;redirects++){
       if(Date.now()>=deadline)throw new NewsRequestError('NEWS_REQUEST_TIMEOUT');
       const origin=new URL(current).origin;
-      if(budget.blocked.has(origin)){const until=budget.blocked.get(origin);if(until&&Date.parse(until)<=now)budget.blocked.delete(origin);else throw new NewsRequestError('NEWS_ORIGIN_BLOCKED',until??null);}
+      if(originBlocked(budget,origin,now))throw new NewsRequestError('NEWS_ORIGIN_BLOCKED',budget.blocked.get(origin)??null);
       if(article&&budget.remaining--<=0)throw new NewsRequestError('NEWS_REQUEST_BUDGET_EXHAUSTED');
       onRequest?.();
       const response=await fetcher(current,{method:'GET',credentials:'omit',redirect:'manual',cache:'no-store',signal:controller.signal,headers:{Accept:article?'text/html, application/xhtml+xml':'application/rss+xml, application/xml, text/xml','User-Agent':'DLKT-Info-ICEO/1.0 (+https://www.dlkt.ee)'}});
@@ -671,8 +678,8 @@ export async function discoverNewsWithDiagnostics(fetcher:typeof fetch,now:numbe
   const unavailableFrontpages={urls:[] as readonly string[],checkedAt:new Date(now).toISOString(),available:false,rejected:4};
   // Homepage inspection and the durable candidate write share the same bounded phase.
   const frontpageFetcher:typeof fetch=async(input,init)=>{
-    const url=typeof input==='string'?input:input instanceof URL?input.href:input.url,origin=new URL(url).origin,until=budget.blocked.get(origin);
-    if(until&&Date.parse(until)>now)throw new NewsRequestError('NEWS_ORIGIN_BLOCKED',until);
+    const url=typeof input==='string'?input:input instanceof URL?input.href:input.url,origin=new URL(url).origin;
+    if(originBlocked(budget,origin,now))throw new NewsRequestError('NEWS_ORIGIN_BLOCKED',budget.blocked.get(origin)??null);
     const response=await fetcher(input,init);if([401,402,403,429].includes(response.status))budget.blocked.set(origin,retryAt(response,now)??new Date(now+900_000).toISOString());
     return response;
   };
@@ -682,10 +689,21 @@ export async function discoverNewsWithDiagnostics(fetcher:typeof fetch,now:numbe
   const frontpages=await frontpagePromise,knownCandidateUrls=new Set(pool.map(row=>row.sourceUrl));
   const featuredUrls=new Set(frontpages.urls.filter(url=>knownCandidateUrls.has(url)));
   const eligibleRetained=eligibleRetainedNewsCards(options.retainedCards??[],now);
-  const selected=newsAcquisitionOrder(pool,budget.remaining,now,featuredUrls,eligibleRetained);diagnostics.scheduled(selected);
+  // Keep the full durable pool, but reserve original-request opportunities only
+  // for origins available after index and homepage checks have completed.
+  const deferredOrigins:NewsCandidate[]=[];
+  const available=pool.filter(candidate=>{
+    if(!originBlocked(budget,new URL(candidate.sourceUrl).origin,now))return true;
+    deferredOrigins.push(candidate);diagnostics.deferBeforeScheduling(candidate.sourceUrl,'origin-backoff');return false;
+  });
+  const selected=newsAcquisitionOrder(available,budget.remaining,now,featuredUrls,eligibleRetained);diagnostics.scheduled(selected);
   const selectedUrls=new Set(selected.map(row=>row.sourceUrl));
   const identities=new Map<string,{card:EvidenceCard;category:NewsCandidate['category'];candidateUrl:string}>(),conflicts=new Set<string>();
   const cards=new Map<NewsCandidate['category'],EvidenceCard[]>(),errors=new Map<NewsCandidate['category'],string[]>(),retries=new Map<NewsCandidate['category'],string>();let cursor=0;
+  for(const candidate of deferredOrigins){
+    const previous=errors.get(candidate.category)??[];previous.push('NEWS_ORIGIN_BLOCKED');errors.set(candidate.category,previous);
+    const until=budget.blocked.get(new URL(candidate.sourceUrl).origin);if(until)retries.set(candidate.category,until);
+  }
   const worker=async():Promise<void>=>{for(;;){const candidate=selected[cursor++];if(!candidate)return;
     try{
       if(Date.now()>=budget.deadline)throw new NewsRequestError('NEWS_GLOBAL_DEADLINE');
@@ -724,7 +742,7 @@ export async function discoverNewsWithDiagnostics(fetcher:typeof fetch,now:numbe
     const category=source.id===NEWS_UNCLASSIFIED_SOURCE.id?null:source.id.slice(5) as PublicEditorialCategory,accepted=cards.get(category)??[],failed=errors.get(category)??[],checkedAt=new Date(now).toISOString();
     // A failed alternative does not invalidate a separately checked public card.
     const error=accepted.length?null:indexError??(storeError?'NEWS_CANDIDATE_STORE_FAILED':null)??failed[0]??null;
-    return Object.freeze({cards:Object.freeze(accepted),health:Object.freeze({id:source.id,label:source.label,publisher:source.publisher,topic:source.topic,state:accepted.length?'partial' as const:error?'unavailable' as const:'partial' as const,checkedAt,verifiedAt:accepted.length?new Date(Math.max(...accepted.map(card=>Date.parse(card.observedAt)))).toISOString():null,count:accepted.length,rejected:failed.length,error,retryAt:retries.get(category)??indexRetry,scope:source.scope+` Discovery indexes with valid metadata: ${successfulIndexes}/${indexes.length}. Retained candidate pool: ${pool.length}; scheduled originals: ${selected.length}; candidates deferred by request capacity: ${Math.max(0,pool.length-selected.length)}. Queue rotation: two minutes. Earlier eligible observations retained without re-dating: ${retainedCount}.`,termsUrl:source.termsUrl,windowed:true})});
+    return Object.freeze({cards:Object.freeze(accepted),health:Object.freeze({id:source.id,label:source.label,publisher:source.publisher,topic:source.topic,state:accepted.length?'partial' as const:error?'unavailable' as const:'partial' as const,checkedAt,verifiedAt:accepted.length?new Date(Math.max(...accepted.map(card=>Date.parse(card.observedAt)))).toISOString():null,count:accepted.length,rejected:failed.length,error,retryAt:retries.get(category)??indexRetry,scope:source.scope+` Discovery indexes with valid metadata: ${successfulIndexes}/${indexes.length}. Retained candidate pool: ${pool.length}; scheduled originals: ${selected.length}; candidates outside current schedule: ${Math.max(0,pool.length-selected.length)}; candidates deferred by active origin backoff: ${deferredOrigins.length}. Queue rotation: two minutes. Earlier eligible observations retained without re-dating: ${retainedCount}.`,termsUrl:source.termsUrl,windowed:true})});
   });
   const featuredCards=categoryResults.flatMap(result=>result.cards).filter(card=>card.sourceIds.includes(NEWS_FEATURED_SOURCE.id));
   const featuredCount=featuredCards.length,priorFeatured=featuredCards.filter(card=>retainedIdentities.has(card.identity));

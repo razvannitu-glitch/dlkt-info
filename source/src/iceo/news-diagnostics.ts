@@ -187,9 +187,15 @@ export class NewsDiagnosticsBuilder {
   scheduled(values:readonly {readonly sourceUrl:string}[]):void {
     if(values.length>80)throw new Error('NEWS_DIAGNOSTICS_LIMIT');
     for(const value of values){
-      const row=this.candidates.get(value.sourceUrl);if(!row||row.scheduled)throw new Error('NEWS_DIAGNOSTICS_SEQUENCE_INVALID');
+      const row=this.candidates.get(value.sourceUrl);if(!row||row.scheduled||row.outcome!==null)throw new Error('NEWS_DIAGNOSTICS_SEQUENCE_INVALID');
       row.scheduled=true;
     }
+  }
+  /** The legacy deferredCapacity counter is the unscheduled pool; reasons preserve why each item was deferred. */
+  deferBeforeScheduling(url:string,code:NewsDiagnosticReason):void {
+    const row=this.candidates.get(url);
+    if(!row||row.scheduled||row.outcome!==null||!reason(code))throw new Error('NEWS_DIAGNOSTICS_SEQUENCE_INVALID');
+    row.outcome='deferred';row.reason=code;
   }
   request(url:string):void {const row=this.candidate(url);row.attempted=true;row.requests++;}
   verified(url:string):void {const row=this.candidate(url);if(!row.attempted)throw new Error('NEWS_DIAGNOSTICS_SEQUENCE_INVALID');row.outcome='verified';row.reason=null;}
@@ -210,7 +216,7 @@ export class NewsDiagnosticsBuilder {
       counts.freshDiscovered=group.fresh;counts.retained=group.retained;
       for(const row of this.candidates.values()){
         if(row.group!==key)continue;counts.pool++;
-        if(!row.scheduled){counts.deferredCapacity++;addReason('request-capacity');continue;}
+        if(!row.scheduled){counts.deferredCapacity++;addReason(row.reason??'request-capacity');continue;}
         counts.scheduled++;counts.requestAttempts+=row.requests;
         if(row.attempted)counts.attempted++;else counts.deferredBeforeAttempt++;
         if(row.outcome===null)throw new Error('NEWS_DIAGNOSTICS_INCOMPLETE');
