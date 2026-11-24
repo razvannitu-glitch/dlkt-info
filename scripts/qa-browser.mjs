@@ -204,7 +204,7 @@ async function newsFixture(){
  assert.equal(selected.items.some(item=>item.card.id===distinct.id),true,'the different penalty cannot be silently merged');
  assert.equal(selected.items.some(item=>item.card.id===english.id),true,'all-source scope must include the English original');
  assert.equal(JSON.stringify(stored),before,'the reader cannot restamp the stored evidence');
- return {city,groupKey:grouped.story.key,urls:reports.map(card=>card.sourceUrl),titles:reports.map(card=>card.title),storyCount:selected.total,articleTotal:selected.articleTotal,sourceOnly,
+ return {city,estimatedCity:true,groupKey:grouped.story.key,urls:reports.map(card=>card.sourceUrl),titles:reports.map(card=>card.title),storyCount:selected.total,articleTotal:selected.articleTotal,sourceOnly,
   localIds,get localExpected(){return localExpected();},get localRequests(){return localRequests;},
   async response(url){
    if(url.pathname==='/api/places'&&url.searchParams.get('hint')==='1')return {status:200,value:{city,countryCode:city.countryCode,estimated:true}};
@@ -252,7 +252,7 @@ function readerProbe(expected){
  };
  const calendar=document.querySelector('#glance-date'),city=document.querySelector('#glance-city-label'),country=document.querySelector('#glance-zone'),cityButton=document.querySelector('#glance-city');
  const normalized=value=>value.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase().trim();
- const expectedCountry=new Intl.DisplayNames(['ro'],{type:'region'}).of(expected.city.countryCode);
+ const expectedCountry=new Intl.DisplayNames(['ro'],{type:'region'}).of(expected.city.countryCode)+(expected.estimatedCity?' · aproximativ':'');
  const cards=[...document.querySelectorAll('#discovery-cards article[data-news-stream-key]')],groups=cards.filter(node=>node.dataset.storyKey===expected.groupKey),group=groups[0];
  const originals=group?[...group.querySelectorAll('.news-story-source-link')]:[];
  const sourceOnly=expected.sourceOnly.map(expectedCard=>{
@@ -361,7 +361,7 @@ function assertReadingLayout(measured,format,fixture,{compact=true}={}){
  }
 }
 function expectedReader(fixture){
- return {city:fixture.city,groupKey:fixture.groupKey,urls:fixture.urls,titles:fixture.titles,sourceOnly:fixture.sourceOnly,localExpected:fixture.localExpected};
+ return {city:fixture.city,estimatedCity:fixture.estimatedCity,groupKey:fixture.groupKey,urls:fixture.urls,titles:fixture.titles,sourceOnly:fixture.sourceOnly,localExpected:fixture.localExpected};
 }
 async function measureReader(call,fixture){
  return evaluate(call,'('+readerProbe.toString()+')('+JSON.stringify(expectedReader(fixture))+')');
@@ -412,7 +412,7 @@ function disclosureTextProbe(expected){
  const card=[...document.querySelectorAll('#home-local-cards article[data-local-id]')].find(node=>node.dataset.localId===expected.id);
  const reading=card?.querySelector('details.local-reading');
  const wanted=[...expected.reading.paragraphs,...(expected.reading.period?[expected.reading.period]:[]),...(expected.reading.nextStep?[expected.reading.nextStep]:[])];
- const paragraphs=[...(reading?.querySelectorAll('p')??[])],evidence=card?.querySelector('.evidence');
+ const paragraphs=[...(card?.querySelectorAll('p')??[])],evidence=card?.querySelector('.evidence');
  const evidenceParagraphs=[...(evidence?.querySelectorAll('p')??[])];
  return {open:reading?.open??false,evidenceOpen:evidence?.open??false,
   evidenceFacts:expected.facts.map(text=>evidenceParagraphs.some(node=>node.textContent===text&&fits(node))),
@@ -572,6 +572,7 @@ async function run(){
    const news=await measureReader(cdp,fixture);
    writeFileSync(join(outputDir,'measured-'+f.width+'.json'),JSON.stringify(news,null,2)+'\n',{mode:0o600});
    try{assertReaderGeometry(news,f,fixture);assertReadingLayout(news,f,fixture);}catch(error){
+    console.error('DLKT_READER_GEOMETRY_FAILURE',JSON.stringify({viewport:f.width,date:news.date,city:news.city,country:news.country,expectedCountry:news.expectedCountry,cityComplete:news.cityComplete,countryComplete:news.countryComplete,cityButton:news.cityButton,firstUsefulTop:news.firstUsefulTop,firstEditorialTop:news.firstEditorialTop,layout:news.layout,controls:news.controls.filter(c=>c.width<43.5||c.height<43.5),titles:news.titles.filter(t=>!t.fits),local:news.local}));
     const failedImage=(await cdp('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false})).data;
     if(typeof failedImage==='string')writeFileSync(join(outputDir,'failed-'+f.width+'.png'),Buffer.from(failedImage,'base64'),{mode:0o600});
     throw error;
