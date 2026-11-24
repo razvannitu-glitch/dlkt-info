@@ -885,7 +885,7 @@
     "tests/iceo-daily-cache.test.mjs": "41b97d41932138dfbe7f516a43020eb296927f4a10a257e5d6495be3d76fa2b0",
     "tests/iceo-device-memory.test.mjs": "9ce30ef1e03bd45c6ab7ba1e6d752ad450a960aadbb3638dbb4363e8c1ac2944",
     "tests/iceo-insight.test.mjs": "e2dc642c8f8285f49c40ef7d412e6b568900d58729d0b61ad5ae2f7260da4414",
-    "tests/iceo-public.test.mjs": "31cd69d09767758d37482aa70f8b398dee8c583a00aaf9a0d635327bcce88096",
+    "tests/iceo-public.test.mjs": "ae394e21e2684e44fe53a5f361332407402b9db39c20522ba745b0eda6ce0d65",
     "tests/iceo-reader.test.mjs": "cf24d9950aabb404f4ee16cde9bd5d237962da2f8175254aa2a57ecec0ff1f43",
     "tests/iceo-refresh-interval.test.mjs": "3cbf5763c0a764d297fe4ed81df3f463cd37eebbb7cab66de99602e24424cdb0",
     "tests/iceo-return-brief.test.mjs": "c13a440ad14d128562bd3ba68bdc14af7c5bc0978c38da2c434017933b68e56f",
