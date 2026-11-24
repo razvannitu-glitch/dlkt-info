@@ -1,0 +1,72 @@
+{
+  "epoch": 2018,
+  "scope": "Three already observed public originals; read repeated once after tool-envelope parser failure; no publisher HTTP",
+  "revision": 1941,
+  "originals": [
+    {
+      "id": "81a33e91794b623ec97f3e43",
+      "date": "2026-11-24T10:17:57.451Z",
+      "kind": "publication",
+      "title": "Derry: Aberfoyle GP surgery halts routine appointments due to 'tsunami' of demand",
+      "topic": "weather",
+      "version": null,
+      "boundary": "Original publisher headline and publication metadata checked. Discovery uses GDELT and reviewed publisher news indexes; not independent corroboration of the reported facts.",
+      "deadline": null,
+      "identity": "https://www.bbc.com/news/articles/cm62pze6xn37o",
+      "dateLabel": "Published",
+      "publisher": "BBC",
+      "sourceIds": [
+        "news-weather"
+      ],
+      "sourceUrl": "https://www.bbc.com/news/articles/cm62pze6xn37o",
+      "observedAt": "2026-11-24T11:22:40.770Z",
+      "attribution": "Source: BBC. News discovery: GDELT (https://www.gdeltproject.org/) and public publisher indexes. No article body or images republished.",
+      "contentHash": "5610dd9d494a9dd8066f7adb97d0326a39f2b7d694693ee98d342b597c1e555b",
+      "sourceState": "verified"
+    },
+    {
+      "id": "dae3c109c29e1711fad9fccd",
+      "date": "2026-11-24T07:52:44.000Z",
+      "kind": "publication",
+      "title": "Wars choke global food routes, threatening aid for 7.3 million, WFP warns",
+      "topic": "food",
+      "version": null,
+      "boundary": "Original publisher headline and publication metadata checked. Discovery uses GDELT and reviewed publisher news indexes; not independent corroboration of the reported facts.",
+      "deadline": null,
+      "identity": "https://www.aljazeera.com/news/2026/11/24/wars-choke-global-food-routes-threatening-aid-for-7-3-million-wfp-warns",
+      "dateLabel": "Published",
+      "publisher": "Al Jazeera",
+      "sourceIds": [
+        "news-food"
+      ],
+      "sourceUrl": "https://www.aljazeera.com/news/2026/11/24/wars-choke-global-food-routes-threatening-aid-for-7-3-million-wfp-warns",
+      "observedAt": "2026-11-24T11:48:50.540Z",
+      "attribution": "Source: Al Jazeera. News discovery: GDELT (https://www.gdeltproject.org/) and public publisher indexes. No article body or images republished.",
+      "contentHash": "a8cf63981f1b72dc0d77bd4e7c0cdaad7f6730e2f70ba0d4332c30a740019026",
+      "sourceState": "verified"
+    },
+    {
+      "id": "e34754229ca99fa494a1650a",
+      "date": "2026-11-23T23:30:13.000Z",
+      "kind": "publication",
+      "title": "Thank you for making Grand Theft Auto VI the biggest launch in PlayStation history",
+      "topic": "culture",
+      "version": null,
+      "boundary": "Original publisher headline and publication metadata checked. Discovery uses GDELT and reviewed publisher news indexes; not independent corroboration of the reported facts.",
+      "deadline": null,
+      "identity": "https://blog.playstation.com/2026/11/23/thank-you-for-making-grand-theft-auto-vi-the-biggest-launch-in-playstation-history/",
+      "dateLabel": "Published",
+      "publisher": "PlayStation",
+      "sourceIds": [
+        "news-gaming"
+      ],
+      "sourceUrl": "https://blog.playstation.com/2026/11/23/thank-you-for-making-grand-theft-auto-vi-the-biggest-launch-in-playstation-history/",
+      "observedAt": "2026-11-24T11:38:25.535Z",
+      "attribution": "Source: PlayStation. News discovery: GDELT (https://www.gdeltproject.org/) and public publisher indexes. No article body or images republished.",
+      "contentHash": "1d7a767eafe50772569793bded539927b322bec280d173ed4aac7a6bfd5d1b1c",
+      "sourceState": "verified"
+    }
+  ],
+  "measuredAt": "2026-11-24T12:10:43.025715+00:00",
+  "generatedAt": "2026-11-24T12:08:47.11+00:00"
+}
