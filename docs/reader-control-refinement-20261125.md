@@ -70,3 +70,9 @@ The official account baseline was also inspected: main and `.controls` extended 
 ## Initial verification and corrected contracts
 
 Generation at `ead18c27e2e5e3ec45f275d2c460a1c865483bb0` passed strict TypeScript, 52 packaging tests and 2433 of2436 application tests. Three failures identified stale visual test contracts: the palette token regex read the beginning of `#account` as `#acc`, the authorized shared CSS fingerprint had changed, and Wallet's exact stylesheet list needed the existing reader theme. The fixes retain the palette whitelist and add a negative case for a genuinely new color, update only the independently recalculated CSS fingerprint, and explicitly require synchronous appearance bootstrap plus final stylesheet order. Auth, privacy, Kate and header checks remain intact. A new generation run follows these demonstrated fixes.
+
+## Generated candidate evidence
+
+Generation run `45500104249`, job `138820791455`, completed successfully from exact authored commit `a03772c1b644f34c2c030c18e2ff826371498714`. Strict TypeScript, 2437 application tests, 52 packaging tests and the dependency audit passed (0 vulnerabilities reported). The bounded export was independently decoded and verified for chunk order, byte count, SHA256, exact input commit, allowed paths, baseline hashes, complete source pin, unchanged release metadata, manifest consistency and news-registry projection. Source hash: `415b8b112674099f7f21bbe87e9c2d30baaac25a17cf963d4f91f8c3c8d0b6e0`. Manifest hash: `6fb2682f10b3ffdd046fb30d3cfcab9a689383484015d982d5a7a64945313857`.
+
+The separate browser QA change retains the existing normal geometry gate byte-for-byte and adds badge/CTA measurements, 440px/DPR3, labelled typography stress, Explore and anonymous Account Night. Root and an independent reviewer found no blocking source issue. Browser execution and post-publication checks remain required; this document does not substitute their results.
