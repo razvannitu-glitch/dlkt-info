@@ -23,3 +23,9 @@ The inventory in docs/iceo-owned-cards-inventory-20261124.md now distinguishes t
 ## Boundaries
 
 This batch does not guarantee universal semantic deduplication, seven to ten unique stories in every category, universal publisher availability or account-synchronized reading history. It does not broaden source reuse permissions, introduce a paid provider or change billing. The two newly admitted publishers remain subject to the current RSS/original verification and promotion filtering implemented in PR45.
+
+## Generated-release evidence
+
+The authored candidate af4aa95c310664d0378dda47e9ac3ec84b315a70 passed independent source review and the existing Generate DLKT reader assets workflow [run 45478214601](https://github.com/razvannitu-glitch/dlkt-info/actions/runs/45478214601), job 138744006997. Strict TypeScript compilation, 2,434 application/database tests and 52 packaging tests passed. The locally built release export contained four allowed generated text files, and its framing, input commit, UTF-8 byte lengths, SHA-256 digests, original file hashes, complete source pin and news-registry projection were checked before import.
+
+Generated source digest: 04f66ce59cde3d120a6866f242d827e31e4ec64b76f82e2875b5c33a795e991d. Release manifest digest: 05ad59170d8f80e2629200647bc40c2f3997db8e0ef262b0d0cf9366ea0c70c7. These checks cover the generated candidate; final PR browser checks and official deployment receipt must still be verified before declaring the release live.
