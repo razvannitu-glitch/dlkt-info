@@ -570,11 +570,12 @@ async function verifyDisclosures(call,format,fixture){
  if(sourcesWereOpen!==true)await toggleDetails(call,groupSelector,false);
  await evaluate(call,'(()=>{window.scrollTo(0,0);return true;})()');return {filters:true,local,originals:originals.length};
 }
-function contrastProbe(){
+function contrastProbe({allCards=false}={}){
  const rgba=value=>{
-  const match=/^rgba?\(([^)]+)\)$/u.exec(value);if(!match)return null;
-  const parts=match[1].split(/[,\s/]+/u).filter(Boolean).map(Number);
-  return parts.length>=3&&parts.every(Number.isFinite)?[parts[0],parts[1],parts[2],parts[3]??1]:null;
+  const match=/^rgba?\(([^)]+)\)$/u.exec(value),srgb=/^color\(srgb ([^)]+)\)$/u.exec(value);
+  if(!match&&!srgb)return null;
+  const parts=(match??srgb)[1].split(/[,\s/]+/u).filter(Boolean).map(Number);
+  return parts.length>=3&&parts.every(Number.isFinite)?[parts[0]*(srgb?255:1),parts[1]*(srgb?255:1),parts[2]*(srgb?255:1),parts[3]??1]:null;
  };
  const blend=(front,back)=>front.slice(0,3).map((channel,index)=>channel*front[3]+back[index]*(1-front[3]));
  const luminance=color=>color.map(channel=>{const c=channel/255;return c<=.04045?c/12.92:((c+.055)/1.055)**2.4;}).reduce((value,c,index)=>value+c*[.2126,.7152,.0722][index],0);
@@ -582,18 +583,87 @@ function contrastProbe(){
   const ancestors=[];for(let current=node;current;current=current.parentElement)ancestors.push(current);
   let result=[255,255,255];for(const current of ancestors.reverse()){const color=rgba(getComputedStyle(current).backgroundColor);if(!color)return null;result=blend(color,result);}return result;
  };
- const card=document.querySelector('#discovery-cards article[data-news-stream-key]');
- const nodes=[...new Set(card?.querySelectorAll('h3,.publisher-citation,.card-publisher,.card-date,[data-original-language],.card-actions .source-link')??[])].filter(node=>node.getClientRects().length>0&&getComputedStyle(node).visibility!=='hidden');
- return {theme:document.documentElement.dataset.readerTheme,page:background(document.body),
-  samples:nodes.map(node=>{
-   const style=getComputedStyle(node),foreground=rgba(style.color),back=background(node);
+ const visible=node=>{
+  if(!node||node.getClientRects().length===0||getComputedStyle(node).visibility==='hidden'||getComputedStyle(node).display==='none')return false;
+  for(let parent=node.parentElement;parent;parent=parent.parentElement)if(parent.tagName==='DETAILS'&&!parent.open){
+   const summary=[...parent.children].find(child=>child.tagName==='SUMMARY');if(!summary?.contains(node))return false;
+  }
+  return true;
+ };
+ const over=(front,back)=>{
+  const alpha=front[3]+back[3]*(1-front[3]);
+  return [...front.slice(0,3).map((channel,index)=>alpha?(channel*front[3]+back[index]*back[3]*(1-front[3]))/alpha:0),alpha];
+ };
+ // Composite the text and its adjacent background through every actual opacity
+ // group. Reading text has solid panels; a background image cannot be inferred.
+ const pixels=node=>{
+  let ink=rgba(getComputedStyle(node).color),back=[0,0,0,0];const opacity=[];
+  if(!ink)return null;
+  for(let current=node;current;current=current.parentElement){
+   const style=getComputedStyle(current),layer=rgba(style.backgroundColor),alpha=Number(style.opacity);
+   if(!layer||!Number.isFinite(alpha)||alpha<0||alpha>1)return null;
+   // An opaque descendant panel shields text from an ancestor's photo/gradient.
+   if(style.backgroundImage!=='none'&&(ink[3]<1||back[3]<1))return null;
+   ink=over(ink,layer);back=over(back,layer);ink[3]*=alpha;back[3]*=alpha;
+   if(alpha!==1)opacity.push({tag:current.tagName,className:current.className,value:alpha});
+  }
+  return {ink:over(ink,[255,255,255,1]).slice(0,3),background:over(back,[255,255,255,1]).slice(0,3),opacity};
+ };
+ const role=node=>{
+  if(node.closest('.source-link'))return 'source-button';
+  if(node.closest('.card-topic'))return 'badge';
+  if(node.closest('h3,.card-title-link'))return 'title';
+  if(node.closest('.publisher-citation,.card-publisher,.card-boundary,.card-photo-caption'))return 'source-credit';
+  if(node.closest('.card-date,[data-original-language],.card-meta,.news-origin-meta'))return 'meta';
+  if(node.closest('button'))return 'button';if(node.closest('a'))return 'link';return 'body';
+ };
+ const cards=allCards?[...document.querySelectorAll('#discovery-cards article[data-news-stream-key],#home-local-cards article[data-local-id]')]
+  :[document.querySelector('#discovery-cards article[data-news-stream-key]')].filter(Boolean);
+ const samples=cards.flatMap(card=>{
+  const nodes=allCards?[...card.querySelectorAll('*')].filter(node=>node instanceof HTMLElement&&visible(node)
+   &&[...node.childNodes].some(child=>child.nodeType===Node.TEXT_NODE&&child.textContent?.trim()))
+   :[...new Set(card.querySelectorAll('h3,.publisher-citation,.card-publisher,.card-date,[data-original-language],.card-actions .source-link'))].filter(node=>node.getClientRects().length>0&&getComputedStyle(node).visibility!=='hidden');
+  return nodes.map(node=>{
+   const style=getComputedStyle(node),foreground=rgba(style.color),composite=allCards?pixels(node):null,back=allCards?composite?.background??null:background(node);
    const fontSize=parseFloat(style.fontSize),weight=parseInt(style.fontWeight,10),large=fontSize>=24||(fontSize>=18.66&&weight>=700);
-   const painted=foreground&&back?blend(foreground,back):null,a=painted?luminance(painted):null,b=back?luminance(back):null;
+   const painted=allCards?composite?.ink??null:foreground&&back?blend(foreground,back):null,a=painted?luminance(painted):null,b=back?luminance(back):null;
    return {tag:node.tagName,className:node.className,text:node.textContent?.slice(0,100),foreground:style.color,background:back,
+    ...(allCards?{cardId:card.dataset.cardId??card.dataset.localId,surface:card.dataset.readerSurface,role:role(node),opacity:composite?.opacity??null}:{}),
     ratio:a!==null&&b!==null?(Math.max(a,b)+.05)/(Math.min(a,b)+.05):null,minimum:large?3:4.5};
-  })};
+  });
+ });
+ return {theme:document.documentElement.dataset.readerTheme,page:background(document.body),samples,
+  ...(allCards?{cards:cards.map(card=>({id:card.dataset.cardId??card.dataset.localId,kind:card.hasAttribute('data-news-stream-key')?'news':'local',
+   surface:card.dataset.readerSurface,visible:visible(card),backgroundColor:rgba(getComputedStyle(card).backgroundColor),background:pixels(card)?.background??null,
+   photoUnavailable:Boolean(card.querySelector('.photo-unavailable')),validPhoto:[...card.querySelectorAll('img[data-article-photo]')].some(img=>img.complete&&img.naturalWidth>0)}))}:{})};
+};
+// Product-approved paints are checked against browser results, not re-derived from CSS tokens.
+const approvedPrismSurfaces={paper:'#F0EDE5',ivory:'#D8D6CD',coral:'#F66061',berry:'#142D44',wine:'#7D969B',gold:'#B7C4C3'};
+function assertPaletteContrast(measured,fixture,{prism=false}={}){
+ assert.equal(measured.theme,prism?'prism':'night');
+ const news=measured.cards.filter(card=>card.kind==='news'),local=measured.cards.filter(card=>card.kind==='local');
+ assert.equal(news.length,fixture.storyCount);assert.deepEqual(new Set(local.map(card=>card.id)),new Set(fixture.localIds));
+ assert.deepEqual(new Set(news.slice(0,6).map(card=>card.surface)),new Set(Object.keys(approvedPrismSurfaces)),'the actual first news cycle paints all six approved variants');
+ for(const card of measured.cards){
+  assert.equal(card.visible,true,'palette card is rendered: '+card.id);assert.ok(Object.hasOwn(approvedPrismSurfaces,card.surface),'card has an approved assigned surface');
+  if(prism){
+   const expected=[1,3,5].map(offset=>parseInt(approvedPrismSurfaces[card.surface].slice(offset,offset+2),16));
+   assert.deepEqual(card.backgroundColor,[...expected,1],'computed card paint matches its assigned Prism swatch: '+JSON.stringify(card));
+   assert.deepEqual(card.background,expected,'effective card paint preserves its full approved color: '+JSON.stringify(card));
+  }
+  const samples=measured.samples.filter(sample=>sample.cardId===card.id);
+  for(const role of ['title','source-credit','source-button','badge'])assert.ok(samples.some(sample=>sample.role===role),'actual '+role+' text is measured on '+card.surface+': '+card.id);
+  if(card.kind==='news')assert.ok(samples.some(sample=>sample.role==='meta'),'actual news metadata is measured: '+card.id);
+  for(const sample of samples)assert.ok(sample.ratio!==null&&sample.ratio>=sample.minimum,'actual '+measured.theme+' card text has readable contrast after opacity compositing: '+JSON.stringify(sample));
+ }
+ assert.ok(measured.samples.some(sample=>sample.role==='body'),'visible body copy is actually measured where supplied by the fixture');
+ assert.ok(news.some(card=>card.photoUnavailable),'the natural failed-photo reading panel remains covered');
+ // Existing geometry assertions independently retain full titles, source URLs,
+ // badge padding and 44px controls. No article or surface attribute is replaced.
 }
 async function verifyNight(call,format,fixture,outputDir){
+ await settleFixturePhotos(call);
+ const prism=await evaluate(call,'('+contrastProbe.toString()+')({allCards:true})');assertPaletteContrast(prism,fixture,{prism:true});
  const before=await evaluate(call,'('+contrastProbe.toString()+')()');assert.equal(before.theme,'prism','day layout is the baseline');
  await focusSelector(call,'#reader-theme-toggle');await keyboard(call,'Enter');
  await evaluate(call,'(()=>{window.scrollTo(0,0);return true;})()');
@@ -602,6 +672,8 @@ async function verifyNight(call,format,fixture,outputDir){
  assert.equal(contrast.theme,'night');assert.notDeepEqual(contrast.page,before.page,'night changes the effective computed page background');
  assert.ok(contrast.samples.length>=3,'night reads actual title, attribution and action colors');
  for(const sample of contrast.samples)assert.ok(sample.ratio!==null&&sample.ratio+.01>=sample.minimum,'night text contrast falls below its readable threshold: '+JSON.stringify(sample));
+ const nightPalette=await evaluate(call,'('+contrastProbe.toString()+')({allCards:true})');assertPaletteContrast(nightPalette,fixture);
+ assert.deepEqual(nightPalette.cards.map(card=>[card.id,card.surface]),prism.cards.map(card=>[card.id,card.surface]),'Night preserves actual article identities and palette assignments');
  const screenshots=[];
  for(const section of ['top','cards']){
   if(section==='cards')await evaluate(call,"(()=>{document.querySelector('#discovery-cards article[data-news-stream-key]').scrollIntoView({block:'start'});return true;})()");
@@ -613,7 +685,9 @@ async function verifyNight(call,format,fixture,outputDir){
  await focusSelector(call,'#reader-theme-toggle');await keyboard(call,'Enter');
  assert.equal(await evaluate(call,'document.documentElement.dataset.readerTheme'),'prism','theme action restores day mode');
  await evaluate(call,'(()=>{window.scrollTo(0,0);return true;})()');
- return {contrast,screenshots};
+ const restored=await evaluate(call,'('+contrastProbe.toString()+')({allCards:true})');assertPaletteContrast(restored,fixture,{prism:true});
+ assert.deepEqual(restored.cards.map(card=>[card.id,card.surface]),prism.cards.map(card=>[card.id,card.surface]),'returning to Prism restores the same assigned variants');
+ return {contrast,screenshots,palette:{prism,night:nightPalette,restored}};
 }
 
 /** Small fixture-only previews make visual review possible without downloading the ZIP.
@@ -823,6 +897,8 @@ async function run(){
     'Local weather and CMTEB records are synthetic controlled fixtures validated by the actual city/source contracts, not live operator or forecast checks.',
     'The 440px DPR 3 scenario is Chrome at visual scale 1. Font-size doubling is a test-only typography stress, not physical Safari zoom or Safari text autosizing.',
     'Account layout is checked only in the existing unavailable anonymous fixture; hidden login and OTP fields are not claimed as verified.',
+    'Palette checks use actual computed card paints and visible text at 390 and 1440px. Existing body copy is measured where rendered; source-only articles are not given fabricated excerpts.',
+    'Article-photo requests remain unavailable in this offline fixture. Failed-photo panels are measured; successful publisher photography requires separate live inspection.',
     'Programmatic layout metrics and screenshots do not replace manual visual review.']};
   writeFileSync(join(outputDir,'report.json'),JSON.stringify(result,null,2)+'\n',{mode:0o600});
   console.log('DLKT_UI_BROWSER_QA '+JSON.stringify(result));

@@ -461,32 +461,14 @@ html[data-reader-theme=night] #discovery :is(#home-news-category,#home-news-peri
 #home-local-cards .local-utility .local-reading a{max-width:100%;overflow-wrap:anywhere}
 #home-local-cards .local-utility .local-reading[open]{flex-basis:100%;margin-top:10px;padding-bottom:6px;border-top:1px solid var(--reader-hairline)}
 
-/* News uses paper; position colors remain small accents, while owned cards retain their palette.
-   Explicit role pairs prevent a former navy surface from leaving pale text on paper. */
-html[data-reader-theme=prism] :is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card,
-html[data-reader-theme=prism] #discovery-cards>.info-card[data-news-stream-key],
-html[data-reader-theme=prism] #home-local-cards .info-card.local-utility{
- --reader-surface:var(--reader-story-paper);--reader-panel:#D8D6CD;--reader-ink:#121416;--reader-muted:#465660;--reader-rule:#CECEC7;--reader-edge:#142D44;
- --reader-action:#142D44;--reader-action-ink:#F0EDE5;--reader-action-hover:#F66061;--reader-action-hover-ink:#121416;
- --reader-secondary-hover:#F66061;--reader-secondary-hover-ink:#121416;--reader-selected:#142D44;--reader-selected-ink:#F0EDE5;--reader-selected-edge:#142D44;
- --reader-link:#142D44;--reader-focus:#142D44;--reader-photo-link:#142D44;--reader-photo-focus:#142D44;
- --card-tone-surface:var(--reader-story-paper);--card-tone-accent:#142D44;--card-tone-badge:#142D44;--card-tone-badge-ink:#F0EDE5;
- --black:var(--reader-ink);--white:var(--reader-surface);--muted:var(--reader-muted);--line:var(--reader-rule);--soft:var(--reader-panel);
-}
-html[data-reader-theme=night] :is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card,
-html[data-reader-theme=night] #discovery-cards>.info-card[data-news-stream-key]{
- --card-tone-surface:var(--reader-story-paper);--card-tone-accent:#B7C4C3;--card-tone-badge:#B7C4C3;--card-tone-badge-ink:#142D44;
-}
+/* Preserve the approved full-card palettes and their paired text/action colors above.
+   The responsive composition below changes geometry, not each card's assigned surface. */
 html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card,
 html:is([data-reader-theme=prism],[data-reader-theme=night]) #discovery-cards>.info-card[data-news-stream-key],
 html:is([data-reader-theme=prism],[data-reader-theme=night]) #home-local-cards .info-card.local-utility{
  --card-bg:var(--card-tone-surface);--card-ink:var(--reader-ink);--card-title:var(--reader-ink);--card-muted:var(--reader-muted);--card-rule:var(--reader-rule);
  --card-action:var(--reader-action);--card-action-ink:var(--reader-action-ink);
  background:var(--card-tone-surface);color:var(--reader-ink);border:1px solid var(--reader-hairline);border-radius:18px;box-shadow:0 2px 6px #142D4406;transform:none;transition:border-color .15s ease,box-shadow .15s ease;
-}
-html:is([data-reader-theme=prism],[data-reader-theme=night]) #home-local-cards .info-card.local-utility{
- --reader-surface:var(--reader-utility-paper);--card-tone-surface:var(--reader-utility-paper);
- background:var(--reader-utility-paper);
 }
 html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card :is(.photo-editorial .card-photo-visual,.card-photo-frame,.card-photo-headline,.card-photo-caption,.evidence){background:var(--card-tone-surface)}
 html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card .card-photo-headline :is(h3,a){color:var(--reader-ink)}
@@ -496,14 +478,6 @@ html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-card
 html:is([data-reader-theme=prism],[data-reader-theme=night]) #home-local-cards .info-card.local-utility:hover{transform:none;box-shadow:0 3px 12px #142D440C}
 html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-cards,#world-cards,#cards)>.info-card.editorial-card:focus-within,
 html:is([data-reader-theme=prism],[data-reader-theme=night]) #home-local-cards .info-card.local-utility:focus-within{border-color:var(--reader-focus);box-shadow:0 0 0 1px var(--reader-focus)}
-
-html:is([data-reader-theme=prism],[data-reader-theme=night]) #discovery-cards>.info-card[data-news-stream-key][data-reader-surface=paper]{--news-accent:#142D44}
-html:is([data-reader-theme=prism],[data-reader-theme=night]) #discovery-cards>.info-card[data-news-stream-key][data-reader-surface=ivory]{--news-accent:#D8D6CD}
-html:is([data-reader-theme=prism],[data-reader-theme=night]) #discovery-cards>.info-card[data-news-stream-key][data-reader-surface=coral]{--news-accent:#F66061}
-html:is([data-reader-theme=prism],[data-reader-theme=night]) #discovery-cards>.info-card[data-news-stream-key][data-reader-surface=berry]{--news-accent:#142D44}
-html:is([data-reader-theme=prism],[data-reader-theme=night]) #discovery-cards>.info-card[data-news-stream-key][data-reader-surface=wine]{--news-accent:#7D969B}
-html:is([data-reader-theme=prism],[data-reader-theme=night]) #discovery-cards>.info-card[data-news-stream-key][data-reader-surface=gold]{--news-accent:#B7C4C3}
-html:is([data-reader-theme=prism],[data-reader-theme=night]) #discovery-cards>.info-card[data-news-stream-key] .card-topic:before{background:var(--news-accent,var(--card-tone-accent))}
 
 @media(max-width:1152px){
  .site-header .masthead-inner{padding-block:12px}
