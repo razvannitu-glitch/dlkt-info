@@ -20,7 +20,7 @@ export interface NewsPageRequest {readonly language:Locale;readonly cityId:strin
 export interface NewsPageReader {read(query:NewsPageRequest):Promise<NewsPage>;readSources(cursor:string):Promise<NewsStorySourcesPage>}
 export class NewsPageError extends Error {constructor(readonly code:NewsPageErrorCode){super(code);this.name='NewsPageError';}}
 const NEWS_CURSOR_VERSION='news-cursor-6' as const;
-const NEWS_COUNTRY_ORDER_VERSION='iptc17-source-scope-publisher-rounds-20261124-r2' as const;
+const NEWS_COUNTRY_ORDER_VERSION='iptc17-source-scope-publisher-rounds-20261124-r3' as const;
 const object=(value:unknown):value is Record<string,unknown>=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 const exact=(value:Record<string,unknown>,keys:readonly string[]):boolean=>Object.keys(value).length===keys.length&&keys.every(key=>Object.hasOwn(value,key));
 const TOKEN=/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/u;

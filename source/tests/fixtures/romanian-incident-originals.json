@@ -1,0 +1,242 @@
+{
+  "queryScope": "One bounded SELECT; six exact global URLs and one local URL from one latest epoch; no publisher HTTP",
+  "records": [
+    {
+      "fence": 1678,
+      "revision": 1605,
+      "generated_at": "2026-11-24 00:46:53.588+00",
+      "expires_at": "2026-11-24 01:46:53.588+00",
+      "kind": "global",
+      "original": {
+        "id": "e5d91e6399db1f3598eba0a7",
+        "date": "2026-11-23T15:26:48.000Z",
+        "kind": "publication",
+        "title": "Momentul în care Călin Georgescu iese din arest, în uralele susținătorilor: „Dumnezeu m-a născut om liber și liber voi rămâne”",
+        "topic": "other",
+        "version": null,
+        "boundary": "Original publisher headline and publication metadata checked. Discovery uses GDELT and reviewed publisher news indexes; not independent corroboration of the reported facts.",
+        "deadline": null,
+        "identity": "https://www.digi24.ro/stiri/actualitate/momentul-in-care-calin-georgescu-iese-din-arest-in-uralele-sustinatorilor-dumnezeu-m-a-nascut-om-liber-si-liber-voi-ramane-4049541",
+        "dateLabel": "Published",
+        "publisher": "Digi24",
+        "sourceIds": [
+          "news-unclassified"
+        ],
+        "sourceUrl": "https://www.digi24.ro/stiri/actualitate/momentul-in-care-calin-georgescu-iese-din-arest-in-uralele-sustinatorilor-dumnezeu-m-a-nascut-om-liber-si-liber-voi-ramane-4049541",
+        "observedAt": "2026-11-24T00:04:38.783Z",
+        "attribution": "Source: Digi24. News discovery: GDELT (https://www.gdeltproject.org/) and public publisher indexes. No article body or images republished.",
+        "contentHash": "92a4cf6006e5329c4737cf964cc4d479b7160692ace41f3703f31e950bd72a38",
+        "sourceState": "verified"
+      },
+      "city": null
+    },
+    {
+      "fence": 1678,
+      "revision": 1605,
+      "generated_at": "2026-11-24 00:46:53.588+00",
+      "expires_at": "2026-11-24 01:46:53.588+00",
+      "kind": "global",
+      "original": {
+        "id": "26b96c700db696d6a95645ae",
+        "date": "2026-11-23T15:16:35.000Z",
+        "kind": "publication",
+        "title": "Hotelul Alpin din Poiana Brașov încă arde, după 18 ore. De ce se chinuie pompierii să stingă incendiul",
+        "topic": "other",
+        "version": null,
+        "boundary": "Original publisher headline and publication metadata checked. Discovery uses GDELT and reviewed publisher news indexes; not independent corroboration of the reported facts.",
+        "deadline": null,
+        "identity": "https://stirileprotv.ro/stiri/actualitate/hotelul-alpin-din-poiana-brasov-inca-arde-dupa-18-ore-de-ce-se-chinuie-pompierii-sa-stinga-incendiul.html",
+        "dateLabel": "Published",
+        "publisher": "Știrile ProTV",
+        "sourceIds": [
+          "news-unclassified"
+        ],
+        "sourceUrl": "https://stirileprotv.ro/stiri/actualitate/hotelul-alpin-din-poiana-brasov-inca-arde-dupa-18-ore-de-ce-se-chinuie-pompierii-sa-stinga-incendiul.html",
+        "observedAt": "2026-11-24T00:04:38.783Z",
+        "attribution": "Source: Știrile ProTV. News discovery: GDELT (https://www.gdeltproject.org/) and public publisher indexes. No article body or images republished.",
+        "contentHash": "3f21cc82ec18305dec55eac9e56f2ee0ca4c46bf287c400985a4651698abb243",
+        "sourceState": "verified",
+        "articleSubject": {
+          "basis": "publisher-jsonld",
+          "keywords": [],
+          "sections": [
+            "Știri Actuale"
+          ],
+          "articleUrl": "https://stirileprotv.ro/stiri/actualitate/hotelul-alpin-din-poiana-brasov-inca-arde-dupa-18-ore-de-ce-se-chinuie-pompierii-sa-stinga-incendiul.html"
+        }
+      },
+      "city": null
+    },
+    {
+      "fence": 1678,
+      "revision": 1605,
+      "generated_at": "2026-11-24 00:46:53.588+00",
+      "expires_at": "2026-11-24 01:46:53.588+00",
+      "kind": "global",
+      "original": {
+        "id": "998218b980c65c3cc91d5abf",
+        "date": "2026-11-23T14:04:23.000Z",
+        "kind": "publication",
+        "title": "Călin Georgescu, în arest la domiciliu. Curtea de Apel a decis, definitiv, să-l elibereze din Arestul Central",
+        "topic": "other",
+        "version": null,
+        "boundary": "Original publisher headline and publication metadata checked. Discovery uses GDELT and reviewed publisher news indexes; not independent corroboration of the reported facts.",
+        "deadline": null,
+        "identity": "https://stirileprotv.ro/stiri/actualitate/calin-georgescu-va-intra-in-arest-la-domiciliu-curtea-de-apel-a-decis-definitiv.html",
+        "dateLabel": "Published",
+        "publisher": "Știrile ProTV",
+        "sourceIds": [
+          "news-unclassified"
+        ],
+        "sourceUrl": "https://stirileprotv.ro/stiri/actualitate/calin-georgescu-va-intra-in-arest-la-domiciliu-curtea-de-apel-a-decis-definitiv.html",
+        "observedAt": "2026-11-23T23:50:32.506Z",
+        "attribution": "Source: Știrile ProTV. News discovery: GDELT (https://www.gdeltproject.org/) and public publisher indexes. No article body or images republished.",
+        "contentHash": "aef9be797143809139009a81b8533ad9fbaa920dc82c684c9bf3137f9400ccee",
+        "sourceState": "verified",
+        "articleSubject": {
+          "basis": "publisher-jsonld",
+          "keywords": [],
+          "sections": [
+            "Știri Actuale"
+          ],
+          "articleUrl": "https://stirileprotv.ro/stiri/actualitate/calin-georgescu-va-intra-in-arest-la-domiciliu-curtea-de-apel-a-decis-definitiv.html"
+        }
+      },
+      "city": null
+    },
+    {
+      "fence": 1678,
+      "revision": 1605,
+      "generated_at": "2026-11-24 00:46:53.588+00",
+      "expires_at": "2026-11-24 01:46:53.588+00",
+      "kind": "global",
+      "original": {
+        "id": "1bf2f186e12f58a0edfc6eb6",
+        "date": "2026-11-23T10:43:18.000Z",
+        "kind": "publication",
+        "title": "Incendiul de la hotelul din Poiana Brașov nu se mai manifestă cu flacără deschisă. Suprafața afectată este de aprox. 3.000 m2",
+        "topic": "other",
+        "version": null,
+        "boundary": "Original publisher headline and publication metadata checked. Discovery uses GDELT and reviewed publisher news indexes; not independent corroboration of the reported facts.",
+        "deadline": null,
+        "identity": "https://www.digi24.ro/stiri/actualitate/incendiu-puternic-la-un-hotel-din-poiana-brasov-intervin-pompieri-din-patru-judete-4048199",
+        "dateLabel": "Published",
+        "publisher": "Digi24",
+        "sourceIds": [
+          "news-unclassified"
+        ],
+        "sourceUrl": "https://www.digi24.ro/stiri/actualitate/incendiu-puternic-la-un-hotel-din-poiana-brasov-intervin-pompieri-din-patru-judete-4048199",
+        "observedAt": "2026-11-23T23:48:21.477Z",
+        "attribution": "Source: Digi24. News discovery: GDELT (https://www.gdeltproject.org/) and public publisher indexes. No article body or images republished.",
+        "contentHash": "e9ebca39f3d3d700e22b47c5ac0a702518410b29f24e20402b181388ac0c0cc6",
+        "sourceState": "verified"
+      },
+      "city": null
+    },
+    {
+      "fence": 1678,
+      "revision": 1605,
+      "generated_at": "2026-11-24 00:46:53.588+00",
+      "expires_at": "2026-11-24 01:46:53.588+00",
+      "kind": "global",
+      "original": {
+        "id": "8474e3521967db695ddce930",
+        "date": "2026-11-23T05:53:00.000Z",
+        "kind": "publication",
+        "title": "Incendiu puternic la hotelul Alpin din Poiana Brașov. Pompierii se luptă în continuare cu flăcările",
+        "topic": "other",
+        "version": null,
+        "boundary": "Original publisher headline and publication metadata checked. Discovery uses GDELT and reviewed publisher news indexes; not independent corroboration of the reported facts.",
+        "deadline": null,
+        "identity": "https://hotnews.ro/incendiu-la-un-hotel-din-poiana-brasov-intervin-pompieri-din-patru-judete-2411165",
+        "dateLabel": "Published",
+        "publisher": "HotNews.ro",
+        "sourceIds": [
+          "news-unclassified"
+        ],
+        "sourceUrl": "https://hotnews.ro/incendiu-la-un-hotel-din-poiana-brasov-intervin-pompieri-din-patru-judete-2411165",
+        "observedAt": "2026-11-23T23:50:32.506Z",
+        "attribution": "Source: HotNews.ro. News discovery: GDELT (https://www.gdeltproject.org/) and public publisher indexes. No article body or images republished.",
+        "contentHash": "461f581851fc67d3ef1b23d137b9f315c5e4b1c4383f7be5405878a8ee883b6f",
+        "sourceState": "verified"
+      },
+      "city": null
+    },
+    {
+      "fence": 1678,
+      "revision": 1605,
+      "generated_at": "2026-11-24 00:46:53.588+00",
+      "expires_at": "2026-11-24 01:46:53.588+00",
+      "kind": "global",
+      "original": {
+        "id": "5f3ceca9b5f185872c85563c",
+        "date": "2026-11-23T05:13:09.000Z",
+        "kind": "publication",
+        "title": "Curtea de Apel București a decis să înlocuiască arestul preventiv cu arestul la domiciliu în cazul lui Călin Georgescu",
+        "topic": "other",
+        "version": null,
+        "boundary": "Original publisher headline and publication metadata checked. Discovery uses GDELT and reviewed publisher news indexes; not independent corroboration of the reported facts.",
+        "deadline": null,
+        "identity": "https://stirileprotv.ro/stiri/actualitate/cab-asteptata-sa-decida-luni-daca-inlocuieste-arestul-preventiv-cu-arestul-la-domiciliu-in-cazul-lui-calin-georgescu.html",
+        "dateLabel": "Published",
+        "publisher": "Știrile ProTV",
+        "sourceIds": [
+          "news-unclassified"
+        ],
+        "sourceUrl": "https://stirileprotv.ro/stiri/actualitate/cab-asteptata-sa-decida-luni-daca-inlocuieste-arestul-preventiv-cu-arestul-la-domiciliu-in-cazul-lui-calin-georgescu.html",
+        "observedAt": "2026-11-23T23:48:21.477Z",
+        "attribution": "Source: Știrile ProTV. News discovery: GDELT (https://www.gdeltproject.org/) and public publisher indexes. No article body or images republished.",
+        "contentHash": "f5011b510c3119e35b6295f81828ccf8a8caa4356efc2f891eb1c932e133e79b",
+        "sourceState": "verified",
+        "articleSubject": {
+          "basis": "publisher-jsonld",
+          "keywords": [],
+          "sections": [
+            "Știri Actuale"
+          ],
+          "articleUrl": "https://stirileprotv.ro/stiri/actualitate/cab-asteptata-sa-decida-luni-daca-inlocuieste-arestul-preventiv-cu-arestul-la-domiciliu-in-cazul-lui-calin-georgescu.html"
+        }
+      },
+      "city": null
+    },
+    {
+      "fence": 1678,
+      "revision": 1605,
+      "generated_at": "2026-11-24 00:46:53.588+00",
+      "expires_at": "2026-11-24 01:46:53.588+00",
+      "kind": "local",
+      "original": {
+        "id": "local-news:683506:bucharest-buletin:341869b1192bc3e841cb5f08",
+        "url": "https://buletin.de/bucuresti/calin-georgescu-plasat-in-arest-la-domiciliu-curtea-de-apel-bucuresti-a-respins-contestatia-diicot/",
+        "title": "Călin Georgescu, plasat în arest la domiciliu. Curtea de Apel București a respins contestația DIICOT",
+        "topic": "safety",
+        "byline": "By Redacția Buletin de București",
+        "cityId": "683506",
+        "summary": "Fostul candidat la alegerile prezidențiale, Călin Georgescu, a fost eliberat din Arestul Central, fiind plasat în arest la domiciliu. Georgescu a fost plasat în arest preventiv la finalul lunii septembrie.",
+        "sourceId": "bucharest-buletin",
+        "checkedAt": "2026-11-24T00:46:41.946Z",
+        "publisher": "Buletin de București",
+        "geoAnchors": [
+          "București"
+        ],
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+        "validUntil": "2026-11-24T00:51:41.946Z",
+        "attribution": "Source: Buletin de București. CC BY 4.0. Publisher headline and optional excerpt selected from the feed; the excerpt may be shortened. Read the original article.",
+        "documentUrl": "https://buletin.de/bucuresti/feed/",
+        "publishedAt": "2026-11-23T16:05:35.000Z",
+        "documentHash": "bff8be7f71c24350c7839744992cd2a94c6827cc7fb1e1c8aeb2d5e64296d4cd",
+        "geographyBasis": "article-place-reference"
+      },
+      "city": {
+        "id": "683506",
+        "lat": 44.4323,
+        "lon": 26.1063,
+        "name": "Bucharest",
+        "region": "Bucharest",
+        "country": "Romania",
+        "timezone": "Europe/Bucharest",
+        "countryCode": "RO"
+      }
+    }
+  ]
+}
