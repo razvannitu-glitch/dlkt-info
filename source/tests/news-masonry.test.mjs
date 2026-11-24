@@ -5,6 +5,7 @@ import {runInNewContext} from 'node:vm';
 import {parseDocument,DomUtils} from 'htmlparser2';
 import {NewsMasonry,newsMasonryPositions} from '../.build/src/iceo/news-masonry.js';
 import {KNOWLEDGE_CARDS} from '../.build/src/iceo/knowledge-catalog.js';
+import {newsReadingUpdatesNode} from '../.build/src/iceo/news-story-browser.js';
 import {selectInlineKnowledge,interleaveKnowledge} from '../.build/src/iceo/knowledge-stream.js';
 import {newsOriginalLanguage} from '../.build/src/iceo/news-page-contracts.js';
 
@@ -189,7 +190,8 @@ test('compiled inline rendering preserves 11-plus-1 cadence, append prefixes and
    now,language:'en',newsSourceScope:'all',topCount:80,readingTotal:80,visible:[],host,document:{body:{dataset:{}}},
    contextualCity:{id:'683506',name:'Bucharest',countryCode:'RO'},inlineKnowledgeSeen:new Set(),inlineKnowledgeContext:'',inlineKnowledgeSelection:[],
    pageItemByKey:new Map(originals.map(item=>[item.key,{kind:item.kind,key:item.key,category:item.category,card:originalCard(item)}])),
-   newsContinuation:{editionFor:key=>{assert.ok(context.pageItemByKey.has(key));return context.server.page;}},
+   newsContinuation:{editionFor:key=>{assert.ok(context.pageItemByKey.has(key));return context.server.page;},updatesFor:key=>{assert.ok(context.pageItemByKey.has(key));return [];},currentSourcesFor:key=>{assert.ok(context.pageItemByKey.has(key));return null;}},
+   newsReadingUpdatesNode,
    newsStorySourcesNode(){throw Error('Ungrouped originals must not create a source-group disclosure');},
    KNOWLEDGE_CARDS:catalog,selectInlineKnowledge,interleaveKnowledge,
    writeKnowledgeSeen:seen=>{assert.ok(seen instanceof Set);return true;},

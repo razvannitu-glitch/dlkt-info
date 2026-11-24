@@ -69,9 +69,12 @@ function readingKeys(item:NewsPageItem):ReadingKeys {
 }
 const incidentBound=(alias:string):string=>'incident-bound:'+alias;
 const incidentBinding=(incident:string,alias:string):string=>'incident-binding:'+JSON.stringify([incident,alias]);
+function eligibleReadingAlias(seen:ReadonlySet<string>,reading:ReadingKeys,alias:string):boolean {
+ return seen.has(alias)&&(reading.incident===null||!seen.has(incidentBound(alias))
+  ||seen.has(incidentBinding(reading.incident,alias)));
+}
 function knownReadingKeys(seen:ReadonlySet<string>,reading:ReadingKeys):boolean {
- return reading.aliases.some(alias=>seen.has(alias)&&(reading.incident===null||!seen.has(incidentBound(alias))
-  ||seen.has(incidentBinding(reading.incident,alias))));
+ return reading.aliases.some(alias=>eligibleReadingAlias(seen,reading,alias));
 }
 function retainReadingKeys(seen:Set<string>,reading:ReadingKeys):void {
  for(const alias of reading.aliases)seen.add(alias);
@@ -80,6 +83,59 @@ function retainReadingKeys(seen:Set<string>,reading:ReadingKeys):void {
  // Retain one owner per partial alias; later retargets cannot grow a relation set.
  if(reading.incident!==null)for(const alias of reading.partialAliases)if(!seen.has(incidentBound(alias))){
   seen.add(incidentBound(alias));seen.add(incidentBinding(reading.incident,alias));
+ }
+}
+/** A checked change is separate from the immutable copy first placed in the reading. */
+export interface NewsReadingSourceContext {readonly item:NewsPageItem;readonly edition:NewsPage}
+export interface NewsReadingUpdate extends NewsReadingSourceContext {
+ readonly changes:readonly NewsStorySource[];readonly sourceCountIncreased:boolean;
+}
+interface OriginalInformation {readonly signature:string;readonly checkedAt:number}
+interface ReadingNovelty {readonly signatures:ReadonlyMap<string,OriginalInformation>;readonly sourceTotal:number;readonly incident:string|null}
+const NO_READING_UPDATES:readonly NewsReadingUpdate[]=Object.freeze([]);
+function originalIdentity(source:NewsStorySource):string {
+ return source.kind==='global'?source.card.identity:source.card.sourceUrl;
+}
+/** Dates, check hashes and alternate URLs alone do not add publisher information. */
+function originalInformation(source:NewsStorySource):string {
+ const card=source.card;
+ return source.kind==='global'
+  ?JSON.stringify([card.publisher,card.title,source.card.summary??null,source.card.byline??null,source.card.licenseUrl??null])
+  :JSON.stringify([card.publisher,card.title,source.card.news?.summary??source.card.text,source.card.news?.byline??null,source.card.news?.licenseUrl??null]);
+}
+/** Use only explicit event anchors already recognized by grouping. The wrapper's
+ * publication window and a penalty's excerpt are not a different incident. */
+function explicitReadingIncident(source:NewsStorySource):string|null {
+ const thread=source.kind==='global'?storyThreadKey(source.card):completeIncidentThread(source);
+ if(thread===null)return null;
+ const wrapped:unknown=JSON.parse(thread);
+ if(!Array.isArray(wrapped))return null;
+ const anchor:unknown=wrapped[1]==='window'&&typeof wrapped[2]==='string'?JSON.parse(wrapped[2]):wrapped;
+ if(!Array.isArray(anchor))return null;
+ if(anchor[1]==='ro-explicit-incident')return JSON.stringify(anchor);
+ if(anchor[1]==='reported-penalty')return JSON.stringify(anchor.slice(0,-1));
+ return null;
+}
+function readingOwner(owners:ReadonlyMap<string,string|null>,seen:ReadonlySet<string>,reading:ReadingKeys):string|null {
+ let owner:string|null=null;
+ for(const alias of reading.aliases){
+  if(!eligibleReadingAlias(seen,reading,alias))continue;
+  const found=owners.get(alias);if(found===undefined||found===null)return null;
+  if(owner!==null&&found!==owner)return null;owner=found;
+ }
+ if(owner===null)return null;
+ // A partial original reused for a different explicit incident cannot enrich
+ // either owner merely because the new group also has a complete headline.
+ for(const alias of reading.aliases)if(owners.has(alias)&&owners.get(alias)!==owner)return null;
+ return owner;
+}
+function retainReadingOwner(owners:Map<string,string|null>,seen:ReadonlySet<string>,reading:ReadingKeys,owner:string|null):void {
+ for(const alias of reading.aliases){
+  const prior=owners.get(alias);
+  // A new explicit incident may legitimately retain the same partial original.
+  // Mark that ownership ambiguous without changing the existing dedup binding.
+  if(owner!==null&&prior!==undefined&&prior!==owner){owners.set(alias,null);continue;}
+  if(!owners.has(alias)&&eligibleReadingAlias(seen,reading,alias))owners.set(alias,owner);
  }
 }
 /** Fresh editions are validated independently; an explicit refresh preserves the reading prefix. */
@@ -91,6 +147,11 @@ export class NewsContinuation {
  private activeItems:readonly NewsPageItem[]=[];
  private items:readonly NewsPageItem[]=[];
  private seen=new Set<string>();
+ private owners=new Map<string,string|null>();
+ private novelty=new Map<string,ReadingNovelty>();
+ private updates=new Map<string,readonly NewsReadingUpdate[]>();
+ private currentSources=new Map<string,NewsReadingSourceContext>();
+ private updateUnits=0;
  private itemEditions=new Map<string,NewsPage>();
  private usedCursors=new Set<string>();
  private retainedCount=0;
@@ -112,12 +173,16 @@ export class NewsContinuation {
  }
  /** The original validated edition context, never the latest edition's source cursor context. */
  editionFor(key:string):NewsPage|null {return this.itemEditions.get(key)??null;}
+ /** Only meaningful checked changes; each keeps its own edition and source times. */
+ updatesFor(key:string):readonly NewsReadingUpdate[] {return this.updates.get(key)??NO_READING_UPDATES;}
+ /** Fresh source access is independent of a change's historical receipt and notice. */
+ currentSourcesFor(key:string):NewsReadingSourceContext|null {return this.currentSources.get(key)??null;}
  start(context:NewsContinuationContext,restart=false):Promise<void>{
   const key=contextKey(context),same=this.key===key&&this.context!==null;
   if(same&&!restart)return this.pending??Promise.resolve();
   this.controller?.abort();this.generation++;this.context=Object.freeze({...context,sourceScope:context.sourceScope??'edition'});this.key=key;
   if(!same){
-   this.page=null;this.items=Object.freeze([]);this.seen.clear();this.itemEditions.clear();this.limitReached=false;
+   this.page=null;this.items=Object.freeze([]);this.seen.clear();this.itemEditions.clear();this.owners.clear();this.novelty.clear();this.updates.clear();this.currentSources.clear();this.updateUnits=0;this.limitReached=false;
   }
   this.retainedCount=same?this.items.length:0;
   this.activePage=null;this.activeItems=Object.freeze([]);this.usedCursors.clear();this.freshStart=restart;
@@ -196,24 +261,63 @@ export class NewsContinuation {
      }
      if(activeItems.length>value.filteredTotal||value.nextCursor===null&&activeItems.length!==value.filteredTotal)throw Error('NEWS_PAGE_INVALID');
      if(value.nextCursor===null&&value.filteredTotal===value.total&&activeItems.reduce((sum,item)=>sum+(item.story?.sourceTotal??1),0)!==value.articleTotal)throw Error('NEWS_PAGE_INVALID');
-     // No rejected or late response can contribute even a deduplication alias.
-     const seen=new Set(this.seen),additions:NewsPageItem[]=[];
+     // Stage aliases, ownership and updates together: invalid/late/over-budget
+     // pages cannot partially change the reading or its separately checked changes.
+     const seen=new Set(this.seen),owners=new Map(this.owners),novelty=new Map(this.novelty),updates=new Map(this.updates),currentSources=new Map(this.currentSources),additions:NewsPageItem[]=[];
+     let updateUnits=this.updateUnits;
+     // Store only the envelope, never an extra copy of every scanned page.
+     const edition=Object.freeze({...value,items:Object.freeze([]),nextCursor:null});
      for(const item of value.items){
-      const reading=readingKeys(item),known=knownReadingKeys(seen,reading);
+      const reading=readingKeys(item),known=knownReadingKeys(seen,reading),owner=known?readingOwner(owners,seen,reading):item.key;
       if(!known)additions.push(item);
-      retainReadingKeys(seen,reading);
+      let currentInformation=true;
+      if(owner!==null){
+       const priorNovelty=novelty.get(owner),signatures=new Map(priorNovelty?.signatures),information=new Set([...signatures.values()].map(value=>value.signature)),changes:NewsStorySource[]=[];
+       const sources=originals(item),sourceTotal=item.story?.sourceTotal??1;
+       const incidents=[...new Set(sources.map(explicitReadingIncident).filter((incident):incident is string=>incident!==null))];
+       // A stable original URL can be repurposed to a separately printed event.
+       // Preserve legacy prefix suppression, but never attach it to this owner.
+       if(priorNovelty!==undefined&&(incidents.length>1||priorNovelty.incident!==null&&incidents.some(incident=>incident!==priorNovelty.incident)))currentInformation=false;
+       for(const source of sources){
+        if(!currentInformation)break;
+        const identity=originalIdentity(source),signature=originalInformation(source),previous=signatures.get(identity);
+        const checkedAt=Date.parse(source.kind==='global'?source.card.observedAt:source.card.checkedAt);
+        // A newer edition can still contain an older source snapshot. It must
+        // not undo a newer checked correction, nor teach aliases from that copy.
+        if(previous!==undefined&&previous.signature!==signature&&checkedAt<=previous.checkedAt){currentInformation=false;break;}
+        // Same publisher/content at an alternate URL is learned for future
+        // association, without pretending it is another substantive report.
+        if(priorNovelty!==undefined&&previous?.signature!==signature&&(previous!==undefined||!information.has(signature)))changes.push(source);
+        if(previous===undefined||checkedAt>=previous.checkedAt)signatures.set(identity,Object.freeze({signature,checkedAt}));
+        information.add(signature);
+       }
+       if(currentInformation){
+        const sourceCountIncreased=priorNovelty!==undefined&&sourceTotal>priorNovelty.sourceTotal;
+        if(known&&(changes.length>0||sourceCountIncreased)){
+         const update:NewsReadingUpdate=Object.freeze({item,edition,changes:Object.freeze(changes),sourceCountIncreased});
+         updates.set(owner,Object.freeze([...(updates.get(owner)??NO_READING_UPDATES),update]));
+         // Shared reading budget: a change costs one record plus each retained
+         // preview original. No hidden unbounded history sits behind the cards.
+         updateUnits+=1+sources.length;
+        }
+        novelty.set(owner,Object.freeze({signatures,sourceTotal:Math.max(priorNovelty?.sourceTotal??0,sourceTotal),incident:priorNovelty?.incident??(incidents.length===1?incidents[0]!:null)}));
+        const priorSources=currentSources.get(owner);
+        if(priorSources===undefined||Date.parse(value.generatedAt)>=Date.parse(priorSources.edition.generatedAt)){
+         currentSources.set(owner,Object.freeze({item,edition}));
+        }
+       }
+      }
+      if(currentInformation){retainReadingKeys(seen,reading);retainReadingOwner(owners,seen,reading,owner);}
      }
-     if(this.items.length+additions.length>NEWS_READING_MAX_ITEMS||seen.size>NEWS_READING_MAX_KEYS){
+     if(this.items.length+additions.length+updateUnits>NEWS_READING_MAX_ITEMS||seen.size>NEWS_READING_MAX_KEYS){
       this.limitReached=true;return;
      }
-     // Store only the envelope for original-source panels, never an extra copy
-     // of every scanned page behind each visible card.
-     const edition=Object.freeze({...value,items:Object.freeze([]),nextCursor:null});
      for(const item of additions)this.itemEditions.set(item.key,edition);
-     this.seen=seen;this.items=Object.freeze([...this.items,...additions]);
+     this.seen=seen;this.owners=owners;this.novelty=novelty;this.updates=updates;this.currentSources=currentSources;this.updateUnits=updateUnits;
+     this.items=Object.freeze([...this.items,...additions]);
      this.activeItems=activeItems;this.activePage=value;this.page=value;this.freshStart=false;
      if(cursor!==null)this.usedCursors.add(cursor);
-     this.limitReached=this.items.length>=NEWS_READING_MAX_ITEMS||seen.size>=NEWS_READING_MAX_KEYS;
+     this.limitReached=this.items.length+this.updateUnits>=NEWS_READING_MAX_ITEMS||seen.size>=NEWS_READING_MAX_KEYS;
      if(additions.length>0||value.nextCursor===null||this.limitReached){
       if(recovered&&additions.length===0)this.manualContinuation=true;
       return;

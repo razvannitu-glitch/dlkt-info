@@ -196,7 +196,36 @@ async function newsFixture(){
   return {id:card.id,title:card.title,sourceUrl:card.sourceUrl,...citation};
  });
  const english=article(960,{now,language:'en',category:'13000000'}),cards=[...reports,distinct,english,...specialists];
- const stored=epoch(cards,[],{now}),before=JSON.stringify(stored),service=new NewsPageService(new CorpusMemoryStore([stored]),'test-only-browser-qa-cursor-key-123456789012345678901234567890');
+ const stored=epoch(cards,[],{now}),before=JSON.stringify(stored),memory=new CorpusMemoryStore([stored]),
+  service=new NewsPageService(memory,'test-only-browser-qa-cursor-key-123456789012345678901234567890');
+ let activeCards=cards,activeNow=now,updateRevision=1,lastNewsEpoch=null;
+ const updates={
+  async publish(stage){
+   assert.ok(Number.isInteger(stage)&&stage>=0&&stage<=3,'controlled update stage is explicit');
+   const checked=Date.now(),stamp=new Date(checked).toISOString();
+   const corrected=reports[0].title.replace('pedepsiți','condamnați');
+   assert.notEqual(corrected,reports[0].title,'the controlled publisher wording actually changes');
+   const current=reports.slice(0,stage===0?2:3).map((original,index)=>{
+    const card={...original,observedAt:stamp,...(stage>=2&&index===0?{title:corrected}:{}),
+     ...(stage===3?{date:new Date(checked-2000-(2-index)*1000).toISOString()}: {})};
+    card.contentHash=hash(cardContent(card));return card;
+   });
+   activeCards=[...(stage===3?[...current].reverse():current),distinct,english,...specialists];activeNow=checked;
+   const revision=++updateRevision,storedUpdate=epoch(activeCards,[],{now:checked,id:String(revision),revision});
+   memory.epochs.set(storedUpdate.epoch,storedUpdate);memory.latest=storedUpdate.epoch;
+   const selectedUpdate=await service.read({language:'ro',cityId:city.id,filter:'all',cursor:null,period:'recent',sourceScope:'all'});
+   const group=selectedUpdate.items.find(item=>item.card.id===reports[0].id||item.story?.related.some(source=>source.card.id===reports[0].id));
+   assert.ok(group?.story,'the actual page service groups the controlled original reports');
+   assert.equal(group.story.sourceTotal,stage===0?2:3);assert.equal(selectedUpdate.total,7);
+   assert.ok(selectedUpdate.items.some(item=>item.card.id===distinct.id),'the different explicit penalty remains a distinct event');
+   return {epoch:storedUpdate.epoch,primaryId:group.card.id,primaryTitle:group.card.title,storyKey:group.story.key,
+    originalUrls:reports.slice(0,2).map(card=>card.sourceUrl),negativeId:distinct.id,
+    added:{id:reports[2].id,url:reports[2].sourceUrl,title:reports[2].title,checkedAt:stamp},
+    corrected:{id:reports[0].id,url:reports[0].sourceUrl,title:corrected,checkedAt:stamp}};
+  },
+  reset(){memory.latest=stored.epoch;activeCards=cards;activeNow=now;lastNewsEpoch=null;},
+  get lastNewsEpoch(){return lastNewsEpoch;}
+ };
  const selected=await service.read({language:'ro',cityId:city.id,filter:'all',cursor:null,period:'recent',sourceScope:'all'});
  assert.equal(selected.articleTotal,9,'all nine originals are eligible before testing layout');
  assert.equal(selected.total,7,'three reports share one event; six distinct reports remain separate');
@@ -207,7 +236,7 @@ async function newsFixture(){
  assert.equal(selected.items.some(item=>item.card.id===english.id),true,'all-source scope must include the English original');
  assert.equal(JSON.stringify(stored),before,'the reader cannot restamp the stored evidence');
  return {city,estimatedCity:true,groupKey:grouped.story.key,urls:reports.map(card=>card.sourceUrl),titles:reports.map(card=>card.title),storyCount:selected.total,articleTotal:selected.articleTotal,sourceOnly,
-  localIds,get localExpected(){return localExpected();},get localRequests(){return localRequests;},
+  localIds,updates,get localExpected(){return localExpected();},get localRequests(){return localRequests;},
   async response(url){
    if(url.pathname==='/api/places'&&url.searchParams.get('hint')==='1')return {status:200,value:{city,countryCode:city.countryCode,estimated:true}};
    if(url.pathname==='/api/places'&&url.searchParams.get('id')===city.id)return {status:200,value:{cities:[city],cityAliases:[]}};
@@ -215,10 +244,12 @@ async function newsFixture(){
     if(url.searchParams.get('city')!==city.id)return {status:400,value:{error:'DLKT_QA_LOCAL_CITY_INVALID'}};
     servedLocal=localSnapshot(Date.now());localRequests++;return {status:200,value:servedLocal};
    }
-   if(url.pathname==='/api/iceo')return {status:200,value:snapshot(cards,now)};
+   if(url.pathname==='/api/iceo')return {status:200,value:snapshot(activeCards,activeNow)};
    if(url.pathname==='/api/news-page'){
     const cursor=parseNewsSourcesRequest(url);
-    return {status:200,value:cursor===null?await service.read(parseNewsPageRequest(url)):await service.readSources(cursor)};
+    const value=cursor===null?await service.read(parseNewsPageRequest(url)):await service.readSources(cursor);
+    if(cursor===null)lastNewsEpoch=value.epoch;
+    return {status:200,value};
    }
    return {status:503,value:{error:'DLKT_OFFLINE_UI_QA_ONLY'}};
   }};
@@ -694,7 +725,7 @@ async function verifyNight(call,format,fixture,outputDir){
  * Full-resolution PNGs remain in the normal artifact. Four bounded JPEGs at most.
  */
 async function emitVisualPreview(call,label,width){
- const selected=(label==='top'&&[390,1440].includes(width))||(width===390&&['cards','night-top'].includes(label));
+ const selected=(label==='top'&&[390,1440].includes(width))||(width===390&&['cards','night-top'].includes(label))||(label==='reading-updates'&&[390,1440].includes(width));
  if(!selected)return;
  const data=(await call('Page.captureScreenshot',{format:'jpeg',quality:72,fromSurface:true,captureBeyondViewport:false})).data;
  if(typeof data!=='string'||data.length<1000||data.length>160000){console.log('DLKT_UI_VISUAL_SKIPPED',label,width);return;}
@@ -783,6 +814,128 @@ async function verifyTypographyStress(call,format,fixture,outputDir){
   await evaluate(call,'(()=>{window.scrollTo(0,0);return true;})()');
  }
 }
+
+/** A separate controlled edition sequence exercises the shipped refresh handler without replacing its DOM or controller. */
+function readingUpdateProbe(primaryId){
+ const cards=[...document.querySelectorAll('#discovery-cards article[data-news-stream-key]')];
+ const owner=cards.find(card=>card.dataset.cardId===primaryId),updates=owner?.querySelector('details[data-news-updates]');
+ const original=owner?[...owner.querySelectorAll('.news-story-sources')].find(panel=>!panel.closest('[data-news-updates]')):null;
+ const visible=node=>Boolean(node)&&node.getClientRects().length>0&&getComputedStyle(node).visibility!=='hidden'&&getComputedStyle(node).display!=='none';
+ const linkDetails=node=>{
+  const bound=node.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(node);
+  const text=range.getBoundingClientRect(),style=getComputedStyle(node);
+  return {text:node.textContent,url:node.href,visible:visible(node),width:bound.width,height:bound.height,
+   fits:text.left>=bound.left-1&&text.right<=bound.right+1&&text.top>=bound.top-1&&text.bottom<=bound.bottom+1
+    &&node.scrollWidth<=node.clientWidth+1&&node.scrollHeight<=node.clientHeight+1,
+   lineClamp:style.webkitLineClamp,overflow:style.textOverflow};
+ };
+ return {
+  documentWidth:document.documentElement.scrollWidth,busy:document.querySelector('#discovery-cards')?.getAttribute('aria-busy'),
+  ownerCount:cards.filter(card=>card.dataset.cardId===primaryId).length,
+  cards:cards.map(card=>({id:card.dataset.cardId,key:card.dataset.newsStreamKey,title:card.querySelector('h3')?.textContent,
+   surface:card.dataset.readerSurface,background:getComputedStyle(card).backgroundColor})),
+  original:{open:original?.open??false,links:[...(original?.querySelectorAll('.news-story-source-link')??[])].map(node=>({text:node.textContent,url:node.href})),
+   dates:[...(original?.querySelectorAll('time')??[])].map(node=>node.dateTime),evidence:owner?.querySelector('.evidence')?.textContent??null},
+  updates:updates?{open:updates.open,label:updates.querySelector('summary')?.textContent,
+   rows:[...updates.querySelectorAll('.news-reading-updates-list > li[data-update-source-id]')].map(row=>({
+    id:row.dataset.updateSourceId,epoch:row.dataset.updateEpoch,
+    links:[...row.querySelectorAll('.news-story-source-link')].map(linkDetails),
+    checks:[...row.querySelectorAll('time[data-update-checked]')].map(node=>({at:node.dateTime,text:node.textContent,visible:visible(node)})),
+   }))}:null,
+ };
+}
+async function verifyReadingUpdates(call,format,fixture,origin,outputDir){
+ const group='dlkt-reading-updates-'+format.width;
+ let heldCard=null,heldSources=null;
+ try{
+  const initial=await fixture.updates.publish(0);
+  await call('Page.navigate',{url:origin+'/'});await loaded(call);await selectControlledEdition(call,fixture);await settleFixturePhotos(call);
+  const selector='#discovery-cards article[data-card-id="'+initial.primaryId+'"]',sourceSelector=selector+' .news-story-sources:not([data-news-updates])';
+  await toggleDetails(call,sourceSelector,true);
+  const before=await evaluate(call,'('+readingUpdateProbe.toString()+')('+JSON.stringify(initial.primaryId)+')');
+  assert.equal(before.ownerCount,1);assert.equal(before.cards.length,fixture.storyCount);assert.equal(before.updates,null);
+  assert.equal(before.original.open,true);assert.deepEqual(new Set(before.original.links.map(link=>link.url)),new Set(initial.originalUrls));
+  assert.ok(before.cards.some(card=>card.id===initial.negativeId),'the distinct negative event is initially displayed');
+  const hold=async selector=>{
+   const output=await call('Runtime.evaluate',{expression:'document.querySelector('+JSON.stringify(selector)+')',objectGroup:group,returnByValue:false});
+   assert.equal(output.exceptionDetails,undefined);assert.ok(output.result?.objectId,'actual existing DOM node is retained for identity verification');
+   return output.result.objectId;
+  };
+  heldCard=await hold(selector);heldSources=await hold(sourceSelector);
+  const read=()=>evaluate(call,'('+readingUpdateProbe.toString()+')('+JSON.stringify(initial.primaryId)+')');
+  const retain=async current=>{
+   assert.equal(current.ownerCount,1,'an update never creates a second owner card');
+   assert.deepEqual(current.cards,before.cards,'refresh preserves actual original card order, identities, headlines and palette');
+   assert.deepEqual(current.original,before.original,'original source links, dates, evidence and open state are unchanged');
+   for(const [objectId,expectedSelector]of [[heldCard,selector],[heldSources,sourceSelector]]){
+    const output=await call('Runtime.callFunctionOn',{objectId,
+     functionDeclaration:'function(selector){return this.isConnected&&document.querySelector(selector)===this;}',
+     arguments:[{value:expectedSelector}],returnByValue:true});
+    assert.equal(output.exceptionDetails,undefined);assert.equal(output.result?.value,true,'the original card/source disclosure DOM node survives refresh');
+   }
+   assert.ok(current.documentWidth<=format.width+2,'update disclosure cannot introduce horizontal overflow');
+  };
+  const refresh=async(stage,expectedIds)=>{
+   const edition=await fixture.updates.publish(stage);
+   await focusSelector(call,'#discovery-refresh');await keyboard(call,'Enter');
+   let stable=0,current=null;
+   for(let attempt=0;attempt<80;attempt++){
+    current=await read();
+    const ids=current.updates?.rows.map(row=>row.id)??[];
+    if(fixture.updates.lastNewsEpoch===edition.epoch&&current.busy==='false'
+      &&expectedIds.every(id=>ids.includes(id))){if(++stable===2)break;}else stable=0;
+    if(attempt===79)throw Error('DLKT_UI_READING_UPDATES_TIMEOUT_'+JSON.stringify({epoch:edition.epoch,served:fixture.updates.lastNewsEpoch,busy:current.busy,ids}));
+    await pause(100);
+   }
+   await retain(current);return {edition,current};
+  };
+  const added=await refresh(1,[initial.added.id]);
+  const updatesSelector=selector+' details[data-news-updates]';
+  await toggleDetails(call,updatesSelector,true);
+  const withSource=await read(),addedRows=withSource.updates.rows;
+  assert.equal(addedRows.length,1,'one newly checked original adds one meaningful source row');
+  assert.equal(addedRows[0].id,initial.added.id);assert.equal(addedRows[0].epoch,added.edition.epoch);
+  assert.deepEqual(addedRows[0].checks.map(check=>check.at),[added.edition.added.checkedAt],'new-source check uses its own validated source timestamp');
+  assert.equal(addedRows[0].links.length,1);assert.equal(addedRows[0].links[0].url,initial.added.url);
+  assert.equal(addedRows[0].links[0].text,initial.added.title);
+  assert.ok(addedRows[0].checks.every(check=>check.visible),'source-check time is readable when expanded');
+  for(const link of addedRows[0].links){
+   assert.equal(link.visible,true);assert.equal(link.fits,true);assert.ok(link.width>=43.5&&link.height>=43.5);
+   assert.ok(['','none','0','normal'].includes(link.lineClamp));assert.notEqual(link.overflow,'ellipsis');
+  }
+  await focusSelector(call,updatesSelector+' > summary');await keyboard(call,'Tab');
+  assert.equal(await evaluate(call,'Boolean(document.activeElement?.closest('+JSON.stringify(updatesSelector)+'))'),true,'keyboard navigation reaches update contents');
+  await toggleDetails(call,updatesSelector,false);await toggleDetails(call,updatesSelector,true);
+  const corrected=await refresh(2,[initial.added.id,initial.corrected.id]);
+  await toggleDetails(call,updatesSelector,true);
+  const withCorrection=await read(),rows=withCorrection.updates.rows;
+  assert.equal(rows.length,2,'the publisher correction enriches the same card alongside the added original');
+  const changed=rows.find(row=>row.id===initial.corrected.id);assert.ok(changed);
+  assert.equal(changed.epoch,corrected.edition.epoch);assert.deepEqual(changed.checks.map(check=>check.at),[corrected.edition.corrected.checkedAt]);
+  assert.equal(changed.links.length,1);assert.equal(changed.links[0].url,initial.corrected.url);assert.equal(changed.links[0].text,initial.corrected.title);
+  assert.equal(changed.links[0].visible,true);assert.equal(changed.links[0].fits,true);assert.ok(changed.links[0].height>=43.5);
+  assert.deepEqual(rows.find(row=>row.id===initial.added.id).checks,addedRows[0].checks,'a later edition cannot restamp the earlier update receipt');
+  const meaningful=rows.map(row=>({id:row.id,epoch:row.epoch,links:row.links.map(link=>({text:link.text,url:link.url})),checks:row.checks.map(check=>check.at)}));
+  await refresh(3,[initial.added.id,initial.corrected.id]);await toggleDetails(call,updatesSelector,true);
+  const rechecked=await read();
+  assert.deepEqual(rechecked.updates.rows.map(row=>({id:row.id,epoch:row.epoch,links:row.links.map(link=>({text:link.text,url:link.url})),checks:row.checks.map(check=>check.at)})),meaningful,
+   'source reordering, publication-date changes and rechecking alone neither add a novelty nor rewrite retained update receipts');
+  assert.equal(rechecked.updates.label,withCorrection.updates.label,'unchanged information cannot inflate the update count');
+  await retain(rechecked);
+  await evaluate(call,'(()=>{document.querySelector('+JSON.stringify(updatesSelector)+').scrollIntoView({block:"center"});return true;})()');
+  const screenshot='dlkt-reading-updates-'+format.width+'.png';
+  const picture=(await call('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false})).data;
+  assert.ok(typeof picture==='string'&&picture.length>=1000);writeFileSync(join(outputDir,screenshot),Buffer.from(picture,'base64'),{mode:0o600});
+  await emitVisualPreview(call,'reading-updates',format.width);
+  return {status:'SAME_CARD_UPDATES_PASS',originalCards:before.cards.length,meaningfulSources:meaningful.length,
+   originalDomIdentity:true,originalDisclosureRetained:true,sourceAddition:true,publisherCorrection:true,metadataOnlyIgnored:true,
+   distinctEventRetained:true,keyboard:true,documentWidth:rechecked.documentWidth,screenshot};
+ }finally{
+  fixture.updates.reset();
+  try{await call('Runtime.releaseObjectGroup',{objectGroup:group});}catch{/* Cleanup must not hide the original assertion. */}
+ }
+}
+
 async function verifyAccountSurfaces(call,origin,outputDir){
  // Establish the preference using the production toggle, before leaving the reader.
  await focusSelector(call,'#reader-theme-toggle');await keyboard(call,'Enter');
@@ -880,7 +1033,8 @@ async function run(){
     const night=[390,1440].includes(f.width)?await verifyNight(cdp,f,fixture,outputDir):null;
     const explore=f.width===440?await verifyExploreSurface(cdp,f,fixture):null;
     const typography=f.width===440?await verifyTypographyStress(cdp,f,fixture,outputDir):null;
-    observations.push({viewport:f.width,devicePixelRatio:f.dpr??1,visualScale:news.details.visualScale,documentWidth:m.scroll,menuTested:navigation.compact,brandVisible:true,reducedMotion:true,screenshot,cardScreenshot,news,navigation,disclosures,night,explore,typography});
+    const readingUpdates=[390,1440].includes(f.width)?await verifyReadingUpdates(cdp,f,fixture,'http://'+HOST+':'+binding.port,outputDir):null;
+    observations.push({viewport:f.width,devicePixelRatio:f.dpr??1,visualScale:news.details.visualScale,documentWidth:m.scroll,menuTested:navigation.compact,brandVisible:true,reducedMotion:true,screenshot,cardScreenshot,news,navigation,disclosures,night,explore,typography,readingUpdates});
    }catch(error){
     try{
      const failedImage=(await cdp('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false})).data;
@@ -899,6 +1053,7 @@ async function run(){
     'Account layout is checked only in the existing unavailable anonymous fixture; hidden login and OTP fields are not claimed as verified.',
     'Palette checks use actual computed card paints and visible text at 390 and 1440px. Existing body copy is measured where rendered; source-only articles are not given fabricated excerpts.',
     'Article-photo requests remain unavailable in this offline fixture. Failed-photo panels are measured; successful publisher photography requires separate live inspection.',
+    'Same-card update scenarios use controlled edition publication through the real page service and real refresh handler; no external publisher change is attested.',
     'Programmatic layout metrics and screenshots do not replace manual visual review.']};
   writeFileSync(join(outputDir,'report.json'),JSON.stringify(result,null,2)+'\n',{mode:0o600});
   console.log('DLKT_UI_BROWSER_QA '+JSON.stringify(result));
