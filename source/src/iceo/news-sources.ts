@@ -235,6 +235,8 @@ export interface NewsDiscoveryIndex {
   readonly feedTitle?:string;readonly feedHome?:string;readonly articlePath?:string;
   /** Only an explicitly reviewed feed may omit its channel language; conflicting values still fail closed. */
   readonly allowMissingLanguage?:true;
+  /** These reviewed additions require a positive current feed record before original acquisition. */
+  readonly requireCurrentFeed?:true;
 }
 export const NEWS_DISCOVERY_INDEXES:readonly NewsDiscoveryIndex[]=Object.freeze(([
   // Primary receipt: GitHub Actions run 45050736033, job 137295063381, 2026-11-22 17:40 UTC.
@@ -252,10 +254,10 @@ export const NEWS_DISCOVERY_INDEXES:readonly NewsDiscoveryIndex[]=Object.freeze(
   // Metadata receipt: Actions45467805296 / job138707282525, 2026-11-24.
   // Title/date/canonical only; specific press-review attribution is rendered.
   // No article bodies, logos, images or excerpts are enabled by this registration.
-  {id:'descopera-ro-news',publisherId:'descopera',url:'https://www.descopera.ro/feed',format:'rss',language:'ro',feedTitle:'Descopera',feedHome:'https://www.descopera.ro/',articlePath:'/'},
+  {id:'descopera-ro-news',publisherId:'descopera',url:'https://www.descopera.ro/feed',format:'rss',language:'ro',feedTitle:'Descopera',feedHome:'https://www.descopera.ro/',articlePath:'/',requireCurrentFeed:true},
   // Metadata receipt: Actions45469244043 / job138712368119, 2026-11-24.
   // Short headline and linked lead attribution only; no licensed images or full text.
-  {id:'spotmedia-ro-news',publisherId:'spotmedia',url:'https://spotmedia.ro/feed',format:'rss',language:'ro',feedTitle:'spotmedia.ro',feedHome:'https://spotmedia.ro/',articlePath:'/stiri/'},
+  {id:'spotmedia-ro-news',publisherId:'spotmedia',url:'https://spotmedia.ro/feed',format:'rss',language:'ro',feedTitle:'spotmedia.ro',feedHome:'https://spotmedia.ro/',articlePath:'/stiri/',requireCurrentFeed:true},
   // Primary receipt: Actions 45070034177 / job 137354713875. Channel identity is exact;
   // bare channel home is metadata only, not an additional article origin.
   // Distribution guidance: https://www.repubblica.it/static/servizi/rss/

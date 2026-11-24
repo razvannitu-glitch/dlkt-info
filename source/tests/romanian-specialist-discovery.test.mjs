@@ -14,7 +14,7 @@ const candidate=row=>readPublisherNewsCandidates(specialistFeed(row.publisherId)
 test('Romanian additions require observed feed identity, explicit language and exact reviewed origins',()=>{
  for(const [id,feed] of Object.entries(feeds)){
   const config=index(id);assert.ok(config);assert.equal(config.url,feed.url);assert.equal(config.feedTitle,feed.title);assert.equal(config.feedHome,feed.home);
-  assert.equal(config.language,'ro');assert.deepEqual(NEWS_PUBLISHERS.find(value=>value.id===id).origins,[feed.origin]);
+  assert.equal(config.language,'ro');assert.equal(config.requireCurrentFeed,true);assert.deepEqual(NEWS_PUBLISHERS.find(value=>value.id===id).origins,[feed.origin]);
   const found=readPublisherNewsCandidates(specialistFeed(id),config,now);assert.equal(found.length,2);
   for(const item of found){assert.equal(item.publisher,feed.publisher);assert.equal(sourceLanguage(item.sourceUrl),'ro');assert.equal(sourceEditionCountryCode(item.sourceUrl),'RO');}
   for(const invalid of [
@@ -103,4 +103,37 @@ test('only a valid current exact-origin RSS entry can declare a promotional orig
  assert.deepEqual(rejected,[]);
  assert.throws(()=>readPublisherNewsCandidates(specialistFeed(row.publisherId,[{...row,categories:['Advertorial']}]).replace('<title>Descopera</title>','<title>Forged</title>'),config,now,callback),/IDENTITY_INVALID/);
  assert.deepEqual(rejected,[]);
+});
+
+test('reviewed feed admission prevents a promotion returning from unchanged cache and GAL on the next rotation',async()=>{
+ const previous=await discoverNewsWithDiagnostics(specialistFetcher,now,[],undefined,{frontpageHighlights:false,maxArticleRequests:4});
+ const previousCards=previous.sources.flatMap(source=>source.cards);
+ const cache=rows.map(candidate);
+ for(const id of Object.keys(feeds)){
+  const row=rows.find(value=>value.publisherId===id);
+  const vetoFetcher=async input=>String(input)===feeds[id].url
+   ?new Response(specialistFeed(id,rows.filter(value=>value.publisherId===id).map(value=>value.url===row.url?{...value,categories:['Advertorial']}:value)),{headers:{'content-type':'application/rss+xml'}})
+   :specialistFetcher(input);
+  const first=await discoverNewsWithDiagnostics(vetoFetcher,now,cache,undefined,{frontpageHighlights:false,maxArticleRequests:4,retainedCards:previousCards});
+  const firstCards=first.sources.flatMap(source=>source.cards);
+  assert.equal(firstCards.some(card=>card.sourceUrl===row.url),false);
+  const later=now+120000,attempted=[];
+  const laterFetcher=async input=>{
+   const url=String(input);attempted.push(url);
+   if(url==='https://data.gdeltproject.org/gdeltv3/gal/feed.rss')return new Response('<rss><channel><title>GDELT Article List RSS Feed</title><link>'+url+'</link><lastBuildDate>'+new Date(later).toUTCString()+'</lastBuildDate><item><title>'+row.title+'</title><link>'+row.url+'</link></item></channel></rss>',{headers:{'content-type':'application/rss+xml'}});
+   return specialistFetcher(input);
+  };
+  const second=await discoverNewsWithDiagnostics(laterFetcher,later,cache,undefined,{publisherIndexes:false,frontpageHighlights:false,maxArticleRequests:4,retainedCards:firstCards});
+  const secondCards=second.sources.flatMap(source=>source.cards);
+  assert.equal(secondCards.some(card=>card.sourceUrl===row.url),false,id);
+  assert.equal(attempted.some(url=>rows.some(value=>value.url===url)),false,'unconfirmed cached originals consume no article requests');
+  assert.equal(second.diagnostics.totals.requestAttempts,0);
+  assert.equal(second.diagnostics.totals.deferredCapacity,cache.length);
+  assert.ok(second.diagnostics.groups.every(group=>group.counts.pool===0||group.reasons.some(reason=>reason.code==='index-unavailable')));
+  for(const retained of firstCards){
+   const kept=secondCards.find(card=>card.sourceUrl===retained.sourceUrl);
+   assert.ok(kept,'legitimate cards survive feed rotation');assert.equal(kept.observedAt,retained.observedAt);assert.equal(kept.contentHash,retained.contentHash);
+  }
+  assert.ok(validNewsDiagnostics(second.diagnostics,later));
+ }
 });

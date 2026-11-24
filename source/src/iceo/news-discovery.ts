@@ -22,6 +22,7 @@ export const NEWS_ACQUISITION_ROTATION_MS=120_000;
 
 /** Acquisition objectives, never a claim that incomplete source supply is complete. */
 export const NEWS_CATEGORY_ACQUISITION_POLICY=Object.freeze({minimum:7,target:10});
+const currentFeedPublishers:ReadonlySet<string>=new Set(NEWS_DISCOVERY_INDEXES.filter(index=>index.requireCurrentFeed).map(index=>index.publisherId));
 const promotionMarker=/^\s*(?:\[(?:p|advertorial|publicitate)\]|\((?:p|advertorial|publicitate)\))|^\s*(?:advertorial|publicitate)\s*[:–—-]|(?:\[(?:p|advertorial|publicitate)\]|\((?:p|advertorial|publicitate)\))\s*$/iu;
 function explicitlyPromotional(title:string):boolean{return promotionMarker.test(title);}
 const promotionalSections=new Set(['advertorial','advertoriale','publicitate','material publicitar','articol publicitar',
@@ -395,7 +396,7 @@ function rssPublicationDate(value:unknown):string|null{
 /** Index dates only filter candidates. The bound original headline and publication date must still agree. */
 export function readPublisherNewsCandidates(xml:string,index:NewsDiscoveryIndex,now:number,onPromotionalOriginal?:(url:string)=>void):readonly NewsCandidate[]{
   const registered=NEWS_DISCOVERY_INDEXES.find(row=>row.id===index.id);
-  if(!registered||(['url','publisherId','format','language','feedTitle','feedHome','articlePath','allowMissingLanguage'] as const).some(key=>registered[key]!==index[key]))throw new Error('NEWS_INDEX_NOT_REGISTERED');
+  if(!registered||(['url','publisherId','format','language','feedTitle','feedHome','articlePath','allowMissingLanguage','requireCurrentFeed'] as const).some(key=>registered[key]!==index[key]))throw new Error('NEWS_INDEX_NOT_REGISTERED');
   if(Buffer.byteLength(xml)>HTML_BYTES||/<!\s*(?:DOCTYPE|ENTITY)/iu.test(xml)||XMLValidator.validate(xml)!==true)throw new Error('NEWS_INDEX_XML_INVALID');
   // RSS atom:link/dc:language are distinct from channel link/language; collapsing
   // namespaces would corrupt the identity check on the reviewed live feeds.
@@ -693,13 +694,15 @@ export async function discoverNewsWithDiagnostics(fetcher:typeof fetch,now:numbe
     return Object.freeze({sources,diagnostics:diagnostics.finish()});
   }
   const budget:Budget={deadline:Date.now()+bounded(options.deadlineMs,35_000,35_000),timeout:bounded(options.requestTimeoutMs,4000,4000),remaining:bounded(options.maxArticleRequests,80,80),blocked:options.originBackoff??new Map()};
-  const promotionalOriginals=new Set<string>();
+  const promotionalOriginals=new Set<string>(),currentFeedOriginals=new Set<string>();
   let incoming:NewsCandidate[]=[],indexError:string|null=null,indexRetry:string|null=null,successfulIndexes=0,indexCursor=0;
   const indexWorker=async():Promise<void>=>{for(;;){const index=indexes[indexCursor++];if(index===undefined)return;
     let attempted=false;
     try{
       const response=await fetchText(fetcher,index?.url??NEWS_INDEX_URL,index?HTML_BYTES:INDEX_BYTES,budget,false,now,()=>{attempted=true;});
-      incoming.push(...(index?readPublisherNewsCandidates(response.text,index,now,url=>{promotionalOriginals.add(url);}):readNewsCandidates(response.text,now)));successfulIndexes++;diagnostics.index(index,attempted,null);
+      const found=index?readPublisherNewsCandidates(response.text,index,now,url=>{promotionalOriginals.add(url);}):readNewsCandidates(response.text,now);
+      if(index?.requireCurrentFeed)for(const candidate of found)currentFeedOriginals.add(candidate.sourceUrl);
+      incoming.push(...found);successfulIndexes++;diagnostics.index(index,attempted,null);
     }catch(error){indexError=error instanceof NewsRequestError?error.code:error instanceof Error&&/^NEWS_/u.test(error.message)?error.message:'NEWS_INDEX_UNAVAILABLE';indexRetry=error instanceof NewsRequestError?error.retryAt:null;diagnostics.index(index,attempted,indexError);}
   }};
   await Promise.all(Array.from({length:Math.min(4,indexes.length)},()=>indexWorker()));
@@ -724,8 +727,14 @@ export async function discoverNewsWithDiagnostics(fetcher:typeof fetch,now:numbe
   const eligibleRetained=eligibleRetainedNewsCards(options.retainedCards??[],now).filter(card=>!promotionalOriginals.has(card.sourceUrl));
   // Keep the full durable pool, but reserve original-request opportunities only
   // for origins available after index and homepage checks have completed.
-  const deferredOrigins:NewsCandidate[]=[];
+  const deferredOrigins:NewsCandidate[]=[];let deferredFeedCount=0;
   const available=pool.filter(candidate=>{
+    // A seed or independent index cannot bypass a reviewed feed's promotion filter
+    // on a later rotation. Untouched legitimate observations retain their original date.
+    const publisher=publisherForNewsUrl(candidate.sourceUrl);
+    if(publisher&&currentFeedPublishers.has(publisher.id)&&!currentFeedOriginals.has(candidate.sourceUrl)){
+      deferredFeedCount++;diagnostics.deferBeforeScheduling(candidate.sourceUrl,'index-unavailable');return false;
+    }
     if(!originBlocked(budget,new URL(candidate.sourceUrl).origin,now))return true;
     deferredOrigins.push(candidate);diagnostics.deferBeforeScheduling(candidate.sourceUrl,'origin-backoff');return false;
   });
@@ -775,7 +784,7 @@ export async function discoverNewsWithDiagnostics(fetcher:typeof fetch,now:numbe
     const category=source.id===NEWS_UNCLASSIFIED_SOURCE.id?null:source.id.slice(5) as PublicEditorialCategory,accepted=cards.get(category)??[],failed=errors.get(category)??[],checkedAt=new Date(now).toISOString();
     // A failed alternative does not invalidate a separately checked public card.
     const error=accepted.length?null:indexError??(storeError?'NEWS_CANDIDATE_STORE_FAILED':null)??failed[0]??null;
-    return Object.freeze({cards:Object.freeze(accepted),health:Object.freeze({id:source.id,label:source.label,publisher:source.publisher,topic:source.topic,state:accepted.length?'partial' as const:error?'unavailable' as const:'partial' as const,checkedAt,verifiedAt:accepted.length?new Date(Math.max(...accepted.map(card=>Date.parse(card.observedAt)))).toISOString():null,count:accepted.length,rejected:failed.length,error,retryAt:retries.get(category)??indexRetry,scope:source.scope+` Discovery indexes with valid metadata: ${successfulIndexes}/${indexes.length}. Retained candidate pool: ${pool.length}; scheduled originals: ${selected.length}; candidates outside current schedule: ${Math.max(0,pool.length-selected.length)}; candidates deferred by active origin backoff: ${deferredOrigins.length}. Queue rotation: two minutes. Earlier eligible observations retained without re-dating: ${retainedCount}.`,termsUrl:source.termsUrl,windowed:true})});
+    return Object.freeze({cards:Object.freeze(accepted),health:Object.freeze({id:source.id,label:source.label,publisher:source.publisher,topic:source.topic,state:accepted.length?'partial' as const:error?'unavailable' as const:'partial' as const,checkedAt,verifiedAt:accepted.length?new Date(Math.max(...accepted.map(card=>Date.parse(card.observedAt)))).toISOString():null,count:accepted.length,rejected:failed.length,error,retryAt:retries.get(category)??indexRetry,scope:source.scope+` Discovery indexes with valid metadata: ${successfulIndexes}/${indexes.length}. Retained candidate pool: ${pool.length}; scheduled originals: ${selected.length}; candidates outside current schedule: ${Math.max(0,pool.length-selected.length)}; candidates deferred by active origin backoff: ${deferredOrigins.length}; candidates awaiting a current reviewed feed: ${deferredFeedCount}. Queue rotation: two minutes. Earlier eligible observations retained without re-dating: ${retainedCount}.`,termsUrl:source.termsUrl,windowed:true})});
   });
   const featuredCards=categoryResults.flatMap(result=>result.cards).filter(card=>card.sourceIds.includes(NEWS_FEATURED_SOURCE.id));
   const featuredCount=featuredCards.length,priorFeatured=featuredCards.filter(card=>retainedIdentities.has(card.identity));
