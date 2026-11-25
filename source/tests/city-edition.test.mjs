@@ -86,7 +86,7 @@ test('local and daily boundaries reject modified source identity, publisher, geo
  for(const [name,mutate] of mutations){const changed=structuredClone(snapshot);mutate(changed);assert.equal(currentLocalSnapshot(changed,city,now),false,name);assert.equal(parseDaily(stateFor(changed)),null,name+' must also fail on browser persistence');}
 });
 
-test('home selection retains every current city article while diversifying order and separating bounded support',()=>{
+test('home selection retains every current city article and eligible supporting record while diversifying order',()=>{
  const titles=(offset)=>Array.from({length:8},(_,index)=>[
   `Bucuresti: Metrorex publica programul liniei ${offset+index}`,
   `Bucuresti: Scoala ${offset+index} publica inscrierile pentru elevi`,
@@ -95,10 +95,11 @@ test('home selection retains every current city article while diversifying order
  ][index%4]);
  const articles=[...parsed(b365,titles(100)),...parsed(buletin,titles(200))],snapshot=freeze(local(articles,[...heating(),forecast(),...Array.from({length:8},(_,index)=>event(index+1))]));
  assert.equal(currentLocalSnapshot(snapshot,city,now),true);const before=JSON.stringify(snapshot),selected=selectHomeLocal(snapshot,city,now),news=selected.cards.filter(card=>card.kind==='local-news');
- assert.equal(news.length,16);assert.equal(selected.cards.length,20);assert.deepEqual(selected.cards.slice(0,news.length),news);assert.equal(new Set(news.map(card=>card.publisher)).size,2);assert.ok(new Set(news.map(card=>card.news.topic)).size>=3);
+ assert.equal(news.length,16);assert.equal(selected.cards.length,26);assert.deepEqual(selected.cards.slice(0,news.length),news);assert.equal(new Set(news.map(card=>card.publisher)).size,2);assert.ok(new Set(news.map(card=>card.news.topic)).size>=3);
  assert.deepEqual(new Set(news.map(card=>card.id)),new Set(articles.map(article=>article.id)));
  assert.ok(news.filter(card=>card.publisher===b365.publisher).length>4);assert.ok(news.some(card=>news.filter(other=>other.news.topic===card.news.topic).length>3));
- assert.equal(selected.cards.filter(card=>card.kind==='event').length,2);assert.equal(selected.cards.filter(card=>card.kind==='utility-notice').length,1);assert.equal(new Set(selected.cards.map(card=>card.id)).size,selected.cards.length);
+ assert.equal(selected.cards.filter(card=>card.kind==='event').length,8);
+ assert.deepEqual(selected.cards.filter(card=>card.kind==='event'),snapshot.cards.filter(card=>card.kind==='event'),'every eligible event survives the home projection');assert.equal(selected.cards.filter(card=>card.kind==='utility-notice').length,1);assert.equal(new Set(selected.cards.map(card=>card.id)).size,selected.cards.length);
  assert.equal(selected.expiresAt,now+300000);assert.equal(JSON.stringify(snapshot),before);assert.equal(selectHomeLocal(snapshot,city,now+300000).cards.length,0);
 });
 

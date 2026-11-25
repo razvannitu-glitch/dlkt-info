@@ -38,10 +38,12 @@ test('category pages are exact projections of the same native-language city-spec
  const localEntry=local(25),edition=epoch([...records,article(100,{language:'en'})],[localEntry]),service=new NewsPageService(new CorpusMemoryStore([edition]),KEY,()=>NOW+1000);
  const all=[],pages=[];let cursor=null;do{const page=await service.read(request('ro','683506','all',cursor));pages.push(page);all.push(...page.items);cursor=page.nextCursor;}while(cursor);
  assert.equal(all.length,79);assert.equal(all.filter(item=>item.kind==='local').length,25);
- assert.equal(all[0].kind,'local','one verified city article opens the edition');
- assert.ok(all.slice(0,20).some(item=>item.kind==='global'),'global originals participate before the city supply is exhausted');
- assert.ok(all.slice(20).some(item=>item.kind==='local'),'remaining city reports stay reachable in later pages');
- cycles(all);
+ assert.ok(all.slice(0,25).every(item=>item.kind==='local'),'every verified city article precedes the international supply');
+ assert.ok(all.slice(25).every(item=>item.kind==='global'),'international originals follow the complete city band');
+ assert.deepEqual(pages[0].items.map(item=>item.kind),Array(20).fill('local'));
+ assert.deepEqual(pages[1].items.map(item=>item.kind),[...Array(5).fill('local'),...Array(15).fill('global')],'the geographic transition crosses the page boundary without omitting records');
+ assert.equal(new Set(all.map(item=>item.key)).size,79);
+ cycles(all.slice(0,25));cycles(all.slice(25));
  const category=all.find(item=>item.kind==='local').category,filtered=[];cursor=null;
  do{const page=await service.read(request('ro','683506',category??'other',cursor));filtered.push(...page.items);cursor=page.nextCursor;}while(cursor);
  assert.deepEqual(filtered,all.filter(item=>item.category===category));
