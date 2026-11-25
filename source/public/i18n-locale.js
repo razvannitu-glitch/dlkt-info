@@ -38,17 +38,10 @@ const countryAlternatives = Object.freeze({
     MY: ['ms', 'en', 'zh-Hans', 'ta'], PH: ['fil', 'en'], PK: ['ur', 'en'],
     SG: ['en', 'ms', 'zh-Hans', 'ta'], TN: ['ar', 'fr'], TZ: ['sw', 'en'], UG: ['en', 'sw'], ZA: ['en'],
 });
-/** A supported country default precedes browser fallback; unknown or unshipped defaults do not. */
+/** A known country takes precedence over browser fallback; an unshipped language uses English. */
 export function localeFromCountry(input, navigatorLanguages = []) {
-    if (typeof input !== 'string' || !/^[A-Z]{2}$/u.test(input) || input === 'ZZ')
+    if (typeof input !== 'string' || !/^[A-Z]{2}$/u.test(input))
         return null;
-    try {
-        if (new Intl.DisplayNames(['en'], { type: 'region', fallback: 'none' }).of(input) === undefined)
-            return null;
-    }
-    catch {
-        return null;
-    }
     const alternatives = Object.hasOwn(countryAlternatives, input) ? countryAlternatives[input] : undefined;
     if (alternatives) {
         for (const language of navigatorLanguages.slice(0, 32)) {
@@ -60,10 +53,10 @@ export function localeFromCountry(input, navigatorLanguages = []) {
     if (input === 'HK' || input === 'MO')
         return 'zh-Hant';
     try {
-        return canonicalLocale(new Intl.Locale('und-' + input).maximize().toString());
+        return canonicalLocale(new Intl.Locale('und-' + input).maximize().toString()) ?? 'en';
     }
     catch {
-        return null;
+        return 'en';
     }
 }
 /** Duplicate/invalid URL values never select an arbitrary first language. Hash contents are ignored. */
@@ -76,11 +69,8 @@ export function localeFromUrl(input) {
         return null;
     }
 }
-/** Explicit saved/manual preference > entry URL > current country > browser > English. */
+/** URL > explicit saved preference > current country > browser. Invalid explicit URLs use English. */
 export function resolveLocale(explicit, navigatorLanguages = [], context = {}) {
-    const manual = localeFromPreference(context.manualLocale);
-    if (manual)
-        return manual;
     if (explicit !== null && explicit !== undefined) {
         const isUrl = explicit instanceof URL || /[:/?#]/u.test(explicit);
         if (!isUrl)
@@ -94,6 +84,9 @@ export function resolveLocale(explicit, navigatorLanguages = [], context = {}) {
             return 'en';
         }
     }
+    const manual = localeFromPreference(context.manualLocale);
+    if (manual)
+        return manual;
     const country = localeFromCountry(context.countryCode, navigatorLanguages);
     if (country)
         return country;

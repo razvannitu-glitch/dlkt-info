@@ -24,7 +24,7 @@ Production credentials belong in the existing Vercel project's protected environ
 
 ## Reading language
 
-A saved manual language always wins, including over a conflicting entry URL. Without a manual preference or explicit language link, the current approximate IP-country language is the starting point; unsupported national languages fall back through browser preferences to English. Changing the information city does not change the language. English remains available. News selection uses known source languages and preserves original publisher content; no automatic article translation service is enabled. See `source/CONTEXTUAL-EDITION.md` for coverage limits, local-news promotion and acquisition rules.
+A saved manual language always wins, including over a conflicting entry URL. Without a manual preference or explicit language link, the current approximate IP-country language is the starting point; unsupported national languages fall back through browser preferences to English. Changing the information city does not change the language. English remains available. The homepage continuation keeps eligible originals across source languages; edition-filtered endpoints and an explicit source-language filter can narrow them. No automatic article translation service is enabled. See `source/CONTEXTUAL-EDITION.md` for coverage limits, local-news promotion and acquisition rules.
 
 ## Prelaunch control and production identity
 

@@ -120,7 +120,7 @@ export function stageSourceCandidate(originInput:unknown,nameInput:unknown):Sour
   if(worldSourceAtlas().some(source=>source.origin===origin))return null;
   return Object.freeze({
    id:'discovered:'+url.hostname,name:nameInput.trim(),origin,vertical:'news',
-   scope:'international',countryCode:null,status:'candidate',
+   scope:'unknown',countryCode:null,status:'candidate',
    acquisition:'discovery-only',rights:'source-specific-review-required',
   });
  }catch{return null;}

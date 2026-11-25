@@ -36,7 +36,7 @@ test('untrusted discovered hosts are staged, never automatically connected or ge
  assert.equal(discovered.status,'candidate');
  assert.equal(discovered.acquisition,'discovery-only');
  assert.equal(discovered.countryCode,null);
- assert.equal(discovered.scope,'international');
+ assert.equal(discovered.scope,'unknown');
  assert.equal(stageSourceCandidate('https://www.who.int/news','WHO news'),null);
  for(const url of [
   'http://news.example.org',
