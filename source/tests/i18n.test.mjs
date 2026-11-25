@@ -161,21 +161,27 @@ test('current country defaults to its supported language while multilingual coun
   assert.equal(localeFromCountry('IN',['ta-IN','en']),'ta');
   assert.equal(localeFromCountry('TW',['en']),'zh-Hant');
   assert.equal(localeFromCountry('HK',[]),'zh-Hant');
-  assert.equal(localeFromCountry('EE',['ro']),'en','an unshipped national language falls back to English');
-  assert.equal(localeFromCountry('ZZ',['ro']),'en');
+  assert.equal(localeFromCountry('EE',['ro']),null,'an unshipped national language leaves browser fallback available');
+  assert.equal(localeFromCountry('ZZ',['ro']),null);
+  assert.equal(localeFromCountry('XX',['ro']),null,'a syntactically valid but unknown country is not English');
   for(const invalid of [undefined,null,{},'','romania','ro','__proto__','RO?lang=ar'])assert.equal(localeFromCountry(invalid,['fr']),null);
 });
 
-test('reader locale priority is explicit URL, valid manual preference, current country, then browser',()=>{
+test('reader locale priority is valid manual preference, entry URL, current country, then browser',()=>{
   const url='https://www.dlkt.ee/?explore=1&country=JP';
-  assert.equal(resolveLocale(url+'&lang=fr',['ar'],{manualLocale:'en',countryCode:'RO'}),'fr');
+  assert.equal(resolveLocale(url+'&lang=fr',['ar'],{manualLocale:'en',countryCode:'RO'}),'en');
+  assert.equal(resolveLocale(url+'&lang=fr',['ar'],{countryCode:'RO'}),'fr','an entry URL remains available before a manual choice');
   assert.equal(resolveLocale(url,['ar'],{manualLocale:'en',countryCode:'RO'}),'en');
   assert.equal(resolveLocale(url,['en'],{countryCode:'RO'}),'ro');
-  assert.equal(resolveLocale(url,['ar'],{countryCode:'EE'}),'en');
+  assert.equal(resolveLocale(url,['ar'],{countryCode:'EE'}),'ar');
+  assert.equal(resolveLocale(url,['ro-RO','en-GB'],{countryCode:'EE'}),'ro');
+  assert.equal(resolveLocale(url,['ro-RO'],{countryCode:'ZZ'}),'ro');
+  assert.equal(resolveLocale(url,['zz-ZZ'],{countryCode:'EE'}),'en');
   assert.equal(resolveLocale(url,['ar'],{manualLocale:'{"locale":"en"}'}),'ar');
   assert.equal(resolveLocale(url,['ar'],{manualLocale:'unknown',countryCode:'RO'}),'ro');
   assert.equal(resolveLocale(url,['ar']), 'ar');
   for(const invalid of ['lang=unknown','lang=fr&lang=ar','lang=','lang=%3Cscript%3E']){
-    assert.equal(resolveLocale(url+'&'+invalid,['fr'],{manualLocale:'ro',countryCode:'RO'}),'en',invalid);
+    assert.equal(resolveLocale(url+'&'+invalid,['fr'],{manualLocale:'ro',countryCode:'RO'}),'ro',invalid);
+    assert.equal(resolveLocale(url+'&'+invalid,['fr'],{countryCode:'RO'}),'en','invalid explicit entry still fails closed: '+invalid);
   }
 });

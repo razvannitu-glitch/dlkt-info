@@ -126,9 +126,9 @@ test('appearance labels follow both theme and all30 language changes without cha
   assert.deepEqual(h.sideEffects,[]);
 });
 
-test('popstate restores presentation from the historical URL without pushing another entry or touching preferences',t=>{
+test('popstate preserves the latest manual language without pushing another entry or touching preferences',t=>{
   const h=harness(t);h.choose('ro');const romanian=h.win.location.href;h.choose('ar');const arabic=h.win.location.href,storageCount=h.storageCalls.length;
-  h.pop(romanian);assert.equal(h.doc.documentElement.lang,'ro');assert.equal(h.doc.documentElement.dir,'ltr');assert.equal(h.picker.value,'ro');
+  h.pop(romanian);assert.equal(h.doc.documentElement.lang,'ar');assert.equal(h.doc.documentElement.dir,'rtl');assert.equal(h.picker.value,'ar');
   h.pop(arabic);assert.equal(h.doc.documentElement.lang,'ar');assert.equal(h.doc.documentElement.dir,'rtl');assert.equal(h.picker.value,'ar');
   assert.equal(h.win.location.searchParams.get('city'),'1850147');assert.equal(h.win.location.searchParams.get('country'),'JP');assert.equal(h.win.location.searchParams.get('category'),'culture');
   assert.equal(h.historyCalls.length,2);assert.equal(h.storageCalls.length,storageCount);assert.equal(h.stored.get(preferenceKey),'ar');assert.deepEqual(h.sideEffects,[]);
@@ -181,14 +181,16 @@ test('a manual preference survives a fresh controller and location detection aft
   const stored=new Map([['unrelated-setting','keep-me']]);
   const first=harness(t,'https://www.dlkt.ee/',{stored});first.choose('ro');
   assert.equal(stored.get(preferenceKey),'ro');first.cleanup();
-  const reloaded=harness(t,'https://www.dlkt.ee/',{stored,languages:['en-GB']});
+  const reloaded=harness(t,'https://www.dlkt.ee/?lang=fr&country=DE#reading',{stored,languages:['en-GB']});
   assert.equal(reloaded.doc.documentElement.lang,'ro');assert.equal(reloaded.picker.value,'ro');
   reloaded.country('DE');assert.equal(reloaded.doc.documentElement.lang,'ro');
+  reloaded.pop('https://www.dlkt.ee/?lang=fr&lang=ar&country=DE#reading');
+  assert.equal(reloaded.doc.documentElement.lang,'ro');assert.equal(reloaded.win.location.hash,'#reading');
   assert.deepEqual(reloaded.storageCalls,[['get',preferenceKey]]);
   assert.equal(stored.get('unrelated-setting'),'keep-me');assert.equal(reloaded.historyCalls.length,0);assert.deepEqual(reloaded.sideEffects,[]);
 });
 
-test('a current home-city selection changes the implicit language; restored and malformed cities do not',t=>{
+test('only a current estimated city changes implicit language; manual, restored and malformed cities do not',t=>{
   const h=harness(t,'https://www.dlkt.ee/?explore=1&country=JP#reading');
   h.country('RO',{estimated:true,restored:true});
   for(const detail of [null,[],{},'RO',{city:null,estimated:true,restored:false},{city:{countryCode:'ro'},estimated:true,restored:false},{city:{countryCode:'RO'},estimated:'true',restored:false}]){
@@ -197,21 +199,23 @@ test('a current home-city selection changes the implicit language; restored and 
   assert.equal(h.doc.documentElement.lang,'en');assert.deepEqual(h.localeEvents,['en']);
   h.country('RO');assert.equal(h.doc.documentElement.lang,'ro');
   h.country('IT',{estimated:false,restored:false});
-  assert.equal(h.doc.documentElement.lang,'it');assert.equal(h.picker.value,'it');
+  assert.equal(h.doc.documentElement.lang,'ro');assert.equal(h.picker.value,'ro');
   assert.equal(h.win.location.searchParams.get('country'),'JP');assert.equal(h.win.location.hash,'#reading');
   assert.equal(h.win.location.searchParams.has('lang'),false);assert.equal(h.historyCalls.length,0);
-  assert.deepEqual(h.localeEvents,['en','ro','it']);assert.deepEqual(h.storageCalls,[['get',preferenceKey]]);
+  assert.deepEqual(h.localeEvents,['en','ro']);assert.deepEqual(h.storageCalls,[['get',preferenceKey]]);
   assert.equal(h.stored.size,0);assert.deepEqual(h.sideEffects,[]);
 });
 
-test('late automatic country or city hints cannot undo the explicitly selected home country',t=>{
+test('manual information-city choices do not block current automatic country hints',t=>{
   const h=harness(t,'https://www.dlkt.ee/');
   h.country('IT',{estimated:false,restored:false});
+  assert.equal(h.doc.documentElement.lang,'en');
   h.doc.dispatchEvent(new CustomEventFixture('dlkt:country-detected',{detail:{countryCode:'RO',estimated:true}}));
-  h.country('US');h.country('DE',{estimated:false,restored:true});
-  assert.equal(h.doc.documentElement.lang,'it');assert.deepEqual(h.localeEvents,['en','it']);
-  h.country('FR',{estimated:false,restored:false});assert.equal(h.doc.documentElement.lang,'fr');
-  h.country('US');assert.equal(h.doc.documentElement.lang,'fr');
+  assert.equal(h.doc.documentElement.lang,'ro');assert.equal(h.picker.value,'ro');
+  h.country('DE',{estimated:false,restored:true});
+  h.country('FR',{estimated:false,restored:false});assert.equal(h.doc.documentElement.lang,'ro');
+  h.country('US');assert.equal(h.doc.documentElement.lang,'en');
+  assert.deepEqual(h.localeEvents,['en','ro','en']);
   assert.equal(h.historyCalls.length,0);assert.equal(h.stored.size,0);assert.deepEqual(h.sideEffects,[]);
 });
 
@@ -224,13 +228,14 @@ test('a manual English preference or explicit URL wins over a new Italian home-c
   assert.deepEqual(saved.storageCalls,[['get',preferenceKey]]);assert.deepEqual(saved.sideEffects,[]);
 });
 
-test('multilingual countries use eligible browser choices and unsupported countries fall back to English',t=>{
+test('multilingual countries use local browser choices and unsupported defaults fall through to browser',t=>{
   const h=harness(t,'https://www.dlkt.ee/',{languages:['fr-CA','en-CA']});
   h.country('CA');assert.equal(h.doc.documentElement.lang,'fr');
   h.browser.languages=['en-CA','fr-CA'];h.win.dispatchEvent(new Event('languagechange'));
   assert.equal(h.doc.documentElement.lang,'en');
   h.country('RO');assert.equal(h.doc.documentElement.lang,'ro');
-  h.country('EE');assert.equal(h.doc.documentElement.lang,'en');
+  h.browser.languages=['ro-RO','en-GB'];h.country('EE');assert.equal(h.doc.documentElement.lang,'ro');
+  h.browser.languages=['zz-ZZ'];h.win.dispatchEvent(new Event('languagechange'));assert.equal(h.doc.documentElement.lang,'en');
   assert.deepEqual(h.storageCalls,[['get',preferenceKey]]);assert.equal(h.historyCalls.length,0);
 });
 

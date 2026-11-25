@@ -1163,6 +1163,78 @@ async function verifyAccountSurfaces(call,origin,outputDir){
  return observations;
 }
 
+async function verifyLocalePreference({openIsolated,origin,fixture,personal}) {
+ assert.equal(personal.active,false,'private fixture is inactive before locale acceptance');
+ assert.equal(fixture.city.countryCode,'RO','the existing initial location fixture is Romanian');
+ const isolated=await openIsolated(),{call}=isolated,key='dlkt-reader-language-v1';
+ const read=()=>evaluate(call,`(() => ({
+  ready:document.readyState,timeOrigin:performance.timeOrigin,href:location.href,
+  locale:document.documentElement.lang,picker:document.querySelector('#reader-language')?.value,
+  stored:localStorage.getItem(${JSON.stringify(key)})
+ }))()`);
+ async function expect(locale,stored,{oldTime=null,href=null}={}) {
+  let current;
+  for(let attempt=0;attempt<60;attempt++) {
+   current=await read();
+   if(current.ready==='complete'&&current.locale===locale&&current.picker===locale&&current.stored===stored
+    &&(oldTime===null||current.timeOrigin!==oldTime)&&(href===null||current.href===href))return current;
+   await pause(100);
+  }
+  throw Error('DLKT_UI_LOCALE_TIMEOUT_'+JSON.stringify({locale,stored,current}));
+ }
+ async function visit(url,locale,stored) {
+  const oldTime=await evaluate(call,'performance.timeOrigin');
+  await call('Page.navigate',{url});await loaded(call);
+  return expect(locale,stored,{oldTime,href:url});
+ }
+ async function reload(locale) {
+  const before=await read();
+  await call('Page.reload',{ignoreCache:true});await loaded(call);
+  return expect(locale,locale,{oldTime:before.timeOrigin,href:before.href});
+ }
+ async function choose(locale) {
+  assert.equal(await evaluate(call,`(() => {
+   const picker=document.querySelector('#reader-language');if(!picker)return false;
+   picker.value=${JSON.stringify(locale)};picker.dispatchEvent(new Event('change',{bubbles:true}));return true;
+  })()`),true);
+  await expect(locale,locale);
+ }
+ async function country(countryCode) {
+  await evaluate(call,`(() => {
+   document.dispatchEvent(new CustomEvent('dlkt:country-detected',{detail:${JSON.stringify({countryCode,estimated:true})}}));return true;
+  })()`);
+ }
+ async function city(restored=false) {
+  await evaluate(call,`(() => {
+   document.dispatchEvent(new CustomEvent('dlkt:city-selected',{detail:${JSON.stringify({city:fixture.city,estimated:false,restored})}}));return true;
+  })()`);
+ }
+ try {
+  await visit(origin+'/','ro',null);
+  await country('FR');await expect('fr',null);
+  await city();await expect('fr',null);
+  await city(true);await expect('fr',null);
+  await country('DE');await expect('de',null);
+
+  await choose('en');
+  await visit(origin+'/?lang=ro&country=FR#reading','en','en');
+  await reload('en');
+  await country('RO');await city();await expect('en','en');
+
+  await choose('ro');
+  await visit(origin+'/?lang=en&country=DE#reading','ro','ro');
+  await reload('ro');
+  await country('FR');await city(true);await expect('ro','ro');
+  await visit(origin+'/?lang=fr&lang=ar#reading','ro','ro');
+
+  return {status:'LOCALE_PREFERENCE_BROWSER_PASS',automaticCountryDefault:true,
+   manualCityPreservesLanguage:true,restoredCityPreservesLanguage:true,lateAutomaticHintRemainsUsable:true,
+   manualEnglishOverridesConflictingUrl:true,manualRomanianOverridesConflictingUrl:true,
+   malformedUrlCannotOverrideManual:true,realReloadPersistence:true,lateCountryCannotOverrideManual:true,
+   scope:'Actual compiled locale controller and localStorage in an isolated Chromium context; country events are controlled fixtures. No translation, hosted account or live IP check.'};
+ }finally{await isolated.close();}
+}
+
 async function run(){
  if(typeof WebSocket!=='function')throw Error('DLKT_UI_NODE_WEBSOCKET_UNAVAILABLE');
  const bin=process.env.DLKT_CHROME_BIN??'/usr/bin/google-chrome';
@@ -1251,8 +1323,10 @@ async function run(){
   const account=await verifyAccountSurfaces(cdp,'http://'+HOST+':'+binding.port,outputDir);
   const personalProfile=await verifyPersonalProfileFlow({call:cdp,origin:'http://'+HOST+':'+binding.port,
    fixture:personal,evaluate,loaded,focusSelector,keyboard,openIsolated:()=>openIsolatedChrome(port),outputDir,emitVisualPreview});
+  const localePreference=await verifyLocalePreference({openIsolated:()=>openIsolatedChrome(port),
+   origin:'http://'+HOST+':'+binding.port,fixture,personal});
   const result={version:'dlkt-info-offline-browser-smoke-3',status:'OFFLINE_BROWSER_PASS',
-   scope:'local-built-reader-with-controlled-news-local-and-private-profile-transport',viewports:observations,account,personalProfile,fixture:{storyCount:fixture.storyCount,articleTotal:fixture.articleTotal,groupOriginals:fixture.urls.length,sourceOnlyOriginals:fixture.sourceOnly.length,localCards:fixture.localIds.length,localContract:'currentLocalSnapshot'},
+   scope:'local-built-reader-with-controlled-news-local-and-private-profile-transport',viewports:observations,account,personalProfile,localePreference,fixture:{storyCount:fixture.storyCount,articleTotal:fixture.articleTotal,groupOriginals:fixture.urls.length,sourceOnlyOriginals:fixture.sourceOnly.length,localCards:fixture.localIds.length,localContract:'currentLocalSnapshot'},
    limitations:['News pages use the actual service over controlled corpus fixtures. The additional private phase uses synthetic account identities; no external publisher request, hosted authentication, payment or production runtime availability is tested.',
     'The three grouped publisher headlines and four reviewed-source originals reproduce observed metadata; source-check and publication dates are controlled fixtures.',
     'Local weather and CMTEB records are synthetic controlled fixtures validated by the actual city/source contracts, not live operator or forecast checks.',
