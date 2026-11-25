@@ -749,7 +749,7 @@ function accountPreferencesProbe(){
  const fields=['account-profile-name','account-profile-locale','account-profile-timezone'].map(id=>{const node=must('#'+id);return {id,...box(node),fontSize:parseFloat(getComputedStyle(node).fontSize)};});
  const save=must('#account-profile-save'),saveStyle=getComputedStyle(save);
  return {width:innerWidth,documentWidth:document.documentElement.scrollWidth,theme:document.documentElement.dataset.readerTheme,
-  root:box(root),formVisible:visible(form),panelHidden:must('#account-data').hidden,name:must('#account-profile-name').value,
+  root:box(root),interfaceLocale:document.documentElement.lang,formVisible:visible(form),panelHidden:must('#account-data').hidden,name:must('#account-profile-name').value,
   locale:locale.value,localeTag:locale.tagName,localeOptions:[...locale.options].map(option=>option.value),timezone:must('#account-profile-timezone').value,
   city:city.checked?city.value:'',cityLabelText:must('#account-profile-city-name').textContent.trim(),
   needs:needs.choices.filter(choice=>choice.checked).map(choice=>choice.value),interests:interests.choices.filter(choice=>choice.checked).map(choice=>choice.value),
@@ -763,11 +763,15 @@ function assertAccountPreferencesLayout(state,width,expected){
  assert.ok(state.welcomeText.length>0);assert.equal(state.journeyCount,4);assert.equal(state.images.length,2);
  assert.ok(state.images.every(image=>image.complete&&image.naturalWidth>0&&image.naturalHeight>0),'both Kate images load');
  assert.ok(state.documentWidth<=width+2,'account has no horizontal document overflow');
+ assert.equal(state.interfaceLocale,'ro','controlled account keeps the selected Romanian interface');
+ assert.ok(state.fonts.need>=14&&state.fonts.interest>=14,'choice labels retain readable 14px type rather than inherited helper text');
+ for(const [groupIndex,value,text]of [[0,'administration','Administratie'],[0,'local-reporting','Stiri locale'],[1,'business','Afaceri']])assert.equal(state.groups[groupIndex].choices.find(choice=>choice.value===value)?.text,text,'Romanian choice labels are rendered in the selected language');
  const inside=node=>node.left>=-1&&node.right<=width+1;assert.ok(inside(state.root));
  for(const field of state.fields)assert.ok(inside(field)&&field.height>=43.5&&field.fontSize>=16,'readable profile field: '+JSON.stringify(field));
  const canonical=[expected.accountNeeds,expected.accountInterests];
  for(let i=0;i<state.groups.length;i++){
   const group=state.groups[i],values=group.choices.map(choice=>choice.value);assert.equal(group.grid,true);assert.ok(inside(group));
+  assert.ok(Math.abs(group.left-state.fields[0].left)<=1&&Math.abs(group.right-state.fields[0].right)<=1,'each choice grid uses the full form width, with aligned field edges');
   assert.deepEqual([...values].sort(),[...canonical[i]].sort(),'every canonical option appears exactly once');assert.equal(new Set(values).size,values.length);
   for(const choice of group.choices)assert.ok(choice.type==='checkbox'&&choice.associated&&choice.visible&&!choice.disabled&&choice.text&&choice.textFits&&inside(choice)&&choice.width>=43.5&&choice.height>=43.5&&choice.left>=group.left-1&&choice.right<=group.right+1,'native choice has a complete label: '+JSON.stringify(choice));
   for(let a=0;a<group.choices.length;a++)for(let b=a+1;b<group.choices.length;b++){const x=group.choices[a],y=group.choices[b];

@@ -203,13 +203,13 @@
 .account-page .account-city-choice legend,.account-page .account-choice-grid legend{padding:0;margin-block-end:12px;font-size:13px;font-weight:700;color:var(--muted)}
 .account-page .account-city-choice label,.account-page .account-choice-grid>label{display:flex;align-items:center;gap:10px;min-block-size:52px;min-inline-size:0;margin:0;padding:13px 14px;border:1px solid var(--line);border-radius:12px;background:var(--white);font-size:14px;line-height:1.5;font-weight:600;cursor:pointer;overflow-wrap:anywhere}
 .account-page .account-city-choice label>input,.account-page .account-choice-grid>label>input{flex:none;inline-size:18px;block-size:18px;min-inline-size:18px;margin:0;accent-color:var(--reader-selected,var(--black))}
-.account-page .account-choice-grid>label>span{min-inline-size:0}
+.account-page .account-choice-grid>label>span{min-inline-size:0;font:inherit;color:inherit}
 .account-page .account-choice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:0;margin:0;border:0;min-inline-size:0}
 .account-page .account-choice-grid legend{float:none;grid-column:1/-1}
 .account-page .account-choice-grid>label:has(input:checked),.account-page .account-city-choice label:has(input:checked){border-color:var(--black);background:var(--soft);box-shadow:inset 0 0 0 1px var(--black)}
 .account-page .account-choice-grid>label:has(input:focus-visible),.account-page .account-city-choice label:has(input:focus-visible){outline:3px solid var(--reader-focus,var(--black));outline-offset:3px}
 .account-page .account-choice-grid>label:has(input:disabled),.account-page .account-city-choice label:has(input:disabled){cursor:wait;opacity:.7}
-.account-interests-fieldset{min-inline-size:0;margin:0;padding:0;border:0}
+.account-interests-fieldset{display:block;inline-size:100%;min-inline-size:0;margin:0;padding:0;border:0}
 .account-save-bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;padding:20px;margin-block-start:4px;border:1px solid var(--line);border-radius:14px;background:var(--soft)}
 .account-page .account-save-bar p{flex:1 1 180px;margin:0;font-size:12px;line-height:1.6;color:var(--muted)}
 .account-save-bar .primary{flex:0 0 auto;min-block-size:48px;white-space:normal;padding:12px 20px}
