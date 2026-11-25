@@ -6,7 +6,7 @@ const OTP = /^\d{6,10}$/u;
 const ACCESS_TOKEN = /^[A-Za-z0-9_-]{8,2048}\.[A-Za-z0-9_-]{8,4096}\.[A-Za-z0-9_-]{8,2048}$/u;
 // Supabase Auth also issues 12-character opaque refresh tokens.
 const REFRESH_TOKEN = /^[A-Za-z0-9._~-]{12,4096}$/u;
-const LOCALE = /^[a-z]{2,3}(?:-[A-Z]{2})?$/u;
+const LOCALE = /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{1,8})*$/u;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -29,8 +29,9 @@ export function readIdentityOtp(value: unknown): string {
 }
 
 export function readIdentityLocale(value: unknown): string {
-  if (typeof value !== 'string' || !LOCALE.test(value)) return 'en';
-  return value;
+  // Preserve bounded BCP47 script/region variants; malformed metadata retains the existing English fallback.
+  if (typeof value !== 'string' || value.length > 80 || !LOCALE.test(value)) return 'en';
+  try { new Intl.Locale(value); return value; } catch { return 'en'; }
 }
 
 export function readIdentityTimezone(value: unknown): string {

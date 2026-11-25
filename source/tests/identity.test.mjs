@@ -142,7 +142,7 @@ test('request-code normalizes input and sends only bounded public metadata', asy
   });
   assert.equal(res.value.statusCode, 202);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, `${URL}/auth/v1/otp`);
+  assert.equal(calls[0].url, `${URL}/auth/v1/otp?redirect_to=${encodeURIComponent('https://www.dlkt.ee/account?lang=en')}`);
   assert.equal(calls[0].init.headers.apikey, KEY);
   assert.deepEqual(calls[0].body, {
     email: 'person@example.com',
@@ -279,4 +279,57 @@ test('malformed provider session and provider throttling fail closed', async () 
   }), throttled.value, { environment: READY_ENV, provisioning: READY_PROVISIONING, fetch: async () => json({ message: 'slow down' }, 429) });
   assert.equal(throttled.value.statusCode, 429);
   assert.deepEqual(throttled.json(), { error: 'IDENTITY_RATE_LIMITED' });
+});
+
+test('authentication email redirects cover the full locale catalog on one fixed destination',async()=>{
+ const {LOCALES}=await import('../.build/src/i18n/locale.js');
+ const {authenticationEmailRedirect}=await import('../.build/src/identity/email-locale.js');
+ const codes=new Set(LOCALES.map(({code})=>code));assert.equal(codes.size,30);
+ const regional=[['en-GB','en'],['ro-RO','ro'],['fr-CA','fr'],['es-MX','es'],['pt-BR','pt'],['de-AT','de'],['it-CH','it'],['nl-BE','nl'],['pl-PL','pl'],['tr-TR','tr'],['ru-RU','ru'],['uk-UA','uk'],['ar-MA','ar'],['he-IL','he'],['fa-IR','fa'],['ur-PK','ur'],['hi-IN','hi'],['bn-BD','bn'],['zh-Hans-CN','zh-Hans'],['zh-Hant-TW','zh-Hant'],['ja-JP','ja'],['ko-KR','ko'],['id-ID','id'],['ms-MY','ms'],['vi-VN','vi'],['th-TH','th'],['sw-KE','sw'],['ta-LK','ta'],['te-IN','te'],['fil-PH','fil']];
+ assert.deepEqual(new Set(regional.map(([,expected])=>expected)),codes);
+ const cases=[...LOCALES.map(({code})=>[code,code]),...regional,['zh','zh-Hans'],['zh-CN','zh-Hans'],['zh-SG','zh-Hans'],['zh-TW','zh-Hant'],['zh-HK','zh-Hant'],['zh-MO','zh-Hant'],['iw-IL','he'],['in-ID','id'],['tl-PH','fil'],['UR','ur'],['RO-ro','ro'],['EN-gb','en'],['de-DE-u-ca-gregory','de'],['sr-Latn-RS','en'],['','en'],[' ro ','en'],['not_a_locale','en']];
+ for(const [input,expected]of cases)assert.equal(authenticationEmailRedirect(input),'https://www.dlkt.ee/account?lang='+expected,input);
+ for(const input of ['https://attacker.example/account?lang=ro','//attacker.example','ro&redirect_to=https://attacker.example','ro%26lang%3Den','ro\r\nX-Test: injected','en#https://attacker.example']){
+  const destination=new globalThis.URL(authenticationEmailRedirect(input));
+  assert.equal(destination.origin,'https://www.dlkt.ee',input);assert.equal(destination.pathname,'/account',input);
+  assert.equal(destination.username,'',input);assert.equal(destination.password,'',input);assert.equal(destination.hash,'',input);
+  assert.deepEqual([...destination.searchParams.keys()],['lang'],input);assert.ok(codes.has(destination.searchParams.get('lang')),input);
+ }
+});
+test('request-code transports the current canonical locale without changing the OTP payload',async()=>{
+ const {handleIdentityRequest}=await import('../.build/api/auth.js');
+ const {LOCALES}=await import('../.build/src/i18n/locale.js');
+ for(const {code}of LOCALES){
+  const calls=[],res=response();
+  await handleIdentityRequest(request({method:'POST',body:{action:'request-code',email:'person@example.com',timezone:'Europe/Bucharest',locale:code}}),res.value,{
+   environment:READY_ENV,provisioning:READY_PROVISIONING,
+   fetch:async(url,init)=>{calls.push({url,init,body:JSON.parse(String(init.body))});return json({});}
+  });
+  assert.equal(res.value.statusCode,202,code);assert.equal(calls.length,1,code);
+  const expectedDestination='https://www.dlkt.ee/account?lang='+code;
+  assert.equal(calls[0].url,URL+'/auth/v1/otp?redirect_to='+encodeURIComponent(expectedDestination),code);
+  const outgoing=new globalThis.URL(String(calls[0].url));assert.equal(outgoing.origin,URL,code);assert.equal(outgoing.pathname,'/auth/v1/otp',code);
+  assert.deepEqual([...outgoing.searchParams.keys()],['redirect_to'],code);assert.equal(outgoing.searchParams.get('redirect_to'),expectedDestination,code);
+  assert.equal(calls[0].init.method,'POST',code);assert.equal(calls[0].init.redirect,'error',code);assert.equal(calls[0].init.cache,'no-store',code);
+  assert.deepEqual(calls[0].body,{email:'person@example.com',create_user:true,data:{locale:code,timezone:'Europe/Bucharest'}},code);
+  assert.equal(JSON.stringify(res.json()).includes('person@example.com'),false,code);
+ }
+});
+test('malformed locale metadata uses the existing safe English fallback and cannot change the provider destination',async()=>{
+ const {handleIdentityRequest}=await import('../.build/api/auth.js');
+ for(const locale of ['https://attacker.example/account?lang=ro','ro&redirect_to=https://attacker.example','ro%26lang%3Den','ro\r\nX-Test: injected','zh--Hant','en-'+'x'.repeat(90),null,{}]){
+  const calls=[],res=response();
+  await handleIdentityRequest(request({method:'POST',body:{action:'request-code',email:'person@example.com',timezone:'UTC',locale}}),res.value,{
+   environment:READY_ENV,provisioning:READY_PROVISIONING,fetch:async(url,init)=>{calls.push({url,body:JSON.parse(String(init.body))});return json({});}
+  });
+  assert.equal(res.value.statusCode,202,JSON.stringify(locale));assert.equal(calls.length,1);
+  assert.equal(calls[0].url,URL+'/auth/v1/otp?redirect_to='+encodeURIComponent('https://www.dlkt.ee/account?lang=en'));
+  assert.deepEqual(calls[0].body,{email:'person@example.com',create_user:true,data:{locale:'en',timezone:'UTC'}});
+ }
+});
+test('identity metadata retains script and regional BCP47 variants before the allowlisted email resolution',async()=>{
+ const {readIdentityLocale}=await import('../.build/src/identity/guards.js');
+ for(const value of ['zh-Hans','zh-Hant','zh-Hant-TW','ro-RO','sr-Latn-RS','en-GB','de-DE-u-ca-gregory'])assert.equal(readIdentityLocale(value),value);
+ const overlong='en-x-'+Array(9).fill('abcdefgh').join('-');assert.ok(overlong.length>80);
+ for(const value of ['ro%26lang%3Den','zh--Hant','en-123456789','en-a','en-K',overlong,undefined,[],false])assert.equal(readIdentityLocale(value),'en');
 });

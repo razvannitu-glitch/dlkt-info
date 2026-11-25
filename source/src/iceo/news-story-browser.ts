@@ -68,7 +68,7 @@ function sourceNode(source:NewsStorySource,locale:Locale,timeZone:string):HTMLLI
  language.dataset.originalLanguage=originalLanguage??'unknown';
  language.textContent=originalLanguage?(new Intl.DisplayNames([locale],{type:'language'}).of(originalLanguage)??originalLanguage):locale==='ro'?'Limba sursei neprecizata':locale==='it'?'Lingua della fonte non specificata':'Source language unspecified';
  meta.append(publisher,document.createTextNode(' · '),date,document.createTextNode(' · '),language);row.append(meta,link);
- if(citation){const original=document.createElement('a');original.className='text-button';original.href=source.card.sourceUrl;original.textContent=citation.originalLabel;original.target='_blank';original.rel='noopener noreferrer';row.append(original);}
+ if(citation){const original=document.createElement('a');original.className='text-button';original.href=source.card.sourceUrl;original.textContent=t(locale,'openSource');original.target='_blank';original.rel='noopener noreferrer';row.append(original);}
  return row;
 }
 

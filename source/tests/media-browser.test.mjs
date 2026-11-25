@@ -149,10 +149,10 @@ test('actual parsed local news cards bind their photo request to the document ha
   const record=parsed.articles[0],card=newsCard(record,city),before=JSON.stringify(card),article=localCardNode(card,city,time),figure=article.querySelector('figure'),image=figure.querySelector('img');
   assert.deepEqual(parseArticlePhotoReference(image.src),{id:record.id,revision:record.documentHash,cityId:city.id});
   assert.equal(article.querySelector('h3').textContent,title);assert.equal(article.dataset.newsSourceId,sourceId);assert.equal(JSON.stringify(card),before);
-  assert.ok(article.querySelectorAll('a').some(link=>link.href===record.url&&link.textContent==='Read the full report'));
+  assert.ok(article.querySelectorAll('a').some(link=>link.href===record.url&&link.textContent==='Open source'));
   assert.ok(article.textContent.includes(record.attribution));if(record.licenseUrl)assert.ok(article.querySelectorAll('a').some(link=>link.href===record.licenseUrl));
   image.dispatchEvent(new Event('error'));await Promise.resolve();assert.equal(article.querySelector('figure'),null);assert.equal(article.querySelector('h3').textContent,title);
-  assert.ok(article.querySelectorAll('a').some(link=>link.href===record.url&&link.textContent==='Read the full report'));assert.equal(JSON.stringify(card),before);
+  assert.ok(article.querySelectorAll('a').some(link=>link.href===record.url&&link.textContent==='Open source'));assert.equal(JSON.stringify(card),before);
  }
 });
 

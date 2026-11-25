@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {parseDocument,DomUtils} from 'htmlparser2';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
@@ -84,15 +85,26 @@ test('the real home source control starts all, preserves the chosen interface la
  context.renderDiscovery=()=>{renders++;runInNewContext(labels,context);};
  runInNewContext(handlers,context);context.renderDiscovery();
  assert.equal(nodes.get('#home-news-language-label').textContent,'Toate sursele · limbi originale');
- assert.equal(nodes.get('#home-news-source-scope').textContent,'Inapoi la romana');assert.equal(nodes.get('#home-news-english').hidden,false);
+ assert.equal(nodes.get('#home-news-source-scope').textContent,'Surse in romana');assert.equal(nodes.get('#home-news-english').hidden,false);assert.equal(nodes.get('#home-news-english').lang,'ro');
  listeners.get('#home-news-source-scope:click')();
  assert.equal(context.newsSourceScope,'edition');assert.equal(context.language,'ro');
- assert.equal(nodes.get('#home-news-language-label').textContent,'romana');assert.equal(nodes.get('#home-news-source-scope').textContent,'Toate sursele');
+ assert.equal(nodes.get('#home-news-language-label').textContent,'romana');assert.equal(nodes.get('#home-news-source-scope').textContent,'Toate limbile');
  listeners.get('#home-news-source-scope:click')();assert.equal(context.newsSourceScope,'all');
  listeners.get('#home-news-english:click')();assert.equal(context.newsSourceScope,'edition');assert.equal(context.language,'en');
- assert.equal(nodes.get('#home-news-language-label').textContent,'English');assert.equal(nodes.get('#home-news-english').hidden,true);
+ assert.equal(nodes.get('#home-news-language-label').textContent,'English');assert.equal(nodes.get('#home-news-english').hidden,true);assert.equal(nodes.get('#home-news-english').lang,'en');
  listeners.get('#home-news-source-scope:click')();assert.equal(context.newsSourceScope,'all');assert.equal(context.language,'en');assert.equal(nodes.get('#home-news-english').hidden,false);
  const before=renders;listeners.get('#home-news-english:click')();
  assert.equal(context.newsSourceScope,'edition');assert.equal(context.language,'en');assert.equal(renders,before+1,'English still changes scope when the interface is already English');
  assert.equal(context.newsFilter,'07000000');assert.equal(context.newsPeriod,'today');
+});
+
+test('source language choices stay outside period details and do not imply translation',()=>{
+ const nodes=DomUtils.findAll(node=>node.type==='tag',parseDocument(readFileSync('public/iceo.html','utf8')).children);
+ const language=nodes.find(node=>node.attribs?.id==='home-news-language');
+ const scope=nodes.find(node=>node.attribs?.id==='home-news-source-scope');
+ assert.ok(language);assert.equal(language.parent.attribs?.id,'home-news-toolbar');
+ for(let parent=language.parent;parent;parent=parent.parent)assert.notEqual(parent.name,'details');
+ assert.equal(scope.attribs['aria-describedby'],'home-news-language-label');
+ assert.equal(scope.attribs['aria-pressed'],undefined);
+ assert.equal(DomUtils.textContent(scope),'Sources in English');
 });

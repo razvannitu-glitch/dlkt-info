@@ -67,7 +67,7 @@ export function applyInterfaceLanguage(root:ParentNode=document):void {
   }
 }
 
-export function setupLanguage():void {
+export function setupLanguage(options:Readonly<{updateUrl?:boolean}>={}):void {
   const picker=document.getElementById('reader-language');
   if(!(picker instanceof HTMLSelectElement))throw Error('I18N_PICKER_MISSING');
   for(const locale of LOCALES){
@@ -87,8 +87,8 @@ export function setupLanguage():void {
   picker.addEventListener('change',()=>{
     const locale=localeFromPreference(picker.value);if(!locale)return;
     state.manualLocale=locale;
-    try{window.localStorage.setItem(LANGUAGE_STORAGE_KEY,locale);}catch{/* The URL and in-memory choice still work. */}
-    history.pushState(null,'',localeUrl(window.location.href,locale));apply();
+    try{window.localStorage.setItem(LANGUAGE_STORAGE_KEY,locale);}catch{/* The current visit still uses the manual choice. */}
+    if(options.updateUrl!==false)history.pushState(null,'',localeUrl(window.location.href,locale));apply();
   });
   const applyCountry=(country:string|null):void=>{
     if(country===null||state.countryCode===country)return;

@@ -32,10 +32,10 @@
     <summary id="home-news-options-toggle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16M9 4v6M15 14v6"/></svg><span id="home-news-options-label">Filters</span><span id="home-news-options-period" class="news-options-period">Recent</span></summary>
     <div class="news-options-panel">
       <div class="news-period"><label id="home-news-period-label" class="news-control-label" for="home-news-period">Period</label><select id="home-news-period" aria-describedby="home-news-day"><option value="today">Today</option><option value="recent">Recent</option></select></div>
-      <div id="home-news-language" class="news-language"><span id="home-news-language-caption" class="news-control-label">News language</span><span id="home-news-language-label">All sources · original languages</span><div class="news-language-actions"><button id="home-news-source-scope" class="text-button" type="button" aria-pressed="true">Back to English</button><button id="home-news-english" class="text-button" type="button" lang="en" hidden>English</button></div></div>
       <p id="home-news-day" class="news-day-note"></p>
     </div>
   </details>
+  <div id="home-news-language" class="news-language" role="group" aria-labelledby="home-news-language-caption"><span id="home-news-language-caption" class="news-control-label">News language</span><span id="home-news-language-label">All sources · original languages</span><div class="news-language-actions"><button id="home-news-source-scope" class="text-button" type="button" aria-describedby="home-news-language-label">Sources in English</button><button id="home-news-english" class="text-button" type="button" lang="en" hidden>English</button></div></div>
   <p id="home-news-progress" class="news-progress" aria-live="off"></p>
 </div>
 <p id="discovery-status" class="status sr-only" role="status" aria-live="polite">Loading current stories.</p>

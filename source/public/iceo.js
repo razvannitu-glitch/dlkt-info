@@ -829,7 +829,7 @@ function cardNode(view, index, total, saved, automaticInsights = true, followPre
     if (link) {
         link.href = safeLink(card.sourceUrl) ?? '#';
         const icon = link.querySelector('svg');
-        link.replaceChildren(document.createTextNode((citation?.originalLabel ?? tr('openSource')) + ' '));
+        link.replaceChildren(document.createTextNode(tr('openSource') + ' '));
         if (icon)
             link.append(icon);
     }
@@ -881,7 +881,7 @@ function cardNode(view, index, total, saved, automaticInsights = true, followPre
             }
             row.append(a, make('p', 'privacy-note', formatted(item.date)));
             if (citation) {
-                const original = make('a', 'text-button', citation.originalLabel);
+                const original = make('a', 'text-button', tr('openSource'));
                 original.href = url;
                 original.target = '_blank';
                 original.rel = 'noopener noreferrer';
@@ -1195,7 +1195,7 @@ function retainedNewsSourcesNode(item, page, language) {
         link.setAttribute('translate', 'no');
         row.append(meta, link);
         if (citation) {
-            const original = make('a', 'text-button', citation.originalLabel);
+            const original = make('a', 'text-button', tr('openSource'));
             original.href = url;
             original.target = '_blank';
             original.rel = 'noopener noreferrer';
@@ -1308,10 +1308,12 @@ function renderDiscovery() {
     required('#home-news-language-caption').textContent = language === 'ro' ? 'Limba stirilor' : language === 'it' ? 'Lingua delle notizie' : 'News language';
     required('#home-news-language-label').textContent = newsSourceScope === 'all' ? originalSourcesLabel : languageLabel(language);
     const sourceScopeButton = required('#home-news-source-scope');
-    sourceScopeButton.textContent = newsSourceScope === 'edition' ? allSourcesLabel : language === 'ro' ? `Inapoi la ${languageLabel(language)}` : language === 'it' ? `Torna a ${languageLabel(language)}` : `Back to ${languageLabel(language)}`;
-    sourceScopeButton.setAttribute('aria-pressed', String(newsSourceScope === 'all'));
+    sourceScopeButton.textContent = newsSourceScope === 'edition' ? (language === 'ro' ? 'Toate limbile' : language === 'it' ? 'Tutte le lingue' : 'All languages') : language === 'ro' ? `Surse in ${languageLabel(language)}` : language === 'it' ? `Fonti in ${languageLabel(language)}` : `Sources in ${languageLabel(language)}`;
     sourceScopeButton.dataset.sourceScope = newsSourceScope;
-    required('#home-news-english').hidden = newsSourceScope === 'edition' && language === 'en';
+    const englishButton = required('#home-news-english');
+    englishButton.hidden = newsSourceScope === 'edition' && language === 'en';
+    englishButton.setAttribute('aria-label', language === 'ro' ? 'Interfata si surse in engleza' : language === 'it' ? 'Interfaccia e fonti in inglese' : 'Switch interface and sources to English');
+    englishButton.lang = language === 'ro' ? 'ro' : language === 'it' ? 'it' : 'en';
     const periodPicker = required('#home-news-period');
     required('#home-news-period-label').textContent = language === 'ro' ? 'Perioada' : language === 'it' ? 'Periodo' : 'Period';
     const todayOption = periodPicker.querySelector('option[value="today"]'), recentOption = periodPicker.querySelector('option[value="recent"]');

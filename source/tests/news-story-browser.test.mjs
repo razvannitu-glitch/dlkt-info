@@ -260,7 +260,7 @@ test('Romanian press-review citations stay visible and linked in grouped origina
   const source=sources[index],citation=pressReviewCitation(source.card.sourceUrl),links=rendered[index].querySelectorAll('a');
   assert.ok(links.some(link=>link.textContent===citation.label&&link.href===citation.homeUrl));
   assert.ok(links.some(link=>link.textContent===source.card.title&&link.href===source.card.sourceUrl));
-  assert.ok(links.some(link=>link.textContent===citation.originalLabel&&link.href===source.card.sourceUrl));
+  assert.ok(links.some(link=>link.textContent==='Deschide sursa'&&link.href===source.card.sourceUrl));
   assert.ok(links.every(link=>link.target==='_blank'&&link.rel==='noopener noreferrer'));
  }
  assert.equal(requests,0);assert.equal(JSON.stringify(value),before);

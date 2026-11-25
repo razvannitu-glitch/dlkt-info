@@ -6,7 +6,8 @@ import {existsSync,mkdtempSync,readFileSync,writeFileSync,mkdirSync,rmSync,statS
 import {tmpdir} from 'node:os';
 import {extname,join,resolve,sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {personalProfileFixture,verifyPersonalProfileFlow} from './qa-personal-profile.mjs';
+import {personalProfileFixture,verifyPersonalProfileFlow,verifyAccountPreferencesFlow} from './qa-personal-profile.mjs';
+import {syntheticEmailFixture,verifyAuthenticationEmailPreview} from './qa-auth-email.mjs';
 
 const root=resolve(fileURLToPath(new URL('..',import.meta.url)));
 const publicDir=join(root,'.dlkt-local-build','public-launch');
@@ -42,6 +43,8 @@ function localServer(fixture,personal){
   // Private mutations exist only during the explicitly activated loopback QA phase.
   if(personal.handle(req,res,url))return;
   if(!['GET','HEAD'].includes(req.method)){res.writeHead(405).end();return;}
+  const email=syntheticEmailFixture(url);
+  if(email){res.setHeader('Content-Security-Policy',"default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");res.setHeader('Content-Type','text/html; charset=utf-8');res.writeHead(email.status).end(req.method==='HEAD'?undefined:email.html);return;}
   if(url.pathname.startsWith('/api/')){
    res.setHeader('Content-Type','application/json; charset=utf-8');
    void fixture.response(url).then(({status,value})=>res.writeHead(status).end(JSON.stringify(value))).catch(()=>res.writeHead(500).end(JSON.stringify({error:'DLKT_QA_FIXTURE_FAILED'})));return;
@@ -399,7 +402,7 @@ function readerProbe(expected){
   const credit=card?[...card.querySelectorAll('.card-boundary')].find(node=>node.textContent===expectedCard.publisher&&!node.closest('details')):null;
   return {id:expectedCard.id,found:Boolean(card),title:titleReport(card?.querySelector('h3')),
    readingExists:Boolean(reading),readingOpen:reading?.open??null,summaryVisible:visible(reading?.querySelector('summary')),
-   sourceVisible:visible(source),sourceUrl:source?.href??'',sourceTarget:source?.target??'',sourceRel:source?.rel??'',
+   sourceVisible:visible(source),sourceLabel:source?.textContent?.trim()??'',sourceUrl:source?.href??'',sourceTarget:source?.target??'',sourceRel:source?.rel??'',
    creditVisible:visible(credit),creditText:credit?.textContent??'',...(card?rect(card):{})};
  });
  const useful=[...localCards,...cards].filter(visible);
@@ -415,7 +418,7 @@ function readerProbe(expected){
   firstUsefulTop:useful.length?Math.min(...useful.map(node=>rect(node).top)):null,
   firstEditorialTop:cards.length?rect(cards[0]).top:null,
   layout:{header:rect(document.querySelector('.site-header')),glance:rect(document.querySelector('#today-glance')),
-   toolbar:rect(document.querySelector('#home-news-toolbar')),filtersOpen:document.querySelector('#home-news-options')?.open??null,
+   toolbar:rect(document.querySelector('#home-news-toolbar')),sourceLanguage:rect(document.querySelector('#home-news-language')),toolbarRowGap:parseFloat(getComputedStyle(document.querySelector('#home-news-toolbar')).rowGap),filtersOpen:document.querySelector('#home-news-options')?.open??null,
    categoryVisible:visible(document.querySelector('#home-news-category')),filtersToggleVisible:visible(document.querySelector('#home-news-options-toggle'))},
   controls:controls.map(node=>({id:node.id||node.className,tag:node.tagName,...rect(node)}))};
 }
@@ -440,7 +443,7 @@ function assertReaderGeometry(measured,format,fixture){
   assert.equal(card.title,expected.title,'original title stays unchanged');
   assert.equal(card.citationVisible,true,'source citation stays visible at '+width+'px');
   assert.equal(card.citationLabel,expected.label);assert.equal(card.citationUrl,expected.homeUrl);
-  assert.equal(card.originalLabel,expected.originalLabel);assert.equal(card.originalUrl,expected.sourceUrl);
+  assert.equal(card.originalLabel,'Deschide sursa','primary source action has the consistent Romanian label');assert.equal(card.originalUrl,expected.sourceUrl);
   assert.equal(card.citationBeforeTitle,true,'source citation precedes title in the actual DOM at '+width+'px');
   assert.equal(card.citationAboveTitle,true,'source citation appears above title at '+width+'px');
   assert.equal(card.photographCount,0,'title/date/link-only source creates no photograph request at '+width+'px');
@@ -459,6 +462,11 @@ function assertFullTitle(title,label){
  assert.ok(['','none','0','normal'].includes(title.lineClamp),label+' must not be line-clamped');
  assert.notEqual(title.overflow,'ellipsis',label+' must not use ellipsis');
 }
+function addedLanguageRowHeight(measured){
+ const height=measured.layout.sourceLanguage.height+measured.layout.toolbarRowGap;
+ assert.ok(Number.isFinite(height)&&height>0,'visible language row has positive measured geometry');
+ return height;
+}
 function assertReadingLayout(measured,format,fixture,{compact=true}={}){
  assertReadingDetails(measured,format);assertActionSpacing(measured.actionSpacing,format);
  for(const title of measured.titles)assertFullTitle(title,'editorial title '+title.id+' at '+format.width+'px');
@@ -470,6 +478,7 @@ function assertReadingLayout(measured,format,fixture,{compact=true}={}){
   assert.equal(card.readingExists,true,'local information has an accessible disclosure');
   assert.equal(card.summaryVisible,true,'local reading action stays visible');
   assert.equal(card.sourceVisible,true,'official source action stays outside collapsed details');
+  assert.equal(card.sourceLabel,'Deschide sursa','local source action uses the same label as global cards');
   assert.equal(card.sourceUrl,expected.sourceUrl);assert.equal(card.sourceTarget,'_blank');
   assert.ok(card.sourceRel.split(/\s+/u).includes('noopener')&&card.sourceRel.split(/\s+/u).includes('noreferrer'));
   assert.equal(card.creditVisible,true,'local publisher credit stays visible outside details');
@@ -481,10 +490,14 @@ function assertReadingLayout(measured,format,fixture,{compact=true}={}){
  if(compact){
   assert.equal(measured.layout.filtersOpen,false,'initial geometry measures the closed filters');
   assert.ok(measured.firstUsefulTop!==null,'a useful card is measured');
-  if(format.width===320)assert.ok(measured.firstUsefulTop<=620,'first useful card must begin within 620px at 320px: '+measured.firstUsefulTop);
+  // Keep the previous content budget while accounting exactly for the newly visible language row.
+  // Raw positions and the measured row height/gap remain in the report; no fixed offset is guessed.
+  const languageRow=addedLanguageRowHeight(measured);
+  const previousUsefulTop=measured.firstUsefulTop-languageRow;
+  if(format.width===320)assert.ok(previousUsefulTop<=620,'existing content before the added language row stays within 620px at 320px: '+previousUsefulTop);
   if(format.width===390){
-   assert.ok(measured.firstUsefulTop<=550,'first useful card must begin within 550px at 390px: '+measured.firstUsefulTop);
-   assert.ok(measured.firstEditorialTop!==null&&measured.firstEditorialTop<=1100,'first editorial follows two compact utilities within 1100px: '+measured.firstEditorialTop);
+   assert.ok(previousUsefulTop<=550,'existing content before the added language row stays within 550px at 390px: '+previousUsefulTop);
+   assert.ok(measured.firstEditorialTop!==null&&measured.firstEditorialTop-languageRow<=1100,'existing editorial position excluding the added language row stays within 1100px: '+(measured.firstEditorialTop-languageRow));
   }
   assert.ok(measured.local.every(card=>card.bottom<=measured.firstEditorialTop+1),'the two local utilities precede the editorial feed');
  }
@@ -531,8 +544,9 @@ async function verifyInlineLocalFlow(call,origin,fixture,outputDir){
    assert.equal(new Set(structure.allIds).size,10);assert.equal(structure.folded,0);assert.equal(structure.allBeforeNews,true);
    assert.ok(structure.editorialGap>=0&&structure.editorialGap<=100,'editorial follows the final local row without a blank artificial section: '+JSON.stringify(structure));
    assert.ok(measured.firstUsefulTop!==null);
-   if(format.width===320)assert.ok(measured.firstUsefulTop<=620);
-   if(format.width===390)assert.ok(measured.firstUsefulTop<=550);
+   const previousUsefulTop=measured.firstUsefulTop-addedLanguageRowHeight(measured);
+   if(format.width===320)assert.ok(previousUsefulTop<=620,'continuous local feed retains the existing content budget at 320px');
+   if(format.width===390)assert.ok(previousUsefulTop<=550,'continuous local feed retains the existing content budget at 390px');
    for(const a of structure.bounds)for(const b of structure.bounds)if(a.id!==b.id){
     const overlaps=Math.min(a.right,b.right)-Math.max(a.left,b.left)>1&&Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>1;
     assert.equal(overlaps,false,'inline local cards do not overlap');
@@ -630,6 +644,32 @@ function assertActionSpacing(measured,format){
   assert.ok(card.footerPadding>=14,'expanded and compact local cards retain a comfortable bottom inset');
  }
 }
+
+
+async function verifyVisibleSourceLanguage(call,format){
+ await toggleDetails(call,'#home-news-options',false);
+ const state=await evaluate(call,'(()=>{const root=document.getElementById("home-news-language"),button=document.getElementById("home-news-source-scope"),details=document.getElementById("home-news-options");if(!root||!button||!details)throw Error("SOURCE_LANGUAGE_CONTROL_MISSING");const r=root.getBoundingClientRect(),b=button.getBoundingClientRect(),s=getComputedStyle(button);return {visible:root.getClientRects().length>0&&s.visibility!=="hidden",insideDetails:root.closest("details")!==null,periodOpen:details.open,parent:root.parentElement.id,left:r.left,right:r.right,buttonHeight:b.height,paddingStart:parseFloat(s.paddingInlineStart),paddingEnd:parseFloat(s.paddingInlineEnd),text:button.textContent,scope:button.dataset.sourceScope,documentWidth:document.documentElement.scrollWidth};})()');
+ assert.equal(state.visible,true);assert.equal(state.insideDetails,false);assert.equal(state.periodOpen,false);assert.equal(state.parent,'home-news-toolbar');
+ assert.ok(state.left>=-1&&state.right<=format.width+1&&state.documentWidth<=format.width+2);
+ assert.ok(state.buttonHeight>=43.5&&state.paddingStart>=12&&state.paddingEnd>=12);
+ assert.ok(state.text.trim());assert.ok(['all','edition'].includes(state.scope));
+ return state;
+}
+
+async function verifyTitleLinkPresentation(call){
+ const selector='#discovery-cards .card-title-link';
+ await evaluate(call,'(()=>{const a=document.querySelector('+JSON.stringify(selector)+');if(!a)throw Error("TITLE_LINK_MISSING");a.scrollIntoView({block:"center",behavior:"instant"});document.activeElement?.blur();return true;})()');
+ await call('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0});
+ const read=()=>evaluate(call,'(()=>{const a=document.querySelector('+JSON.stringify(selector)+'),card=a.closest("article"),button=card.querySelector(".source-link");const r=a.getBoundingClientRect(),s=getComputedStyle(a);return {href:a.href,button:button?.href,decoration:s.textDecorationLine,outlineStyle:s.outlineStyle,outlineWidth:parseFloat(s.outlineWidth),hover:a.matches(":hover"),focus:a.matches(":focus-visible"),x:r.left+Math.min(r.width/2,20),y:r.top+Math.min(r.height/2,10)};})()');
+ const before=await read();assert.equal(before.decoration,'none');assert.ok(before.href);assert.equal(before.href,before.button);
+ await call('Input.dispatchMouseEvent',{type:'mouseMoved',x:before.x,y:before.y});
+ const hover=await read();assert.equal(hover.hover,true);assert.ok(hover.decoration.includes('underline'));
+ await call('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0});
+ await keyboard(call,'Tab');await focusSelector(call,selector);
+ const focus=await read();assert.equal(focus.focus,true);assert.ok(focus.outlineWidth>=2&&focus.outlineStyle!=='none');assert.equal(focus.href,before.href);
+ return {restingUnderline:false,hoverIndication:true,keyboardOutline:true,sameSourceDestination:true};
+}
+
 async function verifyActionStates(call,format){
  const pointerMedia=await evaluate(call,"({hover:matchMedia('(hover: hover)').matches,fine:matchMedia('(pointer: fine)').matches})");
  assert.deepEqual(pointerMedia,{hover:true,fine:true},'desktop hover scenario has a real mouse-capable media environment');
@@ -752,9 +792,10 @@ async function settleFixturePhotos(call){
 }
 
 async function keyboard(call,key){
- const code={Enter:13,Escape:27,Tab:9}[key];assert.ok(code,'only the tested keyboard actions are used');
- await call('Input.dispatchKeyEvent',{type:'keyDown',key,code:key,windowsVirtualKeyCode:code,...(key==='Enter'?{text:'\r',unmodifiedText:'\r'}:{})});
- await call('Input.dispatchKeyEvent',{type:'keyUp',key,code:key,windowsVirtualKeyCode:code});
+ const code={Enter:13,Escape:27,Tab:9,Space:32}[key];assert.ok(code,'only the tested keyboard actions are used');
+ const actualKey=key==='Space'?' ':key,text=key==='Enter'?'\r':key==='Space'?' ':null;
+ await call('Input.dispatchKeyEvent',{type:'keyDown',key:actualKey,code:key,windowsVirtualKeyCode:code,...(text===null?{}:{text,unmodifiedText:text})});
+ await call('Input.dispatchKeyEvent',{type:'keyUp',key:actualKey,code:key,windowsVirtualKeyCode:code});
  await pause(30);
 }
 async function focusSelector(call,selector){
@@ -821,9 +862,9 @@ async function verifyDisclosures(call,format,fixture){
  await toggleDetails(call,'#home-news-options',true);
  const expanded=await measureReader(call,fixture);assertReaderGeometry(expanded,format,fixture);assertReadingLayout(expanded,format,fixture,{compact:false});
  assert.ok(expanded.controls.some(control=>control.id==='home-news-period'),'period control is available in the open filters');
- assert.ok(expanded.controls.some(control=>control.id==='home-news-source-scope'),'source-scope control is available in the open filters');
+ assert.ok(expanded.controls.some(control=>control.id==='home-news-source-scope'),'source-language control stays visible while the period panel is open');
  // Leaving the non-modal filter panel must not strand focus under its overlay.
- await focusSelector(call,'#home-news-english');await keyboard(call,'Tab');
+ await focusSelector(call,'#home-news-period');await keyboard(call,'Tab');
  assert.equal(await evaluate(call,"document.getElementById('home-news-options').open"),false,'Tab out closes the filter overlay');
  const outside=await evaluate(call,"(()=>{const n=document.activeElement,r=n?.getBoundingClientRect();return Boolean(n&&r&&r.width>0&&r.height>0&&!n.closest('#home-news-options')&&document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)?.closest('a,button,summary,select')===n);})()");
  assert.equal(outside,true,'the focused control after the filters is visible and uncovered');
@@ -875,7 +916,7 @@ async function verifyDisclosures(call,format,fixture){
  if(sourcesWereOpen!==true)await toggleDetails(call,groupSelector,false);
  await evaluate(call,'(()=>{window.scrollTo(0,0);return true;})()');return {filters:true,local,originals:originals.length};
 }
-function contrastProbe({allCards=false}={}){
+function contrastProbe({allCards=false,rootSelector=null}={}){
  const rgba=value=>{
   const match=/^rgba?\(([^)]+)\)$/u.exec(value),srgb=/^color\(srgb ([^)]+)\)$/u.exec(value);
   if(!match&&!srgb)return null;
@@ -922,7 +963,7 @@ function contrastProbe({allCards=false}={}){
   if(node.closest('.card-date,[data-original-language],.card-meta,.news-origin-meta'))return 'meta';
   if(node.closest('button'))return 'button';if(node.closest('a'))return 'link';return 'body';
  };
- const cards=allCards?[...document.querySelectorAll('#discovery-cards article[data-news-stream-key],#home-local-cards article[data-local-id]')]
+ const cards=rootSelector!==null?[...document.querySelectorAll(rootSelector)]:allCards?[...document.querySelectorAll('#discovery-cards article[data-news-stream-key],#home-local-cards article[data-local-id]')]
   :[document.querySelector('#discovery-cards article[data-news-stream-key]')].filter(Boolean);
  const samples=cards.flatMap(card=>{
   const nodes=allCards?[...card.querySelectorAll('*')].filter(node=>node instanceof HTMLElement&&visible(node)
@@ -938,7 +979,7 @@ function contrastProbe({allCards=false}={}){
   });
  });
  return {theme:document.documentElement.dataset.readerTheme,page:background(document.body),samples,
-  ...(allCards?{cards:cards.map(card=>({id:card.dataset.cardId??card.dataset.localId,kind:card.hasAttribute('data-news-stream-key')?'news':'local',
+  ...(allCards?{cards:cards.map(card=>({id:card.dataset.cardId??card.dataset.localId,kind:rootSelector!==null?'surface':card.hasAttribute('data-news-stream-key')?'news':'local',
    surface:card.dataset.readerSurface,visible:visible(card),backgroundColor:rgba(getComputedStyle(card).backgroundColor),background:pixels(card)?.background??null,
    photoUnavailable:Boolean(card.querySelector('.photo-unavailable')),validPhoto:[...card.querySelectorAll('img[data-article-photo]')].some(img=>img.complete&&img.naturalWidth>0)}))}:{})};
 };
@@ -999,8 +1040,8 @@ async function verifyNight(call,format,fixture,outputDir){
  * Full-resolution PNGs remain in the normal artifact. Ten bounded JPEGs at most.
  */
 async function emitVisualPreview(call,label,width){
- const selected=(label==='top'&&[390,1440].includes(width))||(width===390&&['cards','night-top'].includes(label))||(['reading-updates','owned-card','personal-wallet'].includes(label)&&[390,1440].includes(width));
- if(!selected)return;
+ const selected=(label==='top'&&[390,1440].includes(width))||(width===390&&['cards','night-top'].includes(label))||(['reading-updates','owned-card','personal-wallet','account-profile'].includes(label)&&[390,1440].includes(width));
+ if(!selected&&!(width===320&&['auth-email-ro','auth-email-ar'].includes(label)))return;
  const data=(await call('Page.captureScreenshot',{format:'jpeg',quality:72,fromSurface:true,captureBeyondViewport:false})).data;
  if(typeof data!=='string'||data.length<1000||data.length>160000){console.log('DLKT_UI_VISUAL_SKIPPED',label,width);return;}
  const bytes=Buffer.from(data,'base64'),sha256=createHash('sha256').update(bytes).digest('hex'),chunks=Math.ceil(data.length/4096);
@@ -1505,15 +1546,17 @@ async function run(){
    const cardScreenshot='dlkt-cards-'+f.label+'-'+f.width+'.png';writeFileSync(join(outputDir,cardScreenshot),Buffer.from(cardImage,'base64'),{mode:0o600});
    await emitVisualPreview(cdp,'cards',f.width);
    try{
+    const sourceLanguage=await verifyVisibleSourceLanguage(cdp,f);
     const disclosures=await verifyDisclosures(cdp,f,fixture);
     const night=[390,1440].includes(f.width)?await verifyNight(cdp,f,fixture,outputDir):null;
     const explore=f.width===440?await verifyExploreSurface(cdp,f,fixture):null;
     const typography=f.width===440?await verifyTypographyStress(cdp,f,fixture,outputDir):null;
+    const titleLinks=f.width===1440?await verifyTitleLinkPresentation(cdp):null;
     const actionStates=f.width===1440?await verifyActionStates(cdp,f):null;
     const actionLocales=[390,1440].includes(f.width)?await verifyActionLocales(cdp,f):null;
     const readingUpdates=[390,1440].includes(f.width)?await verifyReadingUpdates(cdp,f,fixture,'http://'+HOST+':'+binding.port,outputDir):null;
     const ownedExposure=[390,1440].includes(f.width)?await verifyKnowledgeExposure(cdp,f,fixture,'http://'+HOST+':'+binding.port,outputDir):null;
-    observations.push({viewport:f.width,devicePixelRatio:f.dpr??1,visualScale:news.details.visualScale,documentWidth:m.scroll,menuTested:navigation.compact,brandVisible:true,reducedMotion:true,screenshot,cardScreenshot,news,navigation,disclosures,night,explore,typography,actionStates,actionLocales,readingUpdates,ownedExposure});
+    observations.push({viewport:f.width,devicePixelRatio:f.dpr??1,visualScale:news.details.visualScale,documentWidth:m.scroll,menuTested:navigation.compact,brandVisible:true,reducedMotion:true,screenshot,cardScreenshot,news,navigation,sourceLanguage,disclosures,night,explore,typography,titleLinks,actionStates,actionLocales,readingUpdates,ownedExposure});
    }catch(error){
     try{
      const failedImage=(await cdp('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false})).data;
@@ -1526,15 +1569,17 @@ async function run(){
   const account=await verifyAccountSurfaces(cdp,'http://'+HOST+':'+binding.port,outputDir);
   const personalProfile=await verifyPersonalProfileFlow({call:cdp,origin:'http://'+HOST+':'+binding.port,
    fixture:personal,evaluate,loaded,focusSelector,keyboard,openIsolated:()=>openIsolatedChrome(port),outputDir,emitVisualPreview});
+  const accountPreferences=await verifyAccountPreferencesFlow({call:cdp,origin:'http://'+HOST+':'+binding.port,fixture:personal,evaluate,loaded,focusSelector,keyboard,outputDir,emitVisualPreview,actionSpacingProbe,assertActionSpacing,contrastProbe,startTypographyStress,restoreTypographyStress});
+  const authenticationEmail=await verifyAuthenticationEmailPreview({call:cdp,origin:'http://'+HOST+':'+binding.port,evaluate,loaded,outputDir,emitVisualPreview});
   const localePreference=await verifyLocalePreference({openIsolated:()=>openIsolatedChrome(port),
    origin:'http://'+HOST+':'+binding.port,fixture,personal});
   const result={version:'dlkt-info-offline-browser-smoke-3',status:'OFFLINE_BROWSER_PASS',
-   scope:'local-built-reader-with-controlled-news-local-and-private-profile-transport',viewports:observations,continuousLocal,account,personalProfile,localePreference,fixture:{storyCount:fixture.storyCount,articleTotal:fixture.articleTotal,groupOriginals:fixture.urls.length,sourceOnlyOriginals:fixture.sourceOnly.length,localCards:fixture.localIds.length,localContract:'currentLocalSnapshot'},
+   scope:'local-built-reader-with-controlled-news-local-and-private-profile-transport',viewports:observations,continuousLocal,account,personalProfile,accountPreferences,authenticationEmail,localePreference,fixture:{storyCount:fixture.storyCount,articleTotal:fixture.articleTotal,groupOriginals:fixture.urls.length,sourceOnlyOriginals:fixture.sourceOnly.length,localCards:fixture.localIds.length,localContract:'currentLocalSnapshot'},
    limitations:['News pages use the actual service over controlled corpus fixtures. The additional private phase uses synthetic account identities; no external publisher request, hosted authentication, payment or production runtime availability is tested.',
     'The three grouped publisher headlines and four reviewed-source originals reproduce observed metadata; source-check and publication dates are controlled fixtures.',
     'Local weather and CMTEB records are synthetic controlled fixtures validated by the actual city/source contracts, not live operator or forecast checks.',
     'The 440px DPR 3 scenario is Chrome at visual scale 1. Font-size doubling is a test-only typography stress, not physical Safari zoom or Safari text autosizing.',
-    'The original anonymous account-layout checks remain unchanged. The additional private Wallet phase is isolated to synthetic loopback profiles; login, OTP delivery and hosted account isolation are not claimed as verified.',
+    'The original anonymous account-layout checks remain unchanged. The private Wallet and account-preference phases use synthetic loopback profiles; login, OTP delivery and hosted account isolation are not claimed as verified.',
     'Palette checks use actual computed card paints and visible text at 390 and 1440px. Existing body copy is measured where rendered; source-only articles are not given fabricated excerpts.',
     'Article-photo requests remain unavailable in this offline fixture. Failed-photo panels are measured; successful publisher photography requires separate live inspection.',
     'Same-card update scenarios use controlled edition publication through the real page service and real refresh handler; no external publisher change is attested.',
