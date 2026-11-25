@@ -10,7 +10,7 @@ import { LiveEdition, editionCardSignature, editionStorySignature, editionUpdate
 import { publicEditionState } from './home-edition.js';
 import { observeNewsStream, NEWS_PAGE_SIZE } from './news-stream.js';
 import { NewsContinuation, continuationItems } from './news-continuation.js';
-import { newsStorySourcesNode } from './news-story-browser.js';
+import { newsStorySourcesNode, newsReadingUpdatesNode, syncNewsReadingUpdates } from './news-story-browser.js';
 import { countryEditionProfile } from './country-editions.js';
 import { commercialCardNode } from './commercial-browser.js';
 import { NEWS_CATEGORIES, newsCategoryLabel, isNewsCategoryId } from './news-taxonomy.js';
@@ -1118,6 +1118,7 @@ function reconcileDiscovery(target, next) {
         const same = node.dataset.liveSignature !== undefined ? existing.dataset.liveSignature === node.dataset.liveSignature : existing.textContent === node.textContent && existing.dataset.weatherRevision === node.dataset.weatherRevision;
         if (!same)
             return node;
+        syncNewsReadingUpdates(existing, node);
         existing.className = node.className;
         if (node.dataset.editionPart)
             existing.dataset.editionPart = node.dataset.editionPart;
@@ -1417,6 +1418,14 @@ function renderDiscovery() {
                 else
                     node.append(sources);
             }
+        }
+        const updates = newsReadingUpdatesNode(newsContinuation.updatesFor(item.key), language, contextualCity ?? undefined, newsContinuation.currentSourcesFor(item.key));
+        if (updates) {
+            const evidence = node.querySelector(':scope > .evidence');
+            if (evidence)
+                evidence.before(updates);
+            else
+                node.append(updates);
         }
         node.dataset.editionPart = 'stream';
         node.dataset.newsStreamKey = item.key;

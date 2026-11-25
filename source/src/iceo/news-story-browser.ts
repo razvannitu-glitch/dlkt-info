@@ -1,5 +1,5 @@
 import {validNewsPage,validNewsStorySourcesPage,newsOriginalLanguage,NEWS_SOURCE_PAGE_SIZE,type NewsPage,type NewsPageItem,type NewsStorySource,type NewsStorySourcesPage} from './news-page-contracts.js';
-import {fetchNewsStorySources,NewsStorySourcesError} from './news-continuation.js';
+import {fetchNewsStorySources,NewsStorySourcesError,type NewsReadingUpdate} from './news-continuation.js';
 import {resolveLocale,t,type Locale} from '../i18n/locale.js';
 import type {City} from '../local/contracts.js';
 import {pressReviewCitation} from './source-links.js';
@@ -124,4 +124,93 @@ export function newsStorySourcesNode(item:NewsPageItem,page:NewsPage,language:st
  });
  for(const source of state.sources)list.append(sourceNode(source,locale,timeZone));
  details.append(summary,note,list,progress,more,status);update();return details;
+}
+
+/** Separate verified changes never rewrite the original card or its source receipt. */
+export function newsReadingUpdatesNode(updates:readonly NewsReadingUpdate[],language:string,city?:City,currentSources?:Pick<NewsReadingUpdate,'item'|'edition'>|null):HTMLDetailsElement|null {
+ if(updates.length===0)return null;
+ const locale=resolveLocale(language),now=Date.now(),latest=updates[updates.length-1]!,current=currentSources??latest;
+ const checkedAt=(source:NewsStorySource):string=>source.kind==='global'?source.card.observedAt:source.card.checkedAt;
+ const changed=new Map<string,{readonly source:NewsStorySource;readonly edition:NewsPage}>();
+ for(const update of updates)for(const source of update.changes)changed.set(source.kind+':'+source.card.id,{source,edition:update.edition});
+ const rows=[...changed.values()],details=document.createElement('details'),summary=document.createElement('summary'),note=document.createElement('p'),list=document.createElement('ol');
+ details.className='news-story-sources news-story-updates';details.dataset.newsUpdates='true';
+ // Only this subtree changes. The original card and any expanded source pagination remain mounted.
+ details.dataset.newsUpdatesSignature=JSON.stringify([updates.map(update=>[
+  update.edition.epoch,update.edition.revision,update.edition.startedAt,update.edition.expiresAt,Date.parse(update.edition.expiresAt)<=now,
+  update.sourceCountIncreased,update.item.story?.key??null,update.item.story?.sourceTotal??1,
+  update.changes.map(source=>[source.kind,source.card.id,source.card.sourceUrl,source.card.title,checkedAt(source),publishedAt(source),
+   source.kind==='global'?source.card.contentHash:source.card.news?.documentHash??null])
+ ]),[current.edition.epoch,current.edition.revision,current.edition.startedAt,current.edition.expiresAt,Date.parse(current.edition.expiresAt)<=now,current.item.story??null]]);
+ const title=locale==='ro'?'Actualizari ale subiectului':locale==='it'?'Aggiornamenti della notizia':'Story updates';
+ summary.textContent=title+(rows.length?' · '+new Intl.NumberFormat(locale).format(rows.length):'');
+ note.className='news-story-sources-note';note.textContent=locale==='ro'
+  ?'Informatii si surse aparute dupa afisarea acestui card. Versiunea initiala este pastrata mai sus.'
+  :locale==='it'?'Informazioni e fonti successive alla comparsa di questa scheda. La versione iniziale resta sopra.'
+  :'Information and sources found after this card was displayed. The original version is kept above.';
+ list.className='news-story-sources-list news-reading-updates-list';
+ let displayed=0;
+ const appendRows=():HTMLLIElement[]=>{
+  const additions=rows.slice(displayed,displayed+NEWS_SOURCE_PAGE_SIZE).map(({source,edition})=>{
+   const row=sourceNode(source,locale,edition.day?.timeZone??city?.timezone??'UTC');
+   row.dataset.updateSourceId=source.card.id;row.dataset.updateEpoch=edition.epoch;
+   const suppliedSummary=source.kind==='global'?source.card.summary:source.card.news?.summary??source.card.text;
+   if(suppliedSummary&&suppliedSummary!==source.card.title){const text=document.createElement('p');text.className='news-story-sources-note';text.dataset.updateSummary='true';text.textContent=suppliedSummary;text.dir='auto';text.lang=newsOriginalLanguage(source)??'';text.setAttribute('translate','no');row.append(text);}
+   const byline=source.kind==='global'?source.card.byline:source.card.news?.byline,licenseUrl=source.kind==='global'?source.card.licenseUrl:source.card.news?.licenseUrl;
+   if(byline){const credit=document.createElement('p');credit.className='news-story-sources-note';credit.textContent=byline;credit.dir='auto';credit.setAttribute('translate','no');row.append(credit);}
+   if(licenseUrl){const license=document.createElement('a');license.className='text-button';license.href=licenseUrl;license.target='_blank';license.rel='noopener noreferrer';license.textContent=locale==='ro'?'Licenta sursei':locale==='it'?'Licenza della fonte':'Source license';row.append(license);}
+   const check=document.createElement('p'),time=document.createElement('time'),expired=Date.parse(edition.expiresAt)<=now;
+   check.className='news-story-sources-status';time.dataset.updateChecked='true';time.dateTime=checkedAt(source);time.title=time.dateTime;
+   time.textContent=new Intl.DateTimeFormat(locale,{dateStyle:'medium',timeStyle:'short',timeZone:edition.day?.timeZone??city?.timezone??'UTC'}).format(new Date(time.dateTime));
+   check.append(document.createTextNode(locale==='ro'?'Sursa verificata la ':locale==='it'?'Fonte verificata il ':'Source checked '),time);
+   if(expired)check.append(document.createTextNode(locale==='ro'?' · Verificarea editiei a expirat.':locale==='it'?' · La verifica di questa edizione è scaduta.':' · This edition check has expired.'));
+   row.append(check);return row;
+  });
+  displayed+=additions.length;list.append(...additions);return additions;
+ };
+ details.append(summary,note,list);appendRows();
+ if(displayed<rows.length){
+  const more=document.createElement('button');more.className='news-story-sources-more';more.type='button';
+  const updateMore=():void=>{const remaining=rows.length-displayed;more.hidden=remaining===0;more.textContent=t(locale,'showMore',{count:Math.min(NEWS_SOURCE_PAGE_SIZE,remaining),remaining});};
+  more.addEventListener('click',()=>{const additions=appendRows();updateMore();additions[0]?.querySelector<HTMLAnchorElement>('a')?.focus();});
+  updateMore();details.append(more);
+ }
+ if(current.item.story&&(current.item.story.nextSourcesCursor!==null||latest.sourceCountIncreased&&latest.changes.length===0)){
+  const sources=newsStorySourcesNode(current.item,current.edition,language,city);
+  if(sources){
+   sources.dataset.currentUpdateSources='true';
+   const currentSummary=sources.querySelector('summary');
+   if(currentSummary)currentSummary.textContent=(locale==='ro'?'Toate sursele din editia actualizata':locale==='it'?'Tutte le fonti della nuova edizione':'All sources in the updated edition')+' · '+new Intl.NumberFormat(locale).format(current.item.story.sourceTotal);
+   details.append(sources);
+  }else{
+   const unavailable=document.createElement('p');unavailable.className='news-story-sources-status';
+   unavailable.textContent=locale==='ro'?'Verificarea editiei actualizate a expirat. Linkurile deja afisate raman disponibile.'
+    :locale==='it'?'La verifica della nuova edizione è scaduta. I link già mostrati restano disponibili.'
+    :'The updated edition check has expired. The links already shown remain available.';
+   details.append(unavailable);
+  }
+ }
+ return details;
+}
+
+/** Preserve the card, its color, original open panels and focus when only updates change. */
+export function syncNewsReadingUpdates(current:HTMLElement,incoming:HTMLElement):void {
+ const before=current.querySelector<HTMLDetailsElement>(':scope > details[data-news-updates]');
+ const after=incoming.querySelector<HTMLDetailsElement>(':scope > details[data-news-updates]');
+ if(before?.dataset.newsUpdatesSignature===after?.dataset.newsUpdatesSignature)return;
+ const active=document.activeElement,focused=active instanceof HTMLElement&&before?.contains(active);
+ const focusedLink=focused&&active instanceof HTMLAnchorElement?active.getAttribute('href'):null;
+ if(after){
+  after.open=before?.open??false;
+  const currentSources=after.querySelector<HTMLDetailsElement>('details[data-current-update-sources]');
+  if(currentSources&&before?.querySelector<HTMLDetailsElement>('details[data-current-update-sources]')?.open)currentSources.open=true;
+  if(before)before.replaceWith(after);
+  else {const evidence=current.querySelector(':scope > .evidence');if(evidence)evidence.before(after);else current.append(after);}
+ }else before?.remove();
+ if(focused){
+  const link=focusedLink?[...(after?.querySelectorAll<HTMLAnchorElement>('a[href]')??[])].find(node=>node.getAttribute('href')===focusedLink):undefined;
+  const visibleLink=link&&!link.closest('details:not([open])')?link:undefined;
+  const focus=visibleLink??after?.querySelector<HTMLElement>('summary')??current.querySelector<HTMLElement>('h3');
+  if(focus){if(focus.tagName==='H3')focus.tabIndex=-1;focus.focus({preventScroll:true});}
+ }
 }

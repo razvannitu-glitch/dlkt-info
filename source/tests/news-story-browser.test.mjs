@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {createNewsStorySourcesState,appendNewsStorySources,newsStorySourcesNode} from '../.build/src/iceo/news-story-browser.js';
+import {createNewsStorySourcesState,appendNewsStorySources,newsStorySourcesNode,newsReadingUpdatesNode} from '../.build/src/iceo/news-story-browser.js';
 import {validNewsPage,validNewsStorySourcesPage,NEWS_PAGE_VERSION,NEWS_STORY_SOURCES_VERSION} from '../.build/src/iceo/news-page-contracts.js';
 import {NEWS_CATEGORIES,newsCategory} from '../.build/src/iceo/news-taxonomy.js';
 import {LOCALES,t as translate} from '../.build/src/i18n/locale.js';
@@ -264,4 +264,89 @@ test('Romanian press-review citations stay visible and linked in grouped origina
   assert.ok(links.every(link=>link.target==='_blank'&&link.rel==='noopener noreferrer'));
  }
  assert.equal(requests,0);assert.equal(JSON.stringify(value),before);
+});
+
+test('same-card update disclosure shows latest changed original once with its own published and checked timestamps',t=>{
+ let requests=0;dom(t,()=>{requests++;throw Error('Unexpected request');});
+ const value=fixture(3),source=value.originals[0],second=value.originals[1];
+ const changed={kind:'global',card:{...source.card,title:'Publisher correction preserves the original identity',observedAt:iso(NOW+500)}};
+ changed.card.contentHash=hash(cardContent(changed.card));
+ const updates=[
+  {item:value.item,edition:{...value.page,epoch:'2'},changes:[source,second],sourceCountIncreased:true},
+  {item:value.item,edition:{...value.page,epoch:'3'},changes:[changed],sourceCountIncreased:false},
+ ],before=JSON.stringify(updates);
+ const details=newsReadingUpdatesNode(updates,'ro');assert.ok(details);
+ assert.equal(details.open,false);assert.equal(details.dataset.newsUpdates,'true');
+ const list=details.children.find(node=>node.className?.includes('news-reading-updates-list'));
+ assert.equal(list.children.length,2,'a second version of the same original occupies the same update row');
+ assert.deepEqual(list.children.map(row=>row.dataset.updateSourceId),[source.card.id,second.card.id]);
+ assert.deepEqual(list.children.map(row=>row.dataset.updateEpoch),['3','2']);
+ assert.deepEqual(list.children.map(row=>row.querySelector('a').textContent),[changed.card.title,second.card.title]);
+ assert.deepEqual(list.children.map(row=>row.querySelector('a').href),[source.card.sourceUrl,second.card.sourceUrl]);
+ assert.deepEqual(list.children.map(row=>row.querySelectorAll('time').map(time=>time.dateTime)),[
+  [changed.card.date,changed.card.observedAt],[second.card.date,second.card.observedAt],
+ ]);
+ assert.equal(requests,0);assert.equal(JSON.stringify(updates),before);assert.match(details.querySelector('summary').textContent,/2/u);
+ assert.equal(newsReadingUpdatesNode([],'ro'),null);
+});
+
+test('a count-only source increase exposes a validated current group without inventing changed originals',t=>{
+ let requests=0;dom(t,()=>{requests++;throw Error('Unexpected request');});
+ const value=fixture(27),update={item:value.item,edition:value.page,changes:[],sourceCountIncreased:true};
+ const details=newsReadingUpdatesNode([update],'en');assert.ok(details);
+ const changes=details.children.find(node=>node.className?.includes('news-reading-updates-list'));
+ assert.equal(changes.children.length,0);
+ const sources=details.children.find(node=>node.dataset?.currentUpdateSources==='true');assert.ok(sources);
+ assert.match(sources.querySelector('summary').textContent,/27/u);
+ assert.deepEqual(sources.querySelectorAll('a').map(link=>link.href),value.originals.slice(0,4).map(source=>source.card.sourceUrl));
+ assert.equal(sources.querySelector('button').hidden,false);assert.equal(requests,0);
+});
+
+test('expired update receipts retain their original links and checks without rebuilding a live source cursor',t=>{
+ let requests=0;dom(t,()=>{requests++;throw Error('Unexpected request');});
+ const value=fixture(27),edition={...value.page,expiresAt:iso(TIME-1)};
+ const details=newsReadingUpdatesNode([{item:value.item,edition,changes:[value.originals[0]],sourceCountIncreased:true}],'ro');
+ assert.ok(details);assert.equal(details.children.some(node=>node.dataset?.currentUpdateSources==='true'),false);
+ assert.equal(details.querySelector('a').href,value.originals[0].card.sourceUrl);
+ assert.equal(details.querySelectorAll('time').find(time=>time.dataset.updateChecked==='true').dateTime,value.originals[0].card.observedAt);
+ assert.match(details.textContent,/expirat/u);assert.equal(requests,0);assert.equal(edition.expiresAt,iso(TIME-1));
+});
+
+test('large retained update lists render one bounded batch and expand only on a reader action',t=>{
+ let requests=0;const document=dom(t,()=>{requests++;throw Error('Unexpected request');}),value=fixture(27);
+ const details=newsReadingUpdatesNode([{item:value.item,edition:value.page,changes:value.originals,sourceCountIncreased:true}],'en');
+ assert.ok(details);document.body.append(details);details.open=true;
+ const list=details.children.find(node=>node.className?.includes('news-reading-updates-list'));
+ const more=details.children.find(node=>node.tagName==='BUTTON');assert.ok(more);
+ assert.equal(list.children.length,20);const prefix=[...list.children];more.focus();more.dispatchEvent(new Event('click'));
+ assert.equal(list.children.length,27);assert.deepEqual(list.children.slice(0,20),prefix);assert.equal(more.hidden,true);
+ assert.equal(document.activeElement,list.children[20].querySelector('a'));assert.equal(requests,0);
+});
+
+test('a newer verified source context renews pagination without rewriting historical update receipts',async t=>{
+ const value=fixture(27),historicalEdition={...value.page,expiresAt:iso(TIME-1)},currentEdition={...value.page,epoch:'2'};
+ let requests=0;const document=dom(t,async()=>{requests++;return json(value.response(4,{epoch:'2'}));});
+ const updates=[{item:value.item,edition:historicalEdition,changes:[value.originals[0]],sourceCountIncreased:true}],before=JSON.stringify(updates);
+ const details=newsReadingUpdatesNode(updates,'ro',undefined,{item:value.item,edition:currentEdition});
+ assert.ok(details);document.body.append(details);details.open=true;
+ const changed=details.children.find(node=>node.className?.includes('news-reading-updates-list')).children[0];
+ assert.equal(changed.dataset.updateEpoch,'1');assert.match(changed.textContent,/expirat/u);
+ const sources=details.children.find(node=>node.dataset?.currentUpdateSources==='true');assert.ok(sources);sources.open=true;
+ assert.equal(sources.querySelectorAll('li').length,4);assert.equal(requests,0);
+ sources.querySelector('button').dispatchEvent(new Event('click'));await flush();await flush();
+ assert.equal(requests,1);assert.equal(sources.querySelectorAll('li').length,24);
+ assert.equal(changed.dataset.updateEpoch,'1');assert.equal(JSON.stringify(updates),before);
+ assert.equal(changed.querySelectorAll('time').find(time=>time.dataset.updateChecked==='true').dateTime,value.originals[0].card.observedAt);
+});
+
+test('a supplied summary correction and its author credit are visible as exact source text',t=>{
+ let requests=0;dom(t,()=>{requests++;throw Error('Unexpected request');});
+ const value=fixture(2),source={kind:'global',card:{...value.originals[0].card,summary:'The publisher corrected this specific detail.',byline:'Original author',licenseUrl:'https://example.org/license'}};
+ source.card.contentHash=hash(cardContent(source.card));
+ const details=newsReadingUpdatesNode([{item:value.item,edition:value.page,changes:[source],sourceCountIncreased:false}],'en');
+ assert.ok(details);const row=details.children.find(node=>node.className?.includes('news-reading-updates-list')).children[0];
+ const summary=row.children.find(node=>node.dataset?.updateSummary==='true');
+ assert.equal(summary.textContent,source.card.summary);assert.equal(summary.getAttribute('translate'),'no');
+ assert.ok(row.textContent.includes(source.card.byline));const license=row.querySelectorAll('a').find(link=>link.href===source.card.licenseUrl);
+ assert.ok(license);assert.equal(license.rel,'noopener noreferrer');assert.equal(requests,0);
 });
