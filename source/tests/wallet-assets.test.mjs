@@ -53,8 +53,9 @@ test('Info Wallet preserves the authorized shared frame and original Kate identi
  for(const file of ['public/iceo.css','public/header.css','public/kate-head.png','public/favicon-kate-fb7b2e60.png']){
   // Shared header/footer redesign authorized 22 November; mobile date and layout
   // stabilization requested 24 November; category and account control refinements
-  // authorized 25 November 2026. Shared header and Kate artwork stay pinned.
-  const expected=file==='public/iceo.css'?'4c65659c7ff37941ab10f3aef887f921ac663f375167696f6d535dabcb4c15f8':file==='public/header.css'?'0c6bbc8d515c798b377592ad91afa720fa71adda521a7f27d78cc2c95b19aef5':baseline.files[file];
+  // authorized 25 November 2026, followed by the Kate account/preferences redesign.
+  // Shared header and Kate artwork stay pinned; normalized CSS hash reflects that explicit design request.
+  const expected=file==='public/iceo.css'?'d6ecf5b3e07c2d98e1076f0106209030a1ed729cc281566c1475eeb35a8369a9':file==='public/header.css'?'0c6bbc8d515c798b377592ad91afa720fa71adda521a7f27d78cc2c95b19aef5':baseline.files[file];
   // The shared frame is pinned as raw bytes; only the existing reader-card normalizations remain.
   let content=file==='public/iceo.css'?readFileSync(file,'utf8').replaceAll('#discovery-cards,#world-cards,','#discovery-cards,'):readFileSync(file);
   if(file==='public/iceo.css'){

@@ -685,6 +685,7 @@ function renderDiscovery():void {
   const englishButton=required<HTMLButtonElement>('#home-news-english');
   englishButton.hidden=newsSourceScope==='edition'&&language==='en';
   englishButton.setAttribute('aria-label',language==='ro'?'Interfata si surse in engleza':language==='it'?'Interfaccia e fonti in inglese':'Switch interface and sources to English');
+  englishButton.lang=language==='ro'?'ro':language==='it'?'it':'en';
   const periodPicker=required<HTMLSelectElement>('#home-news-period');
   required<HTMLLabelElement>('#home-news-period-label').textContent=language==='ro'?'Perioada':language==='it'?'Periodo':'Period';
   const todayOption=periodPicker.querySelector<HTMLOptionElement>('option[value="today"]'),recentOption=periodPicker.querySelector<HTMLOptionElement>('option[value="recent"]');

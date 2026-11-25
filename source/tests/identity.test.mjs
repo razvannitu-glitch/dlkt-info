@@ -315,13 +315,21 @@ test('request-code transports the current canonical locale without changing the 
   assert.equal(JSON.stringify(res.json()).includes('person@example.com'),false,code);
  }
 });
-test('request-code rejects locale injection before contacting the identity provider',async()=>{
+test('malformed locale metadata uses the existing safe English fallback and cannot change the provider destination',async()=>{
  const {handleIdentityRequest}=await import('../.build/api/auth.js');
- for(const locale of ['https://attacker.example/account?lang=ro','ro&redirect_to=https://attacker.example','ro%26lang%3Den','ro\r\nX-Test: injected']){
-  let calls=0;const res=response();
+ for(const locale of ['https://attacker.example/account?lang=ro','ro&redirect_to=https://attacker.example','ro%26lang%3Den','ro\r\nX-Test: injected','zh--Hant','en-'+'x'.repeat(90),null,{}]){
+  const calls=[],res=response();
   await handleIdentityRequest(request({method:'POST',body:{action:'request-code',email:'person@example.com',timezone:'UTC',locale}}),res.value,{
-   environment:READY_ENV,provisioning:READY_PROVISIONING,fetch:async()=>{calls++;throw Error('must not contact provider');}
+   environment:READY_ENV,provisioning:READY_PROVISIONING,fetch:async(url,init)=>{calls.push({url,body:JSON.parse(String(init.body))});return json({});}
   });
-  assert.equal(res.value.statusCode,400,locale);assert.equal(calls,0,locale);
+  assert.equal(res.value.statusCode,202,JSON.stringify(locale));assert.equal(calls.length,1);
+  assert.equal(calls[0].url,URL+'/auth/v1/otp?redirect_to='+encodeURIComponent('https://www.dlkt.ee/account?lang=en'));
+  assert.deepEqual(calls[0].body,{email:'person@example.com',create_user:true,data:{locale:'en',timezone:'UTC'}});
  }
+});
+test('identity metadata retains script and regional BCP47 variants before the allowlisted email resolution',async()=>{
+ const {readIdentityLocale}=await import('../.build/src/identity/guards.js');
+ for(const value of ['zh-Hans','zh-Hant','zh-Hant-TW','ro-RO','sr-Latn-RS','en-GB','de-DE-u-ca-gregory'])assert.equal(readIdentityLocale(value),value);
+ const overlong='en-x-'+Array(9).fill('abcdefgh').join('-');assert.ok(overlong.length>80);
+ for(const value of ['ro%26lang%3Den','zh--Hant','en-123456789','en-a','en-K',overlong,undefined,[],false])assert.equal(readIdentityLocale(value),'en');
 });

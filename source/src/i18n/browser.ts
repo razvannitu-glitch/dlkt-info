@@ -87,7 +87,7 @@ export function setupLanguage(options:Readonly<{updateUrl?:boolean}>={}):void {
   picker.addEventListener('change',()=>{
     const locale=localeFromPreference(picker.value);if(!locale)return;
     state.manualLocale=locale;
-    try{window.localStorage.setItem(LANGUAGE_STORAGE_KEY,locale);}catch{/* The URL and in-memory choice still work. */}
+    try{window.localStorage.setItem(LANGUAGE_STORAGE_KEY,locale);}catch{/* The current visit still uses the manual choice. */}
     if(options.updateUrl!==false)history.pushState(null,'',localeUrl(window.location.href,locale));apply();
   });
   const applyCountry=(country:string|null):void=>{

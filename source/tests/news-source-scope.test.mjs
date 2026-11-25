@@ -85,13 +85,13 @@ test('the real home source control starts all, preserves the chosen interface la
  context.renderDiscovery=()=>{renders++;runInNewContext(labels,context);};
  runInNewContext(handlers,context);context.renderDiscovery();
  assert.equal(nodes.get('#home-news-language-label').textContent,'Toate sursele · limbi originale');
- assert.equal(nodes.get('#home-news-source-scope').textContent,'Surse in romana');assert.equal(nodes.get('#home-news-english').hidden,false);
+ assert.equal(nodes.get('#home-news-source-scope').textContent,'Surse in romana');assert.equal(nodes.get('#home-news-english').hidden,false);assert.equal(nodes.get('#home-news-english').lang,'ro');
  listeners.get('#home-news-source-scope:click')();
  assert.equal(context.newsSourceScope,'edition');assert.equal(context.language,'ro');
  assert.equal(nodes.get('#home-news-language-label').textContent,'romana');assert.equal(nodes.get('#home-news-source-scope').textContent,'Toate limbile');
  listeners.get('#home-news-source-scope:click')();assert.equal(context.newsSourceScope,'all');
  listeners.get('#home-news-english:click')();assert.equal(context.newsSourceScope,'edition');assert.equal(context.language,'en');
- assert.equal(nodes.get('#home-news-language-label').textContent,'English');assert.equal(nodes.get('#home-news-english').hidden,true);
+ assert.equal(nodes.get('#home-news-language-label').textContent,'English');assert.equal(nodes.get('#home-news-english').hidden,true);assert.equal(nodes.get('#home-news-english').lang,'en');
  listeners.get('#home-news-source-scope:click')();assert.equal(context.newsSourceScope,'all');assert.equal(context.language,'en');assert.equal(nodes.get('#home-news-english').hidden,false);
  const before=renders;listeners.get('#home-news-english:click')();
  assert.equal(context.newsSourceScope,'edition');assert.equal(context.language,'en');assert.equal(renders,before+1,'English still changes scope when the interface is already English');

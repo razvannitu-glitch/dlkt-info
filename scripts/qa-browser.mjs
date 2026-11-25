@@ -851,9 +851,9 @@ async function verifyDisclosures(call,format,fixture){
  await toggleDetails(call,'#home-news-options',true);
  const expanded=await measureReader(call,fixture);assertReaderGeometry(expanded,format,fixture);assertReadingLayout(expanded,format,fixture,{compact:false});
  assert.ok(expanded.controls.some(control=>control.id==='home-news-period'),'period control is available in the open filters');
- assert.ok(expanded.controls.some(control=>control.id==='home-news-source-scope'),'source-scope control is available in the open filters');
+ assert.ok(expanded.controls.some(control=>control.id==='home-news-source-scope'),'source-language control stays visible while the period panel is open');
  // Leaving the non-modal filter panel must not strand focus under its overlay.
- await focusSelector(call,'#home-news-english');await keyboard(call,'Tab');
+ await focusSelector(call,'#home-news-period');await keyboard(call,'Tab');
  assert.equal(await evaluate(call,"document.getElementById('home-news-options').open"),false,'Tab out closes the filter overlay');
  const outside=await evaluate(call,"(()=>{const n=document.activeElement,r=n?.getBoundingClientRect();return Boolean(n&&r&&r.width>0&&r.height>0&&!n.closest('#home-news-options')&&document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)?.closest('a,button,summary,select')===n);})()");
  assert.equal(outside,true,'the focused control after the filters is visible and uncovered');
