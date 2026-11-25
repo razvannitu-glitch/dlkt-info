@@ -92,7 +92,7 @@ function sourceNode(source, locale, timeZone) {
         const original = document.createElement('a');
         original.className = 'text-button';
         original.href = source.card.sourceUrl;
-        original.textContent = citation.originalLabel;
+        original.textContent = t(locale, 'openSource');
         original.target = '_blank';
         original.rel = 'noopener noreferrer';
         row.append(original);

@@ -3,7 +3,7 @@ import { localReading, localReadingPreview, localCardCategory } from './local-pr
 import { localEventCalendar } from './local-event-calendar.js';
 import { weatherMotionNode } from './glance-weather-motion.js';
 import { contextPhotoNode } from './card-photo-browser.js';
-import { getLocale } from './i18n-browser.js';
+import { getLocale, translate } from './i18n-browser.js';
 const romanianKinds = { forecast: 'Vreme', transport: 'Transport', 'transport-notice': 'Transport', 'utility-notice': 'Termoficare si apa calda', event: 'Eveniment', 'municipal-news': 'Administratie', 'local-news': 'Stiri locale' };
 const node = (tag, text = '', className = '') => { const n = document.createElement(tag); n.textContent = text; n.className = className; return n; };
 const format = (time, zone, locale = 'en') => new Intl.DateTimeFormat(locale === 'ro' ? 'ro-RO' : 'en-GB', { timeZone: zone, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' }).format(new Date(time));
@@ -72,7 +72,7 @@ export function localCardNode(card, c, now = Date.now(), options = {}) {
         details.append(node('p', fact, 'card-boundary'));
     if (card.news)
         details.append(node('p', card.news.attribution, 'card-boundary'));
-    const source = node('a', ro ? (card.news ? 'Citeste articolul integral' : compact ? 'Sursa oficiala' : 'Deschide sursa oficiala') : (card.news ? 'Read the full report' : compact ? 'Official source' : 'Open official source'), 'source-link');
+    const source = node('a', translate('openSource'), 'source-link');
     source.href = card.sourceUrl;
     source.target = '_blank';
     source.rel = 'noopener noreferrer';
