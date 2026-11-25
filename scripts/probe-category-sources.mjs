@@ -383,22 +383,7 @@ function verifyElifePacing(){
   // Controlled fixture derived from the 23 observed directives; not the original body bytes.
   const fixture=[
     'User-agent: *','Disallow:','Disallow: /search','Disallow: /download/','Crawl-delay: 10',
-    'User-agent: Googlebot','Disallow: /*.ris','Disallow: /*.bib','Allow: /search
-const reports=[];
-for(const source of SOURCES){
-  try{reports.push(await inspectSource(source));}
-  catch(error){reports.push({id:source.id,status:'incomplete',error:clean(error instanceof Error?error.message:'unknown')});}
-}
-const incomplete=reports.some(report=>report.status!=='observed'||report.error||report.articles.length!==2
-  ||report.articles.some(article=>!article.request?.ok)
-  ||report.productionRequired&&(report.productionFeedParser?.state!=='accepted'||report.articles.some(article=>article.productionArticleParser?.state!=='accepted')));
-console.log(JSON.stringify({probe:configuration.id,probeGroup,commit:process.env.GITHUB_SHA??null,
-  startedAt:new Date(startedAt).toISOString(),finishedAt:new Date().toISOString(),attempts,limits,robotsParserChecks,elifePacingChecks,requestTiming,
-  outcome:incomplete?'incomplete-evidence':'observations-collected',
-  boundary:'Metadata observations only. This script changes no source registry, publishes no content and makes no assertion of publisher reuse rights.',
-  reports},null,2));
-if(incomplete)process.exitCode=1;
-,'Disallow: /search?','Disallow: /download/',
+    'User-agent: Googlebot','Disallow: /*.ris','Disallow: /*.bib','Allow: /search$','Disallow: /search?','Disallow: /download/',
     'User-agent: Amazonbot','Disallow: /','User-agent: SemrushBot','Disallow: /',
     'User-agent: MJ12bot','Disallow: /','User-agent: trendkite-akashic-crawler','Disallow: /',
     'User-agent: Seekport Crawler','Disallow: /','User-agent: Linespider','Disallow: /',
@@ -447,7 +432,7 @@ const incomplete=reports.some(report=>report.status!=='observed'||report.error||
   ||report.articles.some(article=>!article.request?.ok)
   ||report.productionRequired&&(report.productionFeedParser?.state!=='accepted'||report.articles.some(article=>article.productionArticleParser?.state!=='accepted')));
 console.log(JSON.stringify({probe:configuration.id,probeGroup,commit:process.env.GITHUB_SHA??null,
-  startedAt:new Date(startedAt).toISOString(),finishedAt:new Date().toISOString(),attempts,limits,robotsParserChecks,
+  startedAt:new Date(startedAt).toISOString(),finishedAt:new Date().toISOString(),attempts,limits,robotsParserChecks,elifePacingChecks,requestTiming,
   outcome:incomplete?'incomplete-evidence':'observations-collected',
   boundary:'Metadata observations only. This script changes no source registry, publishes no content and makes no assertion of publisher reuse rights.',
   reports},null,2));
