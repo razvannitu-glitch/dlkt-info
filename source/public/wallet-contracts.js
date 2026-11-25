@@ -1,12 +1,15 @@
 import { isRecord, isUuid } from './data-guards.js';
 import { DAILY_TOPICS, validTime } from './daily-contracts.js';
+import { LOCAL_NEEDS } from './personal-contracts.js';
 import { getWalletProviders } from './wallet-providers.js';
 export const WALLET_VERSION = 'dlkt-info-wallet-1';
-export const WALLET_PROFILE_VERSION = 'dlkt-info-wallet-profile-1';
+export const WALLET_PROFILE_VERSION = 'dlkt-info-wallet-profile-2';
+const LEGACY_PROFILE_VERSION = 'dlkt-info-wallet-profile-1';
 export const WALLET_PROFILE_MEMORY_KEY = 'wallet-profile-v1';
 export const WALLET_PROFILE_MAX_BYTES = 16_384;
 const CONTROL = /[\p{Cc}\p{Cf}]/u;
 const EMPTY_EVENTS = Object.freeze([]);
+const LEGACY_PROFILE_KEYS = ['displayName', 'locale', 'timezone', 'briefingTime', 'interests', 'personalPriority'];
 function exactKeys(value, expected) {
     const keys = Object.keys(value);
     return keys.length === expected.length && expected.every(key => Object.hasOwn(value, key));
@@ -45,18 +48,27 @@ function profileTimezone(value) {
         throw new Error('WALLET_PROFILE_INVALID');
     }
 }
-function isTopic(value) {
-    return typeof value === 'string' && DAILY_TOPICS.some(topic => topic === value);
+function preferenceSet(value, known) {
+    if (!Array.isArray(value) || value.length > known.length || Object.keys(value).length !== value.length)
+        return false;
+    const entries = value;
+    for (let index = 0; index < entries.length; index++) {
+        if (!Object.hasOwn(entries, index) || !known.some(item => item === entries[index]))
+            return false;
+    }
+    return new Set(entries).size === entries.length;
 }
+/** V2 writes require all eight fields; cached v1 clients must reload before saving. */
 export function parseWalletProfile(value) {
     if (!isRecord(value) || !exactKeys(value, [
-        'displayName', 'locale', 'timezone', 'briefingTime', 'interests', 'personalPriority',
+        ...LEGACY_PROFILE_KEYS, 'cityId', 'localNeeds',
     ]) || (value.displayName !== null && (typeof value.displayName !== 'string'
         || value.displayName.length > 80 || CONTROL.test(value.displayName)))
         || typeof value.briefingTime !== 'string' || !/^(?:[01]\d|2[0-3]):[0-5]\d$/u.test(value.briefingTime)
-        || !Array.isArray(value.interests) || value.interests.length > DAILY_TOPICS.length
-        || !value.interests.every(isTopic) || new Set(value.interests).size !== value.interests.length
-        || (value.personalPriority !== 'personal-first' && value.personalPriority !== 'balanced')) {
+        || !preferenceSet(value.interests, DAILY_TOPICS)
+        || (value.personalPriority !== 'personal-first' && value.personalPriority !== 'balanced')
+        || (value.cityId !== null && (typeof value.cityId !== 'string' || !/^\d{1,12}$/u.test(value.cityId)))
+        || !preferenceSet(value.localNeeds, LOCAL_NEEDS)) {
         throw new Error('WALLET_PROFILE_INVALID');
     }
     const profile = Object.freeze({
@@ -66,21 +78,30 @@ export function parseWalletProfile(value) {
         briefingTime: value.briefingTime,
         interests: Object.freeze([...value.interests]),
         personalPriority: value.personalPriority,
+        cityId: value.cityId,
+        localNeeds: Object.freeze([...value.localNeeds]),
     });
     withinLimit(profile);
     return profile;
 }
 export function parseWalletProfileState(value) {
     if (!isRecord(value) || !exactKeys(value, ['version', 'revision', 'updatedAt', 'value'])
-        || value.version !== WALLET_PROFILE_VERSION || !isWalletRevision(value.revision)
+        || (value.version !== WALLET_PROFILE_VERSION && value.version !== LEGACY_PROFILE_VERSION) || !isWalletRevision(value.revision)
         || !validTime(value.updatedAt)) {
         throw new Error('WALLET_PROFILE_STATE_INVALID');
+    }
+    // Legacy values are accepted only inside their explicit v1 envelope; reading never writes or infers preferences.
+    let profileInput = value.value;
+    if (value.version === LEGACY_PROFILE_VERSION) {
+        if (!isRecord(profileInput) || !exactKeys(profileInput, LEGACY_PROFILE_KEYS))
+            throw new Error('WALLET_PROFILE_INVALID');
+        profileInput = { ...profileInput, cityId: null, localNeeds: [] };
     }
     const state = Object.freeze({
         version: WALLET_PROFILE_VERSION,
         revision: value.revision,
         updatedAt: value.updatedAt,
-        value: parseWalletProfile(value.value),
+        value: parseWalletProfile(profileInput),
     });
     withinLimit(state);
     return state;

@@ -131,7 +131,8 @@ export function localCardNode(card, c, now = Date.now(), options = {}) {
     const category = localCardCategory(card);
     a.dataset.editorialCategory = category;
     a.append(head);
-    const photo = contextPhotoNode({ title: reading.title, sourceUrl: card.sourceUrl, editorialCategory: category }, now, card.kind === 'local-news' && card.news ? { id: card.news.id, revision: card.news.documentHash, cityId: c.id } : undefined);
+    // Private readers can omit image requests; existing public cards retain their photos.
+    const photo = options.photos === false ? null : contextPhotoNode({ title: reading.title, sourceUrl: card.sourceUrl, editorialCategory: category }, now, card.kind === 'local-news' && card.news ? { id: card.news.id, revision: card.news.documentHash, cityId: c.id } : undefined);
     if (photo)
         a.append(photo);
     if (compact) {

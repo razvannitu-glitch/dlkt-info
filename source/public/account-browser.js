@@ -2,6 +2,7 @@ import { ACCOUNT_VERSION, ACCOUNT_MAX_BYTES, parseAccountState, parseAccountValu
 import { DeviceMemory } from './device-memory.js';
 import { safeLink } from './card-validation.js';
 import { DAILY_TOPICS } from './daily-contracts.js';
+import { createPersonalProfileFields } from './personal-profile-fields.js';
 import { WALLET_PROFILE_MAX_BYTES, parseWalletProfile, parseWalletSnapshot } from './wallet-contracts.js';
 function el(id) {
     const node = document.getElementById(id);
@@ -22,6 +23,7 @@ const profileForm = el('account-profile-form');
 const profileName = el('account-profile-name');
 const profileLocale = el('account-profile-locale');
 const profileTimezone = el('account-profile-timezone');
+const personalFields = createPersonalProfileFields('account-profile');
 const profileInterests = new Map();
 for (const topic of DAILY_TOPICS) {
     const label = document.createElement('label');
@@ -74,6 +76,7 @@ function setBusy(value) {
         element.setAttribute('aria-busy', String(value));
     for (const input of profileInterests.values())
         input.disabled = value;
+    personalFields.setBusy(value);
     document.querySelectorAll('input, button').forEach(control => { control.disabled = value; });
 }
 function closeConfirmation() {
@@ -92,6 +95,7 @@ function clearPrivate() {
     profileName.value = '';
     profileLocale.value = '';
     profileTimezone.value = '';
+    personalFields.clear();
     for (const input of profileInterests.values())
         input.checked = false;
     el('account-profile-summary').replaceChildren();
@@ -173,7 +177,7 @@ async function readResponse(response, signal, maximum) {
         reader.releaseLock();
     }
 }
-async function request(path, method, signal, body) {
+async function request(path, method, signal, body, expectedOwner) {
     const timeout = new AbortController();
     const abort = () => timeout.abort();
     signal.addEventListener('abort', abort, { once: true });
@@ -183,7 +187,7 @@ async function request(path, method, signal, body) {
     try {
         const response = await abortable(fetch(path, {
             method, credentials: 'same-origin',
-            headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-DLKT-Info-Request': path === '/api/account' ? 'account-v1' : path === '/api/wallet' ? 'wallet-v1' : 'identity-v1' },
+            headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-DLKT-Info-Request': path === '/api/account' ? 'account-v1' : path === '/api/wallet' ? 'wallet-v1' : 'identity-v1', ...(expectedOwner === undefined ? {} : { 'X-DLKT-Info-Owner': expectedOwner }) },
             ...(body === undefined ? {} : { body: JSON.stringify(body) }),
             cache: 'no-store', redirect: 'error', signal: timeout.signal,
         }), timeout.signal);
@@ -264,7 +268,7 @@ function renderCopy() {
 function newProfile() {
     const defaults = new Intl.DateTimeFormat().resolvedOptions();
     return parseWalletProfile({ displayName: null, locale: defaults.locale, timezone: defaults.timeZone,
-        briefingTime: '08:00', interests: [], personalPriority: 'balanced' });
+        briefingTime: '08:00', interests: [], personalPriority: 'balanced', cityId: null, localNeeds: [] });
 }
 function renderProfile() {
     profilePanel.hidden = false;
@@ -280,6 +284,7 @@ function renderProfile() {
     profileName.value = value.displayName ?? '';
     profileLocale.value = value.locale;
     profileTimezone.value = value.timezone;
+    personalFields.render(value);
     for (const [topic, input] of profileInterests)
         input.checked = value.interests.some(interest => interest === topic);
     summary.append(text('p', saved ? `Profile updated: ${saved.updatedAt}.` : 'No profile has been saved in this account. These starting values are saved only when you choose Save profile.'));
@@ -289,22 +294,24 @@ function renderProfile() {
 async function readProfile(operation, id) {
     let snapshot;
     try {
-        snapshot = parseWalletSnapshot(await request('/api/wallet', 'GET', operation.controller.signal));
+        snapshot = parseWalletSnapshot(await request('/api/wallet', 'GET', operation.controller.signal, undefined, id));
     }
     catch (error) {
         requireCurrent(operation);
         if (error instanceof AccountRequestError && (error.statusCode === 401 || error.statusCode === 403))
             throw error;
+        if (error instanceof AccountRequestError && error.statusCode === 409)
+            throw new Error('ACCOUNT_SESSION_CHANGED');
+        await requireOwner(operation, id);
         return { status: 'unavailable' };
     }
     requireCurrent(operation);
     if (snapshot.account === 'signed-out')
         throw new Error('ACCOUNT_SESSION_CHANGED');
+    // The reader copy is private too: null or unavailable profiles must not bypass owner revalidation.
+    await requireOwner(operation, id);
     if (snapshot.account !== 'signed-in')
         return { status: 'unavailable' };
-    // The optional profile carries private data; verify its owner again before exposing it.
-    if (snapshot.profile !== null)
-        await requireOwner(operation, id);
     return { status: 'ready', profile: snapshot.profile };
 }
 function showSignedOut(email = challengeEmail ?? '') {
@@ -608,7 +615,7 @@ profileForm.addEventListener('submit', event => {
         const base = prior?.value ?? newProfile();
         value = parseWalletProfile({ ...base, displayName: profileName.value.trim() || null,
             locale: profileLocale.value.trim(), timezone: profileTimezone.value.trim(),
-            interests: [...profileInterests].filter(([, input]) => input.checked).map(([topic]) => topic) });
+            interests: [...profileInterests].filter(([, input]) => input.checked).map(([topic]) => topic), ...personalFields.read() });
     }
     catch {
         el('account-profile-message').textContent = 'Check the name, language tag, timezone and interests before saving.';
@@ -616,14 +623,14 @@ profileForm.addEventListener('submit', event => {
     }
     void perform('save-profile', 'Checking your session before saving the profile.', async (operation) => {
         await requireOwner(operation, id);
-        const snapshot = parseWalletSnapshot(await request('/api/wallet', 'PUT', operation.controller.signal, { expectedRevision: prior?.revision ?? null, value }));
+        const snapshot = parseWalletSnapshot(await request('/api/wallet', 'PUT', operation.controller.signal, { expectedRevision: prior?.revision ?? null, value }, id));
         requireCurrent(operation);
         if (snapshot.account !== 'signed-in' || snapshot.profile === null
             || JSON.stringify(snapshot.profile.value) !== JSON.stringify(value))
             throw new Error('ACCOUNT_PROFILE_WRITE_NOT_CONFIRMED');
         await requireOwner(operation, id);
         showAccount(id, copy, { status: 'ready', profile: snapshot.profile });
-        message.textContent = 'Profile saved to your account. Your saved reader copy and this browser’s reading preferences are unchanged.';
+        message.textContent = 'Profile saved to your account. Open Info Wallet to read your personal selection. Your saved reader copy and this browser’s reading preferences are unchanged.';
     });
 });
 document.addEventListener('visibilitychange', () => {

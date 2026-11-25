@@ -51,19 +51,40 @@ function operationalCards(cards, city) {
             why: 'The same checked operator document contains service notices in several sectors of this city.', action: 'Check your street and building in the official operator list.' } };
     return [overview, ...cards.filter(card => !cmteb.includes(card))];
 }
-/** Actual local information only: map references and source directories never become edition cards. */
-export function selectHomeLocal(snapshot, city, now) {
-    if (!Number.isFinite(now) || !validCity(city) || !object(snapshot) || !stamp(snapshot.checkedAt))
-        return { cards: [], expiresAt: null };
+/** Complete accepted source records before any homepage grouping or display cap.
+ * Acquisition limits remain those of the connected sources. An empty valid
+ * snapshot remains distinguishable from an absent, invalid or expired check. */
+export function selectLocalCandidates(snapshot, city, now) {
+    const failed = (state) => Object.freeze({ state, city: null, snapshot: null, cards: Object.freeze([]), checkedAt: null });
+    if (!Number.isFinite(now) || !validCity(city))
+        return failed('invalid');
+    if (snapshot === null || snapshot === undefined)
+        return failed('unavailable');
+    if (!object(snapshot) || !stamp(snapshot.checkedAt))
+        return failed('invalid');
     const checked = Date.parse(snapshot.checkedAt);
-    // Validate the complete source identity at its check, then expire records individually.
-    // A short event does not erase an otherwise-current forecast or another local listing.
-    if (checked > now + 5000 || now - checked >= 300000 || !currentLocalSnapshot(snapshot, city, checked))
-        return { cards: [], expiresAt: null };
-    const eligible = operationalCards(snapshot.cards.filter(card => Date.parse(card.validTo) > now && localEventEligible(card, now) && (card.kind !== 'local-news' || validLocalNewsArticle(card.news, city, now))), city);
-    const news = selectNews(eligible.filter(card => card.kind === 'local-news'), now);
-    const supporting = eligible.filter(card => card.kind !== 'local-news');
-    const ordered = supporting.map((card, index) => ({ card, index })).sort((left, right) => {
+    if (checked > now + 5000)
+        return failed('invalid');
+    if (now - checked >= 300000)
+        return failed('stale');
+    // Validate at the original check, then expire each source record separately.
+    if (!currentLocalSnapshot(snapshot, city, checked))
+        return failed('invalid');
+    const cards = snapshot.cards.filter(card => Date.parse(card.validTo) > now && localEventEligible(card, now)
+        && (card.kind !== 'local-news' || validLocalNewsArticle(card.news, city, now)));
+    return Object.freeze({ state: 'current', city, snapshot, cards: Object.freeze(cards), checkedAt: snapshot.checkedAt });
+}
+/** Earliest actual validity boundary for the chosen records and their source check. */
+export function localCandidateExpiry(cards, checked, now) {
+    const expiries = [checked + 300000, ...cards.flatMap(card => [Date.parse(card.validTo),
+            ...(card.news ? [Date.parse(card.news.publishedAt) + NEWS_WINDOW_MS + 1] : []),
+            ...(card.context?.startsAt ? [Date.parse(card.context.endsAt ?? card.context.startsAt)] : [])])]
+        .filter(time => time > now);
+    return Math.min(...expiries);
+}
+/** Shared stable ordering only; no truncation, grouping or inferred personal impact. */
+export function orderLocalCandidates(cards) {
+    return cards.map((card, index) => ({ card, index })).sort((left, right) => {
         const kind = kindOrder[left.card.kind] - kindOrder[right.card.kind];
         if (kind)
             return kind;
@@ -86,7 +107,18 @@ export function selectHomeLocal(snapshot, city, now) {
                 return rightDate.localeCompare(leftDate) || left.index - right.index;
         }
         return left.index - right.index;
-    });
+    }).map(item => item.card);
+}
+/** Actual local information only: map references and source directories never become edition cards. */
+export function selectHomeLocal(snapshot, city, now) {
+    const candidates = selectLocalCandidates(snapshot, city, now);
+    if (candidates.state !== 'current')
+        return { cards: [], expiresAt: null };
+    const checked = Date.parse(candidates.checkedAt);
+    const eligible = operationalCards(candidates.cards, candidates.city);
+    const news = selectNews(eligible.filter(card => card.kind === 'local-news'), now);
+    const supporting = eligible.filter(card => card.kind !== 'local-news');
+    const ordered = orderLocalCandidates(supporting).map((card, index) => ({ card, index }));
     const kinds = new Set(), cards = [];
     for (const { card } of ordered) {
         if (kinds.has(card.kind))
@@ -96,7 +128,7 @@ export function selectHomeLocal(snapshot, city, now) {
         if (cards.length === 12)
             break;
     }
-    // A first pass gives different kinds visibility; the remaining local information is retained.
+    // Preserve the homepage's existing kind diversity and display limits.
     while (cards.length < Math.min(12, ordered.length)) {
         const before = cards.length;
         for (const kind of kinds) {
@@ -114,8 +146,7 @@ export function selectHomeLocal(snapshot, city, now) {
     const all = [...news, ...cards];
     if (!all.length)
         return { cards: [], expiresAt: null };
-    const expiries = [checked + 300000, ...all.flatMap(card => [Date.parse(card.validTo), ...(card.news ? [Date.parse(card.news.publishedAt) + NEWS_WINDOW_MS + 1] : []), ...(card.context?.startsAt ? [Date.parse(card.context.endsAt ?? card.context.startsAt)] : [])])].filter(time => time > now);
-    return { cards: all, expiresAt: Math.min(...expiries) };
+    return { cards: all, expiresAt: localCandidateExpiry(all, checked, now) };
 }
 /** Reuse checked city records. A publication aged24–72h stays local, outside the24h top. */
 export function selectHomeLanguage(snapshot, city, now, language) {
