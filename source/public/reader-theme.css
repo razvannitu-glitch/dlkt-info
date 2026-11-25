@@ -600,3 +600,9 @@ html:is([data-reader-theme=prism],[data-reader-theme=night]) #entry-options>summ
 
 #discovery .news-options-panel{inset-inline-start:auto;inset-inline-end:0;inline-size:min(100%,420px)}
 #discovery .news-language-actions>button{min-inline-size:0;max-inline-size:100%;white-space:normal;overflow-wrap:anywhere}
+
+/* Give the city its own full-width row on very narrow screens. */
+@media(max-width:379px){
+ #today-glance .glance-heading{grid-template-columns:minmax(0,1fr);grid-template-areas:'date' 'city' 'actions' 'utilities';row-gap:6px}
+ #today-glance .glance-actions{justify-self:stretch;justify-content:flex-start}
+}

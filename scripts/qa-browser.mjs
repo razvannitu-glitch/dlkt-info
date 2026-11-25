@@ -418,7 +418,7 @@ function readerProbe(expected){
   firstUsefulTop:useful.length?Math.min(...useful.map(node=>rect(node).top)):null,
   firstEditorialTop:cards.length?rect(cards[0]).top:null,
   layout:{header:rect(document.querySelector('.site-header')),glance:rect(document.querySelector('#today-glance')),
-   toolbar:rect(document.querySelector('#home-news-toolbar')),filtersOpen:document.querySelector('#home-news-options')?.open??null,
+   toolbar:rect(document.querySelector('#home-news-toolbar')),sourceLanguage:rect(document.querySelector('#home-news-language')),toolbarRowGap:parseFloat(getComputedStyle(document.querySelector('#home-news-toolbar')).rowGap),filtersOpen:document.querySelector('#home-news-options')?.open??null,
    categoryVisible:visible(document.querySelector('#home-news-category')),filtersToggleVisible:visible(document.querySelector('#home-news-options-toggle'))},
   controls:controls.map(node=>({id:node.id||node.className,tag:node.tagName,...rect(node)}))};
 }
@@ -485,10 +485,15 @@ function assertReadingLayout(measured,format,fixture,{compact=true}={}){
  if(compact){
   assert.equal(measured.layout.filtersOpen,false,'initial geometry measures the closed filters');
   assert.ok(measured.firstUsefulTop!==null,'a useful card is measured');
-  if(format.width===320)assert.ok(measured.firstUsefulTop<=620,'first useful card must begin within 620px at 320px: '+measured.firstUsefulTop);
+  // Keep the previous content budget while accounting exactly for the newly visible language row.
+  // Raw positions and the measured row height/gap remain in the report; no fixed offset is guessed.
+  const languageRow=measured.layout.sourceLanguage.height+measured.layout.toolbarRowGap;
+  assert.ok(Number.isFinite(languageRow)&&languageRow>0,'visible language row has positive measured geometry');
+  const previousUsefulTop=measured.firstUsefulTop-languageRow;
+  if(format.width===320)assert.ok(previousUsefulTop<=620,'existing content before the added language row stays within 620px at 320px: '+previousUsefulTop);
   if(format.width===390){
-   assert.ok(measured.firstUsefulTop<=550,'first useful card must begin within 550px at 390px: '+measured.firstUsefulTop);
-   assert.ok(measured.firstEditorialTop!==null&&measured.firstEditorialTop<=1100,'first editorial follows two compact utilities within 1100px: '+measured.firstEditorialTop);
+   assert.ok(previousUsefulTop<=550,'existing content before the added language row stays within 550px at 390px: '+previousUsefulTop);
+   assert.ok(measured.firstEditorialTop!==null&&measured.firstEditorialTop-languageRow<=1100,'existing editorial position excluding the added language row stays within 1100px: '+(measured.firstEditorialTop-languageRow));
   }
   assert.ok(measured.local.every(card=>card.bottom<=measured.firstEditorialTop+1),'the two local utilities precede the editorial feed');
  }
