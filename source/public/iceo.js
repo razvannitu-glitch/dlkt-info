@@ -17,7 +17,9 @@ import { NEWS_CATEGORIES, newsCategoryLabel, isNewsCategoryId } from './news-tax
 import { NewsMasonry } from './news-masonry.js';
 import { knowledgeCardNode } from './knowledge-browser.js';
 import { KNOWLEDGE_CARDS } from './knowledge-catalog.js';
-import { selectInlineKnowledge, interleaveKnowledge, readKnowledgeSeen, writeKnowledgeSeen } from './knowledge-stream.js';
+import { selectInlineKnowledge, isInlineKnowledgeCurrent, appendEligibleKnowledge, interleaveKnowledge, readKnowledgeSeen, writeKnowledgeSeen } from './knowledge-stream.js';
+import { nextKnowledgeBoundary } from './knowledge.js';
+import { observeKnowledgeExposure, KNOWLEDGE_EXPOSURE_LIMIT } from './knowledge-exposure.js';
 import { NewsReadingState } from './news-reading-state.js';
 import { DiscoveryLoading, renderDiscoveryLoading, bindDiscoveryLoadingActions } from './loading.js';
 import { selectHomeLanguage } from './home-local.js';
@@ -92,6 +94,7 @@ let newsInteractionKey = '', newsInteractionRevision = 0;
 const inlineKnowledgeSeen = readKnowledgeSeen();
 let inlineKnowledgeContext = '';
 let inlineKnowledgeSelection = [];
+let stopKnowledgeObserver = () => { };
 let lastLocalLanguageRefresh = 0;
 const currentCardByNode = new WeakMap();
 function schedulePublicRefresh() {
@@ -1210,6 +1213,7 @@ function retainedNewsSourcesNode(item, page, language) {
 function renderDiscovery() {
     clearTimeout(discoveryExpiry);
     stopNewsObserver();
+    stopKnowledgeObserver();
     worldExplorer?.update();
     const interactionKey = JSON.stringify([getLocale(), newsSourceScope, newsFilter, newsPeriod, contextualCity?.id ?? null, document.body.dataset.entryView, document.body.dataset.worldExplore ?? null]);
     if (interactionKey !== newsInteractionKey || restartNewsEdition) {
@@ -1295,7 +1299,9 @@ function renderDiscovery() {
     const discoveryDelay = nextDailyEditionDelay(today, now), returnDelay = checkpoint ? nextReturnDelay(snapshot, selectReturnBrief(checkpoint, null, now, false).topics, now) : null;
     const localBoundaries = [local.expiresAt, reading.expiresAt, server.page ? Date.parse(server.page.expiresAt) : null].filter((time) => time !== null && time > now);
     const localDelay = localBoundaries.length ? Math.max(25, Math.min(...localBoundaries) - now + 25) : null;
-    const delays = [discoveryDelay, returnDelay, localDelay, following.nextDelay(now)].filter((n) => n !== null);
+    const knowledgeBoundary = nextKnowledgeBoundary(KNOWLEDGE_CARDS, now, server.page?.day?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
+    const knowledgeDelay = knowledgeBoundary === null ? null : Math.max(25, knowledgeBoundary - now + 25);
+    const delays = [discoveryDelay, returnDelay, localDelay, knowledgeDelay, following.nextDelay(now)].filter((n) => n !== null);
     if (delays.length && document.visibilityState === 'visible')
         discoveryExpiry = setTimeout(renderDiscovery, Math.min(...delays));
     host.replaceChildren();
@@ -1353,6 +1359,9 @@ function renderDiscovery() {
         inlineKnowledgeContext = inlineContext;
         inlineKnowledgeSelection = inlinePage ? selectInlineKnowledge(KNOWLEDGE_CARDS.filter(card => !inlineKnowledgeSeen.has(card.id)), { cityId: inlinePage.cityId, countryCode: inlinePage.countryCode, timeZone: inlinePage.day?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone }, now, inlinePage.epoch + ':' + inlinePage.revision) : [];
     }
+    else if (inlinePage) {
+        inlineKnowledgeSelection = appendEligibleKnowledge(inlineKnowledgeSelection, KNOWLEDGE_CARDS, { cityId: inlinePage.cityId, countryCode: inlinePage.countryCode, timeZone: inlinePage.day?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone }, now, inlinePage.epoch + ':' + inlinePage.revision, inlineKnowledgeSeen);
+    }
     if (server.retainedCount > 0)
         host.append(make('p', 'discovery-section-label privacy-note', language === 'ro'
             ? `Lectura pastrata · ${format.format(server.retainedCount)} subiecte din editiile anterioare. Verificarile originale raman neschimbate.`
@@ -1361,15 +1370,9 @@ function renderDiscovery() {
     let newsIndex = 0;
     for (const entry of interleaveKnowledge(visible, inlineKnowledgeSelection)) {
         if (entry.kind === 'knowledge') {
-            if (now >= Date.parse(entry.item.card.reviewBy))
-                continue;
-            if (!inlineKnowledgeSeen.has(entry.item.card.id) && selectInlineKnowledge([entry.item.card], { cityId: inlinePage?.cityId ?? null, countryCode: inlinePage?.countryCode ?? null, timeZone: inlinePage?.day?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone }, now, 'reading-check').length === 0)
+            if (!isInlineKnowledgeCurrent(entry.item, { cityId: inlinePage?.cityId ?? null, countryCode: inlinePage?.countryCode ?? null, timeZone: inlinePage?.day?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone }, now))
                 continue;
             host.append(knowledgeCardNode(entry.item.card, entry.item.scope));
-            if (!document.body.dataset.worldExplore && !inlineKnowledgeSeen.has(entry.item.card.id)) {
-                inlineKnowledgeSeen.add(entry.item.card.id);
-                writeKnowledgeSeen(inlineKnowledgeSeen);
-            }
             continue;
         }
         const item = entry.item, index = newsIndex++, originalItem = pageItemByKey.get(item.key), originalPage = newsContinuation.editionFor(item.key);
@@ -1608,6 +1611,12 @@ function renderDiscovery() {
         if (Math.abs(offset) > 1)
             window.scrollBy(0, offset);
     }
+    stopKnowledgeObserver = observeKnowledgeExposure(target, id => {
+        if (inlineKnowledgeSeen.size >= KNOWLEDGE_EXPOSURE_LIMIT || inlineKnowledgeSeen.has(id) || !KNOWLEDGE_CARDS.some(card => card.id === id))
+            return;
+        inlineKnowledgeSeen.add(id);
+        writeKnowledgeSeen(inlineKnowledgeSeen);
+    }, { isActive: () => document.body.dataset.entryView === 'start' && !document.body.dataset.worldExplore && !document.querySelector('dialog[open]') });
     memoryControls();
 }
 /** Explicit updates start a fresh cursor while preserving this context's reading prefix. */
@@ -1752,7 +1761,7 @@ document.addEventListener('visibilitychange', () => {
         clearTimeout(savedUpdateExpiry);
     }
 });
-window.addEventListener('pagehide', () => { stopNewsObserver(); newsMasonry?.disconnect(); newsMasonry = null; });
+window.addEventListener('pagehide', () => { stopNewsObserver(); stopKnowledgeObserver(); newsMasonry?.disconnect(); newsMasonry = null; });
 window.addEventListener('pageshow', () => { renderDiscovery(); schedulePublicRefresh(); });
 document.addEventListener('dlkt:entry-view', event => {
     if (!(event instanceof CustomEvent) || !object(event.detail))
