@@ -445,7 +445,7 @@ function assertFullTitle(title,label){
  assert.notEqual(title.overflow,'ellipsis',label+' must not use ellipsis');
 }
 function assertReadingLayout(measured,format,fixture,{compact=true}={}){
- assertReadingDetails(measured,format);
+ assertReadingDetails(measured,format);assertActionSpacing(measured.actionSpacing,format);
  for(const title of measured.titles)assertFullTitle(title,'editorial title '+title.id+' at '+format.width+'px');
  assert.deepEqual(measured.localIds,fixture.localIds,'both real local fixture cards are present in homepage order');
  for(const expected of fixture.localExpected){
@@ -479,8 +479,127 @@ function expectedReader(fixture){
 }
 async function measureReader(call,fixture){
  const measured=await evaluate(call,'('+readerProbe.toString()+')('+JSON.stringify(expectedReader(fixture))+')');
- measured.details=await evaluate(call,'('+readingDetailProbe.toString()+')()');return measured;
+ measured.details=await evaluate(call,'('+readingDetailProbe.toString()+')()');
+ measured.actionSpacing=await evaluate(call,'('+actionSpacingProbe.toString()+')()');return measured;
 }
+
+/** Measure painted action text, including its actual hover/focus surface insets. */
+function actionSpacingProbe(){
+ const visible=node=>{
+  if(!node||node.getClientRects().length===0||getComputedStyle(node).display==='none'||getComputedStyle(node).visibility==='hidden')return false;
+  for(let p=node;p&&p!==document.body;p=p.parentElement){
+   const s=getComputedStyle(p),r=p.getBoundingClientRect();
+   if(s.visibility==='hidden'||s.display==='none')return false;
+   if(s.position==='absolute'&&r.width<=1&&r.height<=1&&(s.overflow==='hidden'||s.clipPath!=='none'))return false;
+   if(p.parentElement?.tagName==='DETAILS'&&!p.parentElement.open){
+    const summary=[...p.parentElement.children].find(child=>child.tagName==='SUMMARY');
+    if(!summary?.contains(node))return false;
+   }
+  }
+  return true;
+ };
+ const box=node=>{const r=node.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height};};
+ const selector='button,a.primary,a.secondary,a.focus-button,a.text-button,a.source-link,a.footer-link,.more-menu a,summary';
+ const nodes=[...document.querySelectorAll(selector)].filter(visible),violations=[],samples=[];
+ let textControls=0,iconControls=0,minInlineInset=null,minBlockInset=null;
+ for(const node of nodes){
+  const r=box(node),s=getComputedStyle(node),id=node.id||node.className||node.tagName.toLowerCase();
+  const tree=document.createTreeWalker(node,NodeFilter.SHOW_TEXT),rects=[];let child;
+  while((child=tree.nextNode())){
+   const parent=child.parentElement,raw=child.textContent??'';
+   if(!raw.trim()||!parent||parent.closest('svg')||!visible(parent))continue;
+   const range=document.createRange(),start=raw.search(/\S/u),end=raw.search(/\s*$/u);
+   range.setStart(child,start);range.setEnd(child,end);
+   for(const line of range.getClientRects())if(line.width>0&&line.height>0)rects.push(line);
+  }
+  const iconOnly=node.matches('.icon-button,.reader-more>summary,.entry-field>button')
+   ||rects.length===0;
+  if(iconOnly){iconControls++;continue;}
+  textControls++;
+  const ink={left:Math.min(...rects.map(v=>v.left)),right:Math.max(...rects.map(v=>v.right)),top:Math.min(...rects.map(v=>v.top)),bottom:Math.max(...rects.map(v=>v.bottom))};
+  const inline=Math.min(ink.left-r.left,r.right-ink.right),block=Math.min(ink.top-r.top,r.bottom-ink.bottom);
+  minInlineInset=Math.min(minInlineInset??Infinity,inline);minBlockInset=Math.min(minBlockInset??Infinity,block);
+  const reasons=[];
+  if(r.width<43.5||r.height<43.5)reasons.push('target-smaller-than-44px');
+  if(r.left< -1||r.right>innerWidth+1)reasons.push('outside-viewport');
+  if(inline<7||block<3)reasons.push('painted-label-too-close-to-edge');
+  if(!['','none','0','normal'].includes(s.webkitLineClamp)||s.textOverflow==='ellipsis')reasons.push('truncated-label');
+  for(let p=node;p&&p!==document.body;p=p.parentElement){
+   const style=getComputedStyle(p),bound=box(p);
+   if(['hidden','clip'].includes(style.overflowX)&&(ink.left<bound.left-1||ink.right>bound.right+1))reasons.push('ancestor-clips-label-inline');
+   if(['hidden','clip'].includes(style.overflowY)&&(ink.top<bound.top-1||ink.bottom>bound.bottom+1))reasons.push('ancestor-clips-label-block');
+  }
+  const row={id,text:node.textContent?.trim().slice(0,100),...r,inlineInset:inline,blockInset:block,
+   paddingInlineStart:parseFloat(s.paddingInlineStart),paddingInlineEnd:parseFloat(s.paddingInlineEnd),background:s.backgroundColor,color:s.color};
+  if(reasons.length)violations.push({...row,reasons:[...new Set(reasons)]});
+  if(['home-city','glance-city','discovery-refresh','world-back'].includes(node.id))samples.push(row);
+ }
+ const local=[...document.querySelectorAll('#home-local-cards article.local-utility')].filter(visible).map(card=>{
+  const topic=card.querySelector('header .card-topic'),source=card.querySelector('.local-utility-actions>.source-link'),actions=card.querySelector('.local-utility-actions'),reading=card.querySelector('.local-reading');
+  if(!topic||!source||!actions)return {id:card.dataset.localId,missing:true};
+  const r=box(card),t=box(topic),a=box(source),footer=box(actions),style=getComputedStyle(card),f=getComputedStyle(actions);
+  const summary=reading?.querySelector('summary'),lastBottom=Math.max(a.bottom,summary&&visible(summary)?box(summary).bottom:a.bottom);
+  return {id:card.dataset.localId,open:Boolean(reading?.open),topInset:t.top-r.top,sourceBottomInset:r.bottom-a.bottom,
+   rowBottomInset:r.bottom-lastBottom,footerPadding:parseFloat(f.paddingBottom),borderBottom:parseFloat(style.borderBottomWidth),
+   footerBottom:footer.bottom,cardBottom:r.bottom,sourceHeight:a.height,summaryHeight:summary?box(summary).height:null};
+ });
+ return {viewport:innerWidth,documentWidth:document.documentElement.scrollWidth,locale:document.documentElement.lang,direction:document.documentElement.dir,
+  inspectedControls:nodes.length,textControls,iconControls,minInlineInset,minBlockInset,violations,samples,local};
+}
+function assertActionSpacing(measured,format){
+ assert.ok(measured.textControls>=3,'actual text actions are measured');
+ assert.ok(measured.documentWidth<=format.width+2,'action spacing does not cause horizontal document overflow');
+ assert.deepEqual(measured.violations,[],'all measured painted action labels retain their internal space');
+ for(const item of measured.samples)assert.ok(item.paddingInlineStart>=12&&item.paddingInlineEnd>=12,'named text action keeps at least12px inline padding: '+JSON.stringify(item));
+ for(const card of measured.local){
+  assert.notEqual(card.missing,true,'local action geometry is present');
+  if(!card.open){
+   assert.ok(Math.abs(card.topInset-card.rowBottomInset)<=1,'closed local action row matches top category inset: '+JSON.stringify(card));
+   assert.ok(Math.abs(card.topInset-card.sourceBottomInset)<=1,'the actual official-source button shares the balanced bottom inset: '+JSON.stringify(card));
+  }
+  assert.ok(card.footerPadding>=14,'expanded and compact local cards retain a comfortable bottom inset');
+ }
+}
+async function verifyActionStates(call,format){
+ const observations=[];
+ for(const selector of ['#home-city','#glance-city']){
+  await evaluate(call,'(()=>{document.querySelector('+JSON.stringify(selector)+').scrollIntoView({block:"center",behavior:"instant"});document.activeElement?.blur();return true;})()');
+  await call('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0});
+  const resting=await evaluate(call,'('+actionSpacingProbe.toString()+')()');assertActionSpacing(resting,format);
+  const before=resting.samples.find(row=>row.id===selector.slice(1));assert.ok(before);
+  await call('Input.dispatchMouseEvent',{type:'mouseMoved',x:before.left+before.width/2,y:before.top+before.height/2});
+  const hovering=await evaluate(call,'('+actionSpacingProbe.toString()+')()');assertActionSpacing(hovering,format);
+  assert.equal(await evaluate(call,'document.querySelector('+JSON.stringify(selector)+').matches(":hover")'),true,'real pointer hover is exercised');
+  const hovered=hovering.samples.find(row=>row.id===before.id);assert.ok(hovered);
+  await call('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0});await keyboard(call,'Tab');await focusSelector(call,selector);
+  const focused=await evaluate(call,'('+actionSpacingProbe.toString()+')()');assertActionSpacing(focused,format);
+  assert.equal(await evaluate(call,'document.querySelector('+JSON.stringify(selector)+').matches(":focus-visible")'),true,'keyboard focus state is exercised');
+  const focus=focused.samples.find(row=>row.id===before.id);assert.ok(focus);
+  for(const after of [hovered,focus])for(const key of ['width','height','paddingInlineStart','paddingInlineEnd'])assert.ok(Math.abs(after[key]-before[key])<=.1,'hover/focus preserves action geometry');
+  assert.notEqual(hovered.background,before.background,'hover paints the actual button surface');
+  observations.push({id:before.id,resting:before,hovered,focused:focus});
+ }
+ await evaluate(call,'(()=>{document.activeElement?.blur();window.scrollTo(0,0);return true;})()');
+ return {status:'ACTION_STATES_PASS',observations};
+}
+async function verifyActionLocales(call,format){
+ const original=await evaluate(call,"document.querySelector('#reader-language').value"),observations=[];
+ async function choose(locale){
+  await evaluate(call,'(()=>{const picker=document.querySelector("#reader-language");picker.value='+JSON.stringify(locale)+';picker.dispatchEvent(new Event("change",{bubbles:true}));return true;})()');
+  for(let i=0;i<40;i++){if(await evaluate(call,'document.documentElement.lang')===locale)return;await pause(50);}
+  throw Error('DLKT_ACTION_LOCALE_TIMEOUT');
+ }
+ try{
+  for(const locale of ['en','de','ar']){
+   await choose(locale);
+   const measured=await evaluate(call,'('+actionSpacingProbe.toString()+')()');assertActionSpacing(measured,format);
+   assert.equal(measured.locale,locale);if(locale==='ar')assert.equal(measured.direction,'rtl');
+   observations.push(measured);
+  }
+ }finally{await choose(original);}
+ return {status:'ACTION_LOCALES_PASS',observations};
+}
+
 /** CSS-pixel geometry: DPR changes raster density, not this padding contract. */
 function readingDetailProbe(){
  const visible=node=>{
@@ -843,7 +962,9 @@ async function verifyExploreSurface(call,format,fixture){
  await focusSelector(call,'#world-open');await keyboard(call,'Enter');
  assert.equal(await evaluate(call,"document.getElementById('world-explore').hidden"),false,'Explore opens using its real action');
  const measured=await evaluate(call,'('+surfaceProbe.toString()+')("#world-explore","#world-city-query,#world-country,#world-category",".world-controls button,.world-controls input,.world-controls select,.world-explore-top button,#world-refresh,#world-more,.world-coverage>summary,#world-empty button")');
- assertSurface(measured,format,'Explore');assert.equal(measured.fields.length,3,'all three Explore fields are measured');
+ assertSurface(measured,format,'Explore');
+ const actionSpacing=await evaluate(call,'('+actionSpacingProbe.toString()+')()');assertActionSpacing(actionSpacing,format);
+ assert.equal(measured.fields.length,3,'all three Explore fields are measured');
  await focusSelector(call,'#world-back');await keyboard(call,'Enter');
  assert.equal(await evaluate(call,"document.getElementById('world-explore').hidden"),true,'Explore returns to the existing reader');
  assert.equal(await evaluate(call,'document.activeElement?.id'),'world-open','Explore restores its launch action');
@@ -1149,6 +1270,7 @@ async function verifyAccountSurfaces(call,origin,outputDir){
   await call('Page.navigate',{url:origin+'/account'});await loaded(call);await pause(150);
   const measured=await evaluate(call,'('+surfaceProbe.toString()+')("main.account-page","#account-email,#account-otp")');
   assertSurface(measured,format,'anonymous account shell');
+  const actionSpacing=await evaluate(call,'('+actionSpacingProbe.toString()+')()');assertActionSpacing(actionSpacing,format);
   assert.ok(measured.root.width<=1122,'account container has a bounded reading width');
   assert.ok(measured.contentLeft>=15&&measured.contentRight<=format.width-15,'account content keeps its responsive side gutters');
   assert.ok(measured.controls.length>=2,'visible anonymous account controls are actually measured');
@@ -1158,7 +1280,7 @@ async function verifyAccountSurfaces(call,origin,outputDir){
   const data=(await call('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false})).data;
   assert.ok(typeof data==='string'&&data.length>=1000);
   const screenshot='dlkt-account-night-'+format.width+'.png';writeFileSync(join(outputDir,screenshot),Buffer.from(data,'base64'),{mode:0o600});
-  observations.push({viewport:format.width,theme:actual.theme,background:actual.page,measured,screenshot,scope:'unavailable anonymous fixture; no login, OTP or private account data exercised'});
+  observations.push({viewport:format.width,theme:actual.theme,background:actual.page,measured,actionSpacing,screenshot,scope:'unavailable anonymous fixture; no login, OTP or private account data exercised'});
  }
  return observations;
 }
@@ -1309,9 +1431,11 @@ async function run(){
     const night=[390,1440].includes(f.width)?await verifyNight(cdp,f,fixture,outputDir):null;
     const explore=f.width===440?await verifyExploreSurface(cdp,f,fixture):null;
     const typography=f.width===440?await verifyTypographyStress(cdp,f,fixture,outputDir):null;
+    const actionStates=f.width===1440?await verifyActionStates(cdp,f):null;
+    const actionLocales=[390,1440].includes(f.width)?await verifyActionLocales(cdp,f):null;
     const readingUpdates=[390,1440].includes(f.width)?await verifyReadingUpdates(cdp,f,fixture,'http://'+HOST+':'+binding.port,outputDir):null;
     const ownedExposure=[390,1440].includes(f.width)?await verifyKnowledgeExposure(cdp,f,fixture,'http://'+HOST+':'+binding.port,outputDir):null;
-    observations.push({viewport:f.width,devicePixelRatio:f.dpr??1,visualScale:news.details.visualScale,documentWidth:m.scroll,menuTested:navigation.compact,brandVisible:true,reducedMotion:true,screenshot,cardScreenshot,news,navigation,disclosures,night,explore,typography,readingUpdates,ownedExposure});
+    observations.push({viewport:f.width,devicePixelRatio:f.dpr??1,visualScale:news.details.visualScale,documentWidth:m.scroll,menuTested:navigation.compact,brandVisible:true,reducedMotion:true,screenshot,cardScreenshot,news,navigation,disclosures,night,explore,typography,actionStates,actionLocales,readingUpdates,ownedExposure});
    }catch(error){
     try{
      const failedImage=(await cdp('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false})).data;
