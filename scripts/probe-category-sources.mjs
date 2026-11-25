@@ -8,6 +8,19 @@ import {NEWS_DISCOVERY_INDEXES, publisherForNewsUrl} from '../source/.build/src/
 // Observational evidence only. Never changes a registry, publishes a card,
 // follows a redirect, bypasses a denial or uses credentials.
 const PROBE_GROUPS=Object.freeze({
+  'primary-research':Object.freeze({
+    id:'dlkt-primary-research-metadata-1',duration:150_000,limits:Object.freeze({robots:5,feed:3,article:6}),
+    sources:Object.freeze([
+      {id:'elife-research',feed:'https://elifesciences.org/rss/recent.xml',format:'rss',
+        origin:'https://elifesciences.org',articlePath:'/articles/',robots:'https://elifesciences.org/robots.txt',productionRequired:false},
+      {id:'eso-top-news',feed:'https://feeds.feedburner.com/EsoTopNews',format:'rss',
+        origin:'https://www.eso.org',articlePath:'/public/news/',robots:'https://www.eso.org/robots.txt',
+        feedRobots:'https://feeds.feedburner.com/robots.txt',productionRequired:false},
+      {id:'eso-announcements',feed:'https://feeds.feedburner.com/EsoAnnouncements',format:'rss',
+        origin:'https://www.eso.org',articlePath:'/public/announcements/',robots:'https://www.eso.org/robots.txt',
+        feedRobots:'https://feeds.feedburner.com/robots.txt',productionRequired:false},
+    ]),
+  }),
   'protv-compatibility':Object.freeze({
     id:'dlkt-protv-robots-compatibility-3',duration:65_000,limits:Object.freeze({robots:2,feed:1,article:2}),
     sources:Object.freeze([

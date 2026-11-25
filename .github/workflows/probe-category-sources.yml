@@ -5,6 +5,7 @@ on:
     branches:
       - codex/iceo-category-coverage-20261123
       - codex/iceo-ro-source-supply-20261124
+      - codex/iceo-useful-source-probe-20261125
     paths:
       - scripts/probe-category-sources.mjs
       - .github/workflows/probe-category-sources.yml
@@ -20,9 +21,9 @@ concurrency:
 jobs:
   probe:
     name: Bounded publisher metadata observations
-    if: github.ref == 'refs/heads/codex/iceo-category-coverage-20261123' || github.ref == 'refs/heads/codex/iceo-ro-source-supply-20261124'
+    if: github.ref == 'refs/heads/codex/iceo-category-coverage-20261123' || github.ref == 'refs/heads/codex/iceo-ro-source-supply-20261124' || github.ref == 'refs/heads/codex/iceo-useful-source-probe-20261125'
     env:
-      DLKT_SOURCE_PROBE_GROUP: ${{ github.ref == 'refs/heads/codex/iceo-ro-source-supply-20261124' && 'ro-admitted' || 'protv-compatibility' }}
+      DLKT_SOURCE_PROBE_GROUP: ${{ github.ref == 'refs/heads/codex/iceo-useful-source-probe-20261125' && 'primary-research' || github.ref == 'refs/heads/codex/iceo-ro-source-supply-20261124' && 'ro-admitted' || 'protv-compatibility' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:
