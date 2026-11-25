@@ -4,6 +4,9 @@ import {admissionText,localReading,localReadingPreview,localCoverageReading} fro
 import {findCity} from '../.build/src/local/cities.js';
 import {renderLocalPlace} from '../.build/src/local/browser.js';
 import {BUCHAREST_REFERENCES} from '../.build/src/local/reference-places.js';
+import {localCardNode} from '../.build/src/local/card-node.js';
+import {newsFeedsFor,newsGeographicAnchors,newsTopic,validLocalNewsArticle} from '../.build/src/local/news-policy.js';
+import {articlePhotoPath} from '../.build/src/media/article-photo-reference.js';
 const city=findCity('2512989'),now=Date.parse('2026-11-15T16:00:00Z');
 const event={id:'palma:event:1',kind:'event',title:'Final Pop-Rock 2026',text:'Original publisher listing.',publisher:'PalmaCultura',sourceUrl:'https://www.palmacultura.com/ca/noticia/12478/final-pop-rock-2026',sourceUpdatedAt:null,checkedAt:new Date(now).toISOString(),validFrom:new Date(now).toISOString(),validTo:new Date(now+300000).toISOString(),facts:['Listed admission terms: entrada libre con reserva previa (aforo limitado)'],boundary:'Availability not checked.',context:{section:'discover',place:'Es Gremi · c. Gremi de Porgadors, 16',when:'2026-11-15 · a partir de las 18 h (Europe/Madrid)',why:'Scheduled in your selected city today; its listed start is still ahead.',action:'Confirm with the organiser.',sourceDate:'2026-11-15',startsAt:'2026-11-15T17:00:00.000Z',status:'scheduled',documentHash:'a'.repeat(64),documentUrl:'https://www.palmacultura.com/index.php?Idi=2'}};
 test('event foreground explains local time, venue, reservation and capacity in natural text',()=>{const r=localReading(event,city,now);assert.equal(r.title,event.title);assert.match(r.paragraphs[0],/Today from 18:00 \(Palma time\) at Es Gremi/);assert.match(r.paragraphs[1],/Free admission with advance reservation\. Capacity is limited\./);assert.equal(r.period,null);assert.doesNotMatch(r.paragraphs.join(' '),/2026-11-15|Europe\/Madrid|selected city|Recheck/);});
@@ -43,7 +46,7 @@ class ElementFixture extends EventTarget {
  append(...nodes){for(const node of nodes){node.remove();node.parentElement=this;this.children.push(node);}}
  remove(){if(this.parentElement){const children=this.parentElement.children;children.splice(children.indexOf(this),1);this.parentElement=null;}}
  setAttribute(name,value){this.attributes[name]=String(value);}
- matches(selector){if(selector.startsWith('.'))return this.classList.contains(selector.slice(1));if(selector==='img[data-reviewed-photo]')return this.tagName==='IMG'&&'reviewedPhoto' in this.dataset;return this.tagName.toLowerCase()===selector;}
+ matches(selector){if(selector.startsWith('.'))return this.classList.contains(selector.slice(1));if(selector==='img[data-reviewed-photo]')return this.tagName==='IMG'&&'reviewedPhoto' in this.dataset;if(selector==='img[data-article-photo]')return this.tagName==='IMG'&&'articlePhoto' in this.dataset;return this.tagName.toLowerCase()===selector;}
  querySelectorAll(selector){const matches=[];for(const child of this.children){if(!(child instanceof ElementFixture))continue;if(child.matches(selector))matches.push(child);matches.push(...child.querySelectorAll(selector));}return matches;}
  querySelector(selector){return this.querySelectorAll(selector)[0]??null;}
  closest(selector){for(let element=this;element;element=element.parentElement)if(element.matches(selector))return element;return null;}
@@ -125,4 +128,70 @@ test('compact operator preview uses only identified sectors and does not claim a
  assert.equal(localReadingPreview({...card,context:{...card.context,place:'Unknown area'}},bucharest,'ro'),null);
  assert.equal(localReadingPreview({...card,id:'bucharest:cmteb:sector-7'},bucharest,'ro'),null);
  assert.equal(JSON.stringify(card),before);
+});
+
+
+test('private local rendering suppresses image requests while preserving provenance and default photos',async t=>{
+ directoryDom(t);
+ const images=[],imageRequests=[],transportRequests=[];
+ const createElement=document.createElement;
+ document.createElement=tag=>{
+  const element=createElement(tag);
+  if(tag==='img'){
+   images.push(element);let src='';
+   Object.defineProperty(element,'src',{configurable:true,get:()=>src,set:value=>{src=String(value);imageRequests.push(src);}});
+  }
+  return element;
+ };
+ const fetchDescriptor=Object.getOwnPropertyDescriptor(globalThis,'fetch');
+ Object.defineProperty(globalThis,'fetch',{configurable:true,value:async(...args)=>{
+  transportRequests.push(args);throw Error('Unexpected local-card transport');
+ }});
+ t.after(()=>fetchDescriptor?Object.defineProperty(globalThis,'fetch',fetchDescriptor):delete globalThis.fetch);
+ const bucharest=findCity('683506');assert.ok(bucharest);
+ const source=newsFeedsFor(bucharest).find(item=>item.id==='bucharest-b365');assert.ok(source);
+ const checkedAt=new Date(photoNow).toISOString(),title='Bucuresti: trafic modificat in zona centrala';
+ const news={
+  id:'local-news:'+bucharest.id+':'+source.id+':'+'b'.repeat(24),
+  sourceId:source.id,publisher:source.publisher,cityId:bucharest.id,title,
+  url:'https://b365.ro/fixture-bucuresti-123456/',publishedAt:new Date(photoNow-3_600_000).toISOString(),
+  checkedAt,validUntil:new Date(photoNow+300_000).toISOString(),topic:newsTopic(title),
+  geographyBasis:'article-place-reference',geoAnchors:newsGeographicAnchors(title,undefined,source.id,bucharest),
+  documentHash:'c'.repeat(64),documentUrl:source.endpoint,attribution:source.attribution,
+ };
+ assert.equal(validLocalNewsArticle(news,bucharest,photoNow),true,'the photo-capable local report passes its real source contract');
+ const card={id:news.id,kind:'local-news',title,text:'Controlled renderer fixture; read the original report.',
+  publisher:source.publisher,sourceUrl:news.url,sourceUpdatedAt:null,checkedAt,
+  validFrom:checkedAt,validTo:news.validUntil,facts:[],news,
+  boundary:'Controlled city-referenced publisher record; no household impact is established.'};
+ const before=JSON.stringify(card);
+ const privateCard=localCardNode(card,bucharest,photoNow,{photos:false});
+ await Promise.resolve();
+ assert.equal(images.length,0,'private rendering never creates an image capable of sending account cookies');
+ assert.deepEqual(imageRequests,[],'private rendering does not assign an image transport URL');
+ assert.deepEqual(transportRequests,[],'private rendering does not start fetch transport');
+ assert.equal(privateCard.querySelector('figure'),null);
+ assert.equal(privateCard.querySelectorAll('img').length,0);
+ const assertProvenance=article=>{
+  assert.equal(article.querySelector('h3').textContent,title);
+  assert.equal(article.dataset.localId,news.id);
+  const original=article.querySelector('.source-link');
+  assert.equal(original.href,news.url);assert.equal(original.target,'_blank');assert.equal(original.rel,'noopener noreferrer');
+  assert.equal(article.querySelector('.card-content').querySelector('.card-boundary').textContent,source.publisher);
+  assert.ok(article.querySelector('details').textContent.includes(source.attribution));
+  assert.ok(article.querySelector('details').textContent.includes(card.boundary));
+ };
+ assertProvenance(privateCard);
+ const publicCard=localCardNode(card,bucharest,photoNow);
+ await Promise.resolve();
+ assert.equal(images.length,1,'omitting the option preserves the existing public local-photo behavior');
+ assert.deepEqual(imageRequests,[articlePhotoPath({id:news.id,revision:news.documentHash,cityId:bucharest.id})]);
+ assert.deepEqual(transportRequests,[],'the default renderer uses the image element, not a fetch substitute');
+ assert.equal(publicCard.querySelectorAll('img').length,1);
+ assert.equal(publicCard.querySelector('img'),images[0]);
+ assert.equal(images[0].dataset.articlePhoto,news.id);
+ assert.equal(publicCard.querySelector('figure').dataset.photoKind,'source');
+ assert.equal(publicCard.querySelector('figure').querySelector('a').href,news.url);
+ assertProvenance(publicCard);
+ assert.equal(JSON.stringify(card),before,'neither rendering mode mutates the checked source record');
 });

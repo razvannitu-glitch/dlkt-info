@@ -31,11 +31,12 @@ async function bounded(promise, label, milliseconds = 8000) {
  * Node memory. It is NOT a Supabase session, OTP, billing or hosted-RLS test.
  */
 export async function personalProfileFixture(publicFixture) {
-  const [wallet, daily, local, cards] = await Promise.all([
+  const [wallet, daily, local, cards, selection] = await Promise.all([
     import('../source/.build/src/wallet/contracts.js'),
     import('../source/.build/src/daily/contracts.js'),
     import('../source/.build/src/local/contracts.js'),
     import('../source/.build/src/iceo/card-validation.js'),
+    import('../source/.build/src/daily/selection.js'),
   ]);
   const legacy = {
     version: 'dlkt-info-wallet-profile-1',
@@ -59,6 +60,33 @@ export async function personalProfileFixture(publicFixture) {
   const techUrl = 'https://github.com/nodejs/node/releases/tag/v22.1.0';
   const scienceUrl = 'https://www.nasa.gov/science/controlled-research-fixture/';
   const techId = digest(techUrl).slice(0, 24), scienceId = digest(scienceUrl).slice(0, 24);
+  // Distinct publications exercise pagination without defeating the real
+  // reader's intentional software:nodejs release grouping.
+  const paginationPublications = [
+    ['photonic-processors', 'Photonic processors map waveguide interference across laboratory test chips'],
+    ['distributed-compilers', 'Distributed compilers reorder dependency graphs for reproducible binary assembly'],
+    ['soft-robotics', 'Soft robotics actuators measure tendon displacement during grasping trials'],
+    ['quantum-calibration', 'Quantum calibration sequences compare trapped ion control pulse drift'],
+    ['semiconductor-packaging', 'Semiconductor packaging experiments quantify thermal expansion in bonded layers'],
+    ['optical-routing', 'Optical routing algorithms allocate wavelength channels across mesh networks'],
+    ['neuromorphic-memory', 'Neuromorphic memory arrays characterize conductance changes during training'],
+    ['terahertz-antennas', 'Terahertz antenna measurements isolate substrate resonance in compact receivers'],
+    ['formal-verification', 'Formal verification methods prove termination of asynchronous message protocols'],
+    ['precision-lithography', 'Precision lithography tools align nanoscale masks using interferometric references'],
+    ['synthetic-aperture', 'Synthetic aperture electronics reconstruct phase maps from distributed sensors'],
+    ['haptic-feedback', 'Haptic feedback devices encode surface textures with programmable vibration patterns'],
+    ['reversible-computing', 'Reversible computing circuits evaluate energy recovery under variable clock rates'],
+    ['microfluidic-control', 'Microfluidic control boards regulate droplet timing through embedded processors'],
+    ['timing-networks', 'Timing networks synchronize remote oscillators using bidirectional optical links'],
+    ['magnetic-storage', 'Magnetic storage experiments characterize switching thresholds in patterned films'],
+    ['compiler-toolchains', 'Compiler toolchains preserve floating point bounds through optimization passes'],
+    ['acoustic-modems', 'Acoustic modems adapt packet coding to changing underwater propagation paths'],
+    ['tactile-sensors', 'Tactile sensor matrices resolve shear forces on flexible robotic fingertips'],
+    ['memory-compression', 'Memory compression techniques reduce lookup traffic for sparse numerical arrays'],
+    ['edge-inference', 'Edge inference processors schedule tensor operations under strict power budgets'],
+    ['laser-metrology', 'Laser metrology instruments compare displacement noise across optical cavities'],
+  ];
+  const publicationUrl = index => 'https://www.nist.gov/news-events/news/controlled-qa-' + paginationPublications[index][0];
   const expected = {
     alpha: A, bravo: B, alphaName: NAMES.get(A), bravoName: NAMES.get(B),
     technology: 'topic:' + techId, science: 'topic:' + scienceId,
@@ -84,15 +112,15 @@ export async function personalProfileFixture(publicFixture) {
       deadline: null, version: null, attribution: 'Synthetic QA source record, not live NASA reporting.',
       sourceState: 'verified',
     };
-    const technologyCards = [technology, ...Array.from({length: additionalTechnology}, (_, index) => {
-      const url = 'https://github.com/nodejs/node/releases/tag/v0.0.0-qa.' + index;
+    const publications = paginationPublications.slice(0, additionalTechnology).map(([_slug, title], index) => {
+      const url = publicationUrl(index);
       return {...technology, id: digest(url).slice(0, 24), identity: url, sourceUrl: url,
-        title: 'Synthetic browser pagination release ' + index, version: 'v0.0.0-qa.' + index,
+        kind: 'publication', publisher: 'NIST', sourceIds: ['nist-news'], title, version: null,
         date: new Date(now - 15000 - index * 1000).toISOString(),
-        boundary: 'Synthetic browser fixture; this URL is not evidence of an actual Node.js release.',
-        attribution: 'Synthetic pagination fixture. No publisher release is claimed.'};
-    })];
-    const sourceCards = [...technologyCards, science];
+        boundary: 'Synthetic browser fixture; this is not a published NIST article or a live source check.',
+        attribution: 'Synthetic pagination fixture. No publisher article or research finding is claimed.'};
+    });
+    const sourceCards = [technology, science, ...publications];
     for (const card of sourceCards) card.contentHash = digest(JSON.stringify(cards.cardContent(card)));
     const source = (id, label, publisher, topic, termsUrl) => ({
       id, label, publisher, topic, state: 'verified', checkedAt: stamp, verifiedAt: stamp,
@@ -104,13 +132,20 @@ export async function personalProfileFixture(publicFixture) {
       mode: 'current-source-records', generatedAt: stamp, state: 'partial',
       cards: sourceCards,
       sources: [
-        {...source('nodejs', 'Node.js', 'Node.js maintainers', 'technology', 'https://github.com/nodejs/node/blob/main/LICENSE'), count: technologyCards.length},
+        source('nodejs', 'Node.js', 'Node.js maintainers', 'technology', 'https://github.com/nodejs/node/blob/main/LICENSE'),
+        ...(additionalTechnology === 0 ? [] : [{...source('nist-news', 'NIST technology and research', 'NIST', 'technology',
+          'https://www.nist.gov/copyrights-disclaimers'), count: publications.length}]),
         source('nasa-news', 'NASA', 'NASA', 'space', 'https://www.nasa.gov/nasa-brand-center/images-and-media/'),
       ],
       conflictCount: 0, duplicateCount: 0, deltaAvailable: false,
       scheduledDelivery: false, accountPersistence: false, coverage: ['technology', 'science'],
     };
     assert.equal(daily.validTopicSnapshot(value, now), true, 'personal topic fixture passes the actual public source contract');
+    const matched = selection.selectDaily({cityId: null, topics: ['technology'], query: '', budget: 5000, timezone: 'UTC'},
+      value, null, null, [], now);
+    const expectedIds = [expected.technology, ...publications.map(card => 'topic:' + card.id)].sort();
+    assert.equal(matched.topicCount, additionalTechnology + 1, 'the real selector retains one Node.js group plus distinct publications');
+    assert.deepEqual(matched.items.map(item => item.id).sort(), expectedIds, 'fixture pagination counts actual selected story identities');
     return value;
   }
 
@@ -235,7 +270,7 @@ export async function personalProfileFixture(publicFixture) {
     expandTechnology(count) {
       assert.ok(Number.isSafeInteger(count) && count >= 0 && count <= 22);
       additionalTechnology = count;
-      return Array.from({length: count}, (_, index) => 'topic:' + digest('https://github.com/nodejs/node/releases/tag/v0.0.0-qa.' + index).slice(0, 24));
+      return Array.from({length: count}, (_, index) => 'topic:' + digest(publicationUrl(index)).slice(0, 24));
     },
     expireUtilitiesAfter(milliseconds) {assert.ok(milliseconds >= 1000 && milliseconds <= 300000); expiryMilliseconds = milliseconds;},
     failNext(kind, status = 503) {assert.equal(failures.has(kind), false); failures.set(kind, status);},
@@ -564,6 +599,19 @@ export async function verifyPersonalProfileFlow({call, origin, fixture, evaluate
     assert.deepEqual(memoryAfterRacedSave, memoryBeforeRacedSave, 'late confirmation under another owner cannot save or replace a public source card');
     await reload(A, [expected.utility, expected.technology]);
 
+    // Exercise the actual 20-second production deadline. No virtual clock or
+    // shortened timeout is installed in the browser.
+    const beforeTimedSave = await evaluate(call, '(async function(){const {DeviceMemory}=await import("/device-memory.js");return await new DeviceMemory().read();})()');
+    const timeoutGate = fixture.holdNext('wallet-read'), timeoutStarted = Date.now();
+    await click('[data-personal-save="' + savedId + '"]'); await timeoutGate.entered();
+    await waitFor(call, evaluate, '(function(){const p=(' + privateProbe.toString() + ')();return p.profileHidden&&p.personalHidden&&!document.getElementById("wallet-reload").disabled;})()', 'SAVE_CARD_REAL_TIMEOUT', 23000);
+    assert.ok(Date.now() - timeoutStarted >= 19000, 'the production timeout was exercised without accelerating time');
+    emptyPrivate(await probe());
+    const afterTimedSave = await evaluate(call, '(async function(){const {DeviceMemory}=await import("/device-memory.js");return await new DeviceMemory().read();})()');
+    assert.deepEqual(afterTimedSave, beforeTimedSave, 'timed-out confirmation cannot create or replace a saved public card');
+    timeoutGate.release();
+    await reload(A, [expected.utility, expected.technology]);
+
     fixture.failNext('wallet-read', 503);
     await click('#wallet-reload');
     await waitFor(call, evaluate, 'document.getElementById("wallet-reload").disabled===false', 'FAILED_PROFILE_READ');
@@ -634,7 +682,7 @@ export async function verifyPersonalProfileFlow({call, origin, fixture, evaluate
       globalInterestAndLocalNeed: true, distinctAccountSelections: true,
       isolatedBrowserRestoration: true, delayedReadOwnerRace: true, nullRevisionSaveOwnerRace: true,
       delayedSaveOwnerRace: true, sourceCompletionRevalidatesRevision: true,
-      finalReaderOwnerRevalidation: true, sourceCardSaveOwnerRevalidation: true, stableMoreAndExpiryNodes: true,
+      finalReaderOwnerRevalidation: true, sourceCardSaveOwnerRevalidation: true, actualSaveTimeout: true, stableMoreAndExpiryNodes: true,
       profileRequestFailureClearsPrivate: true, partialSourceStateVisible: true,
       actualTimerExpiry: true, simulatedBlurClearsLateResults: true, signoutClearsLateResults: true,
       browserDailyStateUnchanged: true, publicRequestsWithoutCredentials: true,

@@ -72,6 +72,7 @@ function harness(home = false) {
   for (const match of html.matchAll(/<([a-z][a-z0-9-]*)\b([^>]*\bid="([^"]+)"[^>]*)>/gu)) {
     const element = new Element(match[1], document);
     element.id = match[3];
+    element.type = /\btype="([^"]*)"/u.exec(match[2])?.[1] ?? '';
     element.hidden = /\bhidden(?:\s|$)/u.test(match[2]);
     element.value = /\bvalue="([^"]*)"/u.exec(match[2])?.[1] ?? '';
     elements.set(element.id, element);
@@ -489,6 +490,7 @@ test('Explicit city and local needs are restored, submitted with the owner and p
   assert.equal(write.init.headers['X-DLKT-Info-Owner'], revision);
   assert.equal(body.value.cityId, '683506'); assert.deepEqual(body.value.localNeeds, ['utilities']);
   assert.equal(ui.get('wallet-city').checked, false);
+  assert.equal(ui.get('wallet-city').value, '683506', 'Clearing a checkbox preserves its nonprivate public pilot value');
   assert.equal(need.checked, false);
   assert.equal(ui.readers.loads.length, priorLoads, 'Unsaved fields never drive private cards');
   await ui.answer(1, walletSnapshot('signed-in', state(body.value, nextRevision)));
