@@ -483,7 +483,7 @@ async function measureReader(call,fixture){
  measured.actionSpacing=await evaluate(call,'('+actionSpacingProbe.toString()+')()');return measured;
 }
 
-/** Measure painted action text, including its actual hover/focus surface insets. */
+/** Measure rendered text-line boxes, not rasterized glyph outlines. */
 function actionSpacingProbe(){
  const visible=node=>{
   if(!node||node.getClientRects().length===0||getComputedStyle(node).display==='none'||getComputedStyle(node).visibility==='hidden')return false;
@@ -522,7 +522,7 @@ function actionSpacingProbe(){
   const reasons=[];
   if(r.width<43.5||r.height<43.5)reasons.push('target-smaller-than-44px');
   if(r.left< -1||r.right>innerWidth+1)reasons.push('outside-viewport');
-  if(inline<7||block<3)reasons.push('painted-label-too-close-to-edge');
+  if(inline<7||block<3)reasons.push('text-line-too-close-to-edge');
   if(!['','none','0','normal'].includes(s.webkitLineClamp)||s.textOverflow==='ellipsis')reasons.push('truncated-label');
   for(let p=node;p&&p!==document.body;p=p.parentElement){
    const style=getComputedStyle(p),bound=box(p);
@@ -549,7 +549,7 @@ function actionSpacingProbe(){
 function assertActionSpacing(measured,format){
  assert.ok(measured.textControls>=3,'actual text actions are measured');
  assert.ok(measured.documentWidth<=format.width+2,'action spacing does not cause horizontal document overflow');
- assert.deepEqual(measured.violations,[],'all measured painted action labels retain their internal space');
+ assert.deepEqual(measured.violations,[],'all measured action text boxes retain their internal space');
  for(const item of measured.samples)assert.ok(item.paddingInlineStart>=12&&item.paddingInlineEnd>=12,'named text action keeps at least12px inline padding: '+JSON.stringify(item));
  for(const card of measured.local){
   assert.notEqual(card.missing,true,'local action geometry is present');
@@ -706,12 +706,13 @@ async function verifyNavigation(call,format){
  const targets=await evaluate(call,"[...document.querySelectorAll('#header-navigation a,#header-navigation button')].filter(node=>node.getClientRects().length>0&&getComputedStyle(node).visibility!=='hidden').map(node=>{const r=node.getBoundingClientRect();return {id:node.id||node.textContent,width:r.width,height:r.height,left:r.left,right:r.right};})");
  assert.ok(targets.length>=5,'the compact navigation exposes its actions');
  for(const target of targets)assert.ok(target.width>=43.5&&target.height>=43.5&&target.left>=-1&&target.right<=format.width+1,'compact navigation controls remain accessible 44px targets: '+JSON.stringify(target));
+ const actionSpacing=await evaluate(call,'('+actionSpacingProbe.toString()+')()');assertActionSpacing(actionSpacing,format);
  await keyboard(call,'Tab');
  assert.equal(await evaluate(call,"Boolean(document.activeElement?.closest('#header-navigation'))"),true,'Tab reaches another navigation action');
  await keyboard(call,'Escape');
  assert.equal(await evaluate(call,"document.getElementById('header-menu').getAttribute('aria-expanded')"),'false','Escape closes the menu');
  assert.equal(await evaluate(call,"document.activeElement===document.getElementById('header-menu')"),true,'Escape restores focus to the menu control');
- await evaluate(call,'(()=>{window.scrollTo(0,0);return true;})()');return {compact:true,keyboard:true};
+ await evaluate(call,'(()=>{window.scrollTo(0,0);return true;})()');return {compact:true,keyboard:true,actionSpacing};
 }
 function disclosureTextProbe(expected){
  const visible=node=>Boolean(node)&&node.getClientRects().length>0&&getComputedStyle(node).visibility!=='hidden'&&getComputedStyle(node).display!=='none';
@@ -762,6 +763,7 @@ async function verifyDisclosures(call,format,fixture){
  // The static information action replaces the old ticker route to sources/preferences.
  await focusSelector(call,'#glance-read');await keyboard(call,'Enter');
  assert.equal(await evaluate(call,"document.getElementById('glance-list').open"),true,'visible context action opens sources and preferences');
+ assertActionSpacing(await evaluate(call,'('+actionSpacingProbe.toString()+')()'),format);
  await keyboard(call,'Escape');
  assert.equal(await evaluate(call,"document.getElementById('glance-list').open"),false);
  assert.equal(await evaluate(call,"document.activeElement?.id"),'glance-read','context dialog restores its visible trigger');
@@ -781,7 +783,7 @@ async function verifyDisclosures(call,format,fixture){
   assert.equal(evidence.evidenceOpen,true,'local provenance opens with the keyboard');
   assert.equal(evidence.documentHashVisible,true,'operator evidence identity is readable when expanded');
   assert.ok(evidence.evidenceFacts.every(Boolean),'local evidence facts are readable when expanded');
-  assertReaderGeometry(await measureReader(call,fixture),format,fixture);
+  const expandedLocal=await measureReader(call,fixture);assertReaderGeometry(expandedLocal,format,fixture);assertActionSpacing(expandedLocal.actionSpacing,format);
   await toggleDetails(call,provenance,false);
   await toggleDetails(call,selector,false);local.push({id:expected.id,paragraphs:details.paragraphs.length,evidence:true});
  }
@@ -790,6 +792,7 @@ async function verifyDisclosures(call,format,fixture){
  if(sourcesWereOpen===true)await toggleDetails(call,groupSelector,false);
  await toggleDetails(call,groupSelector,true);
  const originals=await evaluate(call,'('+expandedSourcesProbe.toString()+')('+JSON.stringify(fixture.groupKey)+')');
+ assertActionSpacing(await evaluate(call,'('+actionSpacingProbe.toString()+')()'),format);
  assert.deepEqual(new Set(originals.map(value=>value.url)),new Set(fixture.urls),'expanded sources expose every original URL');
  assert.deepEqual(new Set(originals.map(value=>value.title)),new Set(fixture.titles),'expanded sources keep every exact original title');
  for(const original of originals){
