@@ -20,6 +20,8 @@
 <label class="field" for="wallet-locale">Preferred language<input id="wallet-locale" name="locale" type="text" maxlength="35" required autocomplete="off" spellcheck="false" aria-describedby="wallet-locale-help"><small id="wallet-locale-help">Use a language code, such as en or ro-RO. This preview is currently in English.</small></label>
 <label class="field" for="wallet-timezone">Time zone<input id="wallet-timezone" name="timezone" type="text" maxlength="80" required autocomplete="off" spellcheck="false" aria-describedby="wallet-timezone-help"><small id="wallet-timezone-help">Use a city-based time zone, such as Europe/Bucharest, or UTC.</small></label>
 <label class="field" for="wallet-briefing-time">Preferred reading time<input id="wallet-briefing-time" name="briefingTime" type="time" required aria-describedby="wallet-time-help"><small id="wallet-time-help">This saves a preference only. Automatic delivery and background alerts are not active.</small></label>
+<fieldset class="glance-choices"><legend>Confirmed city for local information</legend><label><input id="wallet-city" name="cityId" type="checkbox" value="683506"><strong id="wallet-city-name">Include Bucharest, Romania</strong></label></fieldset><p class="privacy-note">The first local pilot covers Bucharest with declared source coverage. Your interests also work without a city.</p>
+<fieldset id="wallet-local-needs" class="glance-choices"><legend>Local needs you want to follow</legend></fieldset>
 <fieldset id="wallet-interests" aria-describedby="wallet-interests-help"><legend>Your interests</legend></fieldset>
 <p id="wallet-interests-help" class="privacy-note">Choose the subjects you want to keep in your profile. Your existing browser briefing stays separate.</p>
 <fieldset aria-describedby="wallet-priority-help"><legend>Your preferred daily mix</legend><label><input id="wallet-priority-balanced" name="personalPriority" type="radio" value="balanced" required>Balanced<span>Personal updates alongside general interest information.</span></label><label><input id="wallet-priority-personal" name="personalPriority" type="radio" value="personal-first">Personal updates first<span>Put authorized personal updates before general interest information.</span></label></fieldset>
@@ -29,9 +31,17 @@
 </form>
 <section id="wallet-delete-confirmation" class="device-options" aria-labelledby="wallet-delete-title" hidden>
 <h3 id="wallet-delete-title">Delete your Wallet preferences?</h3>
-<p class="privacy-note">This removes your display name, language, time zone, preferred reading time, interests and daily mix preference from your Wallet. It does not delete your sign-in account or browser briefing, and it does not disconnect an email or social account. This cannot be undone.</p>
+<p class="privacy-note">This removes your display name, language, time zone, preferred reading time, interests, confirmed city, local needs and daily mix preference from your Wallet. It does not delete your sign-in account or browser briefing, and it does not disconnect an email or social account. This cannot be undone.</p>
 <div class="memory-controls"><button id="wallet-delete-confirm" class="secondary" type="button">Delete Wallet preferences</button><button id="wallet-delete-cancel" class="text-button" type="button">Keep preferences</button></div>
 </section>
+</section>
+<section id="wallet-personal" aria-labelledby="wallet-personal-title" hidden>
+<h2 id="wallet-personal-title">Relevant to you</h2>
+<p class="privacy-note">Based on the preferences saved in your private profile. Source coverage varies. A matching interest is not proof of personal impact.</p>
+<p id="wallet-personal-status" class="status" role="status" aria-live="polite"></p>
+<button id="wallet-personal-refresh" class="secondary" type="button">Refresh personal selection</button>
+<div id="wallet-personal-coverage"></div><div id="wallet-personal-cards" class="cards"></div>
+<button id="wallet-personal-more" class="secondary" type="button" hidden>Show more matched cards</button>
 </section>
 <section id="wallet-connections" aria-labelledby="wallet-connections-title" aria-busy="true">
 <div class="wallet-section-heading"><h2 id="wallet-connections-title">Email &amp; social accounts</h2><button id="wallet-connections-reload" class="secondary" type="button" disabled>Retry connections</button></div>

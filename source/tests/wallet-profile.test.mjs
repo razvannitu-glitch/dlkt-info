@@ -6,6 +6,7 @@ import {
 } from '../.build/src/wallet/contracts.js';
 import {WalletProfileStore} from '../.build/src/wallet/store.js';
 import {DAILY_TOPICS} from '../.build/src/daily/contracts.js';
+import {LOCAL_NEEDS, PERSONAL_LOCAL_VERSION, parsePersonalLocalProfile} from '../.build/src/personal/contracts.js';
 
 const USER = '11111111-1111-4111-8111-111111111111';
 const OTHER = '22222222-2222-4222-8222-222222222222';
@@ -19,16 +20,20 @@ const token = (sub = USER, role = 'authenticated') => [
 ].join('.');
 const TOKEN = token();
 const config = {state: 'ready', url: 'https://abcdefghijklmnopqrst.supabase.co', publishableKey: 'sb_publishable_' + 'x'.repeat(30)};
-const profile = {displayName: 'Razvan', locale: 'ro-RO', timezone: 'Europe/Bucharest', briefingTime: '08:30', interests: ['technology', 'digital-life'], personalPriority: 'balanced'};
+const profile = {displayName: 'Razvan', locale: 'ro-RO', timezone: 'Europe/Bucharest', briefingTime: '08:30', interests: ['technology', 'digital-life'], personalPriority: 'balanced', cityId: '683506', localNeeds: ['weather', 'utilities']};
+const {cityId: _legacyCity, localNeeds: _legacyNeeds, ...legacyProfile} = profile;
+const legacyState = {version: 'dlkt-info-wallet-profile-1', revision: REV, updatedAt: NOW, value: legacyProfile};
 const state = {version: WALLET_PROFILE_VERSION, revision: REV, updatedAt: NOW, value: profile};
 const row = value => ({owner_id: USER, memory_key: WALLET_PROFILE_MEMORY_KEY, memory_type: 'preference', state: value});
 const response = value => new Response(JSON.stringify(value), {headers: {'content-type': 'application/json'}});
 
-test('wallet profile has exactly six canonical immutable preference fields', () => {
+test('wallet profile has exactly eight canonical immutable preference fields', () => {
   const value = parseWalletProfile({...profile, locale: 'ro-ro'});
   assert.deepEqual(value, profile);
   assert.equal(Object.isFrozen(value), true);
   assert.equal(Object.isFrozen(value.interests), true);
+  assert.equal(Object.isFrozen(value.localNeeds), true);
+  assert.deepEqual(parseWalletProfile({...profile, localNeeds: [...LOCAL_NEEDS]}).localNeeds, LOCAL_NEEDS);
   assert.deepEqual(parseWalletProfile({...profile, displayName: null, interests: []}), {...profile, displayName: null, interests: []});
   assert.deepEqual(parseWalletProfile({...profile, interests: [...DAILY_TOPICS]}).interests, DAILY_TOPICS);
 });
@@ -186,4 +191,115 @@ test('profile storage responses have conservative byte and JSON bounds', async (
     () => new Response('[]', {headers: {'content-type': 'application/json', 'content-length': '90000000'}}),
     () => response([row({...state, value: {...profile, accessToken: TOKEN}})]),
   ]) await assert.rejects(new WalletProfileStore(config, USER, TOKEN, async () => upstream()).read(), /WALLET_UPSTREAM_INVALID/);
+});
+
+
+test('legacy v1 restoration yields v2 with no inferred city or local needs and preserves revision', () => {
+  const expected = {...legacyState, version: WALLET_PROFILE_VERSION, value: {...legacyProfile, cityId: null, localNeeds: []}};
+  assert.equal(WALLET_PROFILE_VERSION, 'dlkt-info-wallet-profile-2');
+  assert.deepEqual(parseWalletProfileState(legacyState), expected);
+  assert.deepEqual(parseWalletSnapshot(walletSnapshot('signed-in', legacyState)).profile, expected);
+  assert.deepEqual(legacyState.value, legacyProfile);
+  assert.equal('cityId' in legacyState.value, false);
+  assert.throws(() => parseWalletProfile(legacyProfile), /WALLET_PROFILE_INVALID/);
+  for (const invalid of [
+    {...state, value: legacyProfile},
+    {...legacyState, value: profile},
+    {...legacyState, value: {...legacyProfile, owner_id: USER}},
+    {...legacyState, value: {...legacyProfile, interests: ['unknown']}},
+  ]) assert.throws(() => parseWalletProfileState(invalid), /WALLET_PROFILE_INVALID/);
+});
+
+test('city and local needs remain explicit independently clearable preferences', () => {
+  for (const [cityId, localNeeds] of [[null, []], ['683506', []], [null, ['weather']]]) {
+    const value = parseWalletProfile({...profile, cityId, localNeeds});
+    assert.equal(value.cityId, cityId);
+    assert.deepEqual(value.localNeeds, localNeeds);
+    assert.deepEqual(value.interests, profile.interests);
+  }
+  for (const cityId of ['', 'Bucharest', '683506 ', '-1', '1.5', '1'.repeat(13), 683506, undefined, {}, []]) {
+    assert.throws(() => parseWalletProfile({...profile, cityId}), /WALLET_PROFILE_INVALID/);
+  }
+  for (const localNeeds of [['weather', 'weather'], ['Weather'], ['electricity'], [null], 'weather', null, Array(7).fill('weather')]) {
+    assert.throws(() => parseWalletProfile({...profile, localNeeds}), /WALLET_PROFILE_INVALID/);
+  }
+});
+
+test('profile arrays must be dense own-property sets and required fields cannot be inherited', () => {
+  const inheritedNeed = new Array(1);
+  Object.setPrototypeOf(inheritedNeed, Object.assign(Object.create(Array.prototype), {0: 'weather'}));
+  const sparseWithExtra = new Array(1); sparseWithExtra.extra = 'weather';
+  for (const localNeeds of [new Array(1), ['weather', , 'utilities'], inheritedNeed, sparseWithExtra, Object.assign(['weather'], {extra: 'utilities'})]) {
+    assert.throws(() => parseWalletProfile({...profile, localNeeds}), /WALLET_PROFILE_INVALID/);
+    assert.throws(() => parsePersonalLocalProfile({version: PERSONAL_LOCAL_VERSION, cityId: '683506', needs: localNeeds}), /PERSONAL_LOCAL_PROFILE_INVALID/);
+  }
+  for (const interests of [new Array(1), ['technology', , 'science'], Object.assign(['science'], {extra: 'world'})]) {
+    assert.throws(() => parseWalletProfile({...profile, interests}), /WALLET_PROFILE_INVALID/);
+  }
+  for (const key of ['cityId', 'localNeeds']) {
+    const own = {...profile}; delete own[key];
+    assert.throws(() => parseWalletProfile(Object.assign(Object.create({[key]: profile[key]}), own)), /WALLET_PROFILE_INVALID/);
+  }
+});
+
+test('canonical profile and local selector inputs do not retain mutable caller arrays', () => {
+  const input = {...profile, interests: [...profile.interests], localNeeds: [...profile.localNeeds]};
+  const value = parseWalletProfile(input);
+  const local = parsePersonalLocalProfile({version: PERSONAL_LOCAL_VERSION, cityId: input.cityId, needs: input.localNeeds});
+  input.interests[0] = 'science'; input.localNeeds[0] = 'mobility';
+  assert.deepEqual(value, profile);
+  assert.deepEqual(local.needs, profile.localNeeds);
+  assert.equal(Object.isFrozen(LOCAL_NEEDS), true);
+});
+
+test('store restores v1 without writing and upgrades only on explicit revision-matched save', async () => {
+  const calls = [];
+  const expected = {...legacyState, version: WALLET_PROFILE_VERSION, value: {...legacyProfile, cityId: null, localNeeds: []}};
+  const store = new WalletProfileStore(config, USER, TOKEN, async (url, init) => {
+    calls.push(init.method);
+    if (init.method === 'GET') return response([row(legacyState)]);
+    assert.equal(init.method, 'PATCH');
+    assert.equal(new URL(url).searchParams.get('state->>revision'), 'eq.' + REV);
+    const written = JSON.parse(init.body).state;
+    assert.equal(written.version, 'dlkt-info-wallet-profile-2');
+    assert.deepEqual(written.value, expected.value);
+    return response([row(written)]);
+  }, () => Date.parse(NOW));
+  const restored = await store.read();
+  assert.deepEqual(restored, expected);
+  assert.deepEqual(calls, ['GET']);
+  const saved = await store.save(restored.value, restored.revision);
+  assert.deepEqual(saved.value, expected.value);
+  assert.notEqual(saved.revision, restored.revision);
+  assert.deepEqual(calls, ['GET', 'PATCH']);
+});
+
+test('v2 city and needs round-trip and clear with a new CAS revision without losing other preferences', async () => {
+  let stored = state;
+  const store = new WalletProfileStore(config, USER, TOKEN, async (url, init) => {
+    if (init.method === 'GET') return response([row(stored)]);
+    assert.equal(init.method, 'PATCH');
+    if (new URL(url).searchParams.get('state->>revision') !== 'eq.' + stored.revision) return response([]);
+    stored = JSON.parse(init.body).state;
+    return response([row(stored)]);
+  }, () => Date.parse(NOW));
+  assert.deepEqual((await store.read()).value, profile);
+  const cleared = await store.save({...profile, cityId: null, localNeeds: []}, REV);
+  assert.deepEqual((await store.read()).value, {...legacyProfile, cityId: null, localNeeds: []});
+  assert.notEqual(cleared.revision, REV);
+  await assert.rejects(store.save(profile, REV), /WALLET_CONFLICT/);
+  assert.deepEqual((await store.read()).value, cleared.value);
+});
+
+test('writes reject downgraded legacy acknowledgments and legacy payloads before I/O', async () => {
+  let calls = 0;
+  const store = new WalletProfileStore(config, USER, TOKEN, async (_url, init) => {
+    calls++;
+    const written = JSON.parse(init.body).state;
+    return response([row({...written, version: 'dlkt-info-wallet-profile-1', value: legacyProfile})]);
+  });
+  await assert.rejects(store.save(legacyProfile, REV), /WALLET_PROFILE_INVALID/);
+  assert.equal(calls, 0);
+  await assert.rejects(store.save({...legacyProfile, cityId: null, localNeeds: []}, REV), /WALLET_WRITE_NOT_CONFIRMED/);
+  assert.equal(calls, 1);
 });

@@ -1,10 +1,12 @@
 import {isRecord, isUuid} from '../data/guards.js';
 import {DAILY_TOPICS, validTime} from '../daily/contracts.js';
 import type {Topic} from '../iceo/contracts.js';
+import {LOCAL_NEEDS, type LocalNeed} from '../personal/contracts.js';
 import {getWalletProviders, type WalletProvider} from './providers.js';
 
 export const WALLET_VERSION = 'dlkt-info-wallet-1' as const;
-export const WALLET_PROFILE_VERSION = 'dlkt-info-wallet-profile-1' as const;
+export const WALLET_PROFILE_VERSION = 'dlkt-info-wallet-profile-2' as const;
+const LEGACY_PROFILE_VERSION = 'dlkt-info-wallet-profile-1';
 export const WALLET_PROFILE_MEMORY_KEY = 'wallet-profile-v1';
 export const WALLET_PROFILE_MAX_BYTES = 16_384;
 
@@ -16,6 +18,8 @@ export interface WalletProfile {
   readonly briefingTime: string;
   readonly interests: readonly Topic[];
   readonly personalPriority: 'personal-first' | 'balanced';
+  readonly cityId: string | null;
+  readonly localNeeds: readonly LocalNeed[];
 }
 
 export interface WalletProfileState {
@@ -41,6 +45,7 @@ export interface WalletSnapshot {
 
 const CONTROL = /[\p{Cc}\p{Cf}]/u;
 const EMPTY_EVENTS: readonly [] = Object.freeze([]);
+const LEGACY_PROFILE_KEYS = ['displayName', 'locale', 'timezone', 'briefingTime', 'interests', 'personalPriority'] as const;
 
 function exactKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
   const keys = Object.keys(value);
@@ -82,19 +87,26 @@ function profileTimezone(value: unknown): string {
   }
 }
 
-function isTopic(value: unknown): value is Topic {
-  return typeof value === 'string' && DAILY_TOPICS.some(topic => topic === value);
+function preferenceSet<T extends string>(value: unknown, known: readonly T[]): value is readonly T[] {
+  if (!Array.isArray(value) || value.length > known.length || Object.keys(value).length !== value.length) return false;
+  const entries: readonly unknown[] = value;
+  for (let index = 0; index < entries.length; index++) {
+    if (!Object.hasOwn(entries, index) || !known.some(item => item === entries[index])) return false;
+  }
+  return new Set(entries).size === entries.length;
 }
 
+/** V2 writes require all eight fields; cached v1 clients must reload before saving. */
 export function parseWalletProfile(value: unknown): WalletProfile {
   if (!isRecord(value) || !exactKeys(value, [
-    'displayName', 'locale', 'timezone', 'briefingTime', 'interests', 'personalPriority',
+    ...LEGACY_PROFILE_KEYS, 'cityId', 'localNeeds',
   ]) || (value.displayName !== null && (typeof value.displayName !== 'string'
     || value.displayName.length > 80 || CONTROL.test(value.displayName)))
     || typeof value.briefingTime !== 'string' || !/^(?:[01]\d|2[0-3]):[0-5]\d$/u.test(value.briefingTime)
-    || !Array.isArray(value.interests) || value.interests.length > DAILY_TOPICS.length
-    || !value.interests.every(isTopic) || new Set(value.interests).size !== value.interests.length
-    || (value.personalPriority !== 'personal-first' && value.personalPriority !== 'balanced')) {
+    || !preferenceSet(value.interests, DAILY_TOPICS)
+    || (value.personalPriority !== 'personal-first' && value.personalPriority !== 'balanced')
+    || (value.cityId !== null && (typeof value.cityId !== 'string' || !/^\d{1,12}$/u.test(value.cityId)))
+    || !preferenceSet(value.localNeeds, LOCAL_NEEDS)) {
     throw new Error('WALLET_PROFILE_INVALID');
   }
   const profile: WalletProfile = Object.freeze({
@@ -104,6 +116,8 @@ export function parseWalletProfile(value: unknown): WalletProfile {
     briefingTime: value.briefingTime,
     interests: Object.freeze([...value.interests]),
     personalPriority: value.personalPriority,
+    cityId: value.cityId,
+    localNeeds: Object.freeze([...value.localNeeds]),
   });
   withinLimit(profile);
   return profile;
@@ -111,15 +125,21 @@ export function parseWalletProfile(value: unknown): WalletProfile {
 
 export function parseWalletProfileState(value: unknown): WalletProfileState {
   if (!isRecord(value) || !exactKeys(value, ['version', 'revision', 'updatedAt', 'value'])
-    || value.version !== WALLET_PROFILE_VERSION || !isWalletRevision(value.revision)
+    || (value.version !== WALLET_PROFILE_VERSION && value.version !== LEGACY_PROFILE_VERSION) || !isWalletRevision(value.revision)
     || !validTime(value.updatedAt)) {
     throw new Error('WALLET_PROFILE_STATE_INVALID');
+  }
+  // Legacy values are accepted only inside their explicit v1 envelope; reading never writes or infers preferences.
+  let profileInput: unknown = value.value;
+  if (value.version === LEGACY_PROFILE_VERSION) {
+    if (!isRecord(profileInput) || !exactKeys(profileInput, LEGACY_PROFILE_KEYS)) throw new Error('WALLET_PROFILE_INVALID');
+    profileInput = {...profileInput, cityId: null, localNeeds: []};
   }
   const state: WalletProfileState = Object.freeze({
     version: WALLET_PROFILE_VERSION,
     revision: value.revision,
     updatedAt: value.updatedAt,
-    value: parseWalletProfile(value.value),
+    value: parseWalletProfile(profileInput),
   });
   withinLimit(state);
   return state;

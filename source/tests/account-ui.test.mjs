@@ -5,6 +5,7 @@ import {runInNewContext} from 'node:vm';
 import {ACCOUNT_VERSION, ACCOUNT_MAX_BYTES, parseAccountState, parseAccountValue, isObject} from '../.build/src/account/contracts.js';
 import {safeLink} from '../.build/src/iceo/card-validation.js';
 import {DAILY_TOPICS} from '../.build/src/daily/contracts.js';
+import {LOCAL_NEEDS} from '../.build/src/personal/contracts.js';
 import {WALLET_PROFILE_VERSION, WALLET_PROFILE_MAX_BYTES, parseWalletProfile, parseWalletSnapshot, walletSnapshot} from '../.build/src/wallet/contracts.js';
 
 const read = file => readFileSync(file, 'utf8');
@@ -17,7 +18,7 @@ const CARD = {id: 'a'.repeat(24), identity: 'https://github.com/nodejs/node/rele
 const VALUE = parseAccountValue({focus: null, cards: [{version: 1, id: CARD.id, savedAt: STAMP, card: CARD}], checkpoint: null});
 const LOCAL = parseAccountValue({...VALUE, cards: [{...VALUE.cards[0], card: {...CARD, title: 'Local saved fixture'}}]});
 const STATE = {version: ACCOUNT_VERSION, revision: REV, updatedAt: STAMP, value: VALUE};
-const PROFILE = parseWalletProfile({displayName: 'Private profile fixture', locale: 'ro-RO', timezone: 'Europe/Bucharest', briefingTime: '06:35', interests: [DAILY_TOPICS[0]], personalPriority: 'personal-first'});
+const PROFILE = parseWalletProfile({displayName: 'Private profile fixture', locale: 'ro-RO', timezone: 'Europe/Bucharest', briefingTime: '06:35', interests: [DAILY_TOPICS[0]], personalPriority: 'personal-first', cityId: '683506', localNeeds: ['utilities']});
 const PROFILE_STATE = {version: WALLET_PROFILE_VERSION, revision: REV, updatedAt: STAMP, value: PROFILE};
 const OUT = {version: 'dlkt-info-identity-1', configured: true, enabled: true, authenticated: false, blocker: null, user: null};
 const OFF = {...OUT, configured: false, enabled: false, blocker: 'ACCOUNT_NOT_READY'};
@@ -54,6 +55,7 @@ function harness(search = '', options = {}) {
   }
   document.getElementById = id => elements.get(id) ?? null;
   document.createElement = tag => new Element(tag, document);
+  document.createTextNode = value => {const node = new Element('#text', document); node.content = value; return node;};
   document.querySelectorAll = selector => [...elements.values()].filter(element => selector.split(',').map(tag => tag.trim().toUpperCase()).includes(element.tagName));
   const window = new Target(); const redirects = []; const timers = new Map(); let timerId = 0;
   window.location = {search, hash: options.hash ?? '', replace: destination => redirects.push(destination)};
@@ -72,20 +74,27 @@ function harness(search = '', options = {}) {
     async restorePersonal(value, signal) {memory.restores.push({value, signal}); if (options.restoreMemory) await options.restoreMemory(value, signal);}
   }
   const requests = [], profileRequests = [];
+  let autoProfileOwnerCheck = false, latestIdentity = signedIn();
   // Existing account scenarios use an empty, valid profile. Dedicated manualProfile scenarios
   // inspect every profile request and its owner readback in the complete request queue.
   const fetch = (path, init) => new Promise((resolve, reject) => {
     const pending = {path, init, resolve, reject};
+    if (path === '/api/account-session' && init.method === 'GET' && autoProfileOwnerCheck && !options.manualProfile) {
+      autoProfileOwnerCheck = false; profileRequests.push(pending);
+      resolve(new Response(JSON.stringify(latestIdentity), {headers: {'content-type': 'application/json'}})); return;
+    }
     if (path === '/api/wallet' && !options.manualProfile) {
       profileRequests.push(pending);
       if (init.method !== 'GET') { reject(new Error('Unexpected profile write in account-only scenario')); return; }
+      autoProfileOwnerCheck = true;
       resolve(new Response(JSON.stringify(walletSnapshot('signed-in')), {headers: {'content-type': 'application/json'}}));
     } else requests.push(pending);
   });
-  const source = read('.build/src/account/browser.js').replace(/^import [^\n]+\n/gmu, '');
+  const source = read('.build/src/personal/profile-fields.js').replace(/^import [^\n]+\n/gmu, '').replace(/^export /gmu, '')
+    + '\n' + read('.build/src/account/browser.js').replace(/^import [^\n]+\n/gmu, '');
   runInNewContext(source, {document, window, fetch, AbortController, TextDecoder, DeviceMemory: Memory,
     BroadcastChannel: Channel, ACCOUNT_VERSION, ACCOUNT_MAX_BYTES, parseAccountState, parseAccountValue, isObject, safeLink,
-    DAILY_TOPICS, WALLET_PROFILE_MAX_BYTES, parseWalletProfile, parseWalletSnapshot,
+    DAILY_TOPICS, LOCAL_NEEDS, WALLET_PROFILE_MAX_BYTES, parseWalletProfile, parseWalletSnapshot,
     Error, Intl, JSON}, {filename: 'account-browser.js'});
   return {
     document, window, requests, profileRequests, redirects, memory, broadcasts, timers, get: id => elements.get(id),
@@ -94,6 +103,7 @@ function harness(search = '', options = {}) {
     changeSession(data) {channels.find(channel => channel.name === 'dlkt-info-account-session-v1').dispatch('message', {data});},
     async answer(index, value, status = 200, headers = {}) {
       assert.ok(requests[index], `Missing request ${index}`);
+      if (value?.version === 'dlkt-info-identity-1') latestIdentity = value;
       requests[index].resolve(new Response(JSON.stringify(value), {status, headers: {'content-type': 'application/json', ...headers}}));
       await tick();
     },
@@ -116,6 +126,8 @@ function privateCleared(ui) {
   assert.equal(ui.get('account-profile-summary').textContent, ''); assert.equal(ui.get('account-profile-message').textContent, '');
   for (const id of ['account-profile-name', 'account-profile-locale', 'account-profile-timezone']) assert.equal(ui.get(id).value, '');
   assert.equal(ui.interests().some(input => input.checked), false);
+  assert.equal(ui.get('account-profile-city').checked, false);
+  assert.equal(ui.get('account-profile-local-needs').children.some(label => label.children[0]?.checked), false);
 }
 
 test('Account exposes a fixed Wallet back link and retry control even when inactive', async () => {
@@ -385,11 +397,9 @@ async function profileReady(ui, profile = PROFILE_STATE) {
   await ui.answer(0, signedIn()); await ui.answer(1, copy());
   assert.equal(ui.requests[2].path, '/api/wallet');
   await ui.answer(2, walletSnapshot('signed-in', profile));
-  if (profile !== null) {
     assert.equal(ui.requests[3].path, '/api/account-session');
     assert.equal(ui.get('account-data').hidden, true);
-    await ui.answer(3, signedIn());
-  }
+  await ui.answer(3, signedIn());
 }
 function editProfile(ui) {
   ui.get('account-profile-name').value = 'Updated reader';
@@ -410,6 +420,10 @@ test('Account renders the real Wallet profile only after same-owner readback, al
   assert.match(ui.get('account-profile-summary').textContent, new RegExp(STAMP, 'u'));
   assert.match(ui.get('account-saved').textContent, /Private saved fixture/u);
   assert.equal(ui.requests[2].init.headers['X-DLKT-Info-Request'], 'wallet-v1');
+  assert.equal(ui.requests[2].init.headers['X-DLKT-Info-Owner'], USER);
+  assert.equal(ui.get('account-profile-city').value, '683506');
+  assert.equal(ui.get('account-profile-city').checked, true);
+  assert.equal(ui.get('account-profile-local-needs').children.find(label => label.children[0]?.value === 'utilities').children[0].checked, true);
   assert.equal(ui.requests[2].init.credentials, 'same-origin');
   assert.equal(ui.requests[2].init.cache, 'no-store'); assert.equal(ui.requests[2].init.redirect, 'error');
   assert.equal(ui.memory.reads, 0); assert.equal(ui.memory.restores.length, 0);
@@ -428,15 +442,17 @@ test('A missing profile is an unsaved draft; an explicit save creates it with nu
   const ui = harness('', {manualProfile: true}); await profileReady(ui, null);
   assert.match(ui.get('account-profile-summary').textContent, /No profile has been saved/u);
   editProfile(ui); ui.get('account-profile-form').dispatch('submit'); privateCleared(ui);
-  assert.equal(ui.requests[3].path, '/api/account-session'); await ui.answer(3, signedIn());
-  assert.equal(ui.requests[4].path, '/api/wallet'); assert.equal(ui.requests[4].init.method, 'PUT');
-  const body = JSON.parse(ui.requests[4].init.body);
+  assert.equal(ui.requests[4].path, '/api/account-session'); await ui.answer(4, signedIn());
+  assert.equal(ui.requests[5].path, '/api/wallet'); assert.equal(ui.requests[5].init.method, 'PUT');
+  const body = JSON.parse(ui.requests[5].init.body);
   assert.equal(body.expectedRevision, null); assert.equal(body.value.displayName, 'Updated reader');
+  assert.equal(ui.requests[5].init.headers['X-DLKT-Info-Owner'], USER);
+  assert.equal(body.value.cityId, null); assert.deepEqual(body.value.localNeeds, []);
   assert.equal(body.value.locale, 'en-GB'); assert.equal(body.value.timezone, 'Europe/London');
   assert.equal(body.value.briefingTime, '08:00'); assert.equal(body.value.personalPriority, 'balanced');
   assert.deepEqual(body.value.interests, [DAILY_TOPICS.at(-1)]);
-  await ui.answer(4, walletSnapshot('signed-in', savedProfile(body.value))); privateCleared(ui);
-  await ui.answer(5, signedIn());
+  await ui.answer(5, walletSnapshot('signed-in', savedProfile(body.value))); privateCleared(ui);
+  await ui.answer(6, signedIn());
   assert.equal(ui.get('account-profile-name').value, 'Updated reader');
   assert.match(ui.get('account-message').textContent, /Profile saved/u);
   assert.equal(ui.requests.filter(request => request.init.method === 'PUT').length, 1);
@@ -449,6 +465,8 @@ test('Updating a profile preserves existing briefing preferences and uses its ex
   const body = JSON.parse(ui.requests[5].init.body);
   assert.equal(body.expectedRevision, REV); assert.equal(body.value.briefingTime, PROFILE.briefingTime);
   assert.equal(body.value.personalPriority, PROFILE.personalPriority);
+  assert.equal(ui.requests[5].init.headers['X-DLKT-Info-Owner'], USER);
+  assert.equal(body.value.cityId, PROFILE.cityId); assert.deepEqual(body.value.localNeeds, [...PROFILE.localNeeds]);
   await ui.answer(5, {error: 'WALLET_CONFLICT'}, 409); privateCleared(ui);
   assert.match(ui.get('account-message').textContent, /This profile changed on another device/u);
   assert.equal(ui.requests.length, 6);
@@ -501,12 +519,13 @@ test('Blur, pagehide, hidden page, sign-out and session broadcast clear profile 
 test('Unavailable, malformed and oversized profile responses preserve the valid reader copy and disable profile edits', async () => {
   for (const payload of [walletSnapshot('unavailable'), {...walletSnapshot('signed-in'), extra: true}, {padding: 'x'.repeat(WALLET_PROFILE_MAX_BYTES + 16_384)}]) {
     const ui = harness('', {manualProfile: true});
-    await ui.answer(0, signedIn()); await ui.answer(1, copy()); await ui.answer(2, payload);
+    await ui.answer(0, signedIn()); await ui.answer(1, copy()); await ui.answer(2, payload); privateCleared(ui);
+    await ui.answer(3, signedIn());
     assert.equal(ui.get('account-data').hidden, false);
     assert.match(ui.get('account-saved').textContent, /Private saved fixture/u);
     assert.equal(ui.get('account-profile-form').hidden, true); assert.equal(ui.get('account-profile-name').value, '');
     assert.match(ui.get('account-profile-message').textContent, /could not be loaded/u);
-    ui.get('account-profile-form').dispatch('submit'); assert.equal(ui.requests.length, 3);
+    ui.get('account-profile-form').dispatch('submit'); assert.equal(ui.requests.length, 4);
   }
 });
 
@@ -527,4 +546,24 @@ test('An explicit reader restore keeps the separately loaded Wallet profile and 
   assert.equal(ui.get('account-profile-name').value, PROFILE.displayName);
   assert.equal(ui.requests.filter(request => request.path === '/api/wallet').length, 1);
   assert.equal(ui.requests.some(request => request.path === '/api/wallet' && request.init.method !== 'GET'), false);
+});
+
+
+test('Owner mismatch during profile read cannot repaint the previously loaded private reader copy', async () => {
+  const ui = harness('', {manualProfile: true});
+  await ui.answer(0, signedIn()); await ui.answer(1, copy());
+  await ui.answer(2, {error: 'WALLET_OWNER_CHANGED'}, 409);
+  privateCleared(ui);
+  assert.match(ui.get('account-message').textContent, /session changed/u);
+  assert.equal(ui.requests.length, 3);
+});
+
+test('Null and unavailable profiles still require same-owner readback before any private reader copy appears', async () => {
+  for (const payload of [walletSnapshot('signed-in'), walletSnapshot('unavailable'), {malformed: true}]) {
+    const ui = harness('', {manualProfile: true});
+    await ui.answer(0, signedIn()); await ui.answer(1, copy()); await ui.answer(2, payload);
+    privateCleared(ui); assert.equal(ui.requests[3].path, '/api/account-session');
+    await ui.answer(3, signedIn(OTHER));
+    privateCleared(ui); assert.match(ui.get('account-message').textContent, /session changed/u);
+  }
 });

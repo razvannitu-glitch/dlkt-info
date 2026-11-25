@@ -13,7 +13,8 @@ const token = (sub = USER, role = 'authenticated') => [
   'testSignatureOnly00000000',
 ].join('.');
 const TOKEN = token();
-const profile = {displayName: 'Razvan', locale: 'ro-RO', timezone: 'Europe/Bucharest', briefingTime: '08:30', interests: ['technology'], personalPriority: 'personal-first'};
+const profile = {displayName: 'Razvan', locale: 'ro-RO', timezone: 'Europe/Bucharest', briefingTime: '08:30', interests: ['technology'], personalPriority: 'personal-first', cityId: '683506', localNeeds: ['weather', 'utilities']};
+const {cityId: _legacyCity, localNeeds: _legacyNeeds, ...legacyProfile} = profile;
 const state = {version: WALLET_PROFILE_VERSION, revision: REV, updatedAt: '2026-11-18T12:00:00.000Z', value: profile};
 const env = {NODE_ENV: 'production', DLKT_INFO_ACCOUNT_BRIDGE_ENABLED: '1', DLKT_INFO_AUTH_EMAIL_READY: '1', DLKT_INFO_SUPABASE_PROJECT_REF: 'abcdefghijklmnopqrst', DLKT_INFO_SUPABASE_URL: 'https://abcdefghijklmnopqrst.supabase.co', DLKT_INFO_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_' + 'x'.repeat(30), DLKT_INFO_DATA_FOUNDATION_READY: '1', DLKT_INFO_AUTH_ENABLED: '1'};
 const provisioning = {configured: true, schemaVerified: true, capabilities: {auth: true, persistence: true}};
@@ -120,7 +121,7 @@ test('expired session without refresh cannot fetch wallet profile', async () => 
 
 test('wallet resolves verified session ownership and exposes no session or email fields', async () => {
   let storageReads = 0;
-  const res = await run(request(), {environment: env, provisioning, fetch: authenticated(async (url, init) => {
+  const res = await run(request('GET', undefined, {'x-dlkt-info-owner': USER}), {environment: env, provisioning, fetch: authenticated(async (url, init) => {
     storageReads++;
     assert.equal(new URL(url).searchParams.get('owner_id'), 'eq.' + USER);
     assert.equal(init.headers.Authorization, 'Bearer ' + TOKEN);
@@ -157,7 +158,7 @@ test('same-origin marker, allowed host, fetch metadata and no-query guard run be
 test('wallet create and update persist only profile preferences then return honest snapshots', async () => {
   for (const revision of [null, REV]) {
     let writes = 0;
-    const res = await run(request('PUT', {expectedRevision: revision, value: profile}), {environment: env, provisioning, fetch: authenticated(async (url, init) => {
+    const res = await run(request('PUT', {expectedRevision: revision, value: profile}, {'x-dlkt-info-owner': USER}), {environment: env, provisioning, fetch: authenticated(async (url, init) => {
       writes++;
       assert.equal(init.method, revision === null ? 'POST' : 'PATCH');
       assert.equal(new URL(url).searchParams.get('state->>revision'), revision === null ? null : 'eq.' + REV);
@@ -175,7 +176,7 @@ test('wallet create and update persist only profile preferences then return hone
 });
 
 test('wallet delete removes the exact owned revision and returns no cached profile', async () => {
-  const res = await run(request('DELETE', {expectedRevision: REV}), {environment: env, provisioning, fetch: authenticated(async (url, init) => {
+  const res = await run(request('DELETE', {expectedRevision: REV}, {'x-dlkt-info-owner': USER}), {environment: env, provisioning, fetch: authenticated(async (url, init) => {
     assert.equal(init.method, 'DELETE');
     assert.equal(new URL(url).searchParams.get('state->>revision'), 'eq.' + REV);
     return response([row(state)]);
@@ -196,6 +197,10 @@ test('owner, provider, unknown and invalid fields cannot enter wallet storage', 
     {value: profile}, {expectedRevision: null},
     {expectedRevision: null, value: {...profile, timezone: 'not/a-zone'}},
     {expectedRevision: null, value: {...profile, interests: ['technology', 'technology']}},
+    {expectedRevision: null, value: {...profile, cityId: 'Bucharest'}},
+    {expectedRevision: null, value: {...profile, localNeeds: ['weather', 'weather']}},
+    {expectedRevision: null, value: {...profile, localNeeds: ['unknown']}},
+    {expectedRevision: null, value: {...profile, localNeeds: [null]}},
     null, [],
   ]) assert.equal((await run(request('PUT', body), dependencies)).statusCode, 400);
   for (const body of [{expectedRevision: null}, {expectedRevision: REV, owner_id: USER}, {expectedRevision: REV, value: profile}, {}]) {
@@ -247,5 +252,110 @@ test('an admin JWT or secret key cannot become a wallet data credential', async 
   assert.equal(res.statusCode, 401);
   const secret = await run(request(), {environment: {...env, DLKT_INFO_SUPABASE_PUBLISHABLE_KEY: 'sb_secret_' + 'x'.repeat(30)}, provisioning, fetch: async () => {writes++; throw new Error('forbidden network');}});
   assert.equal(secret.body.account, 'unavailable');
+  assert.equal(writes, 0);
+});
+
+
+test('legacy stored profiles restore as v2 without write or inferred local preferences', async () => {
+  let storageReads = 0;
+  const legacy = {...state, version: 'dlkt-info-wallet-profile-1', value: legacyProfile};
+  const res = await run(request(), {environment: env, provisioning, fetch: authenticated(async (_url, init) => {
+    storageReads++;
+    assert.equal(init.method, 'GET');
+    return response([row(legacy)]);
+  })});
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.body.profile, {...state, value: {...legacyProfile, cityId: null, localNeeds: []}});
+  assert.equal(storageReads, 1);
+});
+
+test('cached legacy writers cannot silently erase v2 city and needs', async () => {
+  let storageCalls = 0;
+  const deps = {environment: env, provisioning, fetch: authenticated(async () => {storageCalls++; throw new Error('must not write');})};
+  for (const expectedRevision of [null, REV]) {
+    const res = await run(request('PUT', {expectedRevision, value: legacyProfile}), deps);
+    assert.equal(res.statusCode, 400);
+    assert.deepEqual(res.body, {error: 'WALLET_PROFILE_INVALID'});
+  }
+  assert.equal(storageCalls, 0);
+});
+
+test('v2 PUT can explicitly clear city and local needs while retaining interests', async () => {
+  const cleared = {...profile, cityId: null, localNeeds: []};
+  const res = await run(request('PUT', {expectedRevision: REV, value: cleared}, {'x-dlkt-info-owner': USER}), {
+    environment: env, provisioning, fetch: authenticated(async (url, init) => {
+      assert.equal(init.method, 'PATCH');
+      assert.equal(new URL(url).searchParams.get('state->>revision'), 'eq.' + REV);
+      const body = JSON.parse(init.body);
+      assert.equal(body.state.version, 'dlkt-info-wallet-profile-2');
+      assert.deepEqual(body.state.value, cleared);
+      return response([row(body.state)]);
+    }),
+  });
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.body.profile.value, cleared);
+});
+
+test('expected owner header is a single UUID and invalid values are rejected before body or identity I/O', async () => {
+  let calls = 0, bodyReads = 0;
+  const deps = {environment: env, provisioning, fetch: async () => {calls++; throw new Error('must not call');}};
+  for (const owner of ['', '*', ' ' + USER, USER + ',' + OTHER, [USER], [USER, OTHER]]) {
+    for (const method of ['GET', 'PUT', 'DELETE']) {
+      const req = Readable.from((async function* () {bodyReads++; yield Buffer.from('{}');})());
+      const template = request(method, undefined, {'x-dlkt-info-owner': owner});
+      req.method = method; req.url = template.url; req.headers = template.headers;
+      const res = await run(req, deps);
+      assert.equal(res.statusCode, 400);
+      assert.deepEqual(res.body, {error: 'WALLET_OWNER_INVALID'});
+    }
+  }
+  assert.equal(calls, 0);
+  assert.equal(bodyReads, 0);
+});
+
+test('silent account A to B cookie changes cannot retarget owner-bound reads, creates, updates or deletes', async () => {
+  let identityCalls = 0, storageCalls = 0, bodyReads = 0;
+  const otherToken = token(OTHER);
+  const deps = {environment: env, provisioning, fetch: async (url, init) => {
+    if (String(url).endsWith('/auth/v1/user')) {
+      identityCalls++;
+      assert.equal(init.headers.Authorization, 'Bearer ' + otherToken);
+      return response({id: OTHER, email: 'other@example.test'});
+    }
+    storageCalls++; throw new Error('must not access storage');
+  }};
+  for (const [method, body] of [
+    ['GET', null],
+    ['PUT', {expectedRevision: null, value: profile}],
+    ['PUT', {expectedRevision: REV, value: profile}],
+    ['DELETE', {expectedRevision: REV}],
+  ]) {
+    const req = Readable.from((async function* () {bodyReads++; yield Buffer.from(JSON.stringify(body));})());
+    const template = request(method, undefined, {'x-dlkt-info-owner': USER, cookie: '__Host-dlkt_info_at=' + otherToken});
+    req.method = method; req.url = template.url; req.headers = template.headers;
+    const res = await run(req, deps);
+    assert.equal(res.statusCode, 409);
+    assert.deepEqual(res.body, {error: 'WALLET_OWNER_CHANGED'});
+    assert.equal(JSON.stringify(res.body).includes(USER), false);
+    assert.equal(JSON.stringify(res.body).includes(OTHER), false);
+  }
+  assert.equal(identityCalls, 4);
+  assert.equal(storageCalls, 0);
+  assert.equal(bodyReads, 0);
+});
+
+test('16KiB request bound counts UTF-8 bytes across streamed chunks before profile parsing', async () => {
+  const raw = JSON.stringify({expectedRevision: null, value: {...profile, displayName: '界'.repeat(6_000)}});
+  const bytes = Buffer.from(raw);
+  assert.equal(raw.length < WALLET_PROFILE_MAX_BYTES, true);
+  assert.equal(bytes.byteLength > WALLET_PROFILE_MAX_BYTES, true);
+  const chunks = [];
+  for (let offset = 0; offset < bytes.byteLength; offset += 2_048) chunks.push(bytes.subarray(offset, offset + 2_048));
+  const req = Readable.from(chunks), template = request('PUT', undefined, {'x-dlkt-info-owner': USER});
+  req.method = template.method; req.url = template.url; req.headers = template.headers;
+  let writes = 0;
+  const res = await run(req, {environment: env, provisioning, fetch: authenticated(async () => {writes++; throw new Error('must not write');})});
+  assert.equal(res.statusCode, 413);
+  assert.deepEqual(res.body, {error: 'BODY_TOO_LARGE'});
   assert.equal(writes, 0);
 });

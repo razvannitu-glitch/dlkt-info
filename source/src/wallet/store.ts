@@ -83,6 +83,10 @@ export class WalletProfileStore {
         || row.memory_key !== WALLET_PROFILE_MEMORY_KEY || row.memory_type !== 'preference') {
         throw new Error('WALLET_OWNER_MISMATCH');
       }
+      if ((method === 'POST' || method === 'PATCH')
+        && (!isRecord(row.state) || row.state.version !== WALLET_PROFILE_VERSION)) {
+        throw new Error('WALLET_WRITE_NOT_CONFIRMED');
+      }
       try {
         return parseWalletProfileState(row.state);
       } catch {

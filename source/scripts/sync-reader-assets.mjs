@@ -6,7 +6,7 @@ const theme=readFileSync('.build/src/theme/browser.js','utf8')
 if(/^\s*(?:import|export)\b/mu.test(theme))throw Error('READER_THEME_CLASSIC_SCRIPT_REQUIRED');
 writeFileSync('public/reader-theme.js',theme);
 /** Ship the exact compiled strict-TypeScript controller without source map disclosure. */
-for(const [name,target] of [['country-editions','country-editions'],['commercial','commercial'],['commercial-browser','commercial-browser'],['news-story-browser','news-story-browser'],['knowledge','knowledge'],['knowledge-stream','knowledge-stream'],['knowledge-exposure','knowledge-exposure'],['knowledge-catalog','knowledge-catalog'],['knowledge-browser','knowledge-browser'],['news-day','news-day'],['news-page-contracts','news-page-contracts'],['news-continuation','news-continuation'],['article-subject','article-subject'],['evidence-consistency','evidence-consistency'],['editorial-presentation','editorial-presentation'],['story-grouping','story-grouping'],['follow-stories','follow-stories'],['category-follow','category-follow'],['follow-browser','follow-browser'],['editorial-subject-semantics','editorial-subject-semantics'],['live-edition','live-edition'],['editorial-relevance','editorial-relevance'],['news-sources','news-sources'],['news-taxonomy','news-taxonomy'],['news-stream','news-stream'],['news-masonry','news-masonry'],['news-reading-state','news-reading-state'],['editorial-categories','editorial-categories'],['editorial-ranking','editorial-ranking'],['source-relevance','source-relevance'],['editorial-topics','editorial-topics'],['context','context'],['contextual','contextual'],['contextual-today','contextual-today'],['home-local','home-local'],['home-edition','home-edition'],['loading','loading'],['card-guide','card-guide'],['source-links','source-links'],['credits','credits'],['topics','topics'],['browser','iceo'],['reader','reader'],['insight-browser','insight-browser'],['insight-contracts','insight-contracts'],['device-memory','device-memory'],['comparison','comparison'],['return-brief','return-brief'],['saved-updates','saved-updates'],['card-validation','card-validation']]){
+for(const [name,target] of [['personal-relevance','personal-relevance'],['country-editions','country-editions'],['commercial','commercial'],['commercial-browser','commercial-browser'],['news-story-browser','news-story-browser'],['knowledge','knowledge'],['knowledge-stream','knowledge-stream'],['knowledge-exposure','knowledge-exposure'],['knowledge-catalog','knowledge-catalog'],['knowledge-browser','knowledge-browser'],['news-day','news-day'],['news-page-contracts','news-page-contracts'],['news-continuation','news-continuation'],['article-subject','article-subject'],['evidence-consistency','evidence-consistency'],['editorial-presentation','editorial-presentation'],['story-grouping','story-grouping'],['follow-stories','follow-stories'],['category-follow','category-follow'],['follow-browser','follow-browser'],['editorial-subject-semantics','editorial-subject-semantics'],['live-edition','live-edition'],['editorial-relevance','editorial-relevance'],['news-sources','news-sources'],['news-taxonomy','news-taxonomy'],['news-stream','news-stream'],['news-masonry','news-masonry'],['news-reading-state','news-reading-state'],['editorial-categories','editorial-categories'],['editorial-ranking','editorial-ranking'],['source-relevance','source-relevance'],['editorial-topics','editorial-topics'],['context','context'],['contextual','contextual'],['contextual-today','contextual-today'],['home-local','home-local'],['home-edition','home-edition'],['loading','loading'],['card-guide','card-guide'],['source-links','source-links'],['credits','credits'],['topics','topics'],['browser','iceo'],['reader','reader'],['insight-browser','insight-browser'],['insight-contracts','insight-contracts'],['device-memory','device-memory'],['comparison','comparison'],['return-brief','return-brief'],['saved-updates','saved-updates'],['card-validation','card-validation']]){
  const compiled=readFileSync(`.build/src/iceo/${name}.js`,'utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'');
  writeFileSync(`public/${target}.js`,compiled);
 }
@@ -24,7 +24,7 @@ for(const name of ['state','selection','geography','browser']){
   .replaceAll("'./state.js'","'./explore-state.js'").replaceAll("'./selection.js'","'./explore-selection.js'").replaceAll("'./geography.js'","'./explore-geography.js'");
  writeFileSync(`public/explore-${name}.js`,compiled);
 }
-for(const name of ['home-local','news-reading-state','news-page-contracts']){
+for(const name of ['home-local','personal-relevance','news-reading-state','news-page-contracts']){
  const localImports=readFileSync(`public/${name}.js`,'utf8').replaceAll("'../local/contracts.js'","'./local-contracts.js'").replaceAll("'../local/news-policy.js'","'./local-news-policy.js'");writeFileSync(`public/${name}.js`,localImports);
 }
 
@@ -99,4 +99,28 @@ for(const name of ['catalog','locale','browser','reading-messages','media-messag
 }
 for(const name of ['iceo','explore-browser','follow-browser','daily-browser','glance-browser','news-page-contracts','knowledge-browser','country-editions','news-story-browser']){
  const js=readFileSync(`public/${name}.js`,'utf8').replaceAll("'../i18n/browser.js'","'./i18n-browser.js'").replaceAll("'../i18n/locale.js'","'./i18n-locale.js'");writeFileSync(`public/${name}.js`,js);
+}
+
+// Browser-safe personal preferences, identity receipt and ephemeral reader only.
+for(const name of ['contracts','session','profile-fields','browser']){
+ const compiled=readFileSync('.build/src/personal/'+name+'.js','utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'')
+  .replaceAll("'./contracts.js'","'./personal-contracts.js'")
+  .replaceAll("'./session.js'","'./personal-session.js'")
+  .replaceAll("'../data/guards.js'","'./data-guards.js'")
+  .replaceAll("'../wallet/contracts.js'","'./wallet-contracts.js'")
+  .replaceAll("'../daily/contracts.js'","'./daily-contracts.js'")
+  .replaceAll("'../daily/selection.js'","'./daily-selection.js'")
+  .replaceAll("'../daily/reading.js'","'./daily-reading.js'")
+  .replaceAll("'../local/contracts.js'","'./local-contracts.js'")
+  .replaceAll("'../local/card-node.js'","'./local-card-node.js'")
+  .replaceAll('../iceo/','./');
+ writeFileSync('public/personal-'+name+'.js',compiled);
+}
+for(const name of ['wallet-contracts','wallet-browser','account-browser','personal-relevance']){
+ const compiled=readFileSync('public/'+name+'.js','utf8')
+  .replaceAll("'../personal/contracts.js'","'./personal-contracts.js'")
+  .replaceAll("'../personal/session.js'","'./personal-session.js'")
+  .replaceAll("'../personal/profile-fields.js'","'./personal-profile-fields.js'")
+  .replaceAll("'../personal/browser.js'","'./personal-browser.js'");
+ writeFileSync('public/'+name+'.js',compiled);
 }

@@ -6,6 +6,7 @@ import {existsSync,mkdtempSync,readFileSync,writeFileSync,mkdirSync,rmSync,statS
 import {tmpdir} from 'node:os';
 import {extname,join,resolve,sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {personalProfileFixture,verifyPersonalProfileFlow} from './qa-personal-profile.mjs';
 
 const root=resolve(fileURLToPath(new URL('..',import.meta.url)));
 const publicDir=join(root,'.dlkt-local-build','public-launch');
@@ -26,7 +27,7 @@ const formats=[
 ];
 const pause=ms=>new Promise(ok=>setTimeout(ok,ms));
 
-function localServer(fixture){
+function localServer(fixture,personal){
  if(!existsSync(join(publicDir,'index.html')))throw Error('DLKT_UI_BUILD_MISSING');
  const config=JSON.parse(readFileSync(join(root,'vercel.json'),'utf8'));
  const csp=(config.headers??[]).flatMap(x=>x.headers??[]).find(x=>x.key==='Content-Security-Policy')?.value;
@@ -37,8 +38,10 @@ function localServer(fixture){
   res.setHeader('X-Content-Type-Options','nosniff');
   res.setHeader('Content-Security-Policy',csp);
   res.setHeader('Cache-Control','no-store');
-  if(!['GET','HEAD'].includes(req.method)){res.writeHead(405).end();return;}
   let url;try{url=new URL(req.url??'', 'http://'+HOST);}catch{res.writeHead(400).end();return;}
+  // Private mutations exist only during the explicitly activated loopback QA phase.
+  if(personal.handle(req,res,url))return;
+  if(!['GET','HEAD'].includes(req.method)){res.writeHead(405).end();return;}
   if(url.pathname.startsWith('/api/')){
    res.setHeader('Content-Type','application/json; charset=utf-8');
    void fixture.response(url).then(({status,value})=>res.writeHead(status).end(JSON.stringify(value))).catch(()=>res.writeHead(500).end(JSON.stringify({error:'DLKT_QA_FIXTURE_FAILED'})));return;
@@ -77,16 +80,16 @@ function rpcClient(socket){
   socket.send(JSON.stringify({id:seq,method,params}));
  });
 }
-async function connectChrome(port){
+async function connectChrome(port,targetId=null){
  let targets=null;
  for(let i=0;i<40;i++){
   try{
    const response=await fetch('http://'+HOST+':'+port+'/json/list',{signal:AbortSignal.timeout(1000)});
-   if(response.ok){targets=await response.json();break;}
+   if(response.ok){targets=await response.json();if(targetId===null||Array.isArray(targets)&&targets.some(target=>target.id===targetId&&typeof target.webSocketDebuggerUrl==='string'))break;}
   }catch{/* browser booting */}
   await pause(100);
  }
- const page=Array.isArray(targets)?targets.find(x=>x.type==='page'&&typeof x.webSocketDebuggerUrl==='string'):null;
+ const page=Array.isArray(targets)?targets.find(x=>x.type==='page'&&(targetId===null||x.id===targetId)&&typeof x.webSocketDebuggerUrl==='string'):null;
  if(!page)throw Error('DLKT_UI_CHROME_PAGE_MISSING');
  const ws=new WebSocket(page.webSocketDebuggerUrl);
  await Promise.race([
@@ -94,6 +97,40 @@ async function connectChrome(port){
   new Promise((_,reject)=>setTimeout(()=>reject(Error('DLKT_UI_CHROME_WS_TIMEOUT')),5000)),
  ]);
  return ws;
+}
+/** Separate cookies and IndexedDB inside the same ephemeral Chromium process. */
+async function openIsolatedChrome(port){
+ const response=await fetch('http://'+HOST+':'+port+'/json/version',{signal:AbortSignal.timeout(2000)});
+ if(!response.ok)throw Error('DLKT_UI_BROWSER_ENDPOINT_MISSING');
+ const version=await response.json();
+ if(typeof version.webSocketDebuggerUrl!=='string')throw Error('DLKT_UI_BROWSER_SOCKET_MISSING');
+ const browserSocket=new WebSocket(version.webSocketDebuggerUrl);
+ let timer;
+ await Promise.race([
+  new Promise((resolve,reject)=>{browserSocket.addEventListener('open',resolve,{once:true});browserSocket.addEventListener('error',()=>reject(Error('DLKT_UI_BROWSER_SOCKET_ERROR')),{once:true});}),
+  new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('DLKT_UI_BROWSER_SOCKET_TIMEOUT')),5000);}),
+ ]).finally(()=>clearTimeout(timer));
+ const browserCall=rpcClient(browserSocket);
+ let contextId=null,pageSocket=null;
+ try{
+  const context=await browserCall('Target.createBrowserContext',{disposeOnDetach:true});
+  if(typeof context.browserContextId!=='string')throw Error('DLKT_UI_ISOLATED_CONTEXT_MISSING');
+  contextId=context.browserContextId;
+  const target=await browserCall('Target.createTarget',{url:'about:blank',browserContextId:contextId});
+  if(typeof target.targetId!=='string')throw Error('DLKT_UI_ISOLATED_TARGET_MISSING');
+  pageSocket=await connectChrome(port,target.targetId);
+  const call=rpcClient(pageSocket);
+  await call('Page.enable');await call('Runtime.enable');
+  let closed=false;
+  return {call,async close(){
+   if(closed)return;closed=true;
+   try{await browserCall('Target.disposeBrowserContext',{browserContextId:contextId});}
+   finally{pageSocket?.close();browserSocket.close();}
+  }};
+ }catch(error){
+  try{if(contextId!==null)await browserCall('Target.disposeBrowserContext',{browserContextId:contextId});}catch{/* Preserve the original browser error. */}
+  pageSocket?.close();browserSocket.close();throw error;
+ }
 }
 async function evaluate(call,expression){
  const output=await call('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});
@@ -765,10 +802,10 @@ async function verifyNight(call,format,fixture,outputDir){
 }
 
 /** Small fixture-only previews make visual review possible without downloading the ZIP.
- * Full-resolution PNGs remain in the normal artifact. Eight bounded JPEGs at most.
+ * Full-resolution PNGs remain in the normal artifact. Ten bounded JPEGs at most.
  */
 async function emitVisualPreview(call,label,width){
- const selected=(label==='top'&&[390,1440].includes(width))||(width===390&&['cards','night-top'].includes(label))||(['reading-updates','owned-card'].includes(label)&&[390,1440].includes(width));
+ const selected=(label==='top'&&[390,1440].includes(width))||(width===390&&['cards','night-top'].includes(label))||(['reading-updates','owned-card','personal-wallet'].includes(label)&&[390,1440].includes(width));
  if(!selected)return;
  const data=(await call('Page.captureScreenshot',{format:'jpeg',quality:72,fromSurface:true,captureBeyondViewport:false})).data;
  if(typeof data!=='string'||data.length<1000||data.length>160000){console.log('DLKT_UI_VISUAL_SKIPPED',label,width);return;}
@@ -1133,7 +1170,8 @@ async function run(){
  const profile=mkdtempSync(join(process.env.RUNNER_TEMP??tmpdir(),'dlkt-ui-qa-'));
  const outputDir=join(process.env.RUNNER_TEMP??profile,'dlkt-ui-screenshots');
  mkdirSync(outputDir,{recursive:true});
- const fixture=await newsFixture(),server=localServer(fixture);
+ const fixture=await newsFixture();
+ const personal=await personalProfileFixture(fixture),server=localServer(fixture,personal);
  let browser=null,ws=null;
  try{
   await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,HOST,resolve);});
@@ -1211,13 +1249,15 @@ async function run(){
    }
   }
   const account=await verifyAccountSurfaces(cdp,'http://'+HOST+':'+binding.port,outputDir);
+  const personalProfile=await verifyPersonalProfileFlow({call:cdp,origin:'http://'+HOST+':'+binding.port,
+   fixture:personal,evaluate,loaded,focusSelector,keyboard,openIsolated:()=>openIsolatedChrome(port),outputDir,emitVisualPreview});
   const result={version:'dlkt-info-offline-browser-smoke-3',status:'OFFLINE_BROWSER_PASS',
-   scope:'local-built-reader-with-controlled-news-and-local-corpus',viewports:observations,account,fixture:{storyCount:fixture.storyCount,articleTotal:fixture.articleTotal,groupOriginals:fixture.urls.length,sourceOnlyOriginals:fixture.sourceOnly.length,localCards:fixture.localIds.length,localContract:'currentLocalSnapshot'},
-   limitations:['News pages use the actual service over controlled corpus fixtures; no external publisher request, authenticated user, payment or production runtime availability is tested.',
+   scope:'local-built-reader-with-controlled-news-local-and-private-profile-transport',viewports:observations,account,personalProfile,fixture:{storyCount:fixture.storyCount,articleTotal:fixture.articleTotal,groupOriginals:fixture.urls.length,sourceOnlyOriginals:fixture.sourceOnly.length,localCards:fixture.localIds.length,localContract:'currentLocalSnapshot'},
+   limitations:['News pages use the actual service over controlled corpus fixtures. The additional private phase uses synthetic account identities; no external publisher request, hosted authentication, payment or production runtime availability is tested.',
     'The three grouped publisher headlines and four reviewed-source originals reproduce observed metadata; source-check and publication dates are controlled fixtures.',
     'Local weather and CMTEB records are synthetic controlled fixtures validated by the actual city/source contracts, not live operator or forecast checks.',
     'The 440px DPR 3 scenario is Chrome at visual scale 1. Font-size doubling is a test-only typography stress, not physical Safari zoom or Safari text autosizing.',
-    'Account layout is checked only in the existing unavailable anonymous fixture; hidden login and OTP fields are not claimed as verified.',
+    'The original anonymous account-layout checks remain unchanged. The additional private Wallet phase is isolated to synthetic loopback profiles; login, OTP delivery and hosted account isolation are not claimed as verified.',
     'Palette checks use actual computed card paints and visible text at 390 and 1440px. Existing body copy is measured where rendered; source-only articles are not given fabricated excerpts.',
     'Article-photo requests remain unavailable in this offline fixture. Failed-photo panels are measured; successful publisher photography requires separate live inspection.',
     'Same-card update scenarios use controlled edition publication through the real page service and real refresh handler; no external publisher change is attested.',

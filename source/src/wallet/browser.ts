@@ -1,4 +1,7 @@
-import {parseWalletProfile, parseWalletSnapshot, type WalletProfile, type WalletSnapshot} from './contracts.js';
+import {parseWalletProfile, parseWalletSnapshot, type WalletProfile, type WalletSnapshot, walletSnapshot} from './contracts.js';
+import {createPersonalProfileFields} from '../personal/profile-fields.js';
+import {createPersonalReader} from '../personal/browser.js';
+import {parsePersonalSession} from '../personal/session.js';
 import {createConnectionsWallet} from '../connections/browser.js';
 import {DAILY_TOPICS} from '../daily/contracts.js';
 import {TOPIC_LABELS, TOPIC_DESCRIPTIONS} from '../iceo/topics.js';
@@ -13,6 +16,10 @@ const connections = createConnectionsWallet(() => {
   invalidate('Your session ended. Sign in again to check your private profile.');
   signIn.hidden = false;
 });
+const personalReader = createPersonalReader(() => {
+  invalidate('Your saved profile or session changed. Reload your Wallet before reading personal cards.');
+});
+const personalFields = createPersonalProfileFields('wallet');
 const status = el('wallet-status');
 const account = el('wallet-account');
 const panel = el('wallet-profile-panel');
@@ -45,6 +52,7 @@ const interestInputs = DAILY_TOPICS.map(topic => {
 });
 
 let snapshot: WalletSnapshot | null = null;
+let ownerId: string | null = null;
 let pendingDelete: string | null = null;
 let generation = 0;
 let active: AbortController | null = null;
@@ -66,7 +74,8 @@ function setBusy(value: boolean): void {
   busy = value;
   account.setAttribute('aria-busy', String(value));
   form.setAttribute('aria-busy', String(value));
-  form.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input, button').forEach(control => {
+  personalFields.setBusy(value);
+  form.querySelectorAll<HTMLInputElement | HTMLButtonElement | HTMLSelectElement>('input, button, select').forEach(control => {
     control.disabled = value;
   });
   for (const control of [reload, signOut, deleteConfirm, deleteCancel]) control.disabled = value;
@@ -80,7 +89,8 @@ function closeConfirmation(): void {
 
 /** Clear private fields before checking a session, leaving the page, or starting a mutation. */
 function clearPrivate(): void {
-  snapshot = null;
+  snapshot = null; ownerId = null;
+  personalReader.clear(); personalFields.clear();
   panel.hidden = true;
   signIn.hidden = true;
   signOut.hidden = true;
@@ -121,7 +131,7 @@ function foreground(): boolean {
   return !document.hidden && focused && document.hasFocus();
 }
 
-async function request(path: string, marker: string, method: 'GET' | 'PUT' | 'DELETE', signal: AbortSignal, body?: unknown): Promise<unknown> {
+async function request(path: string, marker: string, method: 'GET' | 'PUT' | 'DELETE', signal: AbortSignal, body?: unknown, expectedOwner?: string): Promise<unknown> {
   const timeout = new AbortController();
   const abort = (): void => timeout.abort();
   signal.addEventListener('abort', abort, {once: true});
@@ -133,7 +143,7 @@ async function request(path: string, marker: string, method: 'GET' | 'PUT' | 'DE
       credentials: 'same-origin',
       cache: 'no-store',
       redirect: 'error',
-      headers: {Accept: 'application/json', 'Content-Type': 'application/json', 'X-DLKT-Info-Request': marker},
+      headers: {Accept: 'application/json', 'Content-Type': 'application/json', 'X-DLKT-Info-Request': marker, ...(expectedOwner === undefined ? {} : {'X-DLKT-Info-Owner': expectedOwner})},
       ...(body === undefined ? {} : {body: JSON.stringify(body)}),
       signal: timeout.signal,
     });
@@ -154,15 +164,21 @@ function defaults(): WalletProfile {
     preferredLocale = new Intl.Locale(navigator.language).toString();
     preferredZone = new Intl.DateTimeFormat().resolvedOptions().timeZone;
     return parseWalletProfile({displayName: null, locale: preferredLocale, timezone: preferredZone,
-      briefingTime: '08:00', interests: [], personalPriority: 'balanced'});
+      briefingTime: '08:00', interests: [], personalPriority: 'balanced', cityId: null, localNeeds: []});
   } catch {
     return parseWalletProfile({displayName: null, locale: 'en', timezone: 'UTC',
-      briefingTime: '08:00', interests: [], personalPriority: 'balanced'});
+      briefingTime: '08:00', interests: [], personalPriority: 'balanced', cityId: null, localNeeds: []});
   }
 }
 
-function render(value: WalletSnapshot, message?: string): void {
-  snapshot = value;
+async function requireOwner(id: string, signal: AbortSignal): Promise<void> {
+  const session = parsePersonalSession(await request('/api/account-session', 'identity-v1', 'GET', signal));
+  if (session.status !== 'signed-in' || session.userId !== id) throw new Error('WALLET_SESSION_CHANGED');
+}
+
+function render(value: WalletSnapshot, message?: string, verifiedOwner?: string): void {
+  if (value.account === 'signed-in' && !verifiedOwner) throw new Error('WALLET_OWNER_NOT_VERIFIED');
+  snapshot = value; ownerId = value.account === 'signed-in' ? verifiedOwner ?? null : null;
   connections.setAccount(value.account);
   signIn.hidden = value.account !== 'signed-out';
   signOut.hidden = value.account !== 'signed-in';
@@ -176,6 +192,7 @@ function render(value: WalletSnapshot, message?: string): void {
     return;
   }
   const profile = value.profile?.value ?? defaults();
+  personalFields.render(profile);
   displayName.value = profile.displayName ?? '';
   locale.value = profile.locale;
   timezone.value = profile.timezone;
@@ -188,6 +205,7 @@ function render(value: WalletSnapshot, message?: string): void {
     ? 'Your profile has not been saved yet. Review these preferences before saving.'
     : `Your profile was saved on ${new Date(value.profile.updatedAt).toLocaleString('en', {timeZone: profile.timezone})} (${profile.timezone}).`;
   setStatus(message ?? 'Signed in. Your profile is private. Email and social connections require separate authorization.');
+  if (value.profile !== null && ownerId !== null) void personalReader.load(value.profile, ownerId);
 }
 
 function failure(error: unknown, operation: 'load' | 'save' | 'delete' | 'sign-out'): void {
@@ -196,6 +214,8 @@ function failure(error: unknown, operation: 'load' | 'save' | 'delete' | 'sign-o
   if (error instanceof WalletRequestError && error.statusCode === 401) {
     signIn.hidden = false;
     setStatus('Your session ended. Sign in again to check your private profile.', true);
+  } else if (error instanceof Error && error.message === 'WALLET_SESSION_CHANGED') {
+    setStatus('Your session changed. Reload your Wallet before making another change. Private details have been cleared.', true);
   } else if (error instanceof WalletRequestError && error.statusCode === 409) {
     setStatus('Your profile changed in another tab or device. Reload your Wallet before making another change.', true);
   } else if (error instanceof WalletRequestError && error.statusCode === 503) {
@@ -210,11 +230,11 @@ function failure(error: unknown, operation: 'load' | 'save' | 'delete' | 'sign-o
 }
 
 async function perform(kind: 'load' | 'save' | 'delete' | 'sign-out', message: string,
-  work: (signal: AbortSignal) => Promise<{value: WalletSnapshot; message?: string}>): Promise<void> {
+  work: (signal: AbortSignal) => Promise<{value: WalletSnapshot; message?: string; ownerId?: string}>): Promise<void> {
   const operation = begin(message);
   try {
     const result = await work(operation.controller.signal);
-    if (isCurrent(operation)) render(result.value, result.message);
+    if (isCurrent(operation)) render(result.value, result.message, result.ownerId);
   } catch (error) {
     if (isCurrent(operation)) failure(error, kind);
   } finally {
@@ -230,14 +250,20 @@ async function perform(kind: 'load' | 'save' | 'delete' | 'sign-out', message: s
 
 async function refresh(): Promise<void> {
   if (!foreground()) return;
-  await perform('load', 'Checking private profile availability…', async signal => ({
-    value: parseWalletSnapshot(await request('/api/wallet', 'wallet-v1', 'GET', signal)),
-  }));
+  await perform('load', 'Checking private profile availability…', async signal => {
+    const session = parsePersonalSession(await request('/api/account-session', 'identity-v1', 'GET', signal));
+    if (session.status !== 'signed-in') return {value: walletSnapshot(session.status)};
+    const value = parseWalletSnapshot(await request('/api/wallet', 'wallet-v1', 'GET', signal, undefined, session.userId));
+    if (value.account !== 'signed-in') return {value};
+    await requireOwner(session.userId, signal);
+    return {value, ownerId: session.userId};
+  });
 }
 
 form.addEventListener('submit', event => {
   event.preventDefault();
-  if (busy || snapshot?.account !== 'signed-in' || !form.reportValidity()) return;
+  if (busy || snapshot?.account !== 'signed-in' || ownerId === null || !form.reportValidity()) return;
+  const expectedOwner = ownerId;
   let profile: WalletProfile;
   try {
     profile = parseWalletProfile({
@@ -247,6 +273,7 @@ form.addEventListener('submit', event => {
       briefingTime: readingTime.value,
       interests: interestInputs.filter(({input}) => input.checked).map(({topic}) => topic),
       personalPriority: personalFirst.checked ? 'personal-first' : 'balanced',
+      ...personalFields.read(),
     });
   } catch {
     setStatus('Check your language code, time zone and preferred reading time. Keep the display name within 80 characters and use ordinary text.', true);
@@ -254,10 +281,11 @@ form.addEventListener('submit', event => {
   }
   const expectedRevision = snapshot.profile?.revision ?? null;
   void perform('save', 'Saving your private profile…', async signal => {
-    const value = parseWalletSnapshot(await request('/api/wallet', 'wallet-v1', 'PUT', signal, {expectedRevision, value: profile}));
+    const value = parseWalletSnapshot(await request('/api/wallet', 'wallet-v1', 'PUT', signal, {expectedRevision, value: profile}, expectedOwner));
     if (value.account !== 'signed-in' || value.profile === null
       || JSON.stringify(value.profile.value) !== JSON.stringify(profile)) throw new Error('WALLET_WRITE_NOT_CONFIRMED');
-    return {value, message: 'Your private profile is saved. Account connections are managed separately below. Automatic delivery is not active.'};
+    await requireOwner(expectedOwner, signal);
+    return {value, ownerId: expectedOwner, message: 'Your private profile is saved. Your personal selection uses these confirmed preferences. Automatic delivery is not active.'};
   });
 });
 
@@ -276,11 +304,13 @@ deleteCancel.addEventListener('click', () => {
 
 deleteConfirm.addEventListener('click', () => {
   const expectedRevision = pendingDelete;
-  if (busy || !expectedRevision || snapshot?.profile?.revision !== expectedRevision) return;
+  if (busy || !expectedRevision || snapshot?.profile?.revision !== expectedRevision || ownerId === null) return;
+  const expectedOwner = ownerId;
   void perform('delete', 'Deleting your Wallet preferences…', async signal => {
-    const value = parseWalletSnapshot(await request('/api/wallet', 'wallet-v1', 'DELETE', signal, {expectedRevision}));
+    const value = parseWalletSnapshot(await request('/api/wallet', 'wallet-v1', 'DELETE', signal, {expectedRevision}, expectedOwner));
     if (value.account !== 'signed-in' || value.profile !== null) throw new Error('WALLET_DELETE_NOT_CONFIRMED');
-    return {value, message: 'Your Wallet preferences were deleted. Your sign-in account and browser briefing are unchanged.'};
+    await requireOwner(expectedOwner, signal);
+    return {value, ownerId: expectedOwner, message: 'Your Wallet preferences were deleted. Your sign-in account and browser briefing are unchanged.'};
   });
 });
 

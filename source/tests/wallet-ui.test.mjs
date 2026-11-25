@@ -2,11 +2,13 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import {runInNewContext} from 'node:vm';
-import {parseWalletProfile, parseWalletSnapshot, walletSnapshot} from '../.build/src/wallet/contracts.js';
+import {parseWalletProfile, parseWalletSnapshot, walletSnapshot, WALLET_PROFILE_VERSION} from '../.build/src/wallet/contracts.js';
 import {loadPersonalInbox, personalInboxProviderName, personalInboxStatus, PersonalInboxError} from '../.build/src/wallet/personal-inbox.js';
 import {CONNECTIONS_VERSION} from '../.build/src/connections/types.js';
 import {WALLET_PROVIDER_IDS} from '../.build/src/wallet/providers.js';
 import {DAILY_TOPICS} from '../.build/src/daily/contracts.js';
+import {LOCAL_NEEDS} from '../.build/src/personal/contracts.js';
+import {parsePersonalSession} from '../.build/src/personal/session.js';
 import {TOPIC_LABELS, TOPIC_DESCRIPTIONS} from '../.build/src/iceo/topics.js';
 
 const read = file => readFileSync(file, 'utf8');
@@ -14,8 +16,8 @@ const revision = '11111111-1111-4111-8111-111111111111';
 const nextRevision = '22222222-2222-4222-8222-222222222222';
 const signedOutSession = {version: 'dlkt-info-identity-1', configured: true, enabled: true, authenticated: false, blocker: null, user: null};
 const profile = parseWalletProfile({displayName: 'Private test name', locale: 'en', timezone: 'UTC',
-  briefingTime: '08:30', interests: ['world', 'science'], personalPriority: 'balanced'});
-const state = (value = profile, rev = revision) => ({version: 'dlkt-info-wallet-profile-1',
+  briefingTime: '08:30', interests: ['world', 'science'], personalPriority: 'balanced', cityId: null, localNeeds: []});
+const state = (value = profile, rev = revision) => ({version: WALLET_PROFILE_VERSION,
   revision: rev, updatedAt: '2026-11-18T10:00:00.000Z', value});
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
@@ -77,7 +79,7 @@ function harness(home = false) {
   if (!home) {
     const form = elements.get('wallet-profile-form');
     for (const id of ['wallet-display-name', 'wallet-locale', 'wallet-timezone', 'wallet-briefing-time',
-      'wallet-priority-balanced', 'wallet-priority-personal', 'wallet-interests', 'wallet-save', 'wallet-delete']) {
+      'wallet-priority-balanced', 'wallet-priority-personal', 'wallet-interests', 'wallet-city', 'wallet-local-needs', 'wallet-save', 'wallet-delete']) {
       form.append(elements.get(id));
     }
   }
@@ -91,18 +93,31 @@ function harness(home = false) {
     postMessage(data) {broadcasts.push({name: this.name, data});}
   }
   const connections = {states: [], clears: 0, clear() {this.clears += 1;}, setAccount(state) {this.states.push(state);}};
-  const requests = [];
-  const fetch = (path, init) => new Promise((resolve, reject) => requests.push({path, init, resolve, reject}));
-  const source = read(home ? '.build/src/wallet/home-browser.js' : '.build/src/wallet/browser.js')
+  const requests = [], identityRequests = [];
+  let identityOwner = revision;
+  const readers = {clears: 0, loads: [], clear() {this.clears++;}, async load(value, ownerId) {this.loads.push({value, ownerId});}};
+  const fetch = (path, init) => {
+    if (!home && path === '/api/account-session' && init.method === 'GET') {
+      identityRequests.push({path, init, ownerId: identityOwner});
+      const value = identityOwner === null ? signedOutSession : {...signedOutSession, authenticated: true,
+        user: {id: identityOwner, email: 'reader@example.test'}};
+      return Promise.resolve({ok: true, status: 200, json: async () => value});
+    }
+    return new Promise((resolve, reject) => requests.push({path, init, resolve, reject}));
+  };
+  const fieldsSource = home ? '' : read('.build/src/personal/profile-fields.js').replace(/^import [^\n]+\n/gmu, '').replace(/^export /gmu, '');
+  const source = fieldsSource + '\n' + read(home ? '.build/src/wallet/home-browser.js' : '.build/src/wallet/browser.js')
     .replace(/^import [^\n]+\n/gmu, '');
   runInNewContext(source, {document, window, navigator: {language: 'en'}, BroadcastChannel: Channel,
-    fetch, AbortController, parseWalletProfile, parseWalletSnapshot, DAILY_TOPICS, TOPIC_LABELS, TOPIC_DESCRIPTIONS,
+    fetch, AbortController, parseWalletProfile, parseWalletSnapshot, walletSnapshot, parsePersonalSession, LOCAL_NEEDS, DAILY_TOPICS, TOPIC_LABELS, TOPIC_DESCRIPTIONS,
+    createPersonalReader: () => readers,
     loadPersonalInbox, personalInboxProviderName, personalInboxStatus, PersonalInboxError,
     createConnectionsWallet: onExpired => {connections.onExpired = onExpired; return connections;}, Intl, Date, JSON, Error}, {filename: home ? 'wallet-home-browser.js' : 'wallet-browser.js'});
   return {
-    document, window, requests, broadcasts, connections, get: id => elements.get(id),
+    document, window, requests, broadcasts, connections, readers, identityRequests, setOwner: value => { identityOwner = value; }, get: id => elements.get(id),
     sessionChanged(data) {channels.filter(channel => channel.name === 'dlkt-info-account-session-v1').forEach(channel => channel.dispatch('message', {data}));},
     async answer(index, value, status = 200) {
+      await tick();
       const request = requests[index];
       assert.ok(request, `Expected request ${index}`);
       request.resolve({ok: status >= 200 && status < 300, status, json: async () => value});
@@ -248,6 +263,7 @@ test('Expired authentication clears all profile fields before offering sign-in a
 
 test('Leaving and returning ignores late private responses and rechecks authentication', async () => {
   const ui = harness();
+  await tick();
   ui.document.hidden = true;
   ui.document.dispatch('visibilitychange');
   assert.equal(ui.requests[0].init.signal.aborted, true);
@@ -288,6 +304,7 @@ test('A visible but unfocused window cannot refresh private profile details', as
   assert.equal(ui.get('wallet-display-name').value, '');
   ui.document.focused = true;
   ui.window.dispatch('focus');
+  await tick();
   assert.equal(ui.requests.length, 2);
   await ui.answer(1, walletSnapshot('signed-out'));
 });
@@ -346,6 +363,7 @@ test('Malformed private response and network failure leave the editor closed', a
   assert.equal(ui.get('wallet-profile-panel').hidden, true);
   assert.match(ui.get('wallet-status').textContent, /could not be checked/u);
   ui.get('wallet-reload').dispatch('click');
+  await tick();
   ui.requests[1].reject(new Error('offline'));
   await tick();
   assert.equal(ui.get('wallet-reload').disabled, false);
@@ -378,6 +396,7 @@ test('Wallet revalidates both verified sign-in and sign-out signals without reta
   for (const change of ['signed-in', 'signed-out']) {
     const ui = harness(); await ui.answer(0, walletSnapshot('signed-in', state()));
     ui.sessionChanged(change);
+    await tick();
     assert.equal(ui.get('wallet-display-name').value, '');
     assert.equal(ui.get('wallet-profile-panel').hidden, true);
     assert.equal(ui.requests[1].path, '/api/wallet');
@@ -445,4 +464,49 @@ test('An expired connection request clears the private profile and offers the ac
   assert.equal(ui.get('wallet-display-name').value, '');
   assert.equal(ui.get('wallet-signin').hidden, false);
   assert.match(ui.get('wallet-status').textContent, /session ended/u);
+});
+
+
+test('Wallet binds private profile reads and writes to the confirmed owner and clears an old-owner response', async () => {
+  const ui = harness(); await tick();
+  assert.equal(ui.requests[0].init.headers['X-DLKT-Info-Owner'], revision);
+  ui.setOwner(nextRevision);
+  await ui.answer(0, walletSnapshot('signed-in', state()));
+  assert.equal(ui.get('wallet-profile-panel').hidden, true);
+  assert.equal(ui.get('wallet-display-name').value, '');
+  assert.match(ui.get('wallet-status').textContent, /session changed/u);
+  assert.equal(ui.readers.loads.length, 0);
+});
+
+test('Explicit city and local needs are restored, submitted with the owner and passed only after confirmed saving', async () => {
+  const ui = harness(); await ui.answer(0, walletSnapshot('signed-in', state()));
+  ui.get('wallet-city').checked = true;
+  const need = ui.get('wallet-local-needs').children.find(label => label.children[0]?.value === 'utilities').children[0];
+  need.checked = true;
+  const priorLoads = ui.readers.loads.length;
+  ui.get('wallet-profile-form').dispatch('submit');
+  const write = ui.requests[1], body = JSON.parse(write.init.body);
+  assert.equal(write.init.headers['X-DLKT-Info-Owner'], revision);
+  assert.equal(body.value.cityId, '683506'); assert.deepEqual(body.value.localNeeds, ['utilities']);
+  assert.equal(ui.get('wallet-city').checked, false);
+  assert.equal(need.checked, false);
+  assert.equal(ui.readers.loads.length, priorLoads, 'Unsaved fields never drive private cards');
+  await ui.answer(1, walletSnapshot('signed-in', state(body.value, nextRevision)));
+  assert.equal(ui.get('wallet-city').value, '683506'); assert.equal(need.checked, true);
+  assert.equal(ui.readers.loads.at(-1).ownerId, revision);
+  assert.equal(ui.readers.loads.at(-1).value.revision, nextRevision);
+  ui.window.dispatch('pagehide');
+  assert.equal(ui.get('wallet-city').checked, false); assert.equal(need.checked, false);
+});
+
+test('Null-revision creation stays bound to its displayed owner after a silent session switch', async () => {
+  const ui = harness(); await ui.answer(0, walletSnapshot('signed-in'));
+  ui.get('wallet-city').checked = true; ui.setOwner(nextRevision);
+  ui.get('wallet-profile-form').dispatch('submit');
+  const write = ui.requests[1]; assert.equal(write.init.headers['X-DLKT-Info-Owner'], revision);
+  assert.equal(JSON.parse(write.init.body).expectedRevision, null);
+  await ui.answer(1, {error: 'WALLET_OWNER_CHANGED'}, 409);
+  assert.equal(ui.get('wallet-profile-panel').hidden, true);
+  assert.equal(ui.readers.loads.length, 0);
+  assert.doesNotMatch(ui.get('wallet-status').textContent, /profile is saved/u);
 });

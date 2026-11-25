@@ -1,7 +1,7 @@
 import type {IncomingMessage, ServerResponse} from 'node:http';
 import {bodyJson, noQuery, respond, sameOrigin, type Environment} from '../src/account/http.js';
 import {accountReadiness} from '../src/account/readiness.js';
-import {isRecord} from '../src/data/guards.js';
+import {isRecord, isUuid} from '../src/data/guards.js';
 import {resolveIdentitySession} from '../src/identity/session.js';
 import type {ProvisioningProjection} from '../src/provisioning/index.js';
 import {
@@ -28,6 +28,8 @@ export async function handleWallet(
     return;
   }
   try {
+    const expectedOwner = req.headers['x-dlkt-info-owner'];
+    if (expectedOwner !== undefined && !isUuid(expectedOwner)) throw new Error('WALLET_OWNER_INVALID');
     const request = deps.fetch ?? fetch;
     const readiness = await accountReadiness(environment, request, deps.provisioning);
     if (!readiness.enabled || readiness.configuration.state !== 'ready') {
@@ -40,6 +42,10 @@ export async function handleWallet(
       respond(res, req.method === 'GET' ? 200 : 401,
         req.method === 'GET' ? walletSnapshot('signed-out') : {error: 'AUTHENTICATION_REQUIRED'});
       return;
+    }
+    // Bind a new client's operation to the account it verified; a silent cookie change must not retarget it.
+    if (expectedOwner !== undefined && expectedOwner.toLowerCase() !== session.user.id.toLowerCase()) {
+      throw new Error('WALLET_OWNER_CHANGED');
     }
     const store = new WalletProfileStore(readiness.configuration, session.user.id, session.accessToken, request);
     if (req.method === 'GET') {
@@ -64,8 +70,8 @@ export async function handleWallet(
     respond(res, 200, walletSnapshot('signed-in', profile));
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
-    const invalidInput = ['WALLET_INPUT_INVALID', 'WALLET_PROFILE_INVALID', 'WALLET_REVISION_INVALID', 'BODY_EMPTY'].includes(message);
-    const status = message === 'WALLET_CONFLICT' ? 409
+    const invalidInput = ['WALLET_INPUT_INVALID', 'WALLET_PROFILE_INVALID', 'WALLET_REVISION_INVALID', 'WALLET_OWNER_INVALID', 'BODY_EMPTY'].includes(message);
+    const status = message === 'WALLET_CONFLICT' || message === 'WALLET_OWNER_CHANGED' ? 409
       : message === 'WALLET_SESSION_INVALID' ? 401
         : message === 'WALLET_FORBIDDEN' ? 403
           : message === 'CONTENT_TYPE_REQUIRED' ? 415
