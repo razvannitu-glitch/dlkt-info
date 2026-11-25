@@ -54,7 +54,7 @@ class Element extends Target {
     const tags = selector.split(',').map(tag => tag.trim().toUpperCase());
     return this.children.flatMap(child => [...(tags.includes(child.tagName) ? [child] : []), ...child.querySelectorAll(selector)]);
   }
-  reset() { for (const input of this.querySelectorAll('input')) { input.value = ''; input.checked = false; } }
+  reset() { for (const input of this.querySelectorAll('input')) { if (!['checkbox', 'radio'].includes(input.type)) input.value = ''; input.checked = false; } }
   reportValidity() { return true; }
   focus() { this.document.activeElement = this; }
 }

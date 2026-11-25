@@ -39,7 +39,7 @@ const manifest = {
   engine: 'dlkt-info-inphocore-engine-orchestra',
   version,
   walletVersion: 'dlkt-info-wallet-1',
-  walletProfileVersion: 'dlkt-info-wallet-profile-1',
+  walletProfileVersion: 'dlkt-info-wallet-profile-2',
   connectionsVersion: 'dlkt-info-connections-1',
   iceoVersion: 'iceo-primary-mesh-1',
   publicSourceCount: ICEO_SOURCES.length,

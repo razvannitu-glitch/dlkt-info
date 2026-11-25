@@ -88,7 +88,7 @@ export function createPersonalReader(onInvalidated: () => void): PersonalReader 
   let city: City | null = null, local: LocalSnapshot | null = null, topics: IceoSnapshot | null = null;
   let topicPrior: DailyEdition | null = null, displayed = PAGE_SIZE;
   let currentSelection: DailySelection | null = null;
-  const rendered = new Map<string, {signature: string; node: HTMLElement}>();
+  const rendered = new Map<string, {signature: string; element: HTMLElement}>();
   const foreground = (): boolean => !document.hidden && document.hasFocus();
   const current = (ticket: number, controller: AbortController): boolean =>
     generation === ticket && active === controller && !controller.signal.aborted && foreground();
@@ -108,11 +108,21 @@ export function createPersonalReader(onInvalidated: () => void): PersonalReader 
     element.rel = 'noopener noreferrer'; element.referrerPolicy = 'no-referrer'; return element;
   }
   async function confirmProfile(profile: WalletProfileState, userId: string, controller: AbortController): Promise<void> {
-    const value = parseWalletSnapshot(await json('/api/wallet', controller.signal, userId));
-    if (value.account !== 'signed-in' || value.profile === null || value.profile.revision !== profile.revision
-      || JSON.stringify(value.profile.value) !== JSON.stringify(profile.value)) throw new Error('PERSONAL_PROFILE_CHANGED');
-    const session = parsePersonalSession(await json('/api/account-session', controller.signal, userId));
-    if (session.status !== 'signed-in' || session.userId !== userId) throw new Error('PERSONAL_PROFILE_CHANGED');
+    const verification = new AbortController();
+    const abort = (): void => verification.abort();
+    controller.signal.addEventListener('abort', abort, {once: true});
+    if (controller.signal.aborted) abort();
+    const timeout = window.setTimeout(abort, 20_000);
+    try {
+      const value = parseWalletSnapshot(await json('/api/wallet', verification.signal, userId));
+      if (value.account !== 'signed-in' || value.profile === null || value.profile.revision !== profile.revision
+        || JSON.stringify(value.profile.value) !== JSON.stringify(profile.value)) throw new Error('PERSONAL_PROFILE_CHANGED');
+      const session = parsePersonalSession(await json('/api/account-session', verification.signal, userId));
+      if (verification.signal.aborted || session.status !== 'signed-in' || session.userId !== userId) throw new Error('PERSONAL_PROFILE_CHANGED');
+    } finally {
+      window.clearTimeout(timeout);
+      controller.signal.removeEventListener('abort', abort);
+    }
   }
   function topicNode(item: DailyItem, profile: WalletProfileState, ticket: number, controller: AbortController): HTMLElement {
     const view = item.topic; if (!view) throw new Error('PERSONAL_TOPIC_INVALID');
@@ -175,7 +185,7 @@ export function createPersonalReader(onInvalidated: () => void): PersonalReader 
     if (selectedCity) for (const match of result.matches) {
       const id = 'local:' + match.card.id;
       rows.push({id, signature: JSON.stringify([match.card, match.need, selectedCity]), create: () => {
-        const card = localCardNode(match.card, selectedCity, now); card.dataset.personalId = id;
+        const card = localCardNode(match.card, selectedCity, now, {photos: false}); card.dataset.personalId = id;
         const reason = node('p', 'For ' + selectedCity.name + ', which you confirmed, and ' + NEED_LABELS[match.need]
           + ', which you selected. This is city context; confirm exact applicability at the source.', 'card-kind personal-reason');
         card.querySelector('.card-content')?.prepend(reason); return card;
@@ -187,13 +197,13 @@ export function createPersonalReader(onInvalidated: () => void): PersonalReader 
     }
     const visible = rows.slice(0, displayed), retained = new Set(visible.map(row => row.id));
     const focused = document.activeElement, focusWasInside = focused instanceof HTMLElement && ui.cards.contains(focused);
-    for (const [id, entry] of rendered) if (!retained.has(id)) { entry.node.remove(); rendered.delete(id); }
+    for (const [id, entry] of rendered) if (!retained.has(id)) { entry.element.remove(); rendered.delete(id); }
     for (let index = 0; index < visible.length; index += 1) {
       const row = visible[index]; if (!row) continue;
       const previous = rendered.get(row.id);
-      const card = previous?.signature === row.signature ? previous.node : row.create();
-      if (previous && previous.node !== card) { previous.node.replaceWith(card); }
-      rendered.set(row.id, {signature: row.signature, node: card});
+      const card = previous?.signature === row.signature ? previous.element : row.create();
+      if (previous && previous.element !== card) { previous.element.replaceWith(card); }
+      rendered.set(row.id, {signature: row.signature, element: card});
       const position = ui.cards.children[index];
       if (position !== card) ui.cards.insertBefore(card, position ?? null);
     }

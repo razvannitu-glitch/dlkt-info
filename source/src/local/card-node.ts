@@ -8,7 +8,7 @@ const romanianKinds:Readonly<Record<LocalCard['kind'],string>>={forecast:'Vreme'
 const node=<K extends keyof HTMLElementTagNameMap>(tag:K,text='',className=''):HTMLElementTagNameMap[K]=>{const n=document.createElement(tag);n.textContent=text;n.className=className;return n;};
 const format=(time:string,zone:string,locale='en'):string=>new Intl.DateTimeFormat(locale==='ro'?'ro-RO':'en-GB',{timeZone:zone,month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',timeZoneName:'short'}).format(new Date(time));
 /** Shared local-card presentation: homepage and city view retain identical provenance. */
-export function localCardNode(card:LocalCard,c:City,now=Date.now(),options:{readonly compact?:boolean}={}):HTMLElement{
+export function localCardNode(card:LocalCard,c:City,now=Date.now(),options:{readonly compact?:boolean;readonly photos?:boolean}={}):HTMLElement{
   const locale=getLocale(),ro=locale==='ro',reading=localReading(card,c,now,locale),a=node('article','','info-card local-card');a.dataset.localId=card.id;if(card.kind==='forecast')a.dataset.weatherRevision=JSON.stringify([card.checkedAt,card.sourceUpdatedAt,card.weatherSymbols??null]);if(card.news){a.dataset.newsSourceId=card.news.sourceId;a.dataset.newsTopic=card.news.topic;a.dataset.publishedAt=card.news.publishedAt;}
   // Only the homepage utility presentation is condensed. Original local reports
   // and the dedicated city view keep their full reading layout.
@@ -59,6 +59,7 @@ export function localCardNode(card:LocalCard,c:City,now=Date.now(),options:{read
   if(card.kind==='forecast'){const license=node('a','MET Norway · CC BY 4.0');license.href='https://creativecommons.org/licenses/by/4.0/';license.target='_blank';license.rel='noopener noreferrer';details.append(license);}
   const category=localCardCategory(card);a.dataset.editorialCategory=category;
   a.append(head);
-  const photo=contextPhotoNode({title:reading.title,sourceUrl:card.sourceUrl,editorialCategory:category},now,card.kind==='local-news'&&card.news?{id:card.news.id,revision:card.news.documentHash,cityId:c.id}:undefined);if(photo)a.append(photo);
+  // Private readers can omit image requests; existing public cards retain their photos.
+  const photo=options.photos===false?null:contextPhotoNode({title:reading.title,sourceUrl:card.sourceUrl,editorialCategory:category},now,card.kind==='local-news'&&card.news?{id:card.news.id,revision:card.news.documentHash,cityId:c.id}:undefined);if(photo)a.append(photo);
   if(compact){const actions=node('div','','local-utility-actions');actions.append(source,details);a.append(body,actions);}else a.append(body,details);return a;
  }
