@@ -7,8 +7,8 @@ import {NEWS_CATEGORIES} from '../.build/src/iceo/news-taxonomy.js';
 const now=Date.parse('2026-11-23T12:00:00.000Z');
 const copy=value=>JSON.parse(JSON.stringify(value));
 test('knowledge preview keeps original multilingual copy, primary provenance and bounded review dates',()=>{
- assert.equal(KNOWLEDGE_CARDS.length,19);assert.equal(new Set(KNOWLEDGE_CARDS.map(card=>card.category)).size,9);
- assert.equal(validateKnowledgeCatalog(KNOWLEDGE_CARDS).length,19);
+ assert.equal(KNOWLEDGE_CARDS.length,25);assert.equal(new Set(KNOWLEDGE_CARDS.filter(card=>!['useful','elsewhere'].includes(card.format)).map(card=>card.category)).size,9);
+ assert.equal(validateKnowledgeCatalog(KNOWLEDGE_CARDS).length,25);
  for(const card of KNOWLEDGE_CARDS){
   assert.ok(validKnowledgeCard(card));assert.ok(NEWS_CATEGORIES.some(category=>category.id===card.category));
   for(const language of ['en','ro','it'])for(const field of ['title','explanation','connection'])assert.ok(card.copy[language][field].trim().length>15);
@@ -47,7 +47,7 @@ test('knowledge review windows exclude future and expired facts without inventin
  assert.equal(selectKnowledgeCards([],'all',now,'day').length,0);
 });
 test('knowledge category rounds reach the entire finite collection without a20/40 cap or duplicate cards',()=>{
- const cards=Array.from({length:89},(_,index)=>({...copy(KNOWLEDGE_CARDS[index%KNOWLEDGE_CARDS.length]),id:'fact-'+index}));
+ const cards=Array.from({length:89},(_,index)=>({...copy(KNOWLEDGE_CARDS[0]),id:'fact-'+index,category:NEWS_CATEGORIES[index%NEWS_CATEGORIES.length].id}));
  const result=selectKnowledgeCards(cards,'all',now,'edition');
  assert.equal(result.length,89);assert.equal(new Set(result.map(card=>card.id)).size,89);
  assert.deepEqual(result.map(card=>card.id),selectKnowledgeCards(cards,'all',now,'edition').map(card=>card.id));
@@ -64,7 +64,7 @@ test('knowledge category rounds reach the entire finite collection without a20/4
 });
 test('knowledge filtering and sharing preserve category, language and the canonical destination',()=>{
  for(const category of NEWS_CATEGORIES){
-  const expected=KNOWLEDGE_CARDS.filter(card=>card.category===category.id);
+  const expected=KNOWLEDGE_CARDS.filter(card=>card.category===category.id&&Date.parse(card.publishAt??card.reviewedAt)<=now&&now<Date.parse(card.reviewBy));
   const selected=selectKnowledgeCards(KNOWLEDGE_CARDS,category.id,now,'day');
   assert.equal(selected.length,expected.length);assert.ok(selected.every(card=>card.category===category.id));
  }
@@ -95,7 +95,7 @@ test('knowledge assets integrate into the real reader without starting a second 
 
 test('knowledge geography is explicit, bounded and multilingual',()=>{
  const local=KNOWLEDGE_CARDS.filter(card=>card.geography!==undefined);
- assert.deepEqual(local.map(card=>[card.id,card.geography.countryCode,card.geography.cityIds]),[
+ assert.deepEqual(local.filter(card=>!['useful','elsewhere'].includes(card.format)).map(card=>[card.id,card.geography.countryCode,card.geography.cityIds]),[
   ['torino-museo-egizio-1824','IT',['3165524']],
   ['bucharest-athenaeum-circular-foundations','RO',['683506']],
   ['care-breast-screening-romania','RO',[]],

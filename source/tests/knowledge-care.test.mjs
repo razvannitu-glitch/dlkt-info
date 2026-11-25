@@ -5,14 +5,15 @@ import {KNOWLEDGE_CARDS} from '../.build/src/iceo/knowledge-catalog.js';
 import {safeKnowledgeSource,validKnowledgeCard} from '../.build/src/iceo/knowledge.js';
 import {selectInlineKnowledge} from '../.build/src/iceo/knowledge-stream.js';
 
-test('Coral Care consists of four reviewed, attributable campaigns and independent information',()=>{
+test('Coral Care consists of five reviewed attributable initiatives with independent information',()=>{
  const care=KNOWLEDGE_CARDS.filter(card=>card.format==='care');
- assert.equal(care.length,4);
- assert.equal(new Set(care.map(card=>card.id)).size,4);
+ assert.equal(care.length,5);
+ assert.equal(new Set(care.map(card=>card.id)).size,5);
  assert.equal(care.filter(card=>card.geography?.countryCode==='RO').length,2);
- assert.equal(care.filter(card=>card.geography===undefined).length,2);
+ assert.equal(care.filter(card=>card.geography===undefined).length,3);
+ assert.equal(care.filter(card=>card.category==='07000000').length,4);
+ assert.equal(care.find(card=>card.id==='dlkt-care-contribute-to-research')?.category,'13000000');
  for(const card of care){
-  assert.equal(card.category,'07000000');
   assert.ok(validKnowledgeCard(card));
   assert.ok(safeKnowledgeSource(card.source.url));
   assert.ok(Date.parse(card.reviewBy)>Date.parse(card.reviewedAt));
@@ -39,8 +40,8 @@ test('local care appears only in the intended country and does not fake a neighb
  const at=Date.parse('2026-11-23T11:45:00.000Z');
  const ro=selectInlineKnowledge(KNOWLEDGE_CARDS,{cityId:'683506',countryCode:'RO',timeZone:'Europe/Bucharest'},at,'care-fixture');
  const us=selectInlineKnowledge(KNOWLEDGE_CARDS,{cityId:null,countryCode:'US',timeZone:'America/New_York'},at,'care-fixture');
- assert.equal(ro[0]?.card.format,'care','the first knowledge slot exposes Coral Care');
- assert.equal(us[0]?.card.format,'care','the international edition also shows Coral Care');
+ assert.equal(ro[0]?.scope,'city','geographic relevance remains ahead of national care');
+ assert.notEqual(ro[0]?.card.format,'care','care no longer overrides a more local fact');
  const roIds=ro.filter(value=>value.card.format==='care').map(value=>value.card.id);
  const usIds=us.filter(value=>value.card.format==='care').map(value=>value.card.id);
  assert.ok(roIds.includes('care-breast-screening-romania'));

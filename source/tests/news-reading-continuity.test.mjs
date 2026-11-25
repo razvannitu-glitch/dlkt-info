@@ -13,7 +13,8 @@ import {storyThreadKey} from '../.build/src/iceo/story-grouping.js';
 import {NEWS_CATEGORIES} from '../.build/src/iceo/news-taxonomy.js';
 import {findCity} from '../.build/src/local/cities.js';
 import {KNOWLEDGE_CARDS} from '../.build/src/iceo/knowledge-catalog.js';
-import {selectInlineKnowledge} from '../.build/src/iceo/knowledge-stream.js';
+import {selectInlineKnowledge,isInlineKnowledgeCurrent} from '../.build/src/iceo/knowledge-stream.js';
+import {KNOWLEDGE_EXPOSURE_LIMIT} from '../.build/src/iceo/knowledge-exposure.js';
 import {article,epoch,CorpusMemoryStore,hash} from './fixtures/news-corpus.mjs';
 
 const NOW=Date.parse('2026-11-23T22:00:00.000Z'),iso=value=>new Date(value).toISOString();
@@ -228,20 +229,20 @@ test('Today crossing local midnight keeps the previous day only as explicitly re
  assert.match(source,/Lectura pastrata.*Verificarile originale raman neschimbate/u);
 });
 
-test('an unseen calendar fact is revalidated after midnight while a displayed fact keeps its original copy',()=>{
+test('calendar eligibility is revalidated after local midnight for both exposed and unexposed facts',()=>{
  const prototype=KNOWLEDGE_CARDS.find(card=>card.format==='on-this-day');assert.ok(prototype);
  const card={...prototype,id:'controlled-calendar-continuity',calendarDay:'11-23',geography:undefined,reviewedAt:'2026-11-22T00:00:00.000Z',reviewBy:'2026-11-25T00:00:00.000Z'};
  const source=browserSource(),start=source.indexOf("if (entry.kind === 'knowledge')"),end=source.indexOf('const item = entry.item',start);assert.ok(start>=0&&end>start);
  const block='for(const entry of entries){'+source.slice(start,end)+'}';
  const draw=(now,seen)=>{
   const shown=[],writes=[],environment={entries:[{kind:'knowledge',item:{card,scope:'global'}}],now,inlineKnowledgeSeen:new Set(seen),
-   inlinePage:{cityId:null,countryCode:null,day:{timeZone:'UTC'}},Intl,Date,selectInlineKnowledge,
+   inlinePage:{cityId:null,countryCode:null,day:{timeZone:'UTC'}},Intl,Date,selectInlineKnowledge,isInlineKnowledgeCurrent,
    document:{body:{dataset:{}}},host:{append:value=>shown.push(value)},knowledgeCardNode:record=>record,writeKnowledgeSeen:value=>writes.push([...value])};
   runInNewContext(block,environment);return {shown,writes};
  };
- const before=draw(Date.parse('2026-11-23T23:59:59Z'),[]);assert.equal(before.shown.length,1);assert.equal(before.writes.length,1);
+ const before=draw(Date.parse('2026-11-23T23:59:59Z'),[]);assert.equal(before.shown.length,1);assert.strictEqual(before.shown[0],card);assert.equal(before.writes.length,0,'appending a card cannot write exposure history');
  const unseen=draw(Date.parse('2026-11-24T00:00:01Z'),[]);assert.equal(unseen.shown.length,0);assert.equal(unseen.writes.length,0);
- const retained=draw(Date.parse('2026-11-24T00:00:01Z'),[card.id]);assert.equal(retained.shown.length,1);assert.strictEqual(retained.shown[0],card);assert.equal(retained.writes.length,0);
+ const retained=draw(Date.parse('2026-11-24T00:00:01Z'),[card.id]);assert.equal(retained.shown.length,0,'exposure history cannot bypass the calendar validity boundary');assert.equal(retained.writes.length,0);
  const expired=draw(Date.parse(card.reviewBy),[card.id]);assert.equal(expired.shown.length,0,'the source review boundary is never extended');
 });
 
@@ -307,3 +308,31 @@ test('a checked BBC article cannot reappear when its alternate publisher host re
  }
 });
 
+
+test('the compiled exposure callback alone writes bounded, idempotent history for known catalogue IDs',()=>{
+ const source=browserSource(),start=source.indexOf('stopKnowledgeObserver = observeKnowledgeExposure('),end=source.indexOf('memoryControls();',start);
+ assert.ok(start>=0&&end>start);const body=source.slice(start,end);
+ const known=KNOWLEDGE_CARDS.slice(0,2).map(card=>card.id);assert.equal(known.length,2);
+ const setup=initial=>{
+  const seen=new Set(initial),writes=[],target={},dataset={entryView:'start'};let qualified,options,openDialog=false;
+  const environment={target,inlineKnowledgeSeen:seen,KNOWLEDGE_CARDS,KNOWLEDGE_EXPOSURE_LIMIT,stopKnowledgeObserver:null,
+   document:{body:{dataset},querySelector(selector){assert.equal(selector,'dialog[open]');return openDialog?{}:null;}},
+   observeKnowledgeExposure(node,callback,settings){assert.strictEqual(node,target);qualified=callback;options=settings;return ()=>{};},
+   writeKnowledgeSeen(value){assert.strictEqual(value,seen);writes.push([...value]);return true;},
+  };
+  runInNewContext(body,environment);assert.equal(typeof qualified,'function');assert.equal(typeof environment.stopKnowledgeObserver,'function');
+  assert.equal(writes.length,0,'binding to already inserted cards does not write history');
+  return {seen,writes,qualify:id=>qualified(id),isActive:()=>options.isActive(),dataset,setDialog:value=>{openDialog=value;}};
+ };
+ const h=setup([]);assert.equal(h.isActive(),true);
+ h.dataset.entryView='saved';assert.equal(h.isActive(),false);h.dataset.entryView='start';
+ h.dataset.worldExplore='true';assert.equal(h.isActive(),false);delete h.dataset.worldExplore;
+ h.setDialog(true);assert.equal(h.isActive(),false);h.setDialog(false);assert.equal(h.isActive(),true);
+ h.qualify('unregistered-owned-card');assert.equal(h.seen.size,0);assert.equal(h.writes.length,0);
+ h.qualify(known[0]);h.qualify(known[0]);assert.deepEqual([...h.seen],[known[0]]);assert.equal(h.writes.length,1);
+ const nearlyFull=setup(Array.from({length:KNOWLEDGE_EXPOSURE_LIMIT-1},(_,index)=>'already-'+index));
+ nearlyFull.qualify(known[0]);assert.equal(nearlyFull.seen.size,KNOWLEDGE_EXPOSURE_LIMIT);assert.equal(nearlyFull.writes.length,1);
+ nearlyFull.qualify(known[1]);nearlyFull.qualify(known[0]);nearlyFull.qualify('unregistered-owned-card');
+ assert.equal(nearlyFull.seen.size,KNOWLEDGE_EXPOSURE_LIMIT);assert.equal(nearlyFull.writes.length,1);
+ assert.equal(nearlyFull.seen.has(known[1]),false);assert.equal(nearlyFull.writes[0].length,KNOWLEDGE_EXPOSURE_LIMIT);
+});

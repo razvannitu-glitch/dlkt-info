@@ -6,7 +6,7 @@ import {parseDocument,DomUtils} from 'htmlparser2';
 import {NewsMasonry,newsMasonryPositions} from '../.build/src/iceo/news-masonry.js';
 import {KNOWLEDGE_CARDS} from '../.build/src/iceo/knowledge-catalog.js';
 import {newsReadingUpdatesNode} from '../.build/src/iceo/news-story-browser.js';
-import {selectInlineKnowledge,interleaveKnowledge} from '../.build/src/iceo/knowledge-stream.js';
+import {selectInlineKnowledge,interleaveKnowledge,appendEligibleKnowledge,isInlineKnowledgeCurrent} from '../.build/src/iceo/knowledge-stream.js';
 import {newsOriginalLanguage} from '../.build/src/iceo/news-page-contracts.js';
 
 test('two hundred variable-height articles retain DOM order and exact gaps beyond grid track limits',()=>{
@@ -193,8 +193,8 @@ test('compiled inline rendering preserves 11-plus-1 cadence, append prefixes and
    newsContinuation:{editionFor:key=>{assert.ok(context.pageItemByKey.has(key));return context.server.page;},updatesFor:key=>{assert.ok(context.pageItemByKey.has(key));return [];},currentSourcesFor:key=>{assert.ok(context.pageItemByKey.has(key));return null;}},
    newsReadingUpdatesNode,
    newsStorySourcesNode(){throw Error('Ungrouped originals must not create a source-group disclosure');},
-   KNOWLEDGE_CARDS:catalog,selectInlineKnowledge,interleaveKnowledge,
-   writeKnowledgeSeen:seen=>{assert.ok(seen instanceof Set);return true;},
+   KNOWLEDGE_CARDS:catalog,selectInlineKnowledge,interleaveKnowledge,appendEligibleKnowledge,isInlineKnowledgeCurrent,historyWrites:0,
+   writeKnowledgeSeen:seen=>{assert.ok(seen instanceof Set);context.historyWrites++;return true;},
    knowledgeCardNode:(card,scope)=>({fixtureKind:'knowledge',card,scope,dataset:{}}),
    cardNode:view=>newsNode(view.card),localCardNode:card=>newsNode(card),
    newsOriginalLanguage,languageLabel:language=>language,make:(_tag,className,textContent)=>({className,textContent,dataset:{}}),
@@ -218,15 +218,18 @@ test('compiled inline rendering preserves 11-plus-1 cadence, append prefixes and
  }
  assert.deepEqual(previous.flatMap((node,index)=>node.fixtureKind==='knowledge'?[index+1]:[]),[12,24,36,48,60,72]);
  assert.deepEqual(facts(previous).map(node=>node.card.id),selected.slice(0,6).map(item=>item.card.id));
- assert.equal(h.context.inlineKnowledgeSeen.size,6);assert.deepEqual(sequence(h.render(66)),sequence(previous));
- const seen=new Set(h.context.inlineKnowledgeSeen);
+ assert.equal(h.context.inlineKnowledgeSeen.size,0,'DOM insertion is not qualified exposure');assert.equal(h.context.historyWrites,0);
+ assert.deepEqual(sequence(h.render(66)),sequence(previous));
+ // Simulate the separate observer qualifying these six cards before a context change.
+ const seen=new Set(facts(previous).map(node=>node.card.id));
+ for(const id of seen)h.context.inlineKnowledgeSeen.add(id);
  h.context.server.page={...h.context.server.page,filter:'13000000',period:'recent',day:null};
  const changed=h.render(22);
  assert.equal(facts(changed).length,2);assert.equal(changed.length,24);
- assert.ok(facts(changed).every(node=>!seen.has(node.card.id)),'a new context never reuses a fact already displayed');
- assert.equal(h.context.inlineKnowledgeSeen.size,seen.size+2);
+ assert.ok(facts(changed).every(node=>!seen.has(node.card.id)),'a new context excludes only facts with qualified exposure history');
+ assert.equal(h.context.inlineKnowledgeSeen.size,seen.size,'the two inserted cards have no qualified exposure yet');assert.equal(h.context.historyWrites,0);
  const firstId=selected[0].card.id,expires=now+1000;
- const bounded=KNOWLEDGE_CARDS.map(card=>({...card,reviewedAt:new Date(now-1000).toISOString(),reviewBy:new Date(card.id===firstId?expires:now+10000).toISOString()}));
+ const bounded=KNOWLEDGE_CARDS.filter(card=>card.publishAt===undefined||Date.parse(card.publishAt)<=now).map(card=>({...card,reviewedAt:new Date(now-1000).toISOString(),reviewBy:new Date(card.id===firstId?expires:now+10000).toISOString()}));
  const expiring=harness(bounded);assert.equal(facts(expiring.render(10)).length,0);
  const slots=expiring.context.inlineKnowledgeSelection;assert.equal(slots[0].card.id,firstId);
  expiring.context.now=expires;
@@ -235,6 +238,6 @@ test('compiled inline rendering preserves 11-plus-1 cadence, append prefixes and
  assert.equal(shown.length,3);assert.deepEqual(shown.map(node=>node.card.id),slots.slice(1,4).map(item=>item.card.id));
  assert.deepEqual(shown.map(node=>afterExpiry.indexOf(node)+1),[23,35,47],
   'an expired fact is not replaced early; later facts keep their eleven-story slots');
- assert.equal(expiring.context.inlineKnowledgeSeen.has(firstId),false);assert.equal(expiring.context.inlineKnowledgeSeen.has(slots[1].card.id),true);
+ assert.equal(expiring.context.inlineKnowledgeSeen.has(firstId),false);assert.equal(expiring.context.inlineKnowledgeSeen.has(slots[1].card.id),false);assert.equal(expiring.context.historyWrites,0);
  assert.equal(JSON.stringify(originals),originalsBefore);
 });

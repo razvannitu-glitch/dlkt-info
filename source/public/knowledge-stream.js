@@ -61,20 +61,37 @@ export function selectInlineKnowledge(cards, context, now, seed) {
         for (const card of selectKnowledgeCards(tiers[scope], 'all', now, seed, context.timeZone ?? 'UTC'))
             result.push({ card, scope });
     }
-    // Independent care information retains its first slot. A calendar-confirmed
-    // fact then takes priority, followed by a source-reviewed recipe, if available.
-    const elevate = (format, position) => {
-        const index = result.findIndex(entry => entry.card.format === format);
-        if (index < 0)
-            return;
-        const [entry] = result.splice(index, 1);
-        if (entry)
-            result.splice(Math.min(position, result.length), 0, entry);
-    };
-    elevate('care', 0);
-    elevate('on-this-day', result[0]?.card.format === 'care' ? 1 : 0);
-    elevate('recipe', result[0]?.card.format === 'care' ? (result[1]?.card.format === 'on-this-day' ? 2 : 1) : result[0]?.card.format === 'on-this-day' ? 1 : 0);
+    // Format never overrides geographic relevance or the deterministic category rounds.
     return result;
+}
+/** Current eligibility applies even to an already exposed card in a reserved slot. */
+export function isInlineKnowledgeCurrent(item, context, now) {
+    return selectInlineKnowledge([item.card], context, now, 'reading-check').some(current => current.scope === item.scope);
+}
+/**
+ * Append newly eligible editorial cards without changing an existing reading prefix.
+ * Expired previous entries retain their reserved selection positions; the renderer
+ * must hide them at their lifecycle boundary rather than move later cards forward.
+ * History and existing identity suppress reappearance, including later revisions.
+ */
+export function appendEligibleKnowledge(existing, cards, context, now, seed, seen = new Set()) {
+    validateKnowledgeCatalog(existing.map(item => item.card));
+    if (existing.some(item => !['city', 'country', 'global'].includes(item.scope)))
+        throw Error('INLINE_KNOWLEDGE_SCOPE_INVALID');
+    if (seen.size > 5000 || [...seen].some(id => !KNOWLEDGE_ID.test(id)))
+        throw Error('INLINE_KNOWLEDGE_HISTORY_INVALID');
+    const eligible = selectInlineKnowledge(cards, context, now, seed), ids = new Set(existing.map(item => item.card.id));
+    const result = [...existing];
+    for (const item of eligible) {
+        if (ids.has(item.card.id) || seen.has(item.card.id))
+            continue;
+        // Retain the catalogue's existing bounded capacity, without limiting news.
+        if (result.length === 5000)
+            break;
+        result.push(item);
+        ids.add(item.card.id);
+    }
+    return result.length === existing.length ? existing : Object.freeze(result);
 }
 /**
  * Project an append-only news prefix with the same selected knowledge list.

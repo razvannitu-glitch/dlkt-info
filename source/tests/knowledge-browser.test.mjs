@@ -59,3 +59,17 @@ test('inline knowledge keeps the real city label for country fallback and labels
   const review=descendants(node).find(value=>value.tagName==='time');assert.equal(review.dateTime,general.reviewedAt);
  }
 });
+
+test('useful and elsewhere formats have distinct translated labels and truthful source checks',()=>{
+ const labels={en:{useful:'One useful thing',elsewhere:'Works elsewhere'},ro:{useful:'Un lucru util',elsewhere:'Functioneaza in alta parte'},it:{useful:'Una cosa utile',elsewhere:'Funziona altrove'}};
+ for(const language of ['en','ro','it']){
+  for(const format of ['useful','elsewhere']){
+   const card=KNOWLEDGE_CARDS.find(item=>item.format===format);assert.ok(card);
+   const node=renderer(language)(card,'global'),all=descendants(node);
+   assert.equal(all.find(item=>item.className==='knowledge-category-tag').textContent,labels[language][format]);
+   assert.equal(all.find(item=>item.tagName==='time').dateTime,card.reviewedAt,'publishing never restamps evidence review');
+   assert.equal(all.find(item=>item.tagName==='a').href,card.source.url);
+   assert.equal(node.dataset.knowledgeFormat,format);
+  }
+ }
+});
