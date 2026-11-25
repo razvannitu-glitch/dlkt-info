@@ -292,3 +292,15 @@ if (document.readyState !== 'complete')
 else
     queueMicrotask(openLinkedView);
 window.addEventListener('hashchange', openLinkedView);
+// Native fragment focus can follow DOMContentLoaded; reconcile only that untouched Saved control.
+window.addEventListener('load', () => {
+    requestAnimationFrame(() => {
+        const savedControl = required('saved');
+        if (window.location.hash !== '#saved' || state.view !== 'topics'
+            || savedControl.getAttribute('aria-pressed') !== 'true' || document.activeElement !== savedControl)
+            return;
+        const heading = required('result-heading');
+        heading.focus();
+        heading.scrollIntoView({ block: 'start' });
+    });
+}, { once: true });
