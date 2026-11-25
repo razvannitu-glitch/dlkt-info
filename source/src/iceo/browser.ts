@@ -799,20 +799,14 @@ function renderDiscovery():void {
   }
   if(contextualCity){
     const localCity=contextualCity;
-    const remainingLocal=local.supporting.slice(2);
-    const more=make('details','home-local-more');more.id='home-local-more';
-    more.dataset.liveSignature=JSON.stringify([language,remainingLocal]);
-    more.open=support.querySelector<HTMLDetailsElement>('#home-local-more')?.open??false;
-    const moreLabel=language==='ro'?'Mai multe informatii locale':language==='it'?'Altre informazioni locali':'More local information';
-    more.append(make('summary','',moreLabel+' · '+new Intl.NumberFormat(language).format(remainingLocal.length)));
-    const moreGrid=make('div','home-local-more-grid');
-    local.supporting.forEach((item,index)=>{
+    // Every checked operational record stays in the continuous local grid.
+    // Only each card's evidence is collapsible; no card is hidden behind “more”.
+    local.supporting.forEach(item=>{
       const node=localCardNode(item,localCity,now,{compact:true});
       node.dataset.homeLocalId=item.id;node.dataset.cityId=localCity.id;
       node.dataset.liveSignature=JSON.stringify([language,item]);
-      if(index<2)supportHost.append(node);else moreGrid.append(node);
+      supportHost.append(node);
     });
-    if(remainingLocal.length){more.append(moreGrid);supportHost.append(more);}
   }
   if(contextualCity&&!suppressLocalPending)extrasHost.append(commercialCardNode({city:contextualCity.name,country:countryLabel(contextualCity.countryCode,contextualCity.country)},language));
   if(!suppressLocalPending&&!local.supporting.length&&!localNewsCount&&(contextualCity||contextualLocationPending)){

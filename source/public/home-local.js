@@ -125,19 +125,16 @@ export function selectHomeLocal(snapshot, city, now) {
             continue;
         cards.push(card);
         kinds.add(card.kind);
-        if (cards.length === 12)
-            break;
     }
-    // Preserve the homepage's existing kind diversity and display limits.
-    while (cards.length < Math.min(12, ordered.length)) {
+    // The validated snapshot already bounds acquisition. Rotate kinds without
+    // silently dropping checked records from the continuous homepage stream.
+    while (cards.length < ordered.length) {
         const before = cards.length;
         for (const kind of kinds) {
-            if (news.length && cards.filter(card => card.kind === kind).length >= 2)
-                continue;
             const next = ordered.find(item => item.card.kind === kind && !cards.includes(item.card));
             if (next)
                 cards.push(next.card);
-            if (cards.length === 12)
+            if (cards.length === ordered.length)
                 break;
         }
         if (cards.length === before)

@@ -5,6 +5,8 @@ import {findCity} from '../.build/src/local/cities.js';
 import {currentLocalSnapshot} from '../.build/src/local/contracts.js';
 import {localReading,localDiscoveryLabel} from '../.build/src/local/presentation.js';
 import {referencePlaces} from '../.build/src/local/reference-places.js';
+import {newsCard} from '../.build/src/local/service.js';
+import {local as localNewsFixture} from './fixtures/news-corpus.mjs';
 
 const now=Date.parse('2026-11-18T12:00:00Z'),checkedAt=new Date(now).toISOString();
 const palma=findCity('2512989'),bucharest=findCity('683506'),london=findCity('2643743');
@@ -82,4 +84,29 @@ test('a future forecast window retains its meaning and is not treated as observe
   assert.equal(selected.cards[0],card);
   assert.equal(selected.cards[0].boundary,'Forecast, not observed conditions.');
   assert.equal(selected.expiresAt,now+300000);
+});
+
+test('the continuous local stream retains more than twelve validated operational records',()=>{
+  const events=Array.from({length:14},(_,index)=>event('continuous-'+index,new Date(now+3600000+index*60000).toISOString()));
+  const value=snapshot(palma,[forecast(palma),...events]),before=JSON.stringify(value);
+  assert.equal(currentLocalSnapshot(value,palma,now),true);
+  const selected=selectHomeLocal(value,palma,now);
+  assert.equal(selected.cards.length,15,'the previous homepage display cap does not drop checked records');
+  assert.deepEqual(new Set(selected.cards),new Set(value.cards));
+  assert.equal(new Set(selected.cards.map(card=>card.id)).size,15);
+  assert.deepEqual(selected.cards.filter(card=>card.kind==='event'),events);
+  assert.equal(JSON.stringify(value),before);
+});
+
+test('city news does not hide additional eligible events of the same kind',()=>{
+  const local=localNewsFixture(3,{now,published:now-10000}),base=bucharestSnapshot();
+  const news=local.snapshot.articles.map(article=>newsCard(article,bucharest));
+  const value={...base,cards:[...base.cards,...news],newsSources:local.snapshot.sources},before=JSON.stringify(value);
+  assert.equal(currentLocalSnapshot(value,bucharest,now),true,'city originals and health use the actual local contracts');
+  const selected=selectHomeLocal(value,bucharest,now);
+  assert.equal(selected.cards.filter(card=>card.kind==='event').length,8,'the previous two-per-kind cap does not discard events');
+  assert.equal(selected.cards.filter(card=>card.kind==='local-news').length,3);
+  assert.equal(selected.cards.length,12);
+  assert.deepEqual(new Set(selected.cards),new Set(value.cards));
+  assert.equal(JSON.stringify(value),before);
 });

@@ -89,12 +89,12 @@ function localReport() {
   };
 }
 
-test('personal matching retains every eligible accepted record beyond the homepage display cap', () => {
+test('home and personal matching retain every eligible accepted record while personal needs remain filtered', () => {
   const weather = forecast(palma), events = Array.from({length: 14}, (_, index) => event(index));
   const value = valid(snapshot(palma, [weather, ...events], {coverage: [cultureScope()]}), palma);
   const before = JSON.stringify(value);
   const home = selectHomeLocal(value, palma, now);
-  assert.deepEqual(home.cards.map(card => card.id), [weather.id, ...events.slice(0, 11).map(card => card.id)]);
+  assert.deepEqual(home.cards.map(card => card.id), [weather.id, ...events.map(card => card.id)]);
   assert.equal(home.expiresAt, now + 300_000);
   const edition = selectPersonalLocalEdition(profile(palma, ['culture']), value, palma, now);
   assert.equal(edition.state, 'ready');
