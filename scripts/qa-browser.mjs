@@ -765,10 +765,10 @@ async function verifyNight(call,format,fixture,outputDir){
 }
 
 /** Small fixture-only previews make visual review possible without downloading the ZIP.
- * Full-resolution PNGs remain in the normal artifact. Six bounded JPEGs at most.
+ * Full-resolution PNGs remain in the normal artifact. Eight bounded JPEGs at most.
  */
 async function emitVisualPreview(call,label,width){
- const selected=(label==='top'&&[390,1440].includes(width))||(width===390&&['cards','night-top'].includes(label))||(label==='reading-updates'&&[390,1440].includes(width));
+ const selected=(label==='top'&&[390,1440].includes(width))||(width===390&&['cards','night-top'].includes(label))||(['reading-updates','owned-card'].includes(label)&&[390,1440].includes(width));
  if(!selected)return;
  const data=(await call('Page.captureScreenshot',{format:'jpeg',quality:72,fromSurface:true,captureBeyondViewport:false})).data;
  if(typeof data!=='string'||data.length<1000||data.length>160000){console.log('DLKT_UI_VISUAL_SKIPPED',label,width);return;}
@@ -989,7 +989,7 @@ function knowledgeExposureProbe(seenKey,selectedId=null){
  const possible=bound?Math.min(bound.width,innerWidth)*Math.min(bound.height,innerHeight):0;
  const visible=bound?Math.max(0,Math.min(bound.right,innerWidth)-Math.max(bound.left,0))*Math.max(0,Math.min(bound.bottom,innerHeight)-Math.max(bound.top,0)):0;
  const raw=localStorage.getItem(seenKey),seen=raw===null?[]:JSON.parse(raw);
- return {focused:document.hasFocus(),visibility:document.visibilityState,documentWidth:document.documentElement.scrollWidth,
+ return {theme:document.documentElement.dataset.readerTheme,focused:document.hasFocus(),visibility:document.visibilityState,documentWidth:document.documentElement.scrollWidth,
   seen,ownedIds:owned.map(card=>card.dataset.knowledgeId),current:current?{id:current.dataset.knowledgeId,
    afterNews:news.filter(card=>Boolean(card.compareDocumentPosition(current)&Node.DOCUMENT_POSITION_FOLLOWING)).length,
    fraction:possible>0?visible/possible:0,top:bound.top,bottom:bound.bottom}:null,
@@ -1024,6 +1024,15 @@ async function verifyKnowledgeExposure(call,format,fixture,origin,outputDir){
   assert.equal(initial.current.fraction,0,'the first owned card starts outside the viewport');
   assert.deepEqual(initial.seen,[],'DOM insertion alone cannot mark a card exposed');
   const id=initial.current.id,before=initial.news;
+  const assertApprovedPalette=current=>{
+   assert.equal(current.theme,'prism','owned-card exposure uses the approved light palette');
+   for(const card of current.news){
+    assert.ok(Object.hasOwn(approvedPrismSurfaces,card.surface),'every news card retains an approved assigned surface');
+    const rgb=[1,3,5].map(offset=>parseInt(approvedPrismSurfaces[card.surface].slice(offset,offset+2),16));
+    assert.equal(card.background,'rgb('+rgb.join(', ')+')','every news card paints its assigned approved swatch: '+card.id);
+   }
+  };
+  assertApprovedPalette(initial);
   const selector='#discovery-cards article[data-knowledge-id="'+id+'"]';
   const output=await call('Runtime.evaluate',{expression:'[...document.querySelectorAll("#discovery-cards article[data-news-stream-key]:not([data-knowledge-id])")]',objectGroup:group,returnByValue:false});
   assert.equal(output.exceptionDetails,undefined);assert.ok(output.result?.objectId);
@@ -1077,11 +1086,15 @@ async function verifyKnowledgeExposure(call,format,fixture,origin,outputDir){
   }
   assert.equal(reloaded.seen.includes(id),true,'the real local history survives reload');
   assert.equal(reloaded.ownedIds.includes(id),false,'an exposed stableID does not recur after reload');
-  assert.deepEqual(reloaded.news,before,'a return visit keeps the same original news content and source receipt');
+  // The existing theme assigns a new random six-surface cycle on navigation.
+  // Content/receipts persist across visits; exact painted assignments persist within this visit.
+  const originalNews=cards=>cards.map(({surface,background,...content})=>content);
+  assert.deepEqual(originalNews(reloaded.news),originalNews(before),'a return visit keeps the same original news content and source receipt');
+  assertApprovedPalette(reloaded);
   assert.ok(reloaded.documentWidth<=format.width+2);
   return {status:'OWNED_CARD_EXPOSURE_PASS',newsCount:20,afterNews:initial.current.afterNews,ownedId:id,
    offscreenUnseen:true,briefExposureMs:partialMs,continuousDwellReset:true,qualifiedExposure:true,
-   originalNewsDomIdentity:true,originalSourceDatesRetained:true,paletteRetained:true,reloadSuppressesExposedId:true,screenshot,
+   originalNewsDomIdentity:true,originalSourceDatesRetained:true,paletteRetained:true,reloadApprovedPalette:true,reloadSuppressesExposedId:true,screenshot,
    scope:'actual browser.ts with real NewsPageService over20 controlled stories; publication scheduling is tested separately in model tests, not an autonomous research worker'};
  }finally{
   fixture.owned.reset();
