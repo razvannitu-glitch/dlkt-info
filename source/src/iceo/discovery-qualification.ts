@@ -94,30 +94,67 @@ export function qualifyDiscoveryBatch(input:unknown,nowInput:unknown):DiscoveryB
 }
 
 export type ReviewDisposition='blocked'|'complete-for-human-review';
-export type ReviewIssue='invalid-candidate'|'missing-evidence'|'identity-unverified'|'terms-unreviewed'|'robots-unreviewed'|'invalid-review-window';
+export type ReviewIssue='invalid-candidate'|'missing-evidence'|'identity-unverified'|'terms-unreviewed'|'robots-unreviewed'|'source-origin-mismatch'|'robots-origin-mismatch'|'terms-not-permitted'|'robots-not-permitted'|'invalid-review-window';
 export interface ReviewAssessment {readonly disposition:ReviewDisposition;readonly issues:readonly ReviewIssue[];readonly activationAllowed:false}
 const httpsEvidence=(input:unknown):boolean=>{
  if(typeof input!=='string'||input.length>2048||/[\u0000-\u0020\u007f<>\\]/u.test(input))return false;
  try{const value=new URL(input);return value.protocol==='https:'&&!value.username&&!value.password&&!value.port&&value.hostname.includes('.');}
  catch{return false;}
 };
-/** A complete evidence checklist still cannot activate a feed or grant publication rights. */
-export function assessDiscoveryReview(proposal:DiscoveryProposal,evidence:unknown,nowInput:unknown):ReviewAssessment {
+const exactReviewOrigin=(input:unknown):string|null=>{
+ if(typeof input!=='string'||!httpsEvidence(input))return null;
+ try{const origin=new URL(input).origin;return input===origin?origin:null;}
+ catch{return null;}
+};
+/**
+ * Reuse the same global qualification path instead of maintaining a second
+ * candidate validator. In particular, each discovery index owns its vertical:
+ * OpenAlex science and ReliefWeb humanitarian must not be reduced to news.
+ */
+function reviewedCandidateOrigin(proposal:unknown,nowInput:unknown):string|null {
+ if(!isRecord(proposal)||!isRecord(proposal.candidate))return null;
+ const candidate=proposal.candidate;
+ const reference=qualifyDiscoveryBatch([{
+  index:proposal.discoveryIndex,recordUrl:proposal.recordReference,observedAt:proposal.observedAt,
+  sourceUrl:candidate.origin,sourceName:candidate.name,
+ }],nowInput).proposals[0];
+ if(reference===undefined)return null;
+ const candidateKeys=['id','name','origin','vertical','scope','countryCode','status','acquisition','rights'] as const;
+ const proposalKeys=['discoveryIndex','recordReference','observedAt','provenance','admission'] as const;
+ if(Object.keys(candidate).length!==candidateKeys.length||candidateKeys.some(key=>candidate[key]!==reference.candidate[key])||
+    Object.keys(proposal).length!==proposalKeys.length+1||proposalKeys.some(key=>proposal[key]!==reference[key]))return null;
+ return reference.candidate.origin;
+}
+/**
+ * A reviewed restriction is not a permitted use. The same explicit decisions
+ * and exact-origin binding apply to every candidate, regardless of country or
+ * language. These remain reviewer assertions, not authenticated licensing proof.
+ * A complete evidence checklist still cannot activate a feed or publish content.
+ */
+export function assessDiscoveryReview(proposal:unknown,evidence:unknown,nowInput:unknown):ReviewAssessment {
  const issues:ReviewIssue[]=[];
  const now=canonicalInstant(nowInput);
  if(now===null)throw Error('ICEO_DISCOVERY_REVIEW_CLOCK_INVALID');
- if(proposal?.candidate?.status!=='candidate'||proposal?.admission!=='manual-review-only'||proposal?.provenance!=='unverified-index-metadata')issues.push('invalid-candidate');
- if(!isRecord(evidence)||typeof evidence.reviewer!=='string'||evidence.reviewer.trim().length<2||evidence.reviewer.length>120||
-    !httpsEvidence(evidence.termsUrl)||!httpsEvidence(evidence.rightsEvidenceUrl)||
-    (typeof evidence.rightsBasis!=='string'||!['publisher-terms','explicit-license','written-permission'].includes(evidence.rightsBasis))||
-    (typeof evidence.requestedUse!=='string'||!['metadata-links','licensed-excerpt'].includes(evidence.requestedUse))){
+ const origin=reviewedCandidateOrigin(proposal,nowInput);
+ if(origin===null)issues.push('invalid-candidate');
+ const review=isRecord(evidence)?evidence:null;
+ if(review===null||typeof review.reviewer!=='string'||review.reviewer.trim().length<2||review.reviewer.length>120||
+    !httpsEvidence(review.termsUrl)||!httpsEvidence(review.rightsEvidenceUrl)||
+    (typeof review.rightsBasis!=='string'||!['publisher-terms','explicit-license','written-permission'].includes(review.rightsBasis))||
+    (typeof review.requestedUse!=='string'||!['metadata-links','licensed-excerpt'].includes(review.requestedUse))){
   issues.push('missing-evidence');
  }
- if(!isRecord(evidence)||evidence.publisherIdentityVerified!==true)issues.push('identity-unverified');
- if(!isRecord(evidence)||evidence.termsReviewed!==true)issues.push('terms-unreviewed');
- if(!isRecord(evidence)||evidence.robotsReviewed!==true)issues.push('robots-unreviewed');
- const checked=isRecord(evidence)?canonicalInstant(evidence.checkedAt):null;
- const until=isRecord(evidence)?canonicalInstant(evidence.reviewBy):null;
+ // Explicit publisher binding also permits an external license/permission
+ // document to be cited without confusing that document's host with the source.
+ if(origin===null||exactReviewOrigin(review?.sourceOrigin)!==origin)issues.push('source-origin-mismatch');
+ if(origin===null||review?.robotsUrl!==origin+'/robots.txt')issues.push('robots-origin-mismatch');
+ if(review?.publisherIdentityVerified!==true)issues.push('identity-unverified');
+ if(review?.termsReviewed!==true)issues.push('terms-unreviewed');
+ if(review?.robotsReviewed!==true)issues.push('robots-unreviewed');
+ if(review?.termsDecision!=='permitted')issues.push('terms-not-permitted');
+ if(review?.robotsDecision!=='permitted')issues.push('robots-not-permitted');
+ const checked=canonicalInstant(review?.checkedAt);
+ const until=canonicalInstant(review?.reviewBy);
  if(checked===null||until===null||checked>now||until<=now||until-checked>90*DAY)issues.push('invalid-review-window');
  return Object.freeze({disposition:issues.length===0?'complete-for-human-review':'blocked',issues:Object.freeze(issues),activationAllowed:false});
 }
