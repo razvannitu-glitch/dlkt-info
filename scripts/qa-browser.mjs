@@ -462,6 +462,11 @@ function assertFullTitle(title,label){
  assert.ok(['','none','0','normal'].includes(title.lineClamp),label+' must not be line-clamped');
  assert.notEqual(title.overflow,'ellipsis',label+' must not use ellipsis');
 }
+function addedLanguageRowHeight(measured){
+ const height=measured.layout.sourceLanguage.height+measured.layout.toolbarRowGap;
+ assert.ok(Number.isFinite(height)&&height>0,'visible language row has positive measured geometry');
+ return height;
+}
 function assertReadingLayout(measured,format,fixture,{compact=true}={}){
  assertReadingDetails(measured,format);assertActionSpacing(measured.actionSpacing,format);
  for(const title of measured.titles)assertFullTitle(title,'editorial title '+title.id+' at '+format.width+'px');
@@ -487,8 +492,7 @@ function assertReadingLayout(measured,format,fixture,{compact=true}={}){
   assert.ok(measured.firstUsefulTop!==null,'a useful card is measured');
   // Keep the previous content budget while accounting exactly for the newly visible language row.
   // Raw positions and the measured row height/gap remain in the report; no fixed offset is guessed.
-  const languageRow=measured.layout.sourceLanguage.height+measured.layout.toolbarRowGap;
-  assert.ok(Number.isFinite(languageRow)&&languageRow>0,'visible language row has positive measured geometry');
+  const languageRow=addedLanguageRowHeight(measured);
   const previousUsefulTop=measured.firstUsefulTop-languageRow;
   if(format.width===320)assert.ok(previousUsefulTop<=620,'existing content before the added language row stays within 620px at 320px: '+previousUsefulTop);
   if(format.width===390){
@@ -540,8 +544,9 @@ async function verifyInlineLocalFlow(call,origin,fixture,outputDir){
    assert.equal(new Set(structure.allIds).size,10);assert.equal(structure.folded,0);assert.equal(structure.allBeforeNews,true);
    assert.ok(structure.editorialGap>=0&&structure.editorialGap<=100,'editorial follows the final local row without a blank artificial section: '+JSON.stringify(structure));
    assert.ok(measured.firstUsefulTop!==null);
-   if(format.width===320)assert.ok(measured.firstUsefulTop<=620);
-   if(format.width===390)assert.ok(measured.firstUsefulTop<=550);
+   const previousUsefulTop=measured.firstUsefulTop-addedLanguageRowHeight(measured);
+   if(format.width===320)assert.ok(previousUsefulTop<=620,'continuous local feed retains the existing content budget at 320px');
+   if(format.width===390)assert.ok(previousUsefulTop<=550,'continuous local feed retains the existing content budget at 390px');
    for(const a of structure.bounds)for(const b of structure.bounds)if(a.id!==b.id){
     const overlaps=Math.min(a.right,b.right)-Math.max(a.left,b.left)>1&&Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>1;
     assert.equal(overlaps,false,'inline local cards do not overlap');
