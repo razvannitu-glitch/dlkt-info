@@ -805,7 +805,7 @@ async function verifyNight(call,format,fixture,outputDir){
  * Full-resolution PNGs remain in the normal artifact. Ten bounded JPEGs at most.
  */
 async function emitVisualPreview(call,label,width){
- const selected=(label==='top'&&[390,1440].includes(width))||(width===390&&['cards','night-top'].includes(label))||(['reading-updates','owned-card','personal-wallet'].includes(label)&&[390,1440].includes(width));
+ const selected=(label==='top'&&[390,1440].includes(width))||(width===390&&['cards','night-top'].includes(label))||(['reading-updates','owned-card','personal-wallet','wallet-saved'].includes(label)&&[390,1440].includes(width));
  if(!selected)return;
  const data=(await call('Page.captureScreenshot',{format:'jpeg',quality:72,fromSurface:true,captureBeyondViewport:false})).data;
  if(typeof data!=='string'||data.length<1000||data.length>160000){console.log('DLKT_UI_VISUAL_SKIPPED',label,width);return;}
