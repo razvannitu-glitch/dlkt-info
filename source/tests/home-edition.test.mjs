@@ -141,7 +141,7 @@ test('homepage renders all server-ordered native pages and keeps operational rec
   assert.match(body,/publicEditionState\(today,\{snapshotState:snapshot\?\.state\?\?null,loading:loading\|\|!initialCheckStarted,failed:lastLoadFailed\}\)/u);
   assert.match(body,/retained source checks are not newly verified/u);
   const newsLoop=body.indexOf('for(const entry of interleaveKnowledge(visible,inlineKnowledgeSelection))');
-  const localLoop=body.indexOf('local.supporting.forEach((item,index)=>');
+  const localLoop=body.indexOf('local.supporting.forEach(');
   assert.ok(newsLoop>=0&&localLoop>newsLoop,'both rendering paths exist and operational records stay separate from server-ordered news');
   assert.match(body,/selectHomeLanguage\(contextualLocal,contextualCity,now,language\)/u);
   assert.match(body,/selectNewsLanguage\(snapshot.cards,language\)/u);

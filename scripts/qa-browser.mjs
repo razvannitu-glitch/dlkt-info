@@ -329,7 +329,7 @@ async function newsFixture(){
   localIds,updates,owned,get localExpected(){return localExpected();},get localRequests(){return localRequests;},
   setLocalExpansion(enabled){
    assert.equal(typeof enabled,'boolean');
-   localIds.splice(2,...(enabled?Array.from({length:8},(_,index)=>'bucharest:arcub:'+hash('inline-local-'+index).slice(0,24)):[]));
+   localIds.splice(2,localIds.length-2,...(enabled?Array.from({length:8},(_,index)=>'bucharest:arcub:'+hash('inline-local-'+index).slice(0,24)):[]));
    servedLocal=localSnapshot(Date.now());
   },
   async response(url){
