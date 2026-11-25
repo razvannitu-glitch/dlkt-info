@@ -191,3 +191,14 @@ function openLinkedView():void{
 }
 if(document.readyState!=='complete')document.addEventListener('DOMContentLoaded',openLinkedView,{once:true});else queueMicrotask(openLinkedView);
 window.addEventListener('hashchange',openLinkedView);
+
+// Native fragment focus can follow DOMContentLoaded; reconcile only that untouched Saved control.
+window.addEventListener('load', () => {
+  requestAnimationFrame(() => {
+    const savedControl = required<HTMLButtonElement>('saved');
+    if (window.location.hash !== '#saved' || state.view !== 'topics'
+      || savedControl.getAttribute('aria-pressed') !== 'true' || document.activeElement !== savedControl) return;
+    const heading = required<HTMLElement>('result-heading');
+    heading.focus(); heading.scrollIntoView({block: 'start'});
+  });
+}, {once: true});

@@ -1174,8 +1174,8 @@ async function verifyWalletSavedNavigation(call,origin,fixture,personal,savedLin
  const click=async(target,selector)=>{await focusSelector(target,selector);await keyboard(target,'Enter');};
  const waitSaved=async(target,id=null)=>{
   for(let attempt=0;attempt<60;attempt++){
-   const state=await evaluate(target,'(function(){const button=document.querySelector("[data-view=saved]"),root=document.getElementById("topic-workspace");return {view:document.body.dataset.entryView,visible:Boolean(root&&!root.hidden),saved:button?.getAttribute("aria-pressed"),heading:document.getElementById("result-heading")?.textContent,ids:[...document.querySelectorAll("#cards [data-card-id],#cards [data-related-card-id]")].map(n=>n.dataset.cardId??n.dataset.relatedCardId)};})()');
-   if(state.view==='topics'&&state.visible&&state.saved==='true'&&state.heading==='Saved in this browser'&&(id===null||state.ids.includes(id)))return state;
+   const state=await evaluate(target,'(function(){const button=document.querySelector("[data-view=saved]"),root=document.getElementById("topic-workspace");return {view:document.body.dataset.entryView,visible:Boolean(root&&!root.hidden),saved:button?.getAttribute("aria-pressed"),heading:document.getElementById("result-heading")?.textContent,active:document.activeElement?.id,ids:[...document.querySelectorAll("#cards [data-card-id],#cards [data-related-card-id]")].map(n=>n.dataset.cardId??n.dataset.relatedCardId)};})()');
+   if(state.view==='topics'&&state.visible&&state.saved==='true'&&state.heading==='Saved in this browser'&&state.active==='result-heading'&&(id===null||state.ids.includes(id)))return state;
    if(attempt===59)throw Error('DLKT_SAVED_VIEW_TIMEOUT_'+JSON.stringify(state));await pause(100);
   }
  };
