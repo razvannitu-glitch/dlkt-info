@@ -561,6 +561,8 @@ function assertActionSpacing(measured,format){
  }
 }
 async function verifyActionStates(call,format){
+ const pointerMedia=await evaluate(call,"({hover:matchMedia('(hover: hover)').matches,fine:matchMedia('(pointer: fine)').matches})");
+ assert.deepEqual(pointerMedia,{hover:true,fine:true},'desktop hover scenario has a real mouse-capable media environment');
  const observations=[];
  for(const selector of ['#home-city','#glance-city']){
   await evaluate(call,'(()=>{document.querySelector('+JSON.stringify(selector)+').scrollIntoView({block:"center",behavior:"instant"});document.activeElement?.blur();return true;})()');
@@ -580,7 +582,7 @@ async function verifyActionStates(call,format){
   observations.push({id:before.id,resting:before,hovered,focused:focus});
  }
  await evaluate(call,'(()=>{document.activeElement?.blur();window.scrollTo(0,0);return true;})()');
- return {status:'ACTION_STATES_PASS',observations};
+ return {status:'ACTION_STATES_PASS',pointerMedia,observations};
 }
 async function verifyActionLocales(call,format){
  const original=await evaluate(call,"document.querySelector('#reader-language').value"),observations=[];
@@ -1375,6 +1377,9 @@ async function run(){
   const binding=server.address();if(!binding||typeof binding==='string')throw Error('DLKT_UI_INVALID_SERVER');
   browser=spawn(bin,[
    '--headless=new','--no-sandbox','--disable-dev-shm-usage','--disable-background-networking',
+   // Match headless desktop mouse capabilities used by Playwright's Chromium launcher.
+   // https://github.com/microsoft/playwright/blob/main/packages/playwright-core/src/server/chromium/chromium.ts
+   '--blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4',
    '--no-first-run','--no-default-browser-check','--remote-debugging-port=0',
    '--remote-allow-origins=*','--user-data-dir='+profile,'about:blank'
   ],{stdio:'ignore'});
