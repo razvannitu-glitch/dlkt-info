@@ -197,11 +197,15 @@ function robotsPolicy(response){
       }
       if(hasRules)push();group.agents.push(value.toLowerCase());continue;
     }
+    // Invalid syntax remains blocking even before any valid agent group.
+    if((key==='allow'||key==='disallow')&&value&&(!/^[/*]/u.test(value)||/[\u0000-\u0020\u007f]/u.test(value))){
+      malformedDirectives++;continue;
+    }
+    if(key==='crawl-delay'&&!/^\d+(?:\.\d+)?$/u.test(value)){malformedDirectives++;continue;}
     if(!group.agents.length)continue;
     if(key==='allow'||key==='disallow'){
       hasRules=true;
       if(!value)continue;
-      if(!/^[/*]/u.test(value)||/[\u0000-\u0020\u007f]/u.test(value)){malformedDirectives++;continue;}
       group.rules.push({allow:key==='allow',path:value});
       // An invalid agent after rules cannot introduce an exception that
       // weakens a prior disallow through an uncertain group boundary.
@@ -411,6 +415,8 @@ function verifyElifePacing(){
   assert.equal(decide('User-agent: *\nDisallow: /search\nUser-agent: MJ12bot\nDisallow: invalid-path').allowed,false,'invalid paths still fail closed');
   assert.equal(decide('User-agent: *\nCrawl-delay: invalid').allowed,false,'malformed delays still fail closed');
   assert.equal(robotsPolicy(response('User-agent: *\nDisallow: /search\nUser-agent: OtherBot\nDisallow: invalid-path')).state,'unavailable','invalid paths in other groups still fail closed');
+  assert.equal(decide('User-agent: MJ12bot\nDisallow: invalid-path\nUser-agent: *\nDisallow: /search').allowed,false,'invalid path before the first valid agent remains blocked');
+  assert.equal(decide('User-agent: MJ12bot\nCrawl-delay: invalid\nUser-agent: *\nDisallow: /search').allowed,false,'invalid delay before the first valid agent remains blocked');
   assert.deepEqual(requestPacingPlan(1_000,null,10_000,90_000,0,1),{waitMs:0,responseBudgetMs:10_000});
   assert.equal(requestPacingPlan(10_999,1_000,10_000,90_000,0,1).waitMs,1,'a one-ms deficit still waits');
   assert.equal(requestPacingPlan(11_000,1_000,10_000,90_000,0,1).waitMs,0);
@@ -420,7 +426,7 @@ function verifyElifePacing(){
   assert.throws(()=>requestPacingPlan(3_000,2_000,10_000,90_000,1,1),/PROBE_RESOURCE_LIMIT/,'request cap is checked before waiting');
   assert.throws(()=>requestPacingPlan(3_000,2_000,10_001,90_000,0,1),/PROBE_PACING_INVALID/);
   assert.equal(requestPacingPlan(89_000,null,10_000,90_000,0,1).responseBudgetMs,1_000,'response timeout cannot exceed remaining runtime');
-  return {state:'passed',assertions:30,fixture:'controlled reconstruction of observed public directives'};
+  return {state:'passed',assertions:32,fixture:'controlled reconstruction of observed public directives'};
 }
 const robotsParserChecks=verifyRobotsParsing(),elifePacingChecks=verifyElifePacing();
 const reports=[];
