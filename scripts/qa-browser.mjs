@@ -198,7 +198,7 @@ async function newsFixture(){
  const english=article(960,{now,language:'en',category:'13000000'}),cards=[...reports,distinct,english,...specialists];
  const stored=epoch(cards,[],{now}),before=JSON.stringify(stored),memory=new CorpusMemoryStore([stored]),
   service=new NewsPageService(memory,'test-only-browser-qa-cursor-key-123456789012345678901234567890');
- let activeCards=cards,activeNow=now,updateRevision=1,lastNewsEpoch=null;
+ let activeCards=cards,activeNow=now,activeStoryCount=7,updateRevision=1,lastNewsEpoch=null;
  const updates={
   async publish(stage){
    assert.ok(Number.isInteger(stage)&&stage>=0&&stage<=3,'controlled update stage is explicit');
@@ -210,7 +210,7 @@ async function newsFixture(){
      ...(stage===3?{date:new Date(checked-2000-(2-index)*1000).toISOString()}: {})};
     card.contentHash=hash(cardContent(card));return card;
    });
-   activeCards=[...(stage===3?[...current].reverse():current),distinct,english,...specialists];activeNow=checked;
+   activeCards=[...(stage===3?[...current].reverse():current),distinct,english,...specialists];activeNow=checked;activeStoryCount=7;
    const revision=++updateRevision,storedUpdate=epoch(activeCards,[],{now:checked,id:String(revision),revision});
    memory.epochs.set(storedUpdate.epoch,storedUpdate);memory.latest=storedUpdate.epoch;
    const selectedUpdate=await service.read({language:'ro',cityId:city.id,filter:'all',cursor:null,period:'recent',sourceScope:'all'});
@@ -223,7 +223,7 @@ async function newsFixture(){
     added:{id:reports[2].id,url:reports[2].sourceUrl,title:reports[2].title,checkedAt:stamp},
     corrected:{id:reports[0].id,url:reports[0].sourceUrl,title:corrected,checkedAt:stamp}};
   },
-  reset(){memory.latest=stored.epoch;activeCards=cards;activeNow=now;lastNewsEpoch=null;},
+  reset(){memory.latest=stored.epoch;activeCards=cards;activeNow=now;activeStoryCount=7;lastNewsEpoch=null;},
   get lastNewsEpoch(){return lastNewsEpoch;}
  };
  const selected=await service.read({language:'ro',cityId:city.id,filter:'all',cursor:null,period:'recent',sourceScope:'all'});
@@ -235,8 +235,51 @@ async function newsFixture(){
  assert.equal(selected.items.some(item=>item.card.id===distinct.id),true,'the different penalty cannot be silently merged');
  assert.equal(selected.items.some(item=>item.card.id===english.id),true,'all-source scope must include the English original');
  assert.equal(JSON.stringify(stored),before,'the reader cannot restamp the stored evidence');
- return {city,estimatedCity:true,groupKey:grouped.story.key,urls:reports.map(card=>card.sourceUrl),titles:reports.map(card=>card.title),storyCount:selected.total,articleTotal:selected.articleTotal,sourceOnly,
-  localIds,updates,get localExpected(){return localExpected();},get localRequests(){return localRequests;},
+ const owned={
+  async activate(){
+   const checked=Date.now();
+   const titles=[
+    'Controlled fixture: Harbour observatory records a distant blue comet',
+    'Controlled fixture: Cedar library opens its restored manuscript collection',
+    'Controlled fixture: Amber town starts a riverbank wetland project',
+    'Controlled fixture: Quartz laboratory demonstrates a superconducting sensor',
+    'Controlled fixture: Willow school awards its robotics scholarship',
+    'Controlled fixture: Copper museum presents prehistoric pottery fragments',
+    'Controlled fixture: Juniper theatre announces an original chamber opera',
+    'Controlled fixture: Maple hospital publishes its neonatal equipment report',
+    'Controlled fixture: Silver tram operator restores the eastern route',
+    'Controlled fixture: Oak cooperative develops a drought-tolerant grain',
+    'Controlled fixture: Violet university maps a newly identified marine species',
+    'Controlled fixture: Granite archive releases historic postal maps',
+    'Controlled fixture: Birch council approves an accessible swimming pool',
+    'Controlled fixture: Pearl festival publishes its documentary programme',
+    'Controlled fixture: Falcon astronomers measure a remote stellar orbit',
+    'Controlled fixture: Linden conservatory repairs its concert organ',
+    'Controlled fixture: Moss institute catalogs freshwater insect habitats',
+    'Controlled fixture: Coral engineers present an electric ferry prototype',
+    'Controlled fixture: Hazel foundation translates a medieval poetry volume',
+    'Controlled fixture: Slate researchers measure glacier sediment layers',
+   ];
+   activeCards=titles.map((title,index)=>{
+    const original=article(2000+index,{now:checked,language:'en',published:checked-10_000-index*1000});
+    const card={...original,title,boundary:'Synthetic distinct event for owned-card browser acceptance; not live reporting.'};
+    card.contentHash=hash(cardContent(card));return card;
+   });
+   activeNow=checked;
+   const revision=++updateRevision,ownedEpoch=epoch(activeCards,[],{now:checked,id:String(revision),revision});
+   memory.epochs.set(ownedEpoch.epoch,ownedEpoch);memory.latest=ownedEpoch.epoch;
+   const selectedOwned=await service.read({language:'ro',cityId:city.id,filter:'all',cursor:null,period:'recent',sourceScope:'all'});
+   assert.equal(selectedOwned.articleTotal,20,'owned-card mode contains exactly20 controlled original articles');
+   assert.equal(selectedOwned.total,20,'the real service keeps all20 synthetic events distinct');
+   assert.equal(selectedOwned.items.length,20,'one real page provides20 stories and reaches the eleventh-news insertion');
+   assert.equal(new Set(selectedOwned.items.map(item=>item.key)).size,20,'owned-card mode has20 distinct page identities');
+   activeStoryCount=selectedOwned.total;
+   return {epoch:ownedEpoch.epoch,storyCount:activeStoryCount};
+  },
+  reset(){updates.reset();},
+ };
+ return {city,estimatedCity:true,groupKey:grouped.story.key,urls:reports.map(card=>card.sourceUrl),titles:reports.map(card=>card.title),get storyCount(){return activeStoryCount;},articleTotal:selected.articleTotal,sourceOnly,
+  localIds,updates,owned,get localExpected(){return localExpected();},get localRequests(){return localRequests;},
   async response(url){
    if(url.pathname==='/api/places'&&url.searchParams.get('hint')==='1')return {status:200,value:{city,countryCode:city.countryCode,estimated:true}};
    if(url.pathname==='/api/places'&&url.searchParams.get('id')===city.id)return {status:200,value:{cities:[city],cityAliases:[]}};
@@ -263,7 +306,7 @@ async function selectControlledEdition(call,fixture){
  }
  await evaluate(call,'(()=>{const picker=document.querySelector("#reader-language");picker.value="ro";picker.dispatchEvent(new Event("change",{bubbles:true}));return true;})()');
  for(let attempt=0;attempt<80;attempt++){
-  const current=await evaluate(call,'(()=>{const root=document.querySelector("#discovery-cards");return {scope:root?.dataset.sourceScope,count:root?.querySelectorAll("article[data-news-stream-key]").length,city:document.querySelector("#glance-city-label")?.textContent,localIds:[...document.querySelectorAll("#home-local-cards article[data-local-id]")].map(card=>card.dataset.localId)};})()');
+  const current=await evaluate(call,'(()=>{const root=document.querySelector("#discovery-cards");return {scope:root?.dataset.sourceScope,count:root?.querySelectorAll("article[data-news-stream-key]:not([data-knowledge-id])").length,city:document.querySelector("#glance-city-label")?.textContent,localIds:[...document.querySelectorAll("#home-local-cards article[data-local-id]")].map(card=>card.dataset.localId)};})()');
   if(current.scope==='all'&&current.count===fixture.storyCount&&current.city===fixture.city.name&&JSON.stringify(current.localIds)===JSON.stringify(fixture.localIds))return;
   if(attempt===79)throw Error('DLKT_UI_NEWS_FIXTURE_TIMEOUT_'+JSON.stringify(current));await pause(100);
  }
@@ -936,6 +979,116 @@ async function verifyReadingUpdates(call,format,fixture,origin,outputDir){
  }
 }
 
+/** Test-only observation of the actual owned/news nodes; no production DOM is replaced. */
+function knowledgeExposureProbe(seenKey,selectedId=null){
+ const root=document.querySelector('#discovery-cards');
+ const owned=[...root.querySelectorAll('article[data-knowledge-id]')];
+ const current=selectedId===null?owned[0]:owned.find(card=>card.dataset.knowledgeId===selectedId);
+ const news=[...root.querySelectorAll('article[data-news-stream-key]:not([data-knowledge-id])')];
+ const bound=current?.getBoundingClientRect();
+ const possible=bound?Math.min(bound.width,innerWidth)*Math.min(bound.height,innerHeight):0;
+ const visible=bound?Math.max(0,Math.min(bound.right,innerWidth)-Math.max(bound.left,0))*Math.max(0,Math.min(bound.bottom,innerHeight)-Math.max(bound.top,0)):0;
+ const raw=localStorage.getItem(seenKey),seen=raw===null?[]:JSON.parse(raw);
+ return {focused:document.hasFocus(),visibility:document.visibilityState,documentWidth:document.documentElement.scrollWidth,
+  seen,ownedIds:owned.map(card=>card.dataset.knowledgeId),current:current?{id:current.dataset.knowledgeId,
+   afterNews:news.filter(card=>Boolean(card.compareDocumentPosition(current)&Node.DOCUMENT_POSITION_FOLLOWING)).length,
+   fraction:possible>0?visible/possible:0,top:bound.top,bottom:bound.bottom}:null,
+  news:news.map(card=>({id:card.dataset.cardId,key:card.dataset.newsStreamKey,title:card.querySelector('h3')?.textContent,
+   surface:card.dataset.readerSurface,background:getComputedStyle(card).backgroundColor,
+   dates:[...card.querySelectorAll('time')].map(node=>({at:node.dateTime,text:node.textContent})),
+   evidence:card.querySelector('.evidence')?.textContent??null})),
+ };
+}
+
+async function verifyKnowledgeExposure(call,format,fixture,origin,outputDir){
+ const seenKey='dlkt-info-knowledge-seen-v1',group='dlkt-owned-exposure-'+format.width;
+ let heldNews=null;
+ try{
+  // This dedicated blank-profile test clears only owned-card history before navigation.
+  await evaluate(call,'(()=>{localStorage.removeItem('+JSON.stringify(seenKey)+');return true;})()');
+  await fixture.owned.activate();
+  await call('Page.bringToFront');
+  await call('Emulation.setFocusEmulationEnabled',{enabled:true});
+  await call('Page.navigate',{url:origin+'/'});await loaded(call);await selectControlledEdition(call,fixture);
+  await evaluate(call,'(()=>{window.scrollTo({top:0,behavior:"instant"});return true;})()');
+  const read=id=>evaluate(call,'('+knowledgeExposureProbe.toString()+')('+JSON.stringify(seenKey)+','+JSON.stringify(id??null)+')');
+  let initial=null;
+  for(let attempt=0;attempt<60;attempt++){
+   initial=await read();
+   if(initial.current&&initial.news.length===20)break;
+   if(attempt===59)throw Error('DLKT_UI_OWNED_CARD_TIMEOUT_'+JSON.stringify(initial));await pause(100);
+  }
+  assert.equal(initial.focused,true,'the real Chrome page has focus');
+  assert.equal(initial.visibility,'visible');
+  assert.equal(initial.current.afterNews,11,'the actual owned card follows eleven actual news articles');
+  assert.equal(initial.current.fraction,0,'the first owned card starts outside the viewport');
+  assert.deepEqual(initial.seen,[],'DOM insertion alone cannot mark a card exposed');
+  const id=initial.current.id,before=initial.news;
+  const selector='#discovery-cards article[data-knowledge-id="'+id+'"]';
+  const output=await call('Runtime.evaluate',{expression:'[...document.querySelectorAll("#discovery-cards article[data-news-stream-key]:not([data-knowledge-id])")]',objectGroup:group,returnByValue:false});
+  assert.equal(output.exceptionDetails,undefined);assert.ok(output.result?.objectId);
+  heldNews=output.result.objectId;
+  const retain=async current=>{
+   assert.deepEqual(current.news,before,'exposure retains news identity/order, original source dates/evidence and palette');
+   const result=await call('Runtime.callFunctionOn',{objectId:heldNews,
+    functionDeclaration:'function(){const current=[...document.querySelectorAll("#discovery-cards article[data-news-stream-key]:not([data-knowledge-id])")];return current.length===this.length&&this.every((node,index)=>node.isConnected&&current[index]===node);}',
+    returnByValue:true});
+   assert.equal(result.exceptionDetails,undefined);assert.equal(result.result?.value,true,'every original news DOM node survives exposure bookkeeping');
+   assert.ok(current.documentWidth<=format.width+2,'owned-card exposure introduces no horizontal overflow');
+  };
+  await pause(2200);
+  const offscreen=await read(id);
+  assert.equal(offscreen.current.fraction,0);assert.equal(offscreen.seen.includes(id),false,'offscreen dwell never records exposure');
+  await retain(offscreen);
+  const partialStarted=Date.now();
+  await evaluate(call,'(()=>{document.querySelector('+JSON.stringify(selector)+').scrollIntoView({block:"center",behavior:"instant"});return true;})()');
+  await pause(550);
+  const partial=await read(id);assert.ok(partial.current.fraction>=0.5,'brief exposure reaches the qualifying visible area');
+  assert.equal(partial.seen.includes(id),false,'less than two seconds does not qualify');
+  await evaluate(call,'(()=>{window.scrollTo({top:0,behavior:"instant"});return true;})()');
+  const partialMs=Date.now()-partialStarted;
+  assert.ok(partialMs<1900,'controlled brief exposure remains below the two-second threshold');
+  await pause(2200);
+  const reset=await read(id);
+  assert.equal(reset.current.fraction,0);assert.equal(reset.seen.includes(id),false,'leaving the viewport resets the continuous dwell');
+  await retain(reset);
+  await evaluate(call,'(()=>{document.querySelector('+JSON.stringify(selector)+').scrollIntoView({block:"center",behavior:"instant"});return true;})()');
+  const visible=await read(id);
+  assert.equal(visible.focused,true);assert.equal(visible.visibility,'visible');assert.ok(visible.current.fraction>=0.5);
+  const qualifiedStarted=Date.now();
+  await pause(2300);
+  const qualified=await read(id);
+  assert.ok(Date.now()-qualifiedStarted>=2000);
+  assert.ok(qualified.current.fraction>=0.5,'the owned card stays visibly eligible during the dwell');
+  assert.equal(qualified.seen.filter(value=>value===id).length,1,'qualified exposure writes the stableID once');
+  await retain(qualified);
+  const screenshot='dlkt-owned-exposure-'+format.width+'.png';
+  const picture=(await call('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false})).data;
+  assert.ok(typeof picture==='string'&&picture.length>=1000);
+  writeFileSync(join(outputDir,screenshot),Buffer.from(picture,'base64'),{mode:0o600});
+  await emitVisualPreview(call,'owned-card',format.width);
+  await call('Page.reload',{ignoreCache:true});await loaded(call);await selectControlledEdition(call,fixture);
+  await evaluate(call,'(()=>{window.scrollTo({top:0,behavior:"instant"});return true;})()');
+  let reloaded=null;
+  for(let attempt=0;attempt<60;attempt++){
+   reloaded=await read();
+   if(reloaded.ownedIds.length>0&&reloaded.news.length===20)break;
+   if(attempt===59)throw Error('DLKT_UI_OWNED_RELOAD_TIMEOUT_'+JSON.stringify(reloaded));await pause(100);
+  }
+  assert.equal(reloaded.seen.includes(id),true,'the real local history survives reload');
+  assert.equal(reloaded.ownedIds.includes(id),false,'an exposed stableID does not recur after reload');
+  assert.deepEqual(reloaded.news,before,'a return visit keeps the same original news content and source receipt');
+  assert.ok(reloaded.documentWidth<=format.width+2);
+  return {status:'OWNED_CARD_EXPOSURE_PASS',newsCount:20,afterNews:initial.current.afterNews,ownedId:id,
+   offscreenUnseen:true,briefExposureMs:partialMs,continuousDwellReset:true,qualifiedExposure:true,
+   originalNewsDomIdentity:true,originalSourceDatesRetained:true,paletteRetained:true,reloadSuppressesExposedId:true,screenshot,
+   scope:'actual browser.ts with real NewsPageService over20 controlled stories; publication scheduling is tested separately in model tests, not an autonomous research worker'};
+ }finally{
+  fixture.owned.reset();
+  try{await call('Runtime.releaseObjectGroup',{objectGroup:group});}catch{/* Preserve the measured assertion. */}
+ }
+}
+
 async function verifyAccountSurfaces(call,origin,outputDir){
  // Establish the preference using the production toggle, before leaving the reader.
  await focusSelector(call,'#reader-theme-toggle');await keyboard(call,'Enter');
@@ -1034,7 +1187,8 @@ async function run(){
     const explore=f.width===440?await verifyExploreSurface(cdp,f,fixture):null;
     const typography=f.width===440?await verifyTypographyStress(cdp,f,fixture,outputDir):null;
     const readingUpdates=[390,1440].includes(f.width)?await verifyReadingUpdates(cdp,f,fixture,'http://'+HOST+':'+binding.port,outputDir):null;
-    observations.push({viewport:f.width,devicePixelRatio:f.dpr??1,visualScale:news.details.visualScale,documentWidth:m.scroll,menuTested:navigation.compact,brandVisible:true,reducedMotion:true,screenshot,cardScreenshot,news,navigation,disclosures,night,explore,typography,readingUpdates});
+    const ownedExposure=[390,1440].includes(f.width)?await verifyKnowledgeExposure(cdp,f,fixture,'http://'+HOST+':'+binding.port,outputDir):null;
+    observations.push({viewport:f.width,devicePixelRatio:f.dpr??1,visualScale:news.details.visualScale,documentWidth:m.scroll,menuTested:navigation.compact,brandVisible:true,reducedMotion:true,screenshot,cardScreenshot,news,navigation,disclosures,night,explore,typography,readingUpdates,ownedExposure});
    }catch(error){
     try{
      const failedImage=(await cdp('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false})).data;
@@ -1054,6 +1208,7 @@ async function run(){
     'Palette checks use actual computed card paints and visible text at 390 and 1440px. Existing body copy is measured where rendered; source-only articles are not given fabricated excerpts.',
     'Article-photo requests remain unavailable in this offline fixture. Failed-photo panels are measured; successful publisher photography requires separate live inspection.',
     'Same-card update scenarios use controlled edition publication through the real page service and real refresh handler; no external publisher change is attested.',
+    'Owned-card exposure runs at390 and1440px against20 distinct controlled stories. It verifies actual foreground dwell and local history, not actual reading, autonomous editorial generation or continuous source research.',
     'Programmatic layout metrics and screenshots do not replace manual visual review.']};
   writeFileSync(join(outputDir,'report.json'),JSON.stringify(result,null,2)+'\n',{mode:0o600});
   console.log('DLKT_UI_BROWSER_QA '+JSON.stringify(result));

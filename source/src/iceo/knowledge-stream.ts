@@ -65,6 +65,11 @@ export function selectInlineKnowledge(
  return result;
 }
 
+/** Current eligibility applies even to an already exposed card in a reserved slot. */
+export function isInlineKnowledgeCurrent(item:InlineKnowledge,context:KnowledgeStreamContext,now:number):boolean{
+ return selectInlineKnowledge([item.card],context,now,'reading-check').some(current=>current.scope===item.scope);
+}
+
 /**
  * Append newly eligible editorial cards without changing an existing reading prefix.
  * Expired previous entries retain their reserved selection positions; the renderer

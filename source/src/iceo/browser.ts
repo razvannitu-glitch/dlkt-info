@@ -17,9 +17,9 @@ import {NEWS_CATEGORIES,newsCategoryLabel,isNewsCategoryId} from './news-taxonom
 import {NewsMasonry} from './news-masonry.js';
 import {knowledgeCardNode} from './knowledge-browser.js';
 import {KNOWLEDGE_CARDS} from './knowledge-catalog.js';
-import {selectInlineKnowledge,appendEligibleKnowledge,interleaveKnowledge,readKnowledgeSeen,writeKnowledgeSeen,type InlineKnowledge} from './knowledge-stream.js';
+import {selectInlineKnowledge,isInlineKnowledgeCurrent,appendEligibleKnowledge,interleaveKnowledge,readKnowledgeSeen,writeKnowledgeSeen,type InlineKnowledge} from './knowledge-stream.js';
 import {nextKnowledgeBoundary} from './knowledge.js';
-import {observeKnowledgeExposure} from './knowledge-exposure.js';
+import {observeKnowledgeExposure,KNOWLEDGE_EXPOSURE_LIMIT} from './knowledge-exposure.js';
 import type {NewsPeriod} from './news-day.js';
 import {NewsReadingState} from './news-reading-state.js';
 import {DiscoveryLoading,renderDiscoveryLoading,bindDiscoveryLoadingActions,type DiscoveryLoadingElements} from './loading.js';
@@ -732,8 +732,7 @@ function renderDiscovery():void {
   let newsIndex=0;
   for(const entry of interleaveKnowledge(visible,inlineKnowledgeSelection)){
     if(entry.kind==='knowledge'){
-      if(now>=Date.parse(entry.item.card.reviewBy))continue;
-      if(!inlineKnowledgeSeen.has(entry.item.card.id)&&selectInlineKnowledge([entry.item.card],{cityId:inlinePage?.cityId??null,countryCode:inlinePage?.countryCode??null,timeZone:inlinePage?.day?.timeZone??Intl.DateTimeFormat().resolvedOptions().timeZone},now,'reading-check').length===0)continue;
+      if(!isInlineKnowledgeCurrent(entry.item,{cityId:inlinePage?.cityId??null,countryCode:inlinePage?.countryCode??null,timeZone:inlinePage?.day?.timeZone??Intl.DateTimeFormat().resolvedOptions().timeZone},now))continue;
       host.append(knowledgeCardNode(entry.item.card,entry.item.scope));
       continue;
     }
@@ -876,7 +875,7 @@ function renderDiscovery():void {
 
   const anchor=anchors.find(item=>item.node.isConnected);if(anchor){const offset=anchor.node.getBoundingClientRect().top-anchor.top;if(Math.abs(offset)>1)window.scrollBy(0,offset);}
   stopKnowledgeObserver=observeKnowledgeExposure(target,id=>{
-    if(inlineKnowledgeSeen.has(id)||!KNOWLEDGE_CARDS.some(card=>card.id===id))return;
+    if(inlineKnowledgeSeen.size>=KNOWLEDGE_EXPOSURE_LIMIT||inlineKnowledgeSeen.has(id)||!KNOWLEDGE_CARDS.some(card=>card.id===id))return;
     inlineKnowledgeSeen.add(id);writeKnowledgeSeen(inlineKnowledgeSeen);
   },{isActive:()=>document.body.dataset.entryView==='start'&&!document.body.dataset.worldExplore&&!document.querySelector('dialog[open]')});
   memoryControls();

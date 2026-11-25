@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {KNOWLEDGE_CARDS} from '../.build/src/iceo/knowledge-catalog.js';
 import {validKnowledgeCard,safeKnowledgeSource,selectKnowledgeCards,nextKnowledgeBoundary} from '../.build/src/iceo/knowledge.js';
-import {selectInlineKnowledge,appendEligibleKnowledge,interleaveKnowledge} from '../.build/src/iceo/knowledge-stream.js';
+import {selectInlineKnowledge,isInlineKnowledgeCurrent,appendEligibleKnowledge,interleaveKnowledge} from '../.build/src/iceo/knowledge-stream.js';
 
 const reviewed=Date.parse('2026-11-25T00:00:00.000Z');
 const published=Date.parse('2026-11-26T00:00:00.000Z');
@@ -123,4 +123,23 @@ test('calendar boundaries follow the25-hour autumn day instead of a fixed24-hour
  assert.equal(nextKnowledgeBoundary([anniversary],midnight,'America/New_York'),Date.parse('2026-11-02T05:00:00.000Z'));
  assert.deepEqual(selectKnowledgeCards([anniversary],'all',midnight,'dst','America/New_York'),[]);
  assert.equal(selectKnowledgeCards([anniversary],'all',Date.parse('2026-11-02T05:00:00.000Z'),'dst','America/New_York').length,1);
+});
+
+test('an exposed anniversary keeps its reserved position but stops displaying at local midnight',()=>{
+ const anniversary=card('exposed-anniversary',{format:'on-this-day',calendarDay:'11-25'});
+ const regular=card('retained-general');
+ const beforeMidnight=Date.parse('2026-11-25T21:59:59.999Z'),midnight=beforeMidnight+1;
+ const existing=Object.freeze(selectInlineKnowledge([anniversary,regular],context,beforeMidnight,'rollover'));
+ const seen=new Set([anniversary.id]),after=appendEligibleKnowledge(existing,[anniversary,regular],context,midnight,'rollover',seen);
+ assert.strictEqual(after,existing,'exposure and expiry do not shift the selected slots');
+ const event=after.find(item=>item.card.id===anniversary.id),general=after.find(item=>item.card.id===regular.id);
+ assert.equal(isInlineKnowledgeCurrent(event,context,beforeMidnight),true);
+ assert.equal(isInlineKnowledgeCurrent(event,context,midnight),false,'seen history does not override current calendar applicability');
+ assert.equal(isInlineKnowledgeCurrent(general,context,midnight),true);
+ const scheduled={card:card('not-published',{publishAt:iso(published)}),scope:'global'};
+ assert.equal(isInlineKnowledgeCurrent(scheduled,context,reviewed),false);
+ assert.equal(isInlineKnowledgeCurrent(scheduled,context,published),true);
+ assert.equal(isInlineKnowledgeCurrent(scheduled,context,expires),false);
+ const national={card:card('country-change',{geography:area('RO',[])}),scope:'country'};
+ assert.equal(isInlineKnowledgeCurrent(national,{...context,countryCode:'IT'},reviewed),false);
 });
