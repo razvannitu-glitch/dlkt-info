@@ -93,7 +93,7 @@ for(const [source,target] of [['browser','connections-browser'],['types','connec
 
 writeFileSync('public/data-guards.js',readFileSync('.build/src/data/guards.js','utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,''));
 
-for(const name of ['catalog','locale','browser','reading-messages','media-messages']){
+for(const name of ['catalog','locale','browser','reading-messages','media-messages','country-hint']){
  const compiled=readFileSync(`.build/src/i18n/${name}.js`,'utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'').replaceAll('../iceo/','./').replaceAll("'./reading-messages.js'","'./i18n-reading-messages.js'").replaceAll("'./media-messages.js'","'./i18n-media-messages.js'").replaceAll("'./catalog.js'","'./i18n-catalog.js'").replaceAll("'./locale.js'","'./i18n-locale.js'");
  writeFileSync(`public/i18n-${name}.js`,compiled);
 }
@@ -123,4 +123,20 @@ for(const name of ['wallet-contracts','wallet-browser','account-browser','person
   .replaceAll("'../personal/profile-fields.js'","'./personal-profile-fields.js'")
   .replaceAll("'../personal/browser.js'","'./personal-browser.js'");
  writeFileSync('public/'+name+'.js',compiled);
+}
+
+for(const [source,target] of [['account/presentation','account-presentation'],['brand/welcome-copy','brand-welcome-copy']]){
+ const compiled=readFileSync('.build/src/'+source+'.js','utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'')
+  .replaceAll("'../i18n/browser.js'","'./i18n-browser.js'")
+  .replaceAll("'../i18n/locale.js'","'./i18n-locale.js'")
+  .replaceAll("'../brand/welcome-copy.js'","'./brand-welcome-copy.js'");
+ writeFileSync('public/'+target+'.js',compiled);
+}
+{
+ const compiled=readFileSync('public/account-browser.js','utf8')
+  .replaceAll("'../i18n/browser.js'","'./i18n-browser.js'")
+  .replaceAll("'../i18n/locale.js'","'./i18n-locale.js'")
+  .replaceAll("'../i18n/country-hint.js'","'./i18n-country-hint.js'")
+  .replaceAll("'./presentation.js'","'./account-presentation.js'");
+ writeFileSync('public/account-browser.js',compiled);
 }

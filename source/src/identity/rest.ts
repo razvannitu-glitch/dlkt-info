@@ -1,3 +1,4 @@
+import {authenticationEmailRedirect} from './email-locale.js';
 import type { ReadyPersistenceConfiguration } from '../persistence/contracts.js';
 import type { IdentityFetch, IdentitySessionTokens, IdentityUser } from './contracts.js';
 import { readIdentitySessionTokens, readIdentityUser } from './guards.js';
@@ -70,7 +71,10 @@ export class SupabaseIdentityTransport {
   }
 
   async requestCode(email: string, metadata: { readonly locale: string; readonly timezone: string }): Promise<void> {
-    await this.#request('/auth/v1/otp', {
+    // The fixed first-party redirect carries current-request language to the hosted
+    // OTP template. No user-supplied destination and no sign-in link is rendered.
+    const redirect=authenticationEmailRedirect(metadata.locale);
+    await this.#request('/auth/v1/otp?redirect_to='+encodeURIComponent(redirect), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

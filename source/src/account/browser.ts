@@ -1,9 +1,16 @@
+import {getLocale,setupLanguage} from '../i18n/browser.js';
+import {LOCALES} from '../i18n/locale.js';
+import {initializeCountryLanguage} from '../i18n/country-hint.js';
+import {accountText,topicName,applyAccountPresentation} from './presentation.js';
 import {ACCOUNT_VERSION, ACCOUNT_MAX_BYTES, parseAccountState, parseAccountValue, isObject, type AccountState, type AccountValue} from './contracts.js';
 import {DeviceMemory} from '../iceo/device-memory.js';
 import {safeLink} from '../iceo/card-validation.js';
 import {DAILY_TOPICS} from '../daily/contracts.js';
 import {createPersonalProfileFields} from '../personal/profile-fields.js';
 import {WALLET_PROFILE_MAX_BYTES, parseWalletProfile, parseWalletSnapshot, type WalletProfile, type WalletProfileState} from '../wallet/contracts.js';
+
+setupLanguage({updateUrl:false});
+const languageReady=initializeCountryLanguage();
 
 function el<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -21,15 +28,32 @@ const device = new DeviceMemory();
 const profilePanel = el('account-profile');
 const profileForm = el<HTMLFormElement>('account-profile-form');
 const profileName = el<HTMLInputElement>('account-profile-name');
-const profileLocale = el<HTMLInputElement>('account-profile-locale');
+const profileLocale = el<HTMLSelectElement>('account-profile-locale');
 const profileTimezone = el<HTMLInputElement>('account-profile-timezone');
 const personalFields = createPersonalProfileFields('account-profile');
 const profileInterests = new Map<string, HTMLInputElement>();
 for (const topic of DAILY_TOPICS) {
   const label = document.createElement('label');
   const input = document.createElement('input'); input.type = 'checkbox'; input.value = topic;
-  label.append(input, text('span', topic.charAt(0).toUpperCase() + topic.slice(1).replaceAll('-', ' ')));
+  const name=text('span',topicName(topic));name.dataset.accountCopy=topicName(topic);
+  label.append(input,name);
   el('account-profile-interests').append(label); profileInterests.set(topic, input);
+}
+document.addEventListener('dlkt:language-changed',applyAccountPresentation);
+applyAccountPresentation();
+function setProfileLocale(value:string):void{
+  profileLocale.replaceChildren();
+  const empty=document.createElement('option');empty.value='';empty.textContent=accountText('—');profileLocale.append(empty);
+  for(const locale of LOCALES){
+    const option=document.createElement('option');option.value=locale.code;option.textContent=locale.nativeName;
+    option.lang=locale.code;profileLocale.append(option);
+  }
+  if(value&&!LOCALES.some(locale=>locale.code===value)){
+    const option=document.createElement('option');option.value=value;
+    try{option.textContent=new Intl.DisplayNames([getLocale()],{type:'language'}).of(value)??value;}catch{option.textContent=value;}
+    profileLocale.append(option);
+  }
+  profileLocale.value=value;
 }
 type ReturnIntent = 'wallet' | null;
 // An exact enum, never a URL supplied by the caller. Extra or encoded queries fail closed.
@@ -67,7 +91,7 @@ function requireCurrent(operation: Operation): void {
 }
 function text(tag: string, value: string): HTMLElement {
   const node = document.createElement(tag);
-  node.textContent = value;
+  node.textContent = accountText(value);
   return node;
 }
 function normalizedEmail(value: string): string { return value.normalize('NFKC').trim().toLowerCase(); }
@@ -77,21 +101,21 @@ function setBusy(value: boolean): void {
   for (const element of [panel, login, code, profileForm]) element.setAttribute('aria-busy', String(value));
   for (const input of profileInterests.values()) input.disabled = value;
   personalFields.setBusy(value);
-  document.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input, button').forEach(control => { control.disabled = value; });
+  document.querySelectorAll<HTMLInputElement | HTMLButtonElement | HTMLSelectElement>('input, button, select').forEach(control => { control.disabled = value; });
 }
 function closeConfirmation(): void {
   pending = null;
   el('account-confirmation').hidden = true;
-  el('account-confirm-copy').textContent = '';
+  el('account-confirm-copy').textContent = accountText('');
 }
 /** Only the acknowledged email challenge survives an email-app round trip in page memory. */
 function clearPrivate(): void {
   state = null; ownerId = null; sessionStatus = 'unknown';
   profileView = {status: 'unavailable'}; profilePanel.hidden = true; profileForm.hidden = true;
-  profileName.value = ''; profileLocale.value = ''; profileTimezone.value = '';
+  profileName.value = ''; setProfileLocale(''); profileTimezone.value = '';
   personalFields.clear();
   for (const input of profileInterests.values()) input.checked = false;
-  el('account-profile-summary').replaceChildren(); el('account-profile-message').textContent = '';
+  el('account-profile-summary').replaceChildren(); el('account-profile-message').textContent = accountText('');
   panel.hidden = true; signOut.hidden = true; login.hidden = true; code.hidden = true;
   el('account-summary').replaceChildren(); el('account-saved').replaceChildren();
   closeConfirmation(); setEmail(''); otpInput.value = '';
@@ -100,7 +124,7 @@ function invalidate(status: string, forgetChallenge = false): void {
   generation += 1;
   active?.abort(); active = null;
   if (forgetChallenge) challengeEmail = null;
-  clearPrivate(); setBusy(false); message.textContent = status;
+  clearPrivate(); setBusy(false); message.textContent = accountText(status);
 }
 function begin(status: string): Operation {
   invalidate(status);
@@ -211,7 +235,7 @@ function renderCopy(): void {
 
 function newProfile(): WalletProfile {
   const defaults = new Intl.DateTimeFormat().resolvedOptions();
-  return parseWalletProfile({displayName: null, locale: defaults.locale, timezone: defaults.timeZone,
+  return parseWalletProfile({displayName: null, locale: getLocale(), timezone: defaults.timeZone,
     briefingTime: '08:00', interests: [], personalPriority: 'balanced', cityId: null, localNeeds: []});
 }
 function renderProfile(): void {
@@ -219,17 +243,17 @@ function renderProfile(): void {
   const summary = el('account-profile-summary'); summary.replaceChildren();
   if (profileView.status !== 'ready') {
     profileForm.hidden = true;
-    el('account-profile-message').textContent = 'Profile preferences could not be loaded. Reload your account to retry. Your saved reader copy remains available.';
+    el('account-profile-message').textContent = accountText('Profile preferences could not be loaded. Reload your account to retry. Your saved reader copy remains available.');
     return;
   }
   const saved = profileView.profile;
   const value = saved?.value ?? newProfile();
-  profileName.value = value.displayName ?? ''; profileLocale.value = value.locale; profileTimezone.value = value.timezone;
+  profileName.value = value.displayName ?? ''; setProfileLocale(value.locale); profileTimezone.value = value.timezone;
   personalFields.render(value);
   for (const [topic, input] of profileInterests) input.checked = value.interests.some(interest => interest === topic);
   summary.append(text('p', saved ? `Profile updated: ${saved.updatedAt}.` : 'No profile has been saved in this account. These starting values are saved only when you choose Save profile.'));
-  el('account-profile-message').textContent = '';
-  profileForm.hidden = false;
+  el('account-profile-message').textContent = accountText('');
+  profileForm.hidden = false; applyAccountPresentation();
 }
 async function readProfile(operation: Operation, id: string): Promise<ProfileView> {
   let snapshot: ReturnType<typeof parseWalletSnapshot>;
@@ -262,12 +286,12 @@ async function showSession(session: Session, operation: Operation): Promise<void
   requireCurrent(operation);
   if (session.status === 'unavailable') {
     challengeEmail = null; sessionStatus = 'unavailable';
-    message.textContent = 'Account sign-in and cross-device saving are not activated yet. Reading, browser-only saving and edition preparation remain available. No email address is collected here.';
+    message.textContent = accountText('Account sign-in and cross-device saving are not activated yet. Reading, browser-only saving and edition preparation remain available. No email address is collected here.');
     return;
   }
   if (session.status === 'signed-out') {
     showSignedOut();
-    message.textContent = challengeEmail ? 'Enter the sign-in code sent to your email. You can request another code if needed.' : 'Sign in to access your reader copy across devices.';
+    message.textContent = accountText(challengeEmail ? 'Enter the sign-in code sent to your email. You can request another code if needed.' : 'Sign in to access your reader copy across devices.');
     return;
   }
   challengeEmail = null;
@@ -278,28 +302,28 @@ async function showSession(session: Session, operation: Operation): Promise<void
   const copy = parseCopy(await request('/api/account', 'GET', operation.controller.signal));
   const profile = await readProfile(operation, session.userId);
   requireCurrent(operation); showAccount(session.userId, copy, profile);
-  message.textContent = 'Signed in. Local data is not uploaded automatically.';
+  message.textContent = accountText('Signed in. Local data is not uploaded automatically.');
 }
 function failure(error: unknown, kind: ActionKind): void {
   clearPrivate();
   if (error instanceof AccountRequestError && error.statusCode === 400 && kind === 'verify-code' && challengeEmail) {
-    showSignedOut(); message.textContent = 'The code was not accepted. Try the code from your email or request a new code.';
+    showSignedOut(); message.textContent = accountText('The code was not accepted. Try the code from your email or request a new code.');
   } else if (error instanceof AccountRequestError && error.statusCode === 429 && (kind === 'verify-code' || kind === 'request-code')) {
-    showSignedOut(); message.textContent = 'Too many sign-in attempts. Wait before trying again.';
+    showSignedOut(); message.textContent = accountText('Too many sign-in attempts. Wait before trying again.');
   } else if (error instanceof AccountRequestError && error.statusCode === 401) {
-    challengeEmail = null; message.textContent = 'Your session ended. Check account to sign in again. Private account details and pending actions have been cleared.';
+    challengeEmail = null; message.textContent = accountText('Your session ended. Check account to sign in again. Private account details and pending actions have been cleared.');
   } else if (error instanceof Error && error.message === 'ACCOUNT_SESSION_CHANGED') {
-    challengeEmail = null; message.textContent = 'Your session changed. Check account before making another change. Private details and pending actions have been cleared.';
+    challengeEmail = null; message.textContent = accountText('Your session changed. Check account before making another change. Private details and pending actions have been cleared.');
   } else if (error instanceof AccountRequestError && error.statusCode === 409) {
-    message.textContent = kind === 'save-profile' ? 'This profile changed on another device. Reload your account before saving again.' : 'This account copy changed on another device. Check account to reload it before making another change.';
+    message.textContent = accountText(kind === 'save-profile' ? 'This profile changed on another device. Reload your account before saving again.' : 'This account copy changed on another device. Check account to reload it before making another change.');
   } else if (kind === 'save-profile') {
-    message.textContent = 'The profile change could not be confirmed. Reload your account before retrying. Private details and pending changes have been cleared.';
+    message.textContent = accountText('The profile change could not be confirmed. Reload your account before retrying. Private details and pending changes have been cleared.');
   } else if (kind === 'sign-out') {
-    challengeEmail = null; message.textContent = 'Sign-out could not be confirmed. Private details have been cleared from this page. Check account to verify your session.';
+    challengeEmail = null; message.textContent = accountText('Sign-out could not be confirmed. Private details have been cleared from this page. Check account to verify your session.');
   } else if (kind === 'upload' || kind === 'restore' || kind === 'delete') {
-    message.textContent = 'The change could not be confirmed. Check account and the browser copy before trying again. No pending action is retained.';
+    message.textContent = accountText('The change could not be confirmed. Check account and the browser copy before trying again. No pending action is retained.');
   } else {
-    message.textContent = 'Account availability could not be verified. Private details are hidden. Check account to try again.';
+    message.textContent = accountText('Account availability could not be verified. Private details are hidden. Check account to try again.');
   }
 }
 async function perform(kind: ActionKind, status: string, work: (operation: Operation) => Promise<void>): Promise<void> {
@@ -350,13 +374,14 @@ login.addEventListener('submit', event => {
   challengeEmail = null;
   void perform('request-code', 'Requesting a sign-in code.', async operation => {
     showSignedOut(email);
+    await languageReady; requireCurrent(operation);
     let timezone = 'UTC';
     try { timezone = new Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { /* UTC fallback. */ }
     const result = parseSession(await request('/api/account-session', 'POST', operation.controller.signal,
-      {action: 'request-code', email, timezone, locale: 'en'}), true);
+      {action: 'request-code', email, timezone, locale: getLocale()}), true);
     requireCurrent(operation);
     if (result.status !== 'signed-out') throw new Error('ACCOUNT_CHALLENGE_NOT_CONFIRMED');
-    challengeEmail = email; showSignedOut(); message.textContent = 'Enter the sign-in code sent to your email.';
+    challengeEmail = email; showSignedOut(); message.textContent = accountText('Enter the sign-in code sent to your email.');
   });
 });
 code.addEventListener('submit', event => {
@@ -389,7 +414,7 @@ signOut.addEventListener('click', () => {
     const session = await readSession(operation);
     if (session.status !== 'signed-out') throw new Error('ACCOUNT_SIGNOUT_NOT_CONFIRMED');
     signalSession('signed-out'); showSignedOut();
-    message.textContent = 'You are signed out. Private account details and pending actions have been cleared from this page.';
+    message.textContent = accountText('You are signed out. Private account details and pending actions have been cleared from this page.');
   });
 });
 el('account-check').addEventListener('click', () => { if (!busy) void refresh(); });
@@ -405,19 +430,19 @@ el('account-upload').addEventListener('click', () => {
     const value = parseAccountValue({focus: local.focus, cards: local.cards, checkpoint});
     showAccount(id, copy, profile); pending = {kind: 'upload', ownerId: id, copy, value, profile};
     el('account-confirm-copy').textContent = `Replace the account reader copy with ${value.cards.length} saved cards, ${value.focus ? 'your remembered focus' : 'no remembered focus'} and ${value.checkpoint ? 'your saved comparison' : 'no comparison'} from this browser? Existing account data will be replaced; browser data stays intact.`;
-    el('account-confirmation').hidden = false; message.textContent = 'Review the replacement before confirming. Nothing has been imported.';
+    el('account-confirmation').hidden = false; message.textContent = accountText('Review the replacement before confirming. Nothing has been imported.');
   });
 });
 el('account-restore').addEventListener('click', () => {
   if (busy || !foreground() || sessionStatus !== 'signed-in' || !ownerId || !state) return;
   pending = {kind: 'restore', ownerId, copy: state, profile: profileView};
-  el('account-confirm-copy').textContent = 'Replace this browser’s remembered focus, saved cards and comparison check with the account copy? Other site data will not be changed.';
+  el('account-confirm-copy').textContent = accountText('Replace this browser’s remembered focus, saved cards and comparison check with the account copy? Other site data will not be changed.');
   el('account-confirmation').hidden = false;
 });
 el('account-delete').addEventListener('click', () => {
   if (busy || !foreground() || sessionStatus !== 'signed-in' || !ownerId || !state) return;
   pending = {kind: 'delete', ownerId, copy: state, profile: profileView};
-  el('account-confirm-copy').textContent = 'Delete only the reader copy from this account? This does not delete your sign-in account or local browser copies.';
+  el('account-confirm-copy').textContent = accountText('Delete only the reader copy from this account? This does not delete your sign-in account or local browser copies.');
   el('account-confirmation').hidden = false;
 });
 el('account-cancel').addEventListener('click', () => { if (!busy) closeConfirmation(); });
@@ -432,17 +457,17 @@ el('account-confirm').addEventListener('click', () => {
         {expectedRevision: choice.copy?.revision ?? null, value: choice.value}));
       requireCurrent(operation);
       if (!result || JSON.stringify(result.value) !== JSON.stringify(choice.value)) throw new Error('ACCOUNT_WRITE_NOT_CONFIRMED');
-      showAccount(choice.ownerId, result, choice.profile); message.textContent = 'Reader copy saved to the account. The local browser copy is unchanged.';
+      showAccount(choice.ownerId, result, choice.profile); message.textContent = accountText('Reader copy saved to the account. The local browser copy is unchanged.');
     } else if (choice.kind === 'restore') {
       await device.restorePersonal(choice.copy.value, operation.controller.signal); requireCurrent(operation); showAccount(choice.ownerId, choice.copy, choice.profile);
-      message.textContent = 'Account copy restored in this browser. Return to the briefing to use it.';
+      message.textContent = accountText('Account copy restored in this browser. Return to the briefing to use it.');
       try { const channel = new BroadcastChannel('dlkt-info-device-changes-v1'); channel.postMessage('changed'); channel.close(); }
       catch { /* The explicitly confirmed local transaction has already committed. */ }
     } else {
       const result = parseCopy(await request('/api/account', 'DELETE', operation.controller.signal, {expectedRevision: choice.copy.revision}));
       requireCurrent(operation);
       if (result !== null) throw new Error('ACCOUNT_DELETE_NOT_CONFIRMED');
-      showAccount(choice.ownerId, null, choice.profile); message.textContent = 'Account reader copy deleted. Local browser data is unchanged.';
+      showAccount(choice.ownerId, null, choice.profile); message.textContent = accountText('Account reader copy deleted. Local browser data is unchanged.');
     }
   });
 });
@@ -458,7 +483,7 @@ profileForm.addEventListener('submit', event => {
       locale: profileLocale.value.trim(), timezone: profileTimezone.value.trim(),
       interests: [...profileInterests].filter(([, input]) => input.checked).map(([topic]) => topic), ...personalFields.read()});
   } catch {
-    el('account-profile-message').textContent = 'Check the name, language tag, timezone and interests before saving.';
+    el('account-profile-message').textContent = accountText('Check the name, language tag, timezone and interests before saving.');
     return;
   }
   void perform('save-profile', 'Checking your session before saving the profile.', async operation => {
@@ -470,7 +495,7 @@ profileForm.addEventListener('submit', event => {
       || JSON.stringify(snapshot.profile.value) !== JSON.stringify(value)) throw new Error('ACCOUNT_PROFILE_WRITE_NOT_CONFIRMED');
     await requireOwner(operation, id);
     showAccount(id, copy, {status: 'ready', profile: snapshot.profile});
-    message.textContent = 'Profile saved to your account. Open Info Wallet to read your personal selection. Your saved reader copy and this browser’s reading preferences are unchanged.';
+    message.textContent = accountText('Profile saved to your account. Open Info Wallet to read your personal selection. Your saved reader copy and this browser’s reading preferences are unchanged.');
   });
 });
 

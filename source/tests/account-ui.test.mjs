@@ -4,6 +4,8 @@ import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 import {ACCOUNT_VERSION, ACCOUNT_MAX_BYTES, parseAccountState, parseAccountValue, isObject} from '../.build/src/account/contracts.js';
 import {safeLink} from '../.build/src/iceo/card-validation.js';
+import {LOCALES} from '../.build/src/i18n/locale.js';
+import {accountText as actualAccountText,topicName} from '../.build/src/account/presentation.js';
 import {DAILY_TOPICS} from '../.build/src/daily/contracts.js';
 import {LOCAL_NEEDS} from '../.build/src/personal/contracts.js';
 import {WALLET_PROFILE_VERSION, WALLET_PROFILE_MAX_BYTES, parseWalletProfile, parseWalletSnapshot, walletSnapshot} from '../.build/src/wallet/contracts.js';
@@ -33,7 +35,7 @@ class Target {
   dispatch(type, details = {}) {for (const callback of this.listeners.get(type) ?? []) callback({preventDefault() {}, ...details});}
 }
 class Element extends Target {
-  children = []; attributes = new Map(); hidden = false; disabled = false; value = ''; content = ''; className = '';
+  children = []; attributes = new Map(); hidden = false; disabled = false; value = ''; content = ''; className = ''; dataset = {};
   constructor(tag, document) {super(); this.tagName = tag.toUpperCase(); this.document = document;}
   set textContent(value) {this.content = value; this.children = [];}
   get textContent() {return this.content + this.children.map(child => child.textContent).join('');}
@@ -95,7 +97,11 @@ function harness(search = '', options = {}) {
   runInNewContext(source, {document, window, fetch, AbortController, TextDecoder, DeviceMemory: Memory,
     BroadcastChannel: Channel, ACCOUNT_VERSION, ACCOUNT_MAX_BYTES, parseAccountState, parseAccountValue, isObject, safeLink,
     DAILY_TOPICS, LOCAL_NEEDS, WALLET_PROFILE_MAX_BYTES, parseWalletProfile, parseWalletSnapshot,
-    Error, Intl, JSON}, {filename: 'account-browser.js'});
+    Error, Intl, JSON, LOCALES, topicName,
+    setupLanguage: optionsArg => {assert.equal(optionsArg.updateUrl,false);},
+    getLocale: () => options.locale ?? 'en',
+    initializeCountryLanguage: () => options.countryReady ?? Promise.resolve(),
+    accountText: value => actualAccountText(value,options.locale ?? 'en'), applyAccountPresentation: () => {}}, {filename: 'account-browser.js'});
   return {
     document, window, requests, profileRequests, redirects, memory, broadcasts, timers, get: id => elements.get(id),
     interests: () => elements.get('account-profile-interests').children.map(label => label.children[0]),
@@ -112,7 +118,7 @@ function harness(search = '', options = {}) {
 }
 async function accountReady(ui, state = STATE) {await ui.answer(0, signedIn()); await ui.answer(1, copy(state));}
 async function requestChallenge(ui, email = 'reader@example.test') {
-  ui.input(email); ui.get('account-login').dispatch('submit');
+  ui.input(email); ui.get('account-login').dispatch('submit'); await tick();
   const index = ui.requests.length - 1; assert.equal(ui.requests[index].init.method, 'POST');
   await ui.answer(index, challenge(), 202);
 }
@@ -287,7 +293,7 @@ test('Actual email edits invalidate the acknowledged challenge; verification nev
 });
 
 test('Email editing while code request is pending cancels it and ignores its late acknowledgment', async () => {
-  const ui = harness(); await ui.answer(0, OUT); ui.input('first@example.test'); ui.get('account-login').dispatch('submit');
+  const ui = harness(); await ui.answer(0, OUT); ui.input('first@example.test'); ui.get('account-login').dispatch('submit'); await tick();
   ui.input('second@example.test'); assert.equal(ui.requests[1].init.signal.aborted, true);
   await ui.answer(1, challenge(), 202); assert.equal(ui.get('account-code').hidden, true);
   assert.equal(ui.get('account-email').value, 'second@example.test');
@@ -566,4 +572,46 @@ test('Null and unavailable profiles still require same-owner readback before any
     await ui.answer(3, signedIn(OTHER));
     privateCleared(ui); assert.match(ui.get('account-message').textContent, /session changed/u);
   }
+});
+
+test('The profile language selector retains a saved locale variant and removes it when private state is cleared',async()=>{
+  for(const locale of ['ro-RO','en-GB','sr-Latn-RS']){
+    const ui=harness('',{manualProfile:true});
+    await profileReady(ui,{...PROFILE_STATE,value:parseWalletProfile({...PROFILE,locale})});
+    assert.equal(ui.get('account-profile-locale').tagName,'SELECT');
+    assert.equal(ui.get('account-profile-locale').value,locale);
+    assert.equal(ui.get('account-profile-locale').children.filter(option=>option.value===locale).length,1);
+    assert.deepEqual(ui.interests().map(input=>input.value),[...DAILY_TOPICS]);
+    ui.window.dispatch('blur');privateCleared(ui);
+    assert.equal(ui.get('account-profile-locale').children.some(option=>option.value===locale),false);
+  }
+});
+test('All language controls are disabled during a private save and restored after its acknowledgment',async()=>{
+  const ui=harness('',{manualProfile:true});await profileReady(ui);
+  ui.get('account-profile-form').dispatch('submit');
+  assert.equal(ui.get('account-profile-locale').disabled,true);
+  assert.equal(ui.get('reader-language').disabled,true);
+  await ui.answer(4,signedIn());
+  const sent=JSON.parse(ui.requests[5].init.body);
+  await ui.answer(5,walletSnapshot('signed-in',savedProfile(sent.value)));
+  await ui.answer(6,signedIn());
+  assert.equal(ui.get('account-profile-locale').disabled,false);
+  assert.equal(ui.get('reader-language').disabled,false);
+});
+test('OTP snapshots the resolved current language after country initialization, without private profile reads',async()=>{
+  let ready;const countryReady=new Promise(resolve=>{ready=resolve;});
+  const options={locale:'en',countryReady};const ui=harness('?returnTo=wallet',options);
+  await ui.answer(0,OUT);ui.input('reader@example.test');ui.get('account-login').dispatch('submit');
+  await tick();assert.equal(ui.requests.length,1,'no early English email request');
+  options.locale='ro';ready();await tick();
+  assert.equal(JSON.parse(ui.requests[1].init.body).locale,'ro');
+  assert.equal(ui.requests[1].path,'/api/account-session');
+  assert.equal(ui.requests.some(request=>request.path==='/api/wallet'),false);
+  await ui.answer(1,challenge(),202);verify(ui);await ui.answer(2,signedIn());await ui.answer(3,signedIn());
+  assert.deepEqual(ui.redirects,['/wallet']);
+});
+test('Losing focus while country initialization is pending never sends a delayed sign-in request',async()=>{
+  let ready;const ui=harness('',{countryReady:new Promise(resolve=>{ready=resolve;})});
+  await ui.answer(0,OUT);ui.input('reader@example.test');ui.get('account-login').dispatch('submit');
+  ui.window.dispatch('blur');ready();await tick();privateCleared(ui);assert.equal(ui.requests.length,1);
 });

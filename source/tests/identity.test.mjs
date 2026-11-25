@@ -142,7 +142,7 @@ test('request-code normalizes input and sends only bounded public metadata', asy
   });
   assert.equal(res.value.statusCode, 202);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, `${URL}/auth/v1/otp`);
+  assert.equal(calls[0].url, `${URL}/auth/v1/otp?redirect_to=${encodeURIComponent('https://www.dlkt.ee/account?lang=en')}`);
   assert.equal(calls[0].init.headers.apikey, KEY);
   assert.deepEqual(calls[0].body, {
     email: 'person@example.com',

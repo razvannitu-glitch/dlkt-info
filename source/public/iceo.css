@@ -166,3 +166,61 @@
 .account-page #account-confirmation p{margin-top:0}
 @media(min-width:900px){.account-page:has(#account-data:not([hidden])){grid-template-columns:minmax(260px,340px) minmax(0,1fr)}}
 @media(max-width:600px){.account-page{margin-block:20px 32px;padding-inline:16px;gap:16px}.account-page>.controls,.account-page>.briefing{padding:20px 16px;border-radius:14px}.account-page h2{font-size:22px}}
+
+/* Account: explicit choices, existing native controls, shared Kate identity. */
+.account-header-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:12px;min-inline-size:0}
+.account-language{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;min-inline-size:0}
+.account-language select{min-block-size:44px;max-inline-size:180px;padding:10px 32px 10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--white);color:var(--black);font:inherit}
+.account-page{gap:28px}
+.account-page>.controls,.account-page>.briefing{padding:28px;border-color:var(--line);border-radius:22px}
+.account-page>.controls{max-width:640px}
+.account-page form{max-width:none}
+.account-page .account-kate{display:flex;align-items:center;flex-wrap:wrap;gap:16px;margin-block-end:24px}
+.account-kate>img{inline-size:80px;block-size:80px;object-fit:contain}
+.account-page .account-eyebrow{margin:0;color:var(--muted);font-size:12px;font-weight:800;letter-spacing:.06em;line-height:1.5;text-transform:uppercase}
+.account-page .account-value{font-size:15px;line-height:1.7;margin:0 0 24px}
+.account-journey{display:flex;flex-wrap:wrap;gap:8px;margin-block:0 24px}
+.account-journey>span{padding:7px 11px;border:1px solid var(--line);border-radius:999px;font-size:12px;line-height:1.4;font-weight:700}
+.account-entry-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding-block-start:20px;border-block-start:1px solid var(--line)}
+.account-entry-actions>a{display:inline-flex;align-items:center;justify-content:center;gap:12px;text-decoration:none}
+.account-page #account-message{margin-block:16px}
+.account-page #account-login .primary,.account-page #account-code .primary{inline-size:100%;margin-block-start:8px}
+.account-section-heading{display:flex;align-items:center;gap:14px;margin-block-end:16px}
+.account-section-heading>img{flex:none;inline-size:48px;block-size:48px;object-fit:contain}
+.account-section-heading h2{margin:3px 0 0}
+.account-page .account-section-intro{font-size:16px;margin:0 0 12px}
+.account-page #account-profile-summary p{font-size:12px;color:var(--muted);margin-block:0 24px}
+.account-page .account-form-section{padding-block:24px;border-block-start:1px solid var(--line);min-inline-size:0}
+.account-page h3{font-size:18px;line-height:1.4;letter-spacing:-.2px;margin:0 0 16px;overflow-wrap:anywhere}
+.account-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.account-name-field{grid-column:1/-1}
+.account-page .account-fields .field{margin:0}
+.account-page .field>span{display:block;margin-block-end:8px}
+.account-page .field input,.account-page .field select{inline-size:100%;min-block-size:48px;padding:12px 14px;font-size:16px;line-height:1.5;border:1px solid var(--line);border-radius:10px;background:var(--white);color:var(--black);font-family:inherit}
+.account-page .field select{padding-inline-end:32px}
+.account-page .account-hint{margin:12px 0 16px;color:var(--muted);font-size:13px;line-height:1.6}
+.account-page .account-city-choice{margin:0;padding:0;border:0}
+.account-page .account-city-choice legend,.account-page .account-choice-grid legend{padding:0;margin-block-end:12px;font-size:13px;font-weight:700;color:var(--muted)}
+.account-page .account-city-choice label,.account-page .account-choice-grid>label{display:flex;align-items:center;gap:10px;min-block-size:52px;min-inline-size:0;margin:0;padding:13px 14px;border:1px solid var(--line);border-radius:12px;background:var(--white);font-size:14px;line-height:1.5;font-weight:600;cursor:pointer;overflow-wrap:anywhere}
+.account-page .account-city-choice label>input,.account-page .account-choice-grid>label>input{flex:none;inline-size:18px;block-size:18px;min-inline-size:18px;margin:0;accent-color:var(--reader-selected,var(--black))}
+.account-page .account-choice-grid>label>span{min-inline-size:0}
+.account-page .account-choice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:0;margin:0;border:0;min-inline-size:0}
+.account-page .account-choice-grid legend{float:none;grid-column:1/-1}
+.account-page .account-choice-grid>label:has(input:checked),.account-page .account-city-choice label:has(input:checked){border-color:var(--black);background:var(--soft);box-shadow:inset 0 0 0 1px var(--black)}
+.account-page .account-choice-grid>label:has(input:focus-visible),.account-page .account-city-choice label:has(input:focus-visible){outline:3px solid var(--reader-focus,var(--black));outline-offset:3px}
+.account-page .account-choice-grid>label:has(input:disabled),.account-page .account-city-choice label:has(input:disabled){cursor:wait;opacity:.7}
+.account-interests-fieldset{min-inline-size:0;margin:0;padding:0;border:0}
+.account-save-bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;padding:20px;margin-block-start:4px;border:1px solid var(--line);border-radius:14px;background:var(--soft)}
+.account-page .account-save-bar p{flex:1 1 180px;margin:0;font-size:12px;line-height:1.6;color:var(--muted)}
+.account-save-bar .primary{flex:0 0 auto;min-block-size:48px;white-space:normal;padding:12px 20px}
+.account-page #account-profile:not([hidden]){padding-block-end:28px;margin-block-end:28px}
+.account-page .account-reader-copy>.account-eyebrow{margin-block-end:8px}
+.account-page .account-actions{gap:10px;margin-block:20px 0}
+.account-page .account-actions>button{min-block-size:44px;padding:12px 14px;line-height:1.5;white-space:normal;overflow-wrap:anywhere}
+.account-page #account-delete{margin-block-start:4px;color:var(--muted)}
+@media(min-width:1100px){.account-page:has(#account-data:not([hidden])){grid-template-columns:minmax(280px,340px) minmax(0,1fr)}}
+@media(max-width:600px){.account-header-actions{gap:6px}.account-language>span{position:absolute;inline-size:1px;block-size:1px;overflow:hidden;clip-path:inset(50%)}.account-language select{max-inline-size:142px}.account-page{gap:20px}.account-page>.controls,.account-page>.briefing{padding:22px 18px;border-radius:18px}.account-page .account-kate{gap:12px;margin-block-end:20px}.account-kate>img{inline-size:64px;block-size:64px}.account-page .account-form-section{padding-block:20px}.account-save-bar{padding:16px}.account-page .account-save-bar .primary{inline-size:100%}.account-page .account-save-bar p{flex-basis:100%}.account-fields{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:379px){.account-page .account-choice-grid{grid-template-columns:minmax(0,1fr)}.account-page>.controls,.account-page>.briefing{padding-inline:16px}}
+
+.account-shell .masthead-inner{flex-wrap:wrap;gap:20px}
+@media(min-width:1100px){.account-page #account-profile-interests{grid-template-columns:repeat(3,minmax(0,1fr))}}

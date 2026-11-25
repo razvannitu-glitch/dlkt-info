@@ -579,3 +579,8 @@ html:is([data-reader-theme=prism],[data-reader-theme=night]) :is(#discovery-card
 
 html:is([data-reader-theme=prism],[data-reader-theme=night]) summary:not(.reader-more>summary){padding-inline:var(--reader-control-inline);overflow-wrap:anywhere}
 html:is([data-reader-theme=prism],[data-reader-theme=night]) #entry-options>summary{padding-inline:var(--reader-control-inline)}
+
+/* Editorial headlines remain links; reading is visually quiet until interaction. */
+.info-card .card-title-link{text-decoration:none;text-underline-offset:.15em;text-decoration-thickness:.06em;border-radius:2px}
+@media(hover:hover){.info-card .card-title-link:hover{text-decoration:underline}}
+.info-card .card-title-link:focus-visible{outline:3px solid var(--reader-focus,currentColor);outline-offset:4px;text-decoration:none}
