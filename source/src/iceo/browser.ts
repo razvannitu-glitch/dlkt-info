@@ -444,7 +444,7 @@ function cardNode(view:ReadingCard,index:number,total:number,saved?:SavedCard,au
     readingContext?.after(excerpt);
   }
   evidence?.append(guide);
-  const link=node.querySelector<HTMLAnchorElement>('.source-link');if(link){link.href=safeLink(card.sourceUrl)??'#';const icon=link.querySelector('svg');link.replaceChildren(document.createTextNode((citation?.originalLabel??tr('openSource'))+' '));if(icon)link.append(icon);}
+  const link=node.querySelector<HTMLAnchorElement>('.source-link');if(link){link.href=safeLink(card.sourceUrl)??'#';const icon=link.querySelector('svg');link.replaceChildren(document.createTextNode(tr('openSource')+' '));if(icon)link.append(icon);}
   const deadline=node.querySelector<HTMLElement>('.card-deadline');
   if(deadline&&card.deadline){deadline.hidden=false;deadline.textContent=`Listed closing date: ${formatted(card.deadline,true)}${view.noticeState==='awarded'?' · not an application deadline for this award':''}`;}
   const details=node.querySelector<HTMLElement>('.evidence dl');
@@ -465,7 +465,7 @@ function cardNode(view:ReadingCard,index:number,total:number,saved?:SavedCard,au
       const citation=pressReviewCitation(item.sourceUrl);
       if(citation){const credit=make('a','publisher-citation',citation.label);credit.href=citation.homeUrl;credit.target='_blank';credit.rel='noopener noreferrer';row.append(credit,document.createTextNode(' · '));}
       row.append(a,make('p','privacy-note',formatted(item.date)));
-      if(citation){const original=make('a','text-button',citation.originalLabel);original.href=url;original.target='_blank';original.rel='noopener noreferrer';row.append(original);}
+      if(citation){const original=make('a','text-button',tr('openSource'));original.href=url;original.target='_blank';original.rel='noopener noreferrer';row.append(original);}
       if(saved){const archived=deviceState.cards.find(entry=>entry.id===item.id);if(archived)row.append(make('p','saved-copy-note',`Saved here ${formatted(archived.savedAt)}. Original source check ${formatted(item.observedAt)}. This saved copy is retained.`));}
       const credits=cardCreditsNode(item);if(credits)row.append(credits);
       const saveRelated=make('button','text-button',tr('saveCard'));saveRelated.type='button';saveRelated.dataset.saveCard=item.id;
@@ -595,7 +595,7 @@ function retainedNewsSourcesNode(item:NewsPageItem,page:NewsPage,language:string
     link.className='news-story-source-link';link.href=url;link.target='_blank';link.rel='noopener noreferrer';link.textContent=source.card.title;
     link.dir='auto';link.lang=newsOriginalLanguage(source)??'';link.setAttribute('translate','no');
     row.append(meta,link);
-    if(citation){const original=make('a','text-button',citation.originalLabel);original.href=url;original.target='_blank';original.rel='noopener noreferrer';row.append(original);}
+    if(citation){const original=make('a','text-button',tr('openSource'));original.href=url;original.target='_blank';original.rel='noopener noreferrer';row.append(original);}
     list.append(row);
   }
   const note=make('p','news-story-sources-status',language==='ro'

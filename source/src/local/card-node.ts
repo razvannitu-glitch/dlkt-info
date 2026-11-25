@@ -3,7 +3,7 @@ import {localReading,localReadingPreview,localCardCategory} from './presentation
 import {localEventCalendar} from './event-calendar.js';
 import {weatherMotionNode} from '../glance/weather-motion.js';
 import {contextPhotoNode} from '../media/browser.js';
-import {getLocale} from '../i18n/browser.js';
+import {getLocale,translate} from '../i18n/browser.js';
 const romanianKinds:Readonly<Record<LocalCard['kind'],string>>={forecast:'Vreme',transport:'Transport','transport-notice':'Transport','utility-notice':'Termoficare si apa calda',event:'Eveniment','municipal-news':'Administratie','local-news':'Stiri locale'};
 const node=<K extends keyof HTMLElementTagNameMap>(tag:K,text='',className=''):HTMLElementTagNameMap[K]=>{const n=document.createElement(tag);n.textContent=text;n.className=className;return n;};
 const format=(time:string,zone:string,locale='en'):string=>new Intl.DateTimeFormat(locale==='ro'?'ro-RO':'en-GB',{timeZone:zone,month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',timeZoneName:'short'}).format(new Date(time));
@@ -38,7 +38,7 @@ export function localCardNode(card:LocalCard,c:City,now=Date.now(),options:{read
   if(card.context){details.append(node('p',card.context.when,'card-boundary'),node('p',card.context.why,'card-boundary'),node('p',card.context.action,'card-boundary'));const evidence=node('a','Checked evidence document','source-link');evidence.href=card.context.documentUrl;evidence.target='_blank';evidence.rel='noopener noreferrer';details.append(evidence,node('p',`Evidence SHA-256: ${card.context.documentHash}`,'card-boundary'));}
   for(const fact of card.facts)details.append(node('p',fact,'card-boundary'));
   if(card.news)details.append(node('p',card.news.attribution,'card-boundary'));
-  const source=node('a',ro?(card.news?'Citeste articolul integral':compact?'Sursa oficiala':'Deschide sursa oficiala'):(card.news?'Read the full report':compact?'Official source':'Open official source'),'source-link');source.href=card.sourceUrl;source.target='_blank';source.rel='noopener noreferrer';if(!compact)body.append(source);
+  const source=node('a',translate('openSource'),'source-link');source.href=card.sourceUrl;source.target='_blank';source.rel='noopener noreferrer';if(!compact)body.append(source);
   if(localEventCalendar(card,c,now)){
     const calendar=node('button',ro?'Adauga in calendar':'Add to calendar','text-button');calendar.type='button';calendar.dataset.calendarEvent=card.id;
     const feedback=node('p','','card-boundary');feedback.hidden=true;feedback.setAttribute('role','status');

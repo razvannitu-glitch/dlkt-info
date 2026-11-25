@@ -402,7 +402,7 @@ function readerProbe(expected){
   const credit=card?[...card.querySelectorAll('.card-boundary')].find(node=>node.textContent===expectedCard.publisher&&!node.closest('details')):null;
   return {id:expectedCard.id,found:Boolean(card),title:titleReport(card?.querySelector('h3')),
    readingExists:Boolean(reading),readingOpen:reading?.open??null,summaryVisible:visible(reading?.querySelector('summary')),
-   sourceVisible:visible(source),sourceUrl:source?.href??'',sourceTarget:source?.target??'',sourceRel:source?.rel??'',
+   sourceVisible:visible(source),sourceLabel:source?.textContent?.trim()??'',sourceUrl:source?.href??'',sourceTarget:source?.target??'',sourceRel:source?.rel??'',
    creditVisible:visible(credit),creditText:credit?.textContent??'',...(card?rect(card):{})};
  });
  const useful=[...localCards,...cards].filter(visible);
@@ -443,7 +443,7 @@ function assertReaderGeometry(measured,format,fixture){
   assert.equal(card.title,expected.title,'original title stays unchanged');
   assert.equal(card.citationVisible,true,'source citation stays visible at '+width+'px');
   assert.equal(card.citationLabel,expected.label);assert.equal(card.citationUrl,expected.homeUrl);
-  assert.equal(card.originalLabel,expected.originalLabel);assert.equal(card.originalUrl,expected.sourceUrl);
+  assert.equal(card.originalLabel,'Deschide sursa','primary source action has the consistent Romanian label');assert.equal(card.originalUrl,expected.sourceUrl);
   assert.equal(card.citationBeforeTitle,true,'source citation precedes title in the actual DOM at '+width+'px');
   assert.equal(card.citationAboveTitle,true,'source citation appears above title at '+width+'px');
   assert.equal(card.photographCount,0,'title/date/link-only source creates no photograph request at '+width+'px');
@@ -473,6 +473,7 @@ function assertReadingLayout(measured,format,fixture,{compact=true}={}){
   assert.equal(card.readingExists,true,'local information has an accessible disclosure');
   assert.equal(card.summaryVisible,true,'local reading action stays visible');
   assert.equal(card.sourceVisible,true,'official source action stays outside collapsed details');
+  assert.equal(card.sourceLabel,'Deschide sursa','local source action uses the same label as global cards');
   assert.equal(card.sourceUrl,expected.sourceUrl);assert.equal(card.sourceTarget,'_blank');
   assert.ok(card.sourceRel.split(/\s+/u).includes('noopener')&&card.sourceRel.split(/\s+/u).includes('noreferrer'));
   assert.equal(card.creditVisible,true,'local publisher credit stays visible outside details');
