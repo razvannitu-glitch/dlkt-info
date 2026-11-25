@@ -49,3 +49,7 @@ Reuse the existing generation and test workflows. At most one retry of a transie
 ## Trust and action boundaries
 
 Knowledge uses existing country evidence, catalog codes and immutable public records. Trust requires exact-commit test logs and an independent raw-diff review, with the provider dependency and live translation absence explicitly retained. Action is the explicit language selection stored in the existing browser preference. Account identity, delivery, billing and private profile mutations are inapplicable to that action and remain out of scope.
+
+## Evidence-driven scope clarification before final acceptance
+
+The first generated verification at b506c8936808f52a64913cd04633c0afe02252b1 passed 2538/2540 application tests and all 52 packaging tests. The two failing country-edition assertions equated the final non-null display language directly with localeFromCountry's now-nullable intermediate result. The existing country profile correctly retains its final English fallback when it has no native locale. Extend this increment only to those two expectations in source/tests/country-editions.test.mjs, plus an explicit regression that an Estonian country profile preserves a Romanian reader choice while honestly reporting its unsupported national default. Every country-count, provenance, availability and immutable-data assertion remains. No country-edition production behavior changes.
