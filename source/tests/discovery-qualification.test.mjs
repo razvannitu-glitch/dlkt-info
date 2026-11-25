@@ -147,6 +147,7 @@ test('a forged candidate state cannot borrow a complete review',()=>{
   {status:'configured'},{acquisition:'configured'},{rights:'reviewed-until-expiry'},
   {scope:'country',countryCode:'BE'},{scope:'international'},{countryCode:'RU'},
   {id:'discovered:another-paper.example.org'},{origin:'https://127.0.0.1'},
+  {vertical:undefined},{vertical:'official'},{vertical:'science'},{name:' Tuvalu Observer '},{extra:'unreviewed'},
  ]){
   const changed={...proposal,candidate:{...proposal.candidate,...patch}};
   const result=assessDiscoveryReview(changed,good,now);
@@ -157,4 +158,32 @@ test('a forged candidate state cannot borrow a complete review',()=>{
   const result=assessDiscoveryReview(malformed,good,now);
   assert.equal(result.disposition,'blocked');assert.ok(result.issues.includes('invalid-candidate'));
  }
+});
+
+test('non-news discovery preserves its own validated vertical during source review',()=>{
+ for(const [index,recordUrl,vertical]of [
+  ['openalex','https://api.openalex.org/sources/S42','science'],
+  ['reliefweb','https://api.reliefweb.int/v1/reports/42','humanitarian'],
+  ['media-cloud','https://mediacloud.org/sources/42','news'],
+ ]){
+  const [proposal]=qualifyDiscoveryBatch([discovery({index,recordUrl,sourceName:'Primary institution',sourceUrl:'https://new-institution.example.org'})],now).proposals;
+  assert.ok(proposal);assert.equal(proposal.candidate.vertical,vertical);
+  const good=reviewFor(proposal);
+  assert.deepEqual(assessDiscoveryReview(proposal,good,now),{disposition:'complete-for-human-review',issues:[],activationAllowed:false});
+ }
+});
+
+test('invalid index, altered provenance and stale directory records cannot borrow a review',()=>{
+ const [proposal]=qualifyDiscoveryBatch([discovery()],now).proposals,good=reviewFor(proposal);
+ for(const patch of [
+  {discoveryIndex:'unknown-index'},{discoveryIndex:'openalex'},
+  {recordReference:'https://another-index.example.org/record'},
+  {observedAt:'2026-10-01T12:00:00.000Z'},{observedAt:'2026-11-24T12:00:00.000Z'},
+  {provenance:'verified'},{admission:'auto-approved'},{extra:'unreviewed'},
+ ]){
+  const result=assessDiscoveryReview({...proposal,...patch},good,now);
+  assert.equal(result.disposition,'blocked');assert.ok(result.issues.includes('invalid-candidate'));
+ }
+ const {vertical,...missingVertical}=proposal.candidate;
+ assert.ok(assessDiscoveryReview({...proposal,candidate:missingVertical},good,now).issues.includes('invalid-candidate'));
 });

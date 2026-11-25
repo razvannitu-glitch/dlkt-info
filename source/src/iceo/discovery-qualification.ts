@@ -107,22 +107,36 @@ const exactReviewOrigin=(input:unknown):string|null=>{
  catch{return null;}
 };
 /**
+ * Reuse the same global qualification path instead of maintaining a second
+ * candidate validator. In particular, each discovery index owns its vertical:
+ * OpenAlex science and ReliefWeb humanitarian must not be reduced to news.
+ */
+function reviewedCandidateOrigin(proposal:unknown,nowInput:unknown):string|null {
+ if(!isRecord(proposal)||!isRecord(proposal.candidate))return null;
+ const candidate=proposal.candidate;
+ const reference=qualifyDiscoveryBatch([{
+  index:proposal.discoveryIndex,recordUrl:proposal.recordReference,observedAt:proposal.observedAt,
+  sourceUrl:candidate.origin,sourceName:candidate.name,
+ }],nowInput).proposals[0];
+ if(reference===undefined)return null;
+ const candidateKeys=['id','name','origin','vertical','scope','countryCode','status','acquisition','rights'] as const;
+ const proposalKeys=['discoveryIndex','recordReference','observedAt','provenance','admission'] as const;
+ if(Object.keys(candidate).length!==candidateKeys.length||candidateKeys.some(key=>candidate[key]!==reference.candidate[key])||
+    Object.keys(proposal).length!==proposalKeys.length+1||proposalKeys.some(key=>proposal[key]!==reference[key]))return null;
+ return reference.candidate.origin;
+}
+/**
  * A reviewed restriction is not a permitted use. The same explicit decisions
  * and exact-origin binding apply to every candidate, regardless of country or
  * language. These remain reviewer assertions, not authenticated licensing proof.
  * A complete evidence checklist still cannot activate a feed or publish content.
  */
-export function assessDiscoveryReview(proposal:DiscoveryProposal,evidence:unknown,nowInput:unknown):ReviewAssessment {
+export function assessDiscoveryReview(proposal:unknown,evidence:unknown,nowInput:unknown):ReviewAssessment {
  const issues:ReviewIssue[]=[];
  const now=canonicalInstant(nowInput);
  if(now===null)throw Error('ICEO_DISCOVERY_REVIEW_CLOCK_INVALID');
- const candidate=proposal?.candidate;
- const staged=stageSourceCandidate(candidate?.origin,candidate?.name);
- const origin=exactReviewOrigin(candidate?.origin);
- if(staged===null||origin===null||candidate?.id!==staged.id||candidate?.origin!==staged.origin||
-    candidate?.status!=='candidate'||candidate?.acquisition!=='discovery-only'||
-    candidate?.rights!=='source-specific-review-required'||candidate?.scope!=='unknown'||candidate?.countryCode!==null||
-    proposal?.admission!=='manual-review-only'||proposal?.provenance!=='unverified-index-metadata')issues.push('invalid-candidate');
+ const origin=reviewedCandidateOrigin(proposal,nowInput);
+ if(origin===null)issues.push('invalid-candidate');
  const review=isRecord(evidence)?evidence:null;
  if(review===null||typeof review.reviewer!=='string'||review.reviewer.trim().length<2||review.reviewer.length>120||
     !httpsEvidence(review.termsUrl)||!httpsEvidence(review.rightsEvidenceUrl)||
