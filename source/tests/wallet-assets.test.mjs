@@ -3,6 +3,33 @@ import test from 'node:test';
 import {readFileSync,existsSync} from 'node:fs';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
+import ts from 'typescript';
+
+function browserImports(source, name) {
+ const file = ts.createSourceFile(name, source, ts.ScriptTarget.ESNext, true, ts.ScriptKind.JS);
+ assert.equal(file.parseDiagnostics.length, 0, `Invalid browser module syntax: ${name}`);
+ const imports = [];
+ const visit = node => {
+  if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier) {
+   assert.ok(ts.isStringLiteral(node.moduleSpecifier), `Nonliteral browser import: ${name}`);
+   imports.push(node.moduleSpecifier.text);
+  } else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+   assert.ok(node.arguments.length >= 1 && ts.isStringLiteral(node.arguments[0]), `Nonliteral browser import: ${name}`);
+   imports.push(node.arguments[0].text);
+  }
+  ts.forEachChild(node, visit);
+ };
+ visit(file);
+ return imports;
+}
+
+test('browser import discovery distinguishes stopwords from static and dynamic module edges', () => {
+ const source = "const words = ['from', 'import', 'source']; import {read} from './reader.js'; "
+  + "export {city} from './local-contracts.js'; const lazy = import('./daily-reading.js');";
+ assert.deepEqual(browserImports(source, 'fixture.js'), ['./reader.js', './local-contracts.js', './daily-reading.js']);
+ assert.throws(() => browserImports("const path = './reader.js'; import(path);", 'fixture.js'), /Nonliteral browser import/u);
+ assert.throws(() => browserImports("import {broken from './reader.js';", 'fixture.js'), /Invalid browser module syntax/u);
+});
 
 test('deployed Wallet import graph is closed inside browser-safe public assets',()=>{
  const root=path.resolve('public'),seen=new Set(),queue=['wallet-browser.js','wallet-home-browser.js'];
@@ -11,9 +38,9 @@ test('deployed Wallet import graph is closed inside browser-safe public assets',
   const file=path.resolve(root,name);assert.ok(file.startsWith(root+path.sep));assert.ok(existsSync(file),`Missing public module: ${name}`);
   const source=readFileSync(file,'utf8');
   assert.doesNotMatch(source,/node:|Authorization:|sb_secret_|service_role|gmail\.googleapis\.com/u,`Server-only content in ${name}`);
-  for(const match of source.matchAll(/(?:from\s*|import\s*\()(['"])([^'"]+)\1/gu)){
-   assert.ok(match[2].startsWith('./'),`Unexpected browser import: ${name} -> ${match[2]}`);
-   queue.push(path.posix.normalize(path.posix.join(path.posix.dirname(name),match[2])));
+  for(const specifier of browserImports(source, name)){
+   assert.ok(specifier.startsWith('./'),`Unexpected browser import: ${name} -> ${specifier}`);
+   queue.push(path.posix.normalize(path.posix.join(path.posix.dirname(name),specifier)));
   }
  }
  assert.ok(seen.has('wallet-contracts.js'));assert.ok(seen.has('wallet-providers.js'));assert.ok(seen.has('data-guards.js'));
