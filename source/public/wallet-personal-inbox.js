@@ -139,6 +139,6 @@ export function personalInboxStatus(value) {
     if (value.available > 0)
         return 'Connect an available account in Info Wallet to see its private updates here.';
     return value.profileSaved
-        ? 'Your private profile is saved. Email and social connections are currently unavailable.'
+        ? 'Your private profile is saved. Open Info Wallet to review your preferences and personal selection. Email and social connections are currently unavailable.'
         : 'Create your private profile in Info Wallet. Email and social connections are currently unavailable.';
 }
