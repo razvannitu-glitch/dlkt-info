@@ -7,15 +7,15 @@ export function getLocale() {
     const state = typeof document === 'undefined' ? undefined : languageStates.get(document);
     return resolveLocale(typeof window === 'undefined' ? null : window.location.href, typeof navigator === 'undefined' ? [] : navigator.languages ?? [navigator.language], state);
 }
-/** A current home-city choice sets the default; restored cities and Explore filters do not. */
+/** Only a current estimated city can supply the automatic language context. */
 function detectedCountry(event) {
     if (!(event instanceof CustomEvent) || !event.detail || typeof event.detail !== 'object' || Array.isArray(event.detail))
         return null;
     const detail = event.detail;
-    if (typeof detail.estimated !== 'boolean' || detail.restored !== false || !detail.city || typeof detail.city !== 'object' || Array.isArray(detail.city))
+    if (detail.estimated !== true || detail.restored !== false || !detail.city || typeof detail.city !== 'object' || Array.isArray(detail.city))
         return null;
     const city = detail.city;
-    return typeof city.countryCode === 'string' && /^[A-Z]{2}$/u.test(city.countryCode) ? { countryCode: city.countryCode, selected: detail.estimated === false } : null;
+    return typeof city.countryCode === 'string' && /^[A-Z]{2}$/u.test(city.countryCode) ? city.countryCode : null;
 }
 /** A country-only hint remains usable when the location service cannot match a city. */
 function detectedCountryHint(event) {
@@ -111,7 +111,7 @@ export function setupLanguage() {
         manualLocale = localeFromPreference(window.localStorage.getItem(LANGUAGE_STORAGE_KEY));
     }
     catch { /* Unavailable storage leaves the picker usable. */ }
-    const state = { manualLocale, countryCode: null, selectedHomeCountry: false };
+    const state = { manualLocale, countryCode: null };
     languageStates.set(document, state);
     let applied = null;
     const apply = () => {
@@ -145,20 +145,8 @@ export function setupLanguage() {
         state.countryCode = country;
         apply();
     };
-    document.addEventListener('dlkt:city-selected', event => {
-        const country = detectedCountry(event);
-        if (!country)
-            return;
-        if (country.selected)
-            state.selectedHomeCountry = true;
-        else if (state.selectedHomeCountry)
-            return;
-        applyCountry(country.countryCode);
-    });
-    document.addEventListener('dlkt:country-detected', event => {
-        if (!state.selectedHomeCountry)
-            applyCountry(detectedCountryHint(event));
-    });
+    document.addEventListener('dlkt:city-selected', event => applyCountry(detectedCountry(event)));
+    document.addEventListener('dlkt:country-detected', event => applyCountry(detectedCountryHint(event)));
     window.addEventListener('popstate', apply);
     window.addEventListener('languagechange', apply);
     // Entry controllers may update contextual labels, but never the source content.

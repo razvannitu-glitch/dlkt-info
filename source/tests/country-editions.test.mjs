@@ -18,7 +18,7 @@ test('every actual GeoNames country remains selectable regardless of configured 
  assert.deepEqual(profiles.map(profile=>profile.countryName),countries.map(country=>country.name.trim()));
  assert.equal(new Set(profiles.map(profile=>profile.countryCode)).size,countries.length);
  for(const profile of profiles){
-  assert.equal(profile.language,localeFromCountry(profile.countryCode));assert.equal(profile.defaultLanguage,profile.language);
+  assert.equal(profile.language,localeFromCountry(profile.countryCode)??'en','without browser preferences a missing native default still produces a usable English country profile');assert.equal(profile.defaultLanguage,profile.language);
   assert.ok(LOCALES.some(locale=>locale.code===profile.language));
   assert.equal(profile.englishReadingOption,true);assert.equal(profile.englishRecommended,false);
   assert.equal(profile.coverage,null);assert.notEqual(profile.state,'available');
@@ -62,8 +62,11 @@ test('country defaults are generic while the selected reading language and multi
  const estonia=countryEditionProfile(country('EE'),'en');
  assert.equal(estonia.likelyLanguage,'et');assert.equal(estonia.defaultLanguage,'en');assert.equal(estonia.defaultLanguageSupported,false);
  assert.equal(estonia.state,'unconnected');assert.deepEqual(estonia.countryEditionLanguages,[]);
+ const romanianReader=countryEditionProfile(country('EE'),'ro');
+ assert.equal(romanianReader.language,'ro','the current reader choice stays independent of the country-profile fallback');
+ assert.equal(romanianReader.defaultLanguage,'en');assert.equal(romanianReader.defaultLanguageSupported,false);
  const tuvalu=countryEditionProfile(country('TV'),'en');
- assert.equal(tuvalu.countryCode,'TV');assert.equal(tuvalu.defaultLanguage,localeFromCountry('TV'));
+ assert.equal(tuvalu.countryCode,'TV');assert.equal(tuvalu.defaultLanguage,localeFromCountry('TV')??'en');
  assert.equal(tuvalu.defaultLanguageSupported,newsLanguageMatches(tuvalu.likelyLanguage,resolveLocale(tuvalu.likelyLanguage)));
 });
 
