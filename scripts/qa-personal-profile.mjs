@@ -31,13 +31,17 @@ async function bounded(promise, label, milliseconds = 8000) {
  * Node memory. It is NOT a Supabase session, OTP, billing or hosted-RLS test.
  */
 export async function personalProfileFixture(publicFixture) {
-  const [wallet, daily, local, cards, selection] = await Promise.all([
+  const [wallet, daily, local, cards, selection, account, personalContract] = await Promise.all([
     import('../source/.build/src/wallet/contracts.js'),
     import('../source/.build/src/daily/contracts.js'),
     import('../source/.build/src/local/contracts.js'),
     import('../source/.build/src/iceo/card-validation.js'),
     import('../source/.build/src/daily/selection.js'),
+    import('../source/.build/src/account/contracts.js'),
+    import('../source/.build/src/personal/contracts.js'),
   ]);
+  assert.equal(typeof account.ACCOUNT_VERSION,'string');
+  assert.ok(Array.isArray(personalContract.LOCAL_NEEDS)&&personalContract.LOCAL_NEEDS.length>0);
   const legacy = {
     version: 'dlkt-info-wallet-profile-1',
     revision: '33333333-3333-4333-8333-333333333333',
@@ -92,6 +96,7 @@ export async function personalProfileFixture(publicFixture) {
     technology: 'topic:' + techId, science: 'topic:' + scienceId,
     utility: 'local:' + publicFixture.localIds[0], weather: 'local:' + publicFixture.localIds[1],
     techUrl, scienceUrl, cityName: publicFixture.city.name,
+    accountNeeds:[...personalContract.LOCAL_NEEDS],accountInterests:[...daily.DAILY_TOPICS],
   };
 
   function topicSnapshot() {
@@ -211,6 +216,11 @@ export async function personalProfileFixture(publicFixture) {
       reply(200, value, method === 'DELETE' ? {'Set-Cookie': COOKIE + '=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0'} : {});
       return;
     }
+    if(url.pathname==='/api/account'){
+      if(url.search||method!=='GET'){req.resume();reply(405,{error:'METHOD_NOT_ALLOWED'});return;}
+      if(req.headers['x-dlkt-info-request']!=='account-v1'){reply(403,{error:'ORIGIN_REJECTED'});return;}
+      reply(200,{version:account.ACCOUNT_VERSION,enabled:true,state:null});return;
+    }
     if (url.pathname === '/api/wallet') {
       if (url.search || !['GET', 'PUT', 'DELETE'].includes(method)) {reply(405, {error: 'METHOD_NOT_ALLOWED'}); return;}
       if (req.headers['x-dlkt-info-request'] !== 'wallet-v1') {reply(403, {error: 'ORIGIN_REJECTED'}); return;}
@@ -283,7 +293,7 @@ export async function personalProfileFixture(publicFixture) {
       return {entered: () => bounded(entered, 'HELD_' + kind), release};
     },
     handle(req, res, url) {
-      if (!active || !['/api/account-session', '/api/wallet', '/api/places', '/api/local', '/api/iceo'].includes(url.pathname)) return false;
+      if (!active || !['/api/account-session', '/api/account', '/api/wallet', '/api/places', '/api/local', '/api/iceo'].includes(url.pathname)) return false;
       void respond(req, res, url).catch(error => {
         errors.push({path: url.pathname, message: String(error instanceof Error ? error.message : error).slice(0, 300)});
         send(res, 500, {error: 'CONTROLLED_PRIVATE_FIXTURE_FAILED'});
@@ -704,4 +714,167 @@ export async function verifyPersonalProfileFlow({call, origin, fixture, evaluate
     } catch {/* Preserve the original failed assertion. */}
     throw error;
   } finally {fixture.deactivate();}
+}
+
+function accountPreferencesProbe(){
+ const must=selector=>{const node=document.querySelector(selector);if(!node)throw Error('QA_ACCOUNT_ELEMENT_MISSING:'+selector);return node;};
+ const visible=node=>node.getClientRects().length>0&&getComputedStyle(node).visibility!=='hidden'&&getComputedStyle(node).display!=='none';
+ const box=node=>{const r=node.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height};};
+ const lines=node=>{
+  const result=[],tree=document.createTreeWalker(node,NodeFilter.SHOW_TEXT);let child;
+  while((child=tree.nextNode())){
+   const raw=child.textContent??'';if(!raw.trim()||!child.parentElement||!visible(child.parentElement))continue;
+   const range=document.createRange();range.setStart(child,raw.search(/\S/u));range.setEnd(child,raw.search(/\s*$/u));
+   for(const r of range.getClientRects())if(r.width>0&&r.height>0)result.push(r);
+  }return result;
+ };
+ const textFits=node=>{const r=box(node),text=lines(node);return text.length>0&&text.every(t=>t.left>=r.left-1&&t.right<=r.right+1&&t.top>=r.top-1&&t.bottom<=r.bottom+1);};
+ const paint=node=>{const s=getComputedStyle(node);return {background:s.backgroundColor,border:s.borderColor,outline:s.outline,outlineStyle:s.outlineStyle,outlineWidth:parseFloat(s.outlineWidth),outlineColor:s.outlineColor,shadow:s.boxShadow};};
+ const group=id=>{
+  const root=must('#'+id),choices=[...root.querySelectorAll('input')].map(input=>{
+   const label=input.closest('label');if(!label)throw Error('QA_ACCOUNT_LABEL_MISSING:'+input.value);
+   return {value:input.value,type:input.type,checked:input.checked,disabled:input.disabled,associated:[...(input.labels??[])].includes(label),
+    visible:visible(label),text:label.textContent.trim(),textFits:textFits(label),...box(label),inputPaint:paint(input),labelPaint:paint(label),
+    focused:document.activeElement===input,focusVisible:input.matches(':focus-visible')};
+  });return {id,grid:root.classList.contains('account-choice-grid'),...box(root),choices};
+ };
+ const root=must('main.account-page'),form=must('#account-profile-form'),locale=must('#account-profile-locale'),city=must('#account-profile-city');
+ const needs=group('account-profile-local-needs'),interests=group('account-profile-interests');
+ const textFont=selector=>{
+  const node=must(selector),tree=document.createTreeWalker(node,NodeFilter.SHOW_TEXT);let child;
+  while((child=tree.nextNode()))if(child.textContent?.trim()&&child.parentElement)return parseFloat(getComputedStyle(child.parentElement).fontSize);
+  throw Error('QA_ACCOUNT_TEXT_MISSING:'+selector);
+ };
+ const images=[...document.querySelectorAll('.account-welcome .account-kate img,#account-profile .account-section-heading img')].map(node=>({complete:node.complete,naturalWidth:node.naturalWidth,naturalHeight:node.naturalHeight,...box(node)}));
+ const fields=['account-profile-name','account-profile-locale','account-profile-timezone'].map(id=>{const node=must('#'+id);return {id,...box(node),fontSize:parseFloat(getComputedStyle(node).fontSize)};});
+ const save=must('#account-profile-save'),saveStyle=getComputedStyle(save);
+ return {width:innerWidth,documentWidth:document.documentElement.scrollWidth,theme:document.documentElement.dataset.readerTheme,
+  root:box(root),formVisible:visible(form),panelHidden:must('#account-data').hidden,name:must('#account-profile-name').value,
+  locale:locale.value,localeTag:locale.tagName,localeOptions:[...locale.options].map(option=>option.value),timezone:must('#account-profile-timezone').value,
+  city:city.checked?city.value:'',cityLabelText:must('#account-profile-city-name').textContent.trim(),
+  needs:needs.choices.filter(choice=>choice.checked).map(choice=>choice.value),interests:interests.choices.filter(choice=>choice.checked).map(choice=>choice.value),
+  groups:[needs,interests],fields,images,welcomeText:must('#account-value').textContent.trim(),journeyCount:document.querySelectorAll('.account-journey>span').length,
+  summary:must('#account-profile-summary').textContent.trim(),privateMessage:must('#account-profile-message').textContent.trim(),
+  save:{disabled:save.disabled,visible:visible(save),textFits:textFits(save),paddingStart:parseFloat(saveStyle.paddingInlineStart),paddingEnd:parseFloat(saveStyle.paddingInlineEnd),...box(save)},
+  fonts:{value:textFont('#account-value'),need:textFont('#account-profile-local-needs label'),interest:textFont('#account-profile-interests label'),save:textFont('#account-profile-save')}};
+}
+function assertAccountPreferencesLayout(state,width,expected){
+ assert.equal(state.width,width);assert.equal(state.formVisible,true);assert.equal(state.localeTag,'SELECT');
+ assert.ok(state.welcomeText.length>0);assert.equal(state.journeyCount,4);assert.equal(state.images.length,2);
+ assert.ok(state.images.every(image=>image.complete&&image.naturalWidth>0&&image.naturalHeight>0),'both Kate images load');
+ assert.ok(state.documentWidth<=width+2,'account has no horizontal document overflow');
+ const inside=node=>node.left>=-1&&node.right<=width+1;assert.ok(inside(state.root));
+ for(const field of state.fields)assert.ok(inside(field)&&field.height>=43.5&&field.fontSize>=16,'readable profile field: '+JSON.stringify(field));
+ const canonical=[expected.accountNeeds,expected.accountInterests];
+ for(let i=0;i<state.groups.length;i++){
+  const group=state.groups[i],values=group.choices.map(choice=>choice.value);assert.equal(group.grid,true);assert.ok(inside(group));
+  assert.deepEqual([...values].sort(),[...canonical[i]].sort(),'every canonical option appears exactly once');assert.equal(new Set(values).size,values.length);
+  for(const choice of group.choices)assert.ok(choice.type==='checkbox'&&choice.associated&&choice.visible&&!choice.disabled&&choice.text&&choice.textFits&&inside(choice)&&choice.width>=43.5&&choice.height>=43.5&&choice.left>=group.left-1&&choice.right<=group.right+1,'native choice has a complete label: '+JSON.stringify(choice));
+  for(let a=0;a<group.choices.length;a++)for(let b=a+1;b<group.choices.length;b++){const x=group.choices[a],y=group.choices[b];
+   assert.ok(Math.min(x.right,y.right)-Math.max(x.left,y.left)<=1||Math.min(x.bottom,y.bottom)-Math.max(x.top,y.top)<=1,'choice cards do not overlap');}
+ }
+ assert.ok(state.save.visible&&!state.save.disabled&&state.save.textFits&&inside(state.save)&&state.save.width>=43.5&&state.save.height>=43.5&&state.save.paddingStart>=12&&state.save.paddingEnd>=12,'Save keeps full label and internal space');
+}
+function assertEmptyAccountPreferences(state,defaultOptions){
+ assert.equal(state.formVisible,false);assert.equal(state.panelHidden,true);assert.equal(state.name,'');assert.equal(state.locale,'');assert.equal(state.timezone,'');assert.equal(state.city,'');
+ assert.deepEqual(state.needs,[]);assert.deepEqual(state.interests,[]);assert.equal(state.summary,'');assert.equal(state.privateMessage,'');
+ assert.deepEqual([...state.localeOptions].sort(),[...defaultOptions].sort(),'temporary private locale options are removed');
+}
+/** Actual compiled account UI over isolated synthetic loopback transport. */
+export async function verifyAccountPreferencesFlow({call,origin,fixture,evaluate,loaded,focusSelector,keyboard,outputDir,emitVisualPreview,actionSpacingProbe,assertActionSpacing,contrastProbe,startTypographyStress,restoreTypographyStress}){
+ assert.match(origin,/^http:\/\/127\.0\.0\.1:\d+$/u);
+ const {parseWalletProfile,WALLET_PROFILE_VERSION}=await import('../source/.build/src/wallet/contracts.js');
+ const {LOCALES}=await import('../source/.build/src/i18n/locale.js');
+ const originalA=fixture.profile(A),originalB=fixture.profile(B);assert.ok(originalA!==null);
+ const writesBefore=fixture.writes.length,requestOffset=fixture.requests.length,errorOffset=fixture.errors.length;
+ const observations=[],screenshots=[],variant='en-GB',defaultOptions=['',...LOCALES.map(locale=>locale.code)];
+ const probe=()=>evaluate(call,'('+accountPreferencesProbe.toString()+')()');
+ const click=selector=>activate(call,evaluate,focusSelector,keyboard,selector);
+ const ready=async locale=>waitFor(call,evaluate,'(function(){const form=document.getElementById("account-profile-form"),save=document.getElementById("account-profile-save");return Boolean(form&&form.getClientRects().length&&save&&!save.disabled&&document.getElementById("account-profile-name").value==='+JSON.stringify(originalA.value.displayName)+'&&document.getElementById("account-profile-locale").value==='+JSON.stringify(locale)+');})()','ACCOUNT_PROFILE_'+locale);
+ const setTheme=theme=>evaluate(call,'(function(theme){document.documentElement.dataset.readerTheme=theme;return true;})('+JSON.stringify(theme)+')');
+ const resize=width=>call('Emulation.setDeviceMetricsOverride',{width,height:width===1440?900:width===768?1024:844,deviceScaleFactor:1,mobile:width<768,scale:1});
+ const measure=async(width,theme,mode='normal')=>{
+  await resize(width);await setTheme(theme);const state=await probe();assertAccountPreferencesLayout(state,width,fixture.expected);assert.equal(state.theme,theme);
+  const spacing=await evaluate(call,'('+actionSpacingProbe.toString()+')()');assertActionSpacing(spacing,{width});
+  const contrast=await evaluate(call,'('+contrastProbe.toString()+')({allCards:true,rootSelector:".account-welcome,#account-profile"})');
+  assert.ok(contrast.samples.length>=fixture.expected.accountNeeds.length+fixture.expected.accountInterests.length,'contrast covers choice labels');
+  for(const sample of contrast.samples)assert.ok(sample.ratio!==null&&sample.ratio+.01>=sample.minimum,'account text contrast: '+JSON.stringify(sample));
+  observations.push({width,theme,mode,state,spacing,contrast});return state;
+ };
+ const capture=async width=>{
+  await evaluate(call,'(function(){window.scrollTo(0,0);return true;})()');
+  const height=await evaluate(call,'Math.ceil(Math.max(document.documentElement.scrollHeight,document.body.scrollHeight))');
+  assert.ok(height>0&&height<=16000,'bounded account screenshot');
+  const data=(await call('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:true,clip:{x:0,y:0,width,height,scale:1}})).data;
+  assert.ok(typeof data==='string'&&data.length>1000);
+  const filename='dlkt-account-preferences-'+width+'.png';writeFileSync(join(outputDir,filename),Buffer.from(data,'base64'),{mode:0o600});screenshots.push(filename);
+  await evaluate(call,'(function(){document.getElementById("account-profile").scrollIntoView({block:"start"});return true;})()');
+  await emitVisualPreview(call,'account-profile',width);
+ };
+ let originalTheme=null,typographyActive=false;fixture.activate();
+ try{
+  await call('Page.bringToFront');await resize(390);await setCookie(call,origin,A);await call('Page.navigate',{url:origin+'/account'});await loaded(call);await ready(originalA.value.locale);
+  const baseline=await probe();originalTheme=baseline.theme??null;assert.equal(defaultOptions.includes(variant),false);
+  const seeded={version:WALLET_PROFILE_VERSION,revision:randomUUID(),updatedAt:new Date().toISOString(),value:parseWalletProfile({...originalA.value,locale:variant,cityId:'683506',localNeeds:['utilities'],interests:['technology']})};
+  assert.equal(seeded.value.locale,variant);fixture.replaceProfile(A,seeded);await click('#account-reload');await ready(variant);
+  assert.equal((await probe()).localeOptions.filter(value=>value===variant).length,1);assert.equal(fixture.writes.length,writesBefore);
+  for(const groupIndex of [0,1]){
+   const before=await probe(),group=before.groups[groupIndex],choice=group.choices.find(option=>!option.checked);assert.ok(choice);
+   const selector='#'+group.id+' input[type="checkbox"][value='+JSON.stringify(choice.value)+']';
+   const point=await evaluate(call,'(function(selector){const input=document.querySelector(selector),label=input?.closest("label");if(!input||!label)throw Error("QA_ACCOUNT_CLICK_LABEL_MISSING");label.scrollIntoView({block:"center"});const tree=document.createTreeWalker(label,NodeFilter.SHOW_TEXT);let n;while((n=tree.nextNode())){const raw=n.textContent??"";if(!raw.trim())continue;const r=document.createRange();r.setStart(n,raw.search(/\\S/u));r.setEnd(n,raw.search(/\\s*$/u));const line=[...r.getClientRects()].find(x=>x.width>0&&x.height>0);if(line){const x=(line.left+line.right)/2,y=(line.top+line.bottom)/2;const hit=document.elementFromPoint(x,y);if(!hit||!label.contains(hit))throw Error("QA_ACCOUNT_LABEL_OBSCURED");return {x,y};}}throw Error("QA_ACCOUNT_LABEL_TEXT_MISSING");})('+JSON.stringify(selector)+')');
+   await call('Input.dispatchMouseEvent',{type:'mouseMoved',...point});
+   await call('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...point});
+   await call('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...point});
+   const clicked=await probe(),expectedSelected=[...group.choices.filter(option=>option.checked).map(option=>option.value),choice.value].sort();
+   assert.deepEqual(clicked.groups[groupIndex].choices.filter(option=>option.checked).map(option=>option.value).sort(),expectedSelected);
+   assert.deepEqual(clicked.groups[1-groupIndex].choices.map(option=>option.checked),before.groups[1-groupIndex].choices.map(option=>option.checked));
+   const resting=clicked.groups[groupIndex].choices.find(option=>option.value===choice.value);
+   await focusSelector(call,'#account-profile-timezone');let reached=false;
+   for(let i=0;i<fixture.expected.accountNeeds.length+fixture.expected.accountInterests.length+12;i++){
+    await keyboard(call,'Tab');if(await evaluate(call,'document.activeElement===document.querySelector('+JSON.stringify(selector)+')')){reached=true;break;}
+   }
+   assert.equal(reached,true);const focused=(await probe()).groups[groupIndex].choices.find(option=>option.value===choice.value);
+   assert.equal(focused.focusVisible,true);
+   const visibleOutline=paint=>paint.outlineWidth>=1&&!['none','hidden'].includes(paint.outlineStyle)&&paint.outlineColor.replaceAll(' ','')!=='rgba(0,0,0,0)'&&paint.outlineColor!=='transparent';
+   assert.ok(visibleOutline(focused.inputPaint)||visibleOutline(focused.labelPaint)||focused.inputPaint.shadow!==resting.inputPaint.shadow||focused.labelPaint.shadow!==resting.labelPaint.shadow);
+   await keyboard(call,'Space');assert.deepEqual((await probe()).groups[groupIndex].choices.map(option=>option.checked),group.choices.map(option=>option.checked));
+   assert.equal(await evaluate(call,'document.activeElement===document.querySelector('+JSON.stringify(selector)+')'),true);
+   await keyboard(call,'Space');assert.deepEqual((await probe()).groups[groupIndex].choices.filter(option=>option.checked).map(option=>option.value).sort(),expectedSelected);
+   assert.equal(fixture.writes.length,writesBefore,'label and keyboard selection never autosave');
+  }
+  for(const width of [320,390,768,1440]){await measure(width,'prism');if(width===390||width===1440)await capture(width);}
+  for(const width of [390,1440])await measure(width,'night');
+  await resize(390);await setTheme('prism');const beforeFonts=(await probe()).fonts;
+  const typography=await evaluate(call,'('+startTypographyStress.toString()+')()');typographyActive=true;
+  try{const enlarged=await measure(390,'prism','computed-font-size-times-two');for(const [name,size]of Object.entries(beforeFonts))assert.ok(Math.abs(enlarged.fonts[name]-size*2)<.02,'account font doubles: '+name);}
+  finally{assert.equal(await evaluate(call,'('+restoreTypographyStress.toString()+')()'),true);typographyActive=false;}
+  const selected=await probe(),expectedValue=parseWalletProfile({...seeded.value,displayName:selected.name.trim()||null,locale:selected.locale,timezone:selected.timezone,cityId:selected.city||null,localNeeds:selected.needs,interests:selected.interests});
+  const saveGate=fixture.holdNext('wallet-save');await click('#account-profile-save');await saveGate.entered();
+  assert.equal(fixture.writes.length,writesBefore+1);const write=fixture.writes.at(-1),accepted=fixture.profile(A);
+  assert.equal(write.owner,A);assert.equal(write.method,'PUT');assert.equal(write.expectedRevision,seeded.revision);
+  assert.deepEqual(write.value,expectedValue);assert.deepEqual(accepted.value,expectedValue);assert.notEqual(accepted.revision,seeded.revision);assert.deepEqual(fixture.profile(B),originalB);
+  assert.equal((await probe()).formVisible,false);saveGate.release();await ready(variant);assert.ok((await probe()).summary.includes(accepted.updatedAt));
+  const reloadGate=fixture.holdNext('wallet-read');await click('#account-reload');await reloadGate.entered();assert.equal((await probe()).formVisible,false);reloadGate.release();await ready(variant);
+  const restored=await probe();assert.deepEqual([...restored.needs].sort(),[...expectedValue.localNeeds].sort());assert.deepEqual([...restored.interests].sort(),[...expectedValue.interests].sort());assert.equal(restored.locale,variant);assert.equal(fixture.writes.length,writesBefore+1);
+  await evaluate(call,'(function(){window.dispatchEvent(new Event("blur"));return true;})()');assertEmptyAccountPreferences(await probe(),defaultOptions);
+  const readGate=fixture.holdNext('wallet-read');await evaluate(call,'(function(){window.dispatchEvent(new Event("focus"));return true;})()');await readGate.entered();
+  await evaluate(call,'(function(){window.dispatchEvent(new Event("blur"));return true;})()');assertEmptyAccountPreferences(await probe(),defaultOptions);
+  const lateRead=[...fixture.requests].reverse().find(request=>request.path==='/api/wallet'&&request.method==='GET'&&request.status===null);assert.ok(lateRead);
+  readGate.release();const responseDeadline=Date.now()+8000;while(lateRead.status===null&&Date.now()<responseDeadline)await pause(20);assert.equal(lateRead.status,200);
+  await bounded(evaluate(call,'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve(true))))'),'ACCOUNT_LATE_READ_FRAMES');
+  assertEmptyAccountPreferences(await probe(),defaultOptions);
+  const requests=fixture.requests.slice(requestOffset),copies=requests.filter(request=>request.path==='/api/account');
+  assert.ok(copies.length>=3&&copies.every(request=>request.method==='GET'&&request.owner===A&&request.status===200));
+  assert.ok(requests.filter(request=>request.path==='/api/account-session').every(request=>request.method==='GET'),'no OTP is requested or verified');
+  assert.ok(requests.filter(request=>request.path==='/api/wallet').every(request=>request.ownerHeader===A));
+  assert.deepEqual(fixture.errors.slice(errorOffset),[]);assert.equal(fixture.writes.length,writesBefore+1);assert.deepEqual(fixture.profile(B),originalB);
+  return {status:'CONTROLLED_ACCOUNT_PREFERENCES_PASS',viewports:observations,screenshots,nativeLabelAndKeyboard:true,explicitAcknowledgedSave:true,localeVariant:variant,reloadRetainsSelections:true,
+   simulatedBlurClearsPrivateAndLateRead:true,typography:{mode:typography.mode,nativeBrowserZoom:false,elementCount:typography.elementCount},
+   scope:'Actual compiled account form over synthetic loopback identity, null reader-copy and Wallet profile transport.',
+   limitations:['No hosted authentication, OTP request, email delivery or account isolation is exercised.','Themes are controlled CSS tokens; existing reader tests exercise the actual theme toggle.','Font doubling and dispatched lifecycle events do not certify physical device zoom or operating-system focus behavior.']};
+ }finally{
+  if(typographyActive)await evaluate(call,'('+restoreTypographyStress.toString()+')()').catch(()=>false);
+  if(originalTheme!==null)await setTheme(originalTheme).catch(()=>false);
+  fixture.replaceProfile(A,originalA);fixture.replaceProfile(B,originalB);fixture.deactivate();
+ }
 }

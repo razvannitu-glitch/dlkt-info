@@ -3,6 +3,7 @@ import {LOCALES,type Locale} from '../i18n/locale.js';
 import {WELCOME_COPY} from '../brand/welcome-copy.js';
 
 const romanian:Readonly<Record<string,string>>={
+  "Previously saved city":"Localitate salvata anterior",
   "Your account.": "Contul tau.",
   "Back to briefing": "Inapoi la stiri",
   "Check account": "Verifica contul",
@@ -106,7 +107,17 @@ const romanian:Readonly<Record<string,string>>={
 };
 /** Account utility copy currently ships in Romanian and English; no mislabeled fallback. */
 export function accountText(value:string,locale:Locale=getLocale()):string{
-  return locale==='ro'?(romanian[value]??value):value;
+  if(locale!=='ro')return value;
+  if(Object.hasOwn(romanian,value))return romanian[value]??value;
+  const profile=/^Profile updated: (.+)\.$/u.exec(value);
+  if(profile)return 'Profil actualizat: '+profile[1]+'.';
+  const updated=/^Account copy updated: (.+)\. Saved cards are dated copies, not fresh source checks\.$/u.exec(value);
+  if(updated)return 'Selectie actualizata in cont: '+updated[1]+'. Cardurile pastreaza informatia de la salvare; sursele nu sunt reverificate prin aceasta copie.';
+  const count=/^(\d+) saved cards\. (A remembered focus\.|No remembered focus\.) (A comparison check\.|No comparison check\.)$/u.exec(value);
+  if(count)return count[1]+(count[1]==='1'?' card salvat. ':' carduri salvate. ')+(count[2]==='A remembered focus.'?'Cu preferinta memorata. ':'Fara preferinta memorata. ')+(count[3]==='A comparison check.'?'Cu o comparatie salvata.':'Fara comparatie salvata.');
+  const replace=/^Replace the account reader copy with (\d+) saved cards, (your remembered focus|no remembered focus) and (your saved comparison|no comparison) from this browser\? Existing account data will be replaced; browser data stays intact\.$/u.exec(value);
+  if(replace)return 'Inlocuiesti selectia din cont cu '+replace[1]+(replace[1]==='1'?' card salvat, ':' carduri salvate, ')+(replace[2]==='your remembered focus'?'preferinta memorata':'fara preferinta memorata')+' si '+(replace[3]==='your saved comparison'?'comparatia salvata':'fara comparatie')+' din acest browser? Selectia existenta in cont va fi inlocuita; datele browserului raman neschimbate.';
+  return value;
 }
 export function topicName(value:string):string{
   return value==='work-education'?'Work & education':value.charAt(0).toUpperCase()+value.slice(1).replaceAll('-',' ');
@@ -133,5 +144,5 @@ export function applyAccountPresentation():void{
   }
   const city=document.getElementById('account-profile-city') as HTMLInputElement|null;
   const name=document.getElementById('account-profile-city-name');
-  if(city?.value==='683506'&&name)name.textContent=accountText('Include Bucharest, Romania');
+  if(city&&name)name.textContent=accountText(city.value==='683506'?'Include Bucharest, Romania':'Previously saved city');
 }

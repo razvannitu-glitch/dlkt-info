@@ -680,9 +680,11 @@ function renderDiscovery():void {
   required<HTMLElement>('#home-news-language-caption').textContent=language==='ro'?'Limba stirilor':language==='it'?'Lingua delle notizie':'News language';
   required<HTMLElement>('#home-news-language-label').textContent=newsSourceScope==='all'?originalSourcesLabel:languageLabel(language);
   const sourceScopeButton=required<HTMLButtonElement>('#home-news-source-scope');
-  sourceScopeButton.textContent=newsSourceScope==='edition'?allSourcesLabel:language==='ro'?`Inapoi la ${languageLabel(language)}`:language==='it'?`Torna a ${languageLabel(language)}`:`Back to ${languageLabel(language)}`;
-  sourceScopeButton.setAttribute('aria-pressed',String(newsSourceScope==='all'));sourceScopeButton.dataset.sourceScope=newsSourceScope;
-  required<HTMLButtonElement>('#home-news-english').hidden=newsSourceScope==='edition'&&language==='en';
+  sourceScopeButton.textContent=newsSourceScope==='edition'?(language==='ro'?'Toate limbile':language==='it'?'Tutte le lingue':'All languages'):language==='ro'?`Surse in ${languageLabel(language)}`:language==='it'?`Fonti in ${languageLabel(language)}`:`Sources in ${languageLabel(language)}`;
+  sourceScopeButton.dataset.sourceScope=newsSourceScope;
+  const englishButton=required<HTMLButtonElement>('#home-news-english');
+  englishButton.hidden=newsSourceScope==='edition'&&language==='en';
+  englishButton.setAttribute('aria-label',language==='ro'?'Interfata si surse in engleza':language==='it'?'Interfaccia e fonti in inglese':'Switch interface and sources to English');
   const periodPicker=required<HTMLSelectElement>('#home-news-period');
   required<HTMLLabelElement>('#home-news-period-label').textContent=language==='ro'?'Perioada':language==='it'?'Periodo':'Period';
   const todayOption=periodPicker.querySelector<HTMLOptionElement>('option[value="today"]'),recentOption=periodPicker.querySelector<HTMLOptionElement>('option[value="recent"]');

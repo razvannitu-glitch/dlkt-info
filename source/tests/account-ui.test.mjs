@@ -615,3 +615,29 @@ test('Losing focus while country initialization is pending never sends a delayed
   await ui.answer(0,OUT);ui.input('reader@example.test');ui.get('account-login').dispatch('submit');
   ui.window.dispatch('blur');ready();await tick();privateCleared(ui);assert.equal(ui.requests.length,1);
 });
+
+test('Original saved article titles are not translated when they match account UI labels',async()=>{
+ const ui=harness('',{locale:'ro'});
+ await ui.answer(0,signedIn());
+ const original={...STATE,value:parseAccountValue({...VALUE,cards:[{...VALUE.cards[0],card:{...CARD,title:'Science'}}]})};
+ await ui.answer(1,copy(original));
+ assert.equal(ui.get('account-saved').textContent,'Science');
+ const link=ui.get('account-saved').children[0].children[0];
+ assert.equal(link.dataset.accountCopy,undefined);assert.equal(link.getAttribute('translate'),'no');
+});
+test('A new profile waits for country language initialization before creating its editable defaults',async()=>{
+ let resolveCountry;const options={manualProfile:true,locale:'en',countryReady:new Promise(resolve=>{resolveCountry=resolve;})};
+ const ui=harness('',options);
+ await ui.answer(0,signedIn());await ui.answer(1,copy());await ui.answer(2,walletSnapshot('signed-in'));
+ assert.equal(ui.get('account-profile-form').hidden,true);assert.equal(ui.requests.length,3);
+ options.locale='ro';resolveCountry();await tick();
+ assert.equal(ui.requests[3].path,'/api/account-session');await ui.answer(3,signedIn());
+ assert.equal(ui.get('account-profile-locale').value,'ro');assert.equal(ui.get('account-profile-form').hidden,false);
+ assert.equal(ui.requests.some(request=>request.path==='/api/wallet'&&request.init.method!=='GET'),false);
+});
+test('A stale new-profile load cannot resume after losing focus during country initialization',async()=>{
+ let resolveCountry;const ui=harness('',{manualProfile:true,countryReady:new Promise(resolve=>{resolveCountry=resolve;})});
+ await ui.answer(0,signedIn());await ui.answer(1,copy());await ui.answer(2,walletSnapshot('signed-in'));
+ ui.window.dispatch('blur');resolveCountry();await tick();privateCleared(ui);
+ assert.equal(ui.requests.length,3);
+});

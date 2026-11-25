@@ -4,8 +4,9 @@ import {authenticationEmailRedirect} from './email-locale.js';
 
 export const AUTHENTICATION_EMAIL_SUBJECT='DLKT · Daily Life. Key Things.';
 export const AUTHENTICATION_EMAIL_KATE='https://www.dlkt.ee/kate-head.png';
+const HTML_ENTITIES:Readonly<Record<string,string>>={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
 function escapeHtml(value:string):string{
-  return value.replace(/[&<>"']/gu,character=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]??character));
+  return value.replace(/[&<>"']/gu,character=>HTML_ENTITIES[character]??character);
 }
 type CopyField=keyof WelcomeCopy;
 type EmailContent=Readonly<{language:string;direction:string;title:string;instruction:string;value:string;security:string;token:string}>;

@@ -89,9 +89,13 @@ function isCurrent(operation: Operation): boolean {
 function requireCurrent(operation: Operation): void {
   if (!isCurrent(operation)) throw new Error('ACCOUNT_OPERATION_INVALIDATED');
 }
+function setCopy(node:HTMLElement,value:string):void{
+  node.dataset.accountCopy=value;node.textContent=accountText(value);
+  node.lang=getLocale()==='ro'?'ro':'en';node.dir='ltr';
+}
 function text(tag: string, value: string): HTMLElement {
   const node = document.createElement(tag);
-  node.textContent = accountText(value);
+  if(value)setCopy(node,value);else node.textContent='';
   return node;
 }
 function normalizedEmail(value: string): string { return value.normalize('NFKC').trim().toLowerCase(); }
@@ -106,7 +110,7 @@ function setBusy(value: boolean): void {
 function closeConfirmation(): void {
   pending = null;
   el('account-confirmation').hidden = true;
-  el('account-confirm-copy').textContent = accountText('');
+  setCopy(el('account-confirm-copy'),'');
 }
 /** Only the acknowledged email challenge survives an email-app round trip in page memory. */
 function clearPrivate(): void {
@@ -227,7 +231,8 @@ function renderCopy(): void {
   summary.append(text('p', `${state.value.cards.length} saved cards. ${state.value.focus ? 'A remembered focus.' : 'No remembered focus.'} ${state.value.checkpoint ? 'A comparison check.' : 'No comparison check.'}`),
     text('p', `Account copy updated: ${state.updatedAt}. Saved cards are dated copies, not fresh source checks.`));
   for (const card of state.value.cards) {
-    const paragraph = text('p', ''); const link = text('a', card.card.title) as HTMLAnchorElement;
+    const paragraph = text('p', ''); const link = document.createElement('a');
+    link.textContent=card.card.title;link.dir='auto';link.setAttribute('translate','no');
     link.href = safeLink(card.card.sourceUrl) ?? '#'; link.target = '_blank'; link.rel = 'noopener noreferrer';
     paragraph.append(link); list.append(paragraph);
   }
@@ -268,6 +273,8 @@ async function readProfile(operation: Operation, id: string): Promise<ProfileVie
   }
   requireCurrent(operation);
   if (snapshot.account === 'signed-out') throw new Error('ACCOUNT_SESSION_CHANGED');
+  // A new draft uses the settled current language; existing saved values are never overwritten.
+  if(snapshot.account==='signed-in'&&snapshot.profile===null){await languageReady;requireCurrent(operation);}
   // The reader copy is private too: null or unavailable profiles must not bypass owner revalidation.
   await requireOwner(operation, id);
   if (snapshot.account !== 'signed-in') return {status: 'unavailable'};
@@ -429,20 +436,20 @@ el('account-upload').addEventListener('click', () => {
     if (local.rejected) throw new Error('ACCOUNT_LOCAL_COPY_INVALID');
     const value = parseAccountValue({focus: local.focus, cards: local.cards, checkpoint});
     showAccount(id, copy, profile); pending = {kind: 'upload', ownerId: id, copy, value, profile};
-    el('account-confirm-copy').textContent = `Replace the account reader copy with ${value.cards.length} saved cards, ${value.focus ? 'your remembered focus' : 'no remembered focus'} and ${value.checkpoint ? 'your saved comparison' : 'no comparison'} from this browser? Existing account data will be replaced; browser data stays intact.`;
+    setCopy(el('account-confirm-copy'),`Replace the account reader copy with ${value.cards.length} saved cards, ${value.focus ? 'your remembered focus' : 'no remembered focus'} and ${value.checkpoint ? 'your saved comparison' : 'no comparison'} from this browser? Existing account data will be replaced; browser data stays intact.`);
     el('account-confirmation').hidden = false; message.textContent = accountText('Review the replacement before confirming. Nothing has been imported.');
   });
 });
 el('account-restore').addEventListener('click', () => {
   if (busy || !foreground() || sessionStatus !== 'signed-in' || !ownerId || !state) return;
   pending = {kind: 'restore', ownerId, copy: state, profile: profileView};
-  el('account-confirm-copy').textContent = accountText('Replace this browser’s remembered focus, saved cards and comparison check with the account copy? Other site data will not be changed.');
+  setCopy(el('account-confirm-copy'),'Replace this browser’s remembered focus, saved cards and comparison check with the account copy? Other site data will not be changed.');
   el('account-confirmation').hidden = false;
 });
 el('account-delete').addEventListener('click', () => {
   if (busy || !foreground() || sessionStatus !== 'signed-in' || !ownerId || !state) return;
   pending = {kind: 'delete', ownerId, copy: state, profile: profileView};
-  el('account-confirm-copy').textContent = accountText('Delete only the reader copy from this account? This does not delete your sign-in account or local browser copies.');
+  setCopy(el('account-confirm-copy'),'Delete only the reader copy from this account? This does not delete your sign-in account or local browser copies.');
   el('account-confirmation').hidden = false;
 });
 el('account-cancel').addEventListener('click', () => { if (!busy) closeConfirmation(); });
