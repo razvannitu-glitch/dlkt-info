@@ -26,3 +26,17 @@ Knowledge is the source-attributed editorial catalogue and stable news identitie
 
 ## Subsequent authorized direction
 Before you go reuses current local evidence; broader geographic coverage is separate. Worth your time requires a verified opportunity status, eligibility and deadline from original sources before publishing that family. The current generic feed deadline field is insufficient. No such opportunity is fabricated for this batch. Remaining families stay recorded as product direction, not claimed complete.
+
+## Reviewed batch and release schedule
+The six sources were independently checked on2026-11-25 before assigning reviewedAt2026-11-25T00:45:05.000Z. The initial batch is finite. The release schedule does not constitute a background research service, source recheck or recurring generation job. All six cards expire from selection on2026-12-25T00:45:05.000Z unless separately reviewed and revised through a later change.
+
+Three cards are eligible immediately: offline maps from [Google Maps Help](https://support.google.com/maps/answer/6291838/), email two-step verification from [NCSC](https://www.ncsc.gov.uk/guidance/setting-2-step-verification-2sv), and a shared-workshop example from [Oodi](https://oodihelsinki.fi/en/services/urban-workshop/). Google explicitly limits offline coverage by region and travel mode; NCSC supports the importance of email protection and safely held backup codes; Oodi distinguishes free equipment from paid materials and variable booking requirements.
+
+Two cards become eligible on26November2026 at08:00 Europe/Bucharest (06:00UTC): repair before replacement from [Repair Cafe](https://www.repaircafe.org/en/about/) and schoolyard reuse from [Ville de Paris](https://www.paris.fr/pages/les-cours-oasis-7389). The former makes no promise of a nearby event or a successful repair. The latter describes some schoolyards, not universal public access or a service operating in the reader's city.
+
+One card becomes eligible on27November2026 at08:00 Europe/Bucharest (06:00UTC): volunteer research from [Zooniverse](https://www.zooniverse.org/about). It claims neither a DLKT partnership nor eligibility for every project. Local project instructions remain authoritative.
+
+All six have short original English, Romanian and Italian copy and direct source links. Helsinki and Paris are named examples of transferable ideas; neither is falsely labelled as a service in the reader's own city. No imagery or commercial relationship is imported. Publication dates are kept separate from the original source-check time.
+
+## Mid-task product steering
+The user additionally proposed a subscribed local-life information hub based on registration location. The proposal is captured in docs/my-area-product-contract-20261125.md. This lot does not activate payments, add private location fields or represent unverified local coverage as available. It completes the already authorized editorial and exposure foundation first.

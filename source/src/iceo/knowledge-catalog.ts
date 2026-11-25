@@ -694,6 +694,222 @@ const reviewed=[
   "revision": 1,
   "reviewedAt": "2026-11-23T11:15:00.000Z",
   "reviewBy": "2027-01-22T11:15:00.000Z"
+},
+{
+  "id": "dlkt-useful-offline-map",
+  "format": "useful",
+  "category": "10000000",
+  "topic": {
+    "en": "Offline navigation",
+    "ro": "Navigatie offline",
+    "it": "Navigazione offline"
+  },
+  "source": {
+    "publisher": "Google Maps Help",
+    "url": "https://support.google.com/maps/answer/6291838/"
+  },
+  "copy": {
+    "ro": {
+      "title": "Salveaza harta inainte sa ramai fara semnal",
+      "explanation": "Google Maps permite descarcarea unor zone pentru utilizare offline. Disponibilitatea variaza; fara internet nu ai indicatii pentru mers pe jos, bicicleta sau transport public si nici trafic in timp real.",
+      "connection": "Descarca zona intregului traseu cat esti conectat."
+    },
+    "en": {
+      "title": "Save the map before losing your signal",
+      "explanation": "Google Maps lets you download areas for offline use. Availability varies; without internet, walking, cycling and public transport directions are unavailable, along with live traffic.",
+      "connection": "Download the area covering your entire route while connected."
+    },
+    "it": {
+      "title": "Salva la mappa prima di perdere il segnale",
+      "explanation": "Google Maps permette di scaricare aree da usare offline. La disponibilità varia; senza internet mancano le indicazioni a piedi, in bici e con mezzi pubblici, oltre al traffico in tempo reale.",
+      "connection": "Scarica l'area dell'intero percorso mentre sei connesso."
+    }
+  },
+  "publishAt": "2026-11-25T00:45:05.000Z",
+  "kind": "knowledge",
+  "revision": 1,
+  "reviewedAt": "2026-11-25T00:45:05.000Z",
+  "reviewBy": "2026-12-25T00:45:05.000Z"
+},
+{
+  "id": "dlkt-useful-email-second-step",
+  "format": "useful",
+  "category": "13000000",
+  "topic": {
+    "en": "Account security",
+    "ro": "Securitatea conturilor",
+    "it": "Sicurezza degli account"
+  },
+  "source": {
+    "publisher": "UK National Cyber Security Centre",
+    "url": "https://www.ncsc.gov.uk/guidance/setting-2-step-verification-2sv"
+  },
+  "copy": {
+    "ro": {
+      "title": "Adauga un al doilea pas la intrarea in email",
+      "explanation": "Verificarea in doi pasi ingreuneaza accesul unui intrus chiar daca parola este furata. Cauta optiunea in setarile de securitate si pastreaza in siguranta codurile de rezerva, daca serviciul le ofera.",
+      "connection": "Incepe cu emailul folosit pentru recuperarea celorlalte conturi."
+    },
+    "en": {
+      "title": "Add a second step to your email login",
+      "explanation": "Two-step verification makes intrusion harder even if a password is stolen. Check your security settings and store backup codes safely when your service provides them.",
+      "connection": "Start with the email used to recover your other accounts."
+    },
+    "it": {
+      "title": "Aggiungi un secondo passaggio all'accesso alla posta",
+      "explanation": "La verifica in due passaggi rende più difficile entrare anche con una password rubata. Controlla le impostazioni di sicurezza e conserva al sicuro gli eventuali codici di recupero.",
+      "connection": "Inizia dall'email usata per recuperare gli altri account."
+    }
+  },
+  "publishAt": "2026-11-25T00:45:05.000Z",
+  "kind": "knowledge",
+  "revision": 1,
+  "reviewedAt": "2026-11-25T00:45:05.000Z",
+  "reviewBy": "2026-12-25T00:45:05.000Z"
+},
+{
+  "id": "dlkt-useful-repair-before-replace",
+  "format": "useful",
+  "category": "06000000",
+  "topic": {
+    "en": "Repair and reuse",
+    "ro": "Reparare si reutilizare",
+    "it": "Riparazione e riuso"
+  },
+  "source": {
+    "publisher": "Repair Cafe International Foundation",
+    "url": "https://www.repaircafe.org/en/about/"
+  },
+  "copy": {
+    "ro": {
+      "title": "Inainte sa inlocuiesti un obiect, cauta o reparatie",
+      "explanation": "La Repair Cafe, vizitatorii incearca sa repare obiecte impreuna cu voluntari priceputi. Verifica existenta unui eveniment apropiat si ce obiecte accepta; nu orice defect poate fi rezolvat.",
+      "connection": "Alege un obiect defect si verifica optiunile locale."
+    },
+    "en": {
+      "title": "Before replacing something, look for a repair",
+      "explanation": "At Repair Cafe, visitors work on broken belongings with skilled volunteers. Check for a nearby event and which objects it accepts; not every fault can be fixed.",
+      "connection": "Choose one broken item and check local options."
+    },
+    "it": {
+      "title": "Prima di sostituire un oggetto, cerca una riparazione",
+      "explanation": "Nei Repair Cafe, i visitatori riparano oggetti insieme a volontari esperti. Verifica gli incontri vicini e gli oggetti accettati; non tutti i guasti possono essere risolti.",
+      "connection": "Scegli un oggetto rotto e verifica le possibilità locali."
+    }
+  },
+  "publishAt": "2026-11-26T06:00:00.000Z",
+  "kind": "knowledge",
+  "revision": 1,
+  "reviewedAt": "2026-11-25T00:45:05.000Z",
+  "reviewBy": "2026-12-25T00:45:05.000Z"
+},
+{
+  "id": "dlkt-elsewhere-helsinki-shared-workshop",
+  "format": "elsewhere",
+  "category": "05000000",
+  "topic": {
+    "en": "Shared city workshops",
+    "ro": "Ateliere urbane comune",
+    "it": "Laboratori urbani condivisi"
+  },
+  "source": {
+    "publisher": "Oodi Helsinki Central Library",
+    "url": "https://oodihelsinki.fi/en/services/urban-workshop/"
+  },
+  "copy": {
+    "ro": {
+      "title": "La Helsinki, biblioteca iti ofera si un atelier",
+      "explanation": "Biblioteca Oodi pune la dispozitie masini de cusut si alte echipamente creative pentru lucru pe loc. Utilizarea echipamentelor este gratuita, materialele se platesc, iar conditiile de rezervare difera.",
+      "connection": "Verifica daca biblioteca ta ofera spatii pentru proiecte practice."
+    },
+    "en": {
+      "title": "In Helsinki, the library also offers a workshop",
+      "explanation": "Oodi library provides sewing machines and other creative equipment for use on site. Equipment use is free, materials cost extra, and booking requirements vary.",
+      "connection": "Check whether your library offers space for practical projects."
+    },
+    "it": {
+      "title": "A Helsinki, la biblioteca offre anche un laboratorio",
+      "explanation": "La biblioteca Oodi mette a disposizione macchine da cucire e attrezzature creative da usare sul posto. L'uso è gratuito, i materiali si pagano e le condizioni di prenotazione variano.",
+      "connection": "Verifica se la tua biblioteca offre spazi per progetti pratici."
+    }
+  },
+  "publishAt": "2026-11-25T00:45:05.000Z",
+  "kind": "knowledge",
+  "revision": 1,
+  "reviewedAt": "2026-11-25T00:45:05.000Z",
+  "reviewBy": "2026-12-25T00:45:05.000Z"
+},
+{
+  "id": "dlkt-elsewhere-paris-schoolyard-oasis",
+  "format": "elsewhere",
+  "category": "06000000",
+  "topic": {
+    "en": "Neighbourhood spaces",
+    "ro": "Spatii de cartier",
+    "it": "Spazi di quartiere"
+  },
+  "source": {
+    "publisher": "Ville de Paris",
+    "url": "https://www.paris.fr/pages/les-cours-oasis-7389"
+  },
+  "copy": {
+    "ro": {
+      "title": "Paris transforma curtile scolilor in oaze de cartier",
+      "explanation": "Curti scolare renovate prin programul Oasis includ vegetatie, umbra si o gestionare mai buna a apei de ploaie. Unele primesc si locuitori in afara orelor scolare, conform regulilor locale.",
+      "connection": "O idee de discutat pentru spatiile deja existente in cartier."
+    },
+    "en": {
+      "title": "Paris turns schoolyards into neighbourhood oases",
+      "explanation": "Schoolyards renovated through the Oasis programme include vegetation, shade and improved rainwater management. Some also welcome residents outside school hours, subject to local arrangements.",
+      "connection": "An idea to discuss for spaces your neighbourhood already has."
+    },
+    "it": {
+      "title": "Parigi trasforma i cortili scolastici in oasi di quartiere",
+      "explanation": "I cortili rinnovati dal programma Oasis includono vegetazione, ombra e una migliore gestione della pioggia. Alcuni accolgono anche gli abitanti fuori dall'orario scolastico, secondo le regole locali.",
+      "connection": "Un'idea da discutere per gli spazi già presenti nel quartiere."
+    }
+  },
+  "publishAt": "2026-11-26T06:00:00.000Z",
+  "kind": "knowledge",
+  "revision": 1,
+  "reviewedAt": "2026-11-25T00:45:05.000Z",
+  "reviewBy": "2026-12-25T00:45:05.000Z"
+},
+{
+  "id": "dlkt-care-contribute-to-research",
+  "format": "care",
+  "category": "13000000",
+  "topic": {
+    "en": "Volunteer research",
+    "ro": "Voluntariat pentru cercetare",
+    "it": "Volontariato per la ricerca"
+  },
+  "source": {
+    "publisher": "Zooniverse",
+    "url": "https://www.zooniverse.org/about"
+  },
+  "copy": {
+    "ro": {
+      "title": "Poti contribui la cercetare fara sa fii cercetator",
+      "explanation": "Pe Zooniverse, voluntarii clasifica imagini, documente si alte date reale pentru proiecte de cercetare. Nu este necesara experienta de specialitate, dar fiecare proiect are propriile instructiuni.",
+      "connection": "Alege un proiect care te intereseaza si incearca o sarcina."
+    },
+    "en": {
+      "title": "You can contribute to research without being a researcher",
+      "explanation": "On Zooniverse, volunteers classify images, records and other real research data. Specialist experience is not required, but each project has its own instructions.",
+      "connection": "Choose a project that interests you and try a task."
+    },
+    "it": {
+      "title": "Puoi contribuire alla ricerca senza essere un ricercatore",
+      "explanation": "Su Zooniverse, i volontari classificano immagini, documenti e altri dati reali per la ricerca. Non serve esperienza specialistica, ma ogni progetto ha istruzioni proprie.",
+      "connection": "Scegli un progetto che ti interessa e prova un'attività."
+    }
+  },
+  "publishAt": "2026-11-27T06:00:00.000Z",
+  "kind": "knowledge",
+  "revision": 1,
+  "reviewedAt": "2026-11-25T00:45:05.000Z",
+  "reviewBy": "2026-12-25T00:45:05.000Z"
 }
 ] as const satisfies readonly KnowledgeCard[];
 export const KNOWLEDGE_CARDS:readonly KnowledgeCard[]=Object.freeze(validateKnowledgeCatalog(reviewed));

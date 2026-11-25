@@ -31,13 +31,15 @@ test('eleven original news appear between each knowledge card, without duplicate
  assert.equal(projected.filter(item=>item.kind==='news').length,45);
  assert.equal(new Set(projected.filter(item=>item.kind==='knowledge').map(item=>item.item.card.id)).size,3);
 });
-test('on-this-day evidence is contextual to selected date and promoted after care',()=>{
+test('on-this-day evidence follows the selected date without bypassing geographic relevance',()=>{
  const at=Date.parse('2026-11-23T12:00:00.000Z');
  const context={countryCode:'RO',cityId:'683506',timeZone:'Europe/Bucharest'};
  const picked=selectInlineKnowledge(KNOWLEDGE_CARDS,context,at,'calendar-evidence');
- assert.equal(picked[0]?.card.format,'care');
- assert.equal(picked[1]?.card.id,'computer-industry-1992-nov-23');
- assert.equal(picked[2]?.card.format,'recipe');
+ assert.equal(picked[0]?.scope,'city');
+ assert.ok(picked.some(item=>item.card.id==='computer-industry-1992-nov-23'));
+ assert.ok(picked.some(item=>item.card.format==='recipe'));
+ const ranks={city:0,country:1,global:2};
+ for(let index=1;index<picked.length;index++)assert.ok(ranks[picked[index-1].scope]<=ranks[picked[index].scope]);
  const next=selectInlineKnowledge(KNOWLEDGE_CARDS,context,at+86400000,'next-day');
  assert.ok(!next.some(item=>item.card.id==='computer-industry-1992-nov-23'));
 });
