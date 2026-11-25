@@ -18,12 +18,13 @@ test('verified local cards precede city and global news in one scroll',()=>{
  assert.match(reader,/extrasHost\.append\(commercialCardNode\(/);
  assert.match(reader,/extrasHost\.append\(details\)/);
  assert.match(reader,/local\.supporting\.length > 0 \|\| localNewsCount > 0/);
+ assert.doesNotMatch(reader,/home-local-more|remainingLocal|local\.supporting\.slice\(2\)/,'all selected local cards stay directly in the continuous grid');
 });
 test('backend groups and balances the complete edition before projecting category pages',()=>{
  const grouping=backend.indexOf('groups=groupNewsStories('),balancing=backend.indexOf('balanceNewsEdition(selection.items,');
  assert.ok(grouping>0&&balancing>grouping,'source groups are complete before their representatives are balanced');
- assert.match(backend,/iptc17-source-scope-publisher-rounds-20261124/);
- assert.doesNotMatch(backend,/sort\(\(a,b\)=>scopePriority\(a\)-scopePriority\(b\)\)/,'geography must not rebuild publisher blocks after diversity');
+ assert.match(backend,/iptc17-local-national-world-publisher-rounds-20261125/);
+ assert.doesNotMatch(backend,/sort\(\(a,b\)=>scopePriority\(a\)-scopePriority\(b\)\)/,'geography is composed with publisher diversity before pagination, not patched onto individual pages');
  assert.match(backend,/this\.orders\.set\(key,result\)/,'the complete order remains immutable between pages');
 });
 test('redundant Use my location button is absent in all supported languages',()=>{

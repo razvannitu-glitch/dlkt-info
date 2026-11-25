@@ -190,11 +190,21 @@ async function newsFixture(){
     why:'The checked fixture contains a service notice for the selected city.',action:'Check the official operator list for your street and building.',
     sourceDate:checkedAt.slice(0,10),startsAt:null,status:'operator-notice',
     documentHash:hash('DLKT controlled browser QA CMTEB fixture'),documentUrl:cmtebUrl}};
+  const events=localIds.slice(2).map((id,index)=>({id,kind:'event',title:'Controlled ARCUB agenda event '+(index+1),
+   text:'Original controlled agenda listing with source access.',publisher:'ARCUB',
+   sourceUrl:'https://arcub.ro/eveniment/controlled-agenda-'+(index+1),sourceUpdatedAt:null,checkedAt,
+   validFrom:checkedAt,validTo:new Date(clock+300000).toISOString(),facts:['Controlled agenda fixture; not a live event verification.'],
+   boundary:'Confirm the programme and availability with the organiser.',
+   context:{section:'discover',place:'Bucharest venue '+(index+1),when:'Undated controlled agenda listing',
+    why:'The publisher lists this event for the selected city.',action:'Check the original organiser listing.',
+    sourceDate:checkedAt.slice(0,10),startsAt:null,status:'scheduled',
+    documentHash:hash('DLKT controlled ARCUB agenda fixture'),documentUrl:'https://arcub.ro/agenda'}}));
   const value={version:'dlkt-local-1',city,checkedAt,state:'partial',weatherState:'ready',transportState:'not-covered',
-   cards:[forecast,utility],coverage:[{domain:'utilities',state:'partial',checkedAt,sourceUrl:cmtebUrl,
-    note:'Controlled CMTEB browser fixture; not a complete or live city service check.'}]};
+   cards:[forecast,utility,...events],coverage:[{domain:'utilities',state:'partial',checkedAt,sourceUrl:cmtebUrl,
+    note:'Controlled CMTEB browser fixture; not a complete or live city service check.'},
+    ...(events.length?[{domain:'events',state:'partial',checkedAt,sourceUrl:'https://arcub.ro/agenda',note:'Controlled ARCUB agenda, not live event verification.'}]:[])]};
   assert.equal(currentLocalSnapshot(value,city,clock),true,'local browser fixture passes the actual source identity and freshness contract');
-  assert.deepEqual(selectHomeLocal(value,city,clock).cards.map(card=>card.id),localIds,'the real homepage selector retains both utility kinds');
+  assert.deepEqual(selectHomeLocal(value,city,clock).cards.map(card=>card.id),localIds,'the real homepage selector retains every expected local fixture record');
   return value;
  }
  let servedLocal=localSnapshot(now);
@@ -317,6 +327,11 @@ async function newsFixture(){
  };
  return {city,estimatedCity:true,groupKey:grouped.story.key,urls:reports.map(card=>card.sourceUrl),titles:reports.map(card=>card.title),get storyCount(){return activeStoryCount;},articleTotal:selected.articleTotal,sourceOnly,
   localIds,updates,owned,get localExpected(){return localExpected();},get localRequests(){return localRequests;},
+  setLocalExpansion(enabled){
+   assert.equal(typeof enabled,'boolean');
+   localIds.splice(2,...(enabled?Array.from({length:8},(_,index)=>'bucharest:arcub:'+hash('inline-local-'+index).slice(0,24)):[]));
+   servedLocal=localSnapshot(Date.now());
+  },
   async response(url){
    if(url.pathname==='/api/places'&&url.searchParams.get('hint')==='1')return {status:200,value:{city,countryCode:city.countryCode,estimated:true}};
    if(url.pathname==='/api/places'&&url.searchParams.get('id')===city.id)return {status:200,value:{cities:[city],cityAliases:[]}};
@@ -447,7 +462,7 @@ function assertFullTitle(title,label){
 function assertReadingLayout(measured,format,fixture,{compact=true}={}){
  assertReadingDetails(measured,format);assertActionSpacing(measured.actionSpacing,format);
  for(const title of measured.titles)assertFullTitle(title,'editorial title '+title.id+' at '+format.width+'px');
- assert.deepEqual(measured.localIds,fixture.localIds,'both real local fixture cards are present in homepage order');
+ assert.deepEqual(measured.localIds,fixture.localIds,'all expected local fixture cards are present in homepage order');
  for(const expected of fixture.localExpected){
   const card=measured.local.find(value=>value.id===expected.id);assert.ok(card);
   assert.equal(card.found,true,'local fixture card is rendered');assertFullTitle(card.title,'local title '+card.id);
@@ -481,6 +496,61 @@ async function measureReader(call,fixture){
  const measured=await evaluate(call,'('+readerProbe.toString()+')('+JSON.stringify(expectedReader(fixture))+')');
  measured.details=await evaluate(call,'('+readingDetailProbe.toString()+')()');
  measured.actionSpacing=await evaluate(call,'('+actionSpacingProbe.toString()+')()');return measured;
+}
+
+
+/** Additional source-valid records must be visible without opening a group. */
+async function verifyInlineLocalFlow(call,origin,fixture,outputDir){
+ const observations=[];
+ fixture.updates.reset();fixture.setLocalExpansion(true);
+ try{
+  for(const format of [{width:320,height:750,mobile:true},{width:390,height:844,mobile:true},{width:1440,height:900,mobile:false}]){
+   await call('Emulation.setDeviceMetricsOverride',{width:format.width,height:format.height,deviceScaleFactor:1,mobile:format.mobile,scale:1});
+   await call('Page.navigate',{url:origin+'/'});await loaded(call);await selectControlledEdition(call,fixture);
+   await evaluate(call,'(()=>{window.scrollTo(0,0);return true;})()');
+   const measured=await measureReader(call,fixture);
+   assertReaderGeometry(measured,format,fixture);assertReadingLayout(measured,format,fixture,{compact:false});
+   assert.equal(measured.localIds.length,10,'two utilities and eight agenda records exercise the former fold');
+   assert.ok(measured.local.every(card=>card.readingOpen===false),'only individual evidence starts closed');
+   const structure=await evaluate(call,`(()=>{
+    const cards=[...document.querySelectorAll('#home-local-cards article[data-local-id]')],editorial=document.querySelector('#discovery-cards article[data-news-stream-key]');
+    const visible=node=>{
+     for(let p=node;p&&p!==document.body;p=p.parentElement){
+      const style=getComputedStyle(p);
+      if(style.display==='none'||style.visibility==='hidden'||p.tagName==='DETAILS'&&!p.open)return false;
+     }
+     return node.getClientRects().length>0&&node.getBoundingClientRect().height>0;
+    };
+    const bounds=cards.map(node=>{const r=node.getBoundingClientRect();return {id:node.dataset.localId,top:r.top,bottom:r.bottom,left:r.left,right:r.right};});
+    return {allIds:cards.map(n=>n.dataset.localId),visibleIds:cards.filter(visible).map(n=>n.dataset.localId),
+     folded:document.querySelectorAll('#home-local-more,.home-local-more').length,
+     allBeforeNews:cards.every(n=>Boolean(editorial&&(n.compareDocumentPosition(editorial)&Node.DOCUMENT_POSITION_FOLLOWING))),
+     editorialGap:editorial.getBoundingClientRect().top-Math.max(...bounds.map(b=>b.bottom)),bounds};
+   })()`);
+   assert.deepEqual(structure.allIds,fixture.localIds);assert.deepEqual(structure.visibleIds,fixture.localIds);
+   assert.equal(new Set(structure.allIds).size,10);assert.equal(structure.folded,0);assert.equal(structure.allBeforeNews,true);
+   assert.ok(structure.editorialGap>=0&&structure.editorialGap<=100,'editorial follows the final local row without a blank artificial section: '+JSON.stringify(structure));
+   assert.ok(measured.firstUsefulTop!==null);
+   if(format.width===320)assert.ok(measured.firstUsefulTop<=620);
+   if(format.width===390)assert.ok(measured.firstUsefulTop<=550);
+   for(const a of structure.bounds)for(const b of structure.bounds)if(a.id!==b.id){
+    const overlaps=Math.min(a.right,b.right)-Math.max(a.left,b.left)>1&&Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>1;
+    assert.equal(overlaps,false,'inline local cards do not overlap');
+   }
+   const screenshot='dlkt-continuous-local-'+format.width+'.png';
+   const captured=(await call('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false})).data;
+   assert.ok(typeof captured==='string'&&captured.length>=1000);
+   writeFileSync(join(outputDir,screenshot),Buffer.from(captured,'base64'),{mode:0o600});
+   if(format.width===390){
+    const selector='#home-local-cards article[data-local-id="'+fixture.localIds.at(-1)+'"] .local-reading>summary';
+    await focusSelector(call,selector);await keyboard(call,'Enter');
+    const expanded=await measureReader(call,fixture);assertReaderGeometry(expanded,format,fixture);assertReadingLayout(expanded,format,fixture,{compact:false});
+    assert.equal(expanded.local.find(card=>card.id===fixture.localIds.at(-1))?.readingOpen,true,'last formerly hidden event has keyboard-accessible evidence');
+   }
+   observations.push({viewport:format.width,localCards:structure.allIds.length,structure,actionSpacing:measured.actionSpacing,screenshot});
+  }
+ }finally{fixture.setLocalExpansion(false);fixture.updates.reset();}
+ return {status:'CONTINUOUS_LOCAL_PASS',observations};
 }
 
 /** Measure rendered text-line boxes, not rasterized glyph outlines. */
@@ -1452,13 +1522,14 @@ async function run(){
     throw error;
    }
   }
+  const continuousLocal=await verifyInlineLocalFlow(cdp,'http://'+HOST+':'+binding.port,fixture,outputDir);
   const account=await verifyAccountSurfaces(cdp,'http://'+HOST+':'+binding.port,outputDir);
   const personalProfile=await verifyPersonalProfileFlow({call:cdp,origin:'http://'+HOST+':'+binding.port,
    fixture:personal,evaluate,loaded,focusSelector,keyboard,openIsolated:()=>openIsolatedChrome(port),outputDir,emitVisualPreview});
   const localePreference=await verifyLocalePreference({openIsolated:()=>openIsolatedChrome(port),
    origin:'http://'+HOST+':'+binding.port,fixture,personal});
   const result={version:'dlkt-info-offline-browser-smoke-3',status:'OFFLINE_BROWSER_PASS',
-   scope:'local-built-reader-with-controlled-news-local-and-private-profile-transport',viewports:observations,account,personalProfile,localePreference,fixture:{storyCount:fixture.storyCount,articleTotal:fixture.articleTotal,groupOriginals:fixture.urls.length,sourceOnlyOriginals:fixture.sourceOnly.length,localCards:fixture.localIds.length,localContract:'currentLocalSnapshot'},
+   scope:'local-built-reader-with-controlled-news-local-and-private-profile-transport',viewports:observations,continuousLocal,account,personalProfile,localePreference,fixture:{storyCount:fixture.storyCount,articleTotal:fixture.articleTotal,groupOriginals:fixture.urls.length,sourceOnlyOriginals:fixture.sourceOnly.length,localCards:fixture.localIds.length,localContract:'currentLocalSnapshot'},
    limitations:['News pages use the actual service over controlled corpus fixtures. The additional private phase uses synthetic account identities; no external publisher request, hosted authentication, payment or production runtime availability is tested.',
     'The three grouped publisher headlines and four reviewed-source originals reproduce observed metadata; source-check and publication dates are controlled fixtures.',
     'Local weather and CMTEB records are synthetic controlled fixtures validated by the actual city/source contracts, not live operator or forecast checks.',

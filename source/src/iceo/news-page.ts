@@ -21,7 +21,7 @@ export interface NewsPageReader {read(query:NewsPageRequest):Promise<NewsPage>;r
 export class NewsPageError extends Error {constructor(readonly code:NewsPageErrorCode){super(code);this.name='NewsPageError';}}
 const NEWS_CURSOR_VERSION='news-cursor-6' as const;
 // Grouping changes invalidate page/source offsets even when the stored corpus is unchanged.
-const NEWS_COUNTRY_ORDER_VERSION='iptc17-source-scope-publisher-rounds-20261124-r6' as const;
+const NEWS_COUNTRY_ORDER_VERSION='iptc17-local-national-world-publisher-rounds-20261125-r7' as const;
 const object=(value:unknown):value is Record<string,unknown>=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 const exact=(value:Record<string,unknown>,keys:readonly string[]):boolean=>Object.keys(value).length===keys.length&&keys.every(key=>Object.hasOwn(value,key));
 const TOKEN=/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/u;
@@ -130,9 +130,9 @@ export class NewsPageService implements NewsPageReader {
   // Related originals are never expanded back into standalone feed cards.
   const selection=selectNewsStream({first:representatives.flatMap(item=>item.kind==='global'?[item.view]:[]),more:[]},
    representatives.flatMap(item=>item.kind==='local'?[item.card]:[]),at,'all',seed);
-  // One relevant local/national opening, then publisher/category diversity for
-  // the whole immutable edition. Category filters and page boundaries never
-  // restart these rounds, and every grouped original remains reachable.
+  // Keep city, national-publisher and international-publisher bands in this
+  // order, with publisher/category diversity inside each band. Filters and
+  // page boundaries project this immutable edition; all originals stay reachable.
   const items=Object.freeze(balanceNewsEdition(selection.items,
    item=>item.category??'other',item=>item.publisher,item=>{
     const group=byPrimary.get(item.key)!;

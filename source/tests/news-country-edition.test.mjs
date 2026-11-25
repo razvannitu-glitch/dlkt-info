@@ -33,17 +33,21 @@ function assertCategoryCycles(items){
  }
 }
 
-test('a relevant national opening leads publisher and category rounds across the complete edition',async()=>{
+test('national publications precede international pages with category diversity inside each band',async()=>{
  const london=city('London','GB'),categories=Object.keys(CATEGORIES);
  const national=Array.from({length:36},(_,i)=>publication(i+1,'The Guardian','https://www.theguardian.com/news/2026/nov/22/country-fixture-'+i,CATEGORIES[categories[i%categories.length]]+' '+i));
  const international=Array.from({length:36},(_,i)=>article(i+101,{category:categories[i%categories.length]}));
  const before=JSON.stringify([...national,...international]),service=new NewsPageService(new CorpusMemoryStore([epoch([...international,...national])]),KEY,()=>NOW+1000);
  const {items,pages}=await allPages(service,'en',london.id);
- assert.equal(items.length,72);assert.equal(new Set(items.map(item=>item.key)).size,72);assertCategoryCycles(items);
- assert.equal(sourceEditionCountryCode(items[0].card),'GB','the opening keeps relevant national evidence');
- assert.ok(items.slice(0,20).some(item=>sourceEditionCountryCode(item.card)!=='GB'),'international publishers participate in the first page');
- assert.ok(items.slice(20).some(item=>sourceEditionCountryCode(item.card)==='GB'),'national articles remain interleaved in later pages');
- assert.notEqual(items[19].card.publisher,items[20].card.publisher,'publisher continuity spans the first page boundary');
+ assert.equal(items.length,72);assert.equal(new Set(items.map(item=>item.key)).size,72);
+ const nationalItems=items.slice(0,36),internationalItems=items.slice(36);
+ assert.ok(nationalItems.every(item=>sourceEditionCountryCode(item.card)==='GB'),'all national originals precede the international band');
+ assert.ok(internationalItems.every(item=>sourceEditionCountryCode(item.card)!=='GB'),'international originals remain reachable after the national band');
+ assertCategoryCycles(nationalItems);assertCategoryCycles(internationalItems);
+ assert.equal(pages.length,4);
+ assert.ok(pages[0].items.every(item=>sourceEditionCountryCode(item.card)==='GB'));
+ assert.ok(pages[1].items.slice(0,16).every(item=>sourceEditionCountryCode(item.card)==='GB'));
+ assert.ok(pages[1].items.slice(16).every(item=>sourceEditionCountryCode(item.card)!=='GB'),'a band boundary can fall inside a page without resetting the order');
  for(const page of pages){assert.equal(page.countryCode,'GB');assert.deepEqual(page.coverage,{national:36,local:0,international:36});assert.ok(validNewsPage(page,NOW+1000,london));}
  for(const category of new Set(items.map(item=>item.category))){
   const inCategory=items.filter(item=>item.category===category);
@@ -58,7 +62,7 @@ test('Romanian national provenance and verified Bucharest articles are counted s
  const international=article(2,{language:'ro'}),entry=local(2),service=new NewsPageService(new CorpusMemoryStore([epoch([international,national],[entry])]),KEY,()=>NOW+1000);
  const bucharest=await service.read(request('ro',entry.city.id));
  assert.equal(bucharest.countryCode,'RO');assert.deepEqual(bucharest.coverage,{national:1,local:2,international:1});
- assert.equal(bucharest.items.filter(item=>item.kind==='local').length,2);assert.equal(bucharest.items[0].kind,'local');assertCategoryCycles(bucharest.items);assert.ok(validNewsPage(bucharest,NOW+1000,entry.city));
+ assert.equal(bucharest.items.filter(item=>item.kind==='local').length,2);assert.deepEqual(bucharest.items.map(item=>item.kind),['local','local','global','global']);assert.equal(bucharest.items[2].card,national);assert.equal(bucharest.items[3].card,international);assert.ok(validNewsPage(bucharest,NOW+1000,entry.city));
  const cluj=city('Cluj','RO'),elsewhere=await service.read(request('ro',cluj.id));
  assert.equal(elsewhere.countryCode,'RO');assert.deepEqual(elsewhere.coverage,{national:1,local:0,international:1});
  assert.ok(elsewhere.items.every(item=>item.kind==='global'));
@@ -112,10 +116,12 @@ test('the signed cursor binds national context and old cursor versions expire wi
  const london=city('London','GB'),turin=city('Torino','IT'),edition=epoch(Array.from({length:45},(_,i)=>article(i+1)));
  const service=new NewsPageService(new CorpusMemoryStore([edition]),KEY,()=>NOW+1000),page=await service.read(request('en',london.id));
  const [encoded]=page.nextCursor.split('.'),payload=JSON.parse(Buffer.from(encoded,'base64url').toString('utf8'));
+ assert.equal(payload.orderVersion,'iptc17-local-national-world-publisher-rounds-20261125-r7');
  assert.equal(payload.version,'news-cursor-6');assert.equal(payload.sourceScope,'edition');assert.equal(payload.countryCode,'GB');assert.equal(payload.kind,'page');assert.equal(payload.storyKey,null);
  const sign=value=>{const body=Buffer.from(JSON.stringify(value)).toString('base64url'),key=createHmac('sha256',KEY).update('dlkt-info/news-page/cursor-key/v1').digest();
   return body+'.'+createHmac('sha256',key).update('dlkt-info/news-page/cursor/v1:'+body).digest('base64url');};
  const changed=sign({...payload,countryCode:'IT'});
+ await assert.rejects(service.read(request('en',london.id,'all',sign({...payload,orderVersion:'iptc17-source-scope-publisher-rounds-20261124-r6'}))),/NEWS_EDITION_EXPIRED/,'old mixed-geography offsets expire under continuous bands');
  await assert.rejects(service.read(request('en',london.id,'all',sign({...payload,orderVersion:'iptc17-country-day-local-first-20261123'}))),/NEWS_EDITION_EXPIRED/);
  await assert.rejects(service.read(request('en',london.id,'all',changed)),/NEWS_CONTEXT_MISMATCH/);
  await assert.rejects(service.read(request('en',turin.id,'all',page.nextCursor)),/NEWS_CONTEXT_MISMATCH/);
