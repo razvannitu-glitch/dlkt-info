@@ -1163,6 +1163,81 @@ async function verifyAccountSurfaces(call,origin,outputDir){
  return observations;
 }
 
+
+/** Browser-only checks follow, without changing, the private owner-header gates. */
+async function verifyWalletSavedNavigation(call,origin,fixture,personal,savedLink,outputDir,openIsolated){
+ assert.equal(personal.active,false,'private transport is deactivated before public-reader navigation');
+ assert.equal(savedLink.href,'/#saved');
+ const writesBefore=personal.writes.length;
+ const memoryExpression='(async function(){const {DeviceMemory}=await import("/device-memory.js");const m=new DeviceMemory();return {device:await m.read(),daily:await m.readDaily(),checkpoint:await m.readCheckpoint()};})()';
+ const readMemory=target=>evaluate(target,memoryExpression);
+ const click=async(target,selector)=>{await focusSelector(target,selector);await keyboard(target,'Enter');};
+ const waitSaved=async(target,id=null)=>{
+  for(let attempt=0;attempt<60;attempt++){
+   const state=await evaluate(target,'(function(){const button=document.querySelector("[data-view=saved]"),root=document.getElementById("topic-workspace");return {view:document.body.dataset.entryView,visible:Boolean(root&&!root.hidden),saved:button?.getAttribute("aria-pressed"),heading:document.getElementById("result-heading")?.textContent,ids:[...document.querySelectorAll("#cards [data-card-id],#cards [data-related-card-id]")].map(n=>n.dataset.cardId??n.dataset.relatedCardId)};})()');
+   if(state.view==='topics'&&state.visible&&state.saved==='true'&&state.heading==='Saved in this browser'&&(id===null||state.ids.includes(id)))return state;
+   if(attempt===59)throw Error('DLKT_SAVED_VIEW_TIMEOUT_'+JSON.stringify(state));await pause(100);
+  }
+ };
+ const publicSnapshot=await fixture.response(new URL(origin+'/api/iceo'));
+ assert.equal(publicSnapshot.status,200);
+ const other=publicSnapshot.value.cards.find(card=>card.id!==savedLink.id);
+ assert.ok(other,'a distinct public original is available as an isolation control');
+ // Disposable QA setup only; the target card came from the actual Wallet Save.
+ await evaluate(call,'(async function(seed){const {DeviceMemory}=await import("/device-memory.js");const m=new DeviceMemory();await m.save(seed.card);await m.remember({topics:["science"],query:"controlled saved-navigation focus",budget:1,mode:"briefing"});if(await m.readCheckpoint()===null)await m.saveCheckpoint(seed.snapshot,null);return true;})('+JSON.stringify({card:other,snapshot:publicSnapshot.value})+')');
+ const before=await readMemory(call);
+ assert.ok(before.device.cards.some(card=>card.id===savedLink.id));
+ assert.ok(before.device.cards.some(card=>card.id===other.id));
+ assert.ok(before.device.focus&&before.daily&&before.checkpoint,'nonempty focus, DailyState and comparison controls are present');
+ const walletLink=await evaluate(call,'(function(){const a=document.getElementById("wallet-saved");return {href:a?.getAttribute("href"),visible:Boolean(a&&a.getClientRects().length),target:a?.target};})()');
+ assert.deepEqual(walletLink,{href:savedLink.href,visible:true,target:''},'the same Saved destination remains accessible in signed-out Wallet');
+ await click(call,'#wallet-saved');await loaded(call);await waitSaved(call,savedLink.id);
+ assert.equal(await evaluate(call,'location.pathname+location.hash'),savedLink.href,'the real Wallet link opens the Saved entry fragment');
+ assert.equal(await evaluate(call,'document.activeElement?.id'),'result-heading','existing Saved behavior focuses its heading');
+ assert.deepEqual(await readMemory(call),before,'opening Saved preserves all browser records');
+ const originalUrl=await evaluate(call,'document.querySelector('+JSON.stringify('#cards [data-card-id="'+savedLink.id+'"] a.source-link')+')?.href??null');
+ assert.equal(originalUrl,savedLink.sourceUrl,'the saved original retains its exact source link');
+ await call('Page.reload',{ignoreCache:true});await loaded(call);await waitSaved(call,savedLink.id);
+ assert.deepEqual(await readMemory(call),before,'direct fragment reload is read-only and survives remembered focus restoration');
+ await emitVisualPreview(call,'wallet-saved',390);
+ const screenshot='dlkt-wallet-saved-390.png';
+ writeFileSync(join(outputDir,screenshot),Buffer.from((await call('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false})).data,'base64'),{mode:0o600});
+ await click(call,'#cards [data-save-card="'+savedLink.id+'"]');
+ let after;
+ for(let attempt=0;attempt<60;attempt++){
+  after=await readMemory(call);if(!after.device.cards.some(card=>card.id===savedLink.id))break;
+  if(attempt===59)throw Error('DLKT_SAVED_REMOVE_TIMEOUT');await pause(100);
+ }
+ const expected={...before,device:{...before.device,cards:before.device.cards.filter(card=>card.id!==savedLink.id)}};
+ assert.deepEqual(after,expected,'explicit removal changes only the chosen public original');
+ await call('Page.reload',{ignoreCache:true});await loaded(call);await waitSaved(call,other.id);
+ assert.deepEqual(await readMemory(call),expected,'the removal persists after reload and leaves all other originals intact');
+ const empty=await openIsolated();
+ try{
+  await empty.call('Emulation.setDeviceMetricsOverride',{width:320,height:750,deviceScaleFactor:1,mobile:true,scale:1});
+  await empty.call('Page.navigate',{url:origin+'/#saved-extra'});await loaded(empty.call);
+  assert.equal(await evaluate(empty.call,'document.body.dataset.entryView'),'start','a near-match fragment does not open Saved');
+  const initial=await readMemory(empty.call);assert.deepEqual(initial.device.cards,[]);
+  await empty.call('Page.navigate',{url:origin+savedLink.href});await waitSaved(empty.call);
+  assert.deepEqual(await readMemory(empty.call),initial,'hashchange into an empty collection does not write memory');
+  assert.equal(await evaluate(empty.call,'document.activeElement?.id'),'result-heading');
+  assert.equal(await evaluate(empty.call,'document.getElementById("empty").hidden'),false,'the existing empty state is visible');
+  await empty.call('Page.reload',{ignoreCache:true});await loaded(empty.call);await waitSaved(empty.call);
+  assert.deepEqual(await readMemory(empty.call),initial,'an empty direct entry stays read-only');
+  await empty.call('Page.navigate',{url:origin+'/#briefing-topic=science'});await pause(100);
+  assert.equal(await evaluate(empty.call,'document.body.dataset.entryView'),'daily','shared-topic entry retains its existing view');
+  await empty.call('Page.navigate',{url:origin+'/#org=teams&topics=science&query=controlled&cards=6'});await pause(100);
+  assert.equal(await evaluate(empty.call,'document.body.dataset.entryView'),'topics','organization entry retains its existing view');
+  assert.equal(await evaluate(empty.call,'document.getElementById("query").value'),'controlled');
+  assert.equal(await evaluate(empty.call,'document.querySelector("[data-view=saved]").getAttribute("aria-pressed")'),'false');
+ }finally{await empty.close();await call('Page.bringToFront');}
+ assert.equal(personal.writes.length,writesBefore,'collection navigation never writes a private account profile');
+ return {status:'WALLET_SAVED_NAVIGATION_PASS',confirmedLink:savedLink.href,actualWalletLink:true,originalSourceRetained:true,
+  directEntryAndReload:true,hashchange:true,strictFragment:true,emptyCollection:true,removeOnlyChosenOriginal:true,
+  otherRecordsUnchanged:true,sharedTopicAndOrganizationPreserved:true,screenshot,
+  scope:'Actual compiled reader and IndexedDB in Chromium after the private fixture is deactivated. Other public records and nonempty comparison/focus are controlled test setup; no live account or source check.'};
+}
+
 async function run(){
  if(typeof WebSocket!=='function')throw Error('DLKT_UI_NODE_WEBSOCKET_UNAVAILABLE');
  const bin=process.env.DLKT_CHROME_BIN??'/usr/bin/google-chrome';
@@ -1251,8 +1326,9 @@ async function run(){
   const account=await verifyAccountSurfaces(cdp,'http://'+HOST+':'+binding.port,outputDir);
   const personalProfile=await verifyPersonalProfileFlow({call:cdp,origin:'http://'+HOST+':'+binding.port,
    fixture:personal,evaluate,loaded,focusSelector,keyboard,openIsolated:()=>openIsolatedChrome(port),outputDir,emitVisualPreview});
+  const savedNavigation=await verifyWalletSavedNavigation(cdp,'http://'+HOST+':'+binding.port,fixture,personal,personalProfile.savedCardLink,outputDir,()=>openIsolatedChrome(port));
   const result={version:'dlkt-info-offline-browser-smoke-3',status:'OFFLINE_BROWSER_PASS',
-   scope:'local-built-reader-with-controlled-news-local-and-private-profile-transport',viewports:observations,account,personalProfile,fixture:{storyCount:fixture.storyCount,articleTotal:fixture.articleTotal,groupOriginals:fixture.urls.length,sourceOnlyOriginals:fixture.sourceOnly.length,localCards:fixture.localIds.length,localContract:'currentLocalSnapshot'},
+   scope:'local-built-reader-with-controlled-news-local-and-private-profile-transport',viewports:observations,account,personalProfile,savedNavigation,fixture:{storyCount:fixture.storyCount,articleTotal:fixture.articleTotal,groupOriginals:fixture.urls.length,sourceOnlyOriginals:fixture.sourceOnly.length,localCards:fixture.localIds.length,localContract:'currentLocalSnapshot'},
    limitations:['News pages use the actual service over controlled corpus fixtures. The additional private phase uses synthetic account identities; no external publisher request, hosted authentication, payment or production runtime availability is tested.',
     'The three grouped publisher headlines and four reviewed-source originals reproduce observed metadata; source-check and publication dates are controlled fixtures.',
     'Local weather and CMTEB records are synthetic controlled fixtures validated by the actual city/source contracts, not live operator or forecast checks.',

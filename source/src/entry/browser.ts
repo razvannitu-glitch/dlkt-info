@@ -46,6 +46,9 @@ function present(): void {
 function chooseView(view: EntryView): void {
   state = reduceEntry(state, { type: 'choose', view }); cancelSearch(); present();
 }
+function openSaved(): void {
+  chooseView('topics'); document.querySelector<HTMLButtonElement>('[data-view=saved]')?.click();
+}
 function openToday(): void {
   chooseView('start');
   required<HTMLElement>('entry-title').focus();
@@ -144,7 +147,7 @@ document.querySelectorAll<HTMLButtonElement>('[data-entry-mode]').forEach(button
 document.querySelectorAll<HTMLButtonElement>('[data-entry-topic]').forEach(button => button.addEventListener('click', () => requestTopics('', button.dataset.entryTopic ?? 'all')));
 required<HTMLButtonElement>('entry-weather').addEventListener('click', openCityBriefing);
 required<HTMLButtonElement>('entry-nearby').addEventListener('click', () => { state = reduceEntry(state, { type: 'interact' }); required<HTMLButtonElement>('choose-place').click(); });
-required<HTMLButtonElement>('entry-saved').addEventListener('click', () => { chooseView('topics'); document.querySelector<HTMLButtonElement>('[data-view=saved]')?.click(); });
+required<HTMLButtonElement>('entry-saved').addEventListener('click', openSaved);
 required<HTMLButtonElement>('entry-today').addEventListener('click', openToday);
 required<HTMLButtonElement>('entry-return').addEventListener('click', openToday);
 required<HTMLButtonElement>('entry-show-city').addEventListener('click', openCityBriefing);
@@ -180,10 +183,11 @@ document.addEventListener('dlkt:daily-selected',event=>{if(!(event instanceof Cu
 
 required<HTMLDialogElement>('place-dialog').addEventListener('close',()=>{queueMicrotask(()=>{delete document.body.dataset.dailyPicking;});});
 
-function openSharedTopic():void{
+function openLinkedView():void{
+ if(window.location.hash === '#saved'){openSaved();return;}
  if(organizationSetupFromHash(window.location.hash)){chooseView('topics');return;}
  const topic=sharedTopic(window.location.hash);if(!topic)return;
  chooseView('daily');document.dispatchEvent(new CustomEvent('dlkt:shared-topic',{detail:{topic}}));
 }
-if(document.readyState!=='complete')document.addEventListener('DOMContentLoaded',openSharedTopic,{once:true});else queueMicrotask(openSharedTopic);
-window.addEventListener('hashchange',openSharedTopic);
+if(document.readyState!=='complete')document.addEventListener('DOMContentLoaded',openLinkedView,{once:true});else queueMicrotask(openLinkedView);
+window.addEventListener('hashchange',openLinkedView);

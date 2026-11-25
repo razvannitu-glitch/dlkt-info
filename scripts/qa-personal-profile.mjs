@@ -372,7 +372,7 @@ function personalSurface() {
   const visible = node => node && node.getClientRects().length > 0 && getComputedStyle(node).visibility !== 'hidden';
   const rect = node => {const box = node.getBoundingClientRect(); return {left: box.left, right: box.right, width: box.width, height: box.height};};
   const root = document.getElementById('wallet-personal');
-  const controls = ['wallet-save', 'wallet-personal-refresh', 'wallet-personal-more']
+  const controls = ['wallet-saved', 'wallet-save', 'wallet-personal-refresh', 'wallet-personal-more']
     .map(id => document.getElementById(id)).filter(visible).map(node => ({id: node.id, fontSize: parseFloat(getComputedStyle(node).fontSize), ...rect(node)}));
   for (const input of document.querySelectorAll('#wallet-city, #wallet-local-needs input')) {
     const label = input.closest('label');
@@ -480,8 +480,14 @@ export async function verifyPersonalProfileFlow({call, origin, fixture, evaluate
 
     const memoryBeforeSave = await evaluate(call, '(async function(){const {DeviceMemory}=await import("/device-memory.js");return await new DeviceMemory().read();})()');
     const savedId = expected.technology.slice('topic:'.length);
+    const savedLinkSelector = '[data-personal-id="' + expected.technology + '"] p[role="status"] a';
+    assert.equal(await evaluate(call, 'document.querySelector(' + JSON.stringify(savedLinkSelector) + ')===null'), true,
+      'a personal card has no success link before an explicit confirmed save');
     await click('[data-personal-save="' + savedId + '"]');
     await waitFor(call, evaluate, '(function(){const n=document.querySelector(\'[data-personal-save="' + savedId + '"]\');return n&&!n.disabled&&n.parentElement.textContent.includes("This public source card was saved");})()', 'SAVE_PUBLIC_CARD');
+    const savedLink = await evaluate(call, '(function(){const a=document.querySelector(' + JSON.stringify(savedLinkSelector) + ');return a?{href:a.getAttribute("href"),target:a.target,text:a.textContent}:null;})()');
+    assert.deepEqual(savedLink, {href: '/#saved', target: '', text: 'Open saved cards in this browser'},
+      'a committed public save exposes a same-tab browser-only collection link');
     const memoryAfterSave = await evaluate(call, '(async function(){const {DeviceMemory}=await import("/device-memory.js");return await new DeviceMemory().read();})()');
     assert.equal(memoryBeforeSave.cards.some(card => card.id === savedId), false, 'the selected public fixture was not previously saved');
     assert.equal(memoryAfterSave.cards.length, memoryBeforeSave.cards.length + 1, 'the explicit source action saves one public card');
@@ -505,6 +511,26 @@ export async function verifyPersonalProfileFlow({call, origin, fixture, evaluate
       assert.equal(await dailyMemory(second.call, evaluate), 'null', 'fresh browser context has no inherited browser-only DailyState');
       assert.deepEqual(fixture.profile(A), savedA, 'restoring profile in a new browser context is read-only');
     } finally {await second.close(); await call('Page.bringToFront');}
+    // Storage denial is injected only in a disposable, isolated QA context.
+    const blocked = await openIsolated();
+    try {
+      await blocked.call('Page.addScriptToEvaluateOnNewDocument', {source:
+        'Object.defineProperty(window,"indexedDB",{configurable:true,get(){throw new DOMException("QA_STORAGE_BLOCKED","SecurityError");}});'});
+      await setCookie(blocked.call, origin, A);
+      await blocked.call('Page.navigate', {url: origin + '/wallet'}); await loaded(blocked.call);
+      await blocked.call('Page.bringToFront');
+      await waitFor(blocked.call, evaluate, 'Boolean(document.querySelector(' +
+        JSON.stringify('[data-personal-save="' + savedId + '"]') + '))', 'BLOCKED_STORAGE_CARD');
+      await activate(blocked.call, evaluate, focusSelector, keyboard, '[data-personal-save="' + savedId + '"]');
+      await waitFor(blocked.call, evaluate, '(function(){const n=document.querySelector(' +
+        JSON.stringify('[data-personal-save="' + savedId + '"]') +
+        ');return n&&!n.disabled&&n.parentElement.textContent.includes("Saving in this browser could not be confirmed.");})()', 'BLOCKED_STORAGE_FEEDBACK');
+      assert.equal(await evaluate(blocked.call, 'document.querySelector(' + JSON.stringify(savedLinkSelector) + ')===null'), true,
+        'failed storage does not expose a success link');
+      assert.equal((await evaluate(blocked.call, '(' + privateProbe.toString() + ')()')).personalHidden, false,
+        'a storage failure leaves the source cards readable');
+      assert.deepEqual(fixture.profile(A), savedA, 'failed browser-card storage cannot change the private profile');
+    } finally {await blocked.close(); await call('Page.bringToFront');}
     await awaitCards(A, [expected.utility, expected.technology]);
     await reload(B, [expected.weather, expected.science]);
     const bravo = await probe();
@@ -679,6 +705,7 @@ export async function verifyPersonalProfileFlow({call, origin, fixture, evaluate
       status: 'CONTROLLED_PERSONAL_PROFILE_PASS', viewports: observations,
       legacyReadWithoutWrite: true, explicitSaveBeforeSelection: true,
       boundedScrollingPagination: true, explicitPublicCardSaveOnly: true, confirmedProfileDeletion: true,
+      savedCardLink: {id: savedId, sourceUrl: expected.techUrl, href: savedLink.href}, failedStorageWithoutSuccessLink: true,
       globalInterestAndLocalNeed: true, distinctAccountSelections: true,
       isolatedBrowserRestoration: true, delayedReadOwnerRace: true, nullRevisionSaveOwnerRace: true,
       delayedSaveOwnerRace: true, sourceCompletionRevalidatesRevision: true,
