@@ -81,3 +81,22 @@ jobs:
           test "$(cat "$tmp/claim1" "$tmp/claim2" | sort | paste -sd, -)" = 0,1
           test "$(psql_test -c "SELECT count(*) FROM dlkt_info_billing.subscription_reconcile WHERE account_id='acct_ReconcileRace' AND state='leased' AND generation=1 AND fence=1 AND attempt=1;")" = 1
           echo BILLING_RECONCILIATION_PARALLEL_SESSIONS_OK
+
+  payment-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - name: Install existing locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Strict TypeScript compilation and isolated payment evidence tests
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/tsc -p docs/billing-ledger-sandbox/tsconfig.payment.json
+          node --test docs/billing-ledger-sandbox/tests/payment-proof.test.mjs
