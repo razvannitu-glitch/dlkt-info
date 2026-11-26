@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {Readable} from 'node:stream';
 import {ContinuousSnapshotService,validDailySnapshot} from '../.build/src/iceo/daily-cache.js';
-import {publicSnapshotDigest,CONTINUOUS_REFRESH_INTERVAL_MS} from '../.build/src/iceo/refresh-ledger.js';
+import {publicSnapshotDigest,CONTINUOUS_REFRESH_INTERVAL_MS,RefreshLedgerError,createRefreshLedger} from '../.build/src/iceo/refresh-ledger.js';
 import {buildNewsCorpus,validNewsCorpus} from '../.build/src/iceo/news-corpus.js';
 import {finalizeEditorialCollection} from '../.build/src/iceo/editorial-engine.js';
 import {NewsDiagnosticsBuilder,validNewsDiagnostics} from '../.build/src/iceo/news-diagnostics.js';
@@ -52,7 +52,7 @@ const emptyEnvelope=()=>({version:'iceo-shared-snapshot-1',snapshot:null,digest:
  lastScheduledAttemptAt:null,lastScheduledSuccessAt:null,status:'empty',retryAt:null});
 /** This double checks service ordering only. PostgreSQL transactions/fencing have separate database tests. */
 function persistence({stageError=false,publishError=false,readback=value=>value}={}){
- const calls=[],failures=[],stageCalls=[];let envelope=emptyEnvelope(),staged=null,committed=null;
+ const calls=[],failures=[],stageCalls=[];let envelope=emptyEnvelope(),staged=null,committed=null,scheduled=false;
  const claim={version:'iceo-refresh-claim-1',state:'claimed',slot:Math.floor(now/CONTINUOUS_REFRESH_INTERVAL_MS),fence:7,
   leaseToken:'00000000-0000-4000-8000-000000000007',leaseExpiresAt:iso(now+90_000),retryAt:null};
  const corpus={
@@ -70,12 +70,14 @@ function persistence({stageError=false,publishError=false,readback=value=>value}
  };
  const ledger={
   writable:true,
-  async claim(){calls.push('claim');envelope={...envelope,lastAttemptAt:iso(now),status:'refreshing'};return clone(claim);},
+  async claim(_worker,trigger){calls.push('claim');scheduled=trigger.kind==='scheduled';
+   envelope={...envelope,lastAttemptAt:iso(now),lastScheduledAttemptAt:scheduled?iso(now):envelope.lastScheduledAttemptAt,status:'refreshing'};return clone(claim);},
   async read(){calls.push('snapshot-read');return clone(envelope);},
   async publish(received,value,digest){
    calls.push('snapshot-publish');assert.deepEqual(received,claim);assert.equal(digest,publicSnapshotDigest(value));
    if(publishError)throw Error('CONTROLLED_PUBLISH_FAILURE');
-   envelope={...envelope,snapshot:clone(value),digest,revision:envelope.revision+1,refreshedAt:iso(now),status:'ready',retryAt:null};
+   envelope={...envelope,snapshot:clone(value),digest,revision:envelope.revision+1,refreshedAt:iso(now),status:'ready',retryAt:null,
+    lastScheduledSuccessAt:scheduled?iso(now):envelope.lastScheduledSuccessAt};
    if(staged)committed={version:'dlkt-news-epoch-1',epoch:staged.epoch,revision:envelope.revision,generatedAt:staged.value.generatedAt,
     publishedAt:iso(now),expiresAt:iso(now+3_600_000),digest:staged.digest,corpus:clone(staged.value)};
    return clone(envelope);
@@ -263,4 +265,172 @@ test('common collection completion aligns snapshot and corpus generation without
  assert.equal(result.corpus.local[0].snapshot.articles[0].validUntil,iso(localChecked+300000));
  assert.equal(result.snapshot.cards[0].observedAt,iso(now));assert.equal(result.snapshot.cards[0].date,before.global.date);
  assert.equal(result.snapshot.cards[0].contentHash,before.global.contentHash);assert.deepEqual(result.diagnostics,diagnostics);
+});
+
+/** The transport error occurs after the atomic write in the successful-commit case. */
+function losePublishAcknowledgement(storage,{committed=true,error=new RefreshLedgerError('REFRESH_LEDGER_UNAVAILABLE')}={}){
+ const publish=storage.ledger.publish.bind(storage.ledger);
+ storage.ledger.publish=async(...args)=>{
+  if(committed)await publish(...args);else storage.calls.push('snapshot-publish');
+  throw error;
+ };
+}
+const scheduledRefresh=()=>({kind:'scheduled',executionId:'controlled-reconciliation',scheduleName:'iceo-daily-top',
+ scheduledAt:iso(now),namespace:'default',expression:'*/2 * * * *'});
+
+test('lost publication acknowledgement reconciles the exact committed fenced corpus once',async()=>{
+ for(const trigger of [{kind:'manual'},scheduledRefresh()]){
+  const storage=persistence(),value=collection();losePublishAcknowledgement(storage);
+  const service=new ContinuousSnapshotService(storage.ledger,async()=>{storage.calls.push('collect');return value;},null,()=>now,45000,storage.corpus);
+  const receipt=await service.refresh(trigger);
+  assert.equal(receipt.state,'published');assert.equal(receipt.persistedReadback,true);
+  assert.equal(receipt.snapshotDigest,storage.envelope.digest);assert.equal(receipt.revision,storage.committed.revision);
+  assert.equal(receipt.refreshedAt,storage.envelope.refreshedAt);
+  assert.equal(receipt.lastScheduledSuccessAt,trigger.kind==='scheduled'?storage.envelope.refreshedAt:null);
+  assert.deepEqual(storage.calls,['claim','snapshot-read','collect','corpus-stage','snapshot-publish','snapshot-read','corpus-read:7']);
+  assert.deepEqual(storage.failures,[]);assert.deepEqual(await service.snapshot(),value.snapshot);
+ }
+});
+
+test('a typed unavailable publish without a committed write cannot recover staged data',async()=>{
+ const storage=persistence();losePublishAcknowledgement(storage,{committed:false});
+ await assert.rejects(new ContinuousSnapshotService(storage.ledger,async()=>collection(),null,()=>now,45000,storage.corpus).refresh(),/CONTINUOUS_SNAPSHOT_UNAVAILABLE/u);
+ assert.equal(storage.envelope.snapshot,null);assert.equal(storage.committed,null);
+ assert.deepEqual(storage.calls,['claim','snapshot-read','corpus-stage','snapshot-publish','snapshot-read','failed']);
+ assert.deepEqual(storage.failures,['publish-unavailable']);
+});
+
+test('reconciliation rejects invalid, old, different, newer and non-ready public readback',async()=>{
+ const candidates=[
+  envelope=>({...envelope,writerKey:'private-fixture'}),
+  envelope=>({...envelope,digest:'f'.repeat(64)}),
+  envelope=>{const value=clone(envelope.snapshot);value.generatedAt=iso(now-1);
+   return {...envelope,snapshot:value,digest:publicSnapshotDigest(value)};},
+  envelope=>{const value=clone(envelope.snapshot);value.generatedAt=iso(now+1);
+   return {...envelope,snapshot:value,digest:publicSnapshotDigest(value),revision:envelope.revision+1};},
+  envelope=>({...envelope,status:'refreshing'}),
+  envelope=>({...envelope,status:'backoff',retryAt:iso(now+30000)}),
+  envelope=>({...envelope,retryAt:iso(now+30000)}),
+  envelope=>({...envelope,refreshedAt:iso(now-1)}),
+ ];
+ for(const mutate of candidates){
+  const storage=persistence(),read=storage.ledger.read.bind(storage.ledger);losePublishAcknowledgement(storage);
+  storage.ledger.read=async()=>{const value=await read();return storage.calls.includes('snapshot-publish')?mutate(value):value;};
+  await assert.rejects(new ContinuousSnapshotService(storage.ledger,async()=>collection(),null,()=>now,45000,storage.corpus).refresh(),/CONTINUOUS_(?:SNAPSHOT_UNAVAILABLE|READBACK_FAILED)/u);
+  assert.equal(storage.calls.filter(value=>value==='snapshot-publish').length,1);
+  assert.equal(storage.calls.filter(value=>value==='snapshot-read').length,2);
+  assert.equal(storage.calls.some(value=>value.startsWith('corpus-read:')),false);
+  assert.deepEqual(storage.failures,['publish-unavailable']);
+ }
+});
+
+test('recovered scheduled publication requires the database scheduled-success timestamp',async()=>{
+ for(const stamp of [null,iso(now-1)]){
+  const storage=persistence(),read=storage.ledger.read.bind(storage.ledger);losePublishAcknowledgement(storage);
+  storage.ledger.read=async()=>{const value=await read();return storage.calls.includes('snapshot-publish')?{...value,lastScheduledSuccessAt:stamp}:value;};
+  await assert.rejects(new ContinuousSnapshotService(storage.ledger,async()=>collection(),null,()=>now,45000,storage.corpus).refresh(scheduledRefresh()),/CONTINUOUS_READBACK_FAILED/u);
+  assert.equal(storage.calls.filter(value=>value==='snapshot-publish').length,1);
+  assert.equal(storage.calls.some(value=>value.startsWith('corpus-read:')),false);
+  assert.deepEqual(storage.failures,['publish-unavailable']);
+ }
+});
+
+test('a recovered snapshot still requires exact committed corpus epoch, digest, time and revision',async()=>{
+ for(const mutate of [
+  ()=>null,value=>({...value,epoch:'8'}),value=>({...value,digest:'f'.repeat(64)}),
+  value=>({...value,revision:value.revision+1}),value=>({...value,generatedAt:iso(now-1)}),
+ ]){
+  const storage=persistence({readback:mutate});losePublishAcknowledgement(storage);
+  await assert.rejects(new ContinuousSnapshotService(storage.ledger,async()=>collection(),null,()=>now,45000,storage.corpus).refresh(),/CONTINUOUS_CORPUS_READBACK_FAILED/u);
+  assert.equal(storage.calls.filter(value=>value==='snapshot-publish').length,1);
+  assert.equal(storage.calls.filter(value=>value==='snapshot-read').length,2);
+  assert.equal(storage.calls.filter(value=>value==='corpus-read:7').length,1);
+  assert.deepEqual(storage.failures,['publish-unavailable']);
+ }
+});
+
+test('reconciliation read failures stay failures and never replay any write',async()=>{
+ for(const boundary of ['snapshot','corpus']){
+  const storage=persistence(),read=storage.ledger.read.bind(storage.ledger);losePublishAcknowledgement(storage);
+  if(boundary==='snapshot')storage.ledger.read=async()=>{
+   if(storage.calls.includes('snapshot-publish')){storage.calls.push('snapshot-read');throw new RefreshLedgerError('REFRESH_LEDGER_UNAVAILABLE');}
+   return read();
+  };
+  else storage.corpus.read=async()=>{storage.calls.push('corpus-read:7');throw Error('CONTROLLED_CORPUS_READ_UNAVAILABLE');};
+  await assert.rejects(new ContinuousSnapshotService(storage.ledger,async()=>collection(),null,()=>now,45000,storage.corpus).refresh());
+  assert.equal(storage.calls.filter(value=>value==='snapshot-publish').length,1);
+  assert.equal(storage.calls.filter(value=>value==='snapshot-read').length,2);
+  assert.equal(storage.stageCalls.length,1);assert.deepEqual(storage.failures,['publish-unavailable']);
+ }
+});
+
+test('recovery never substitutes an epoch from another fence',async()=>{
+ const storage=persistence(),stage=storage.corpus.stage.bind(storage.corpus);losePublishAcknowledgement(storage);
+ storage.corpus.stage=async(...args)=>({...await stage(...args),epoch:'8'});
+ await assert.rejects(new ContinuousSnapshotService(storage.ledger,async()=>collection(),null,()=>now,45000,storage.corpus).refresh(),/REFRESH_LEDGER_UNAVAILABLE/u);
+ assert.equal(storage.calls.filter(value=>value==='snapshot-publish').length,1);
+ assert.equal(storage.calls.filter(value=>value==='snapshot-read').length,1);
+ assert.equal(storage.calls.some(value=>value.startsWith('corpus-read:')),false);
+ assert.deepEqual(storage.failures,['publish-unavailable']);
+});
+
+test('validation and untyped errors do not enter publication reconciliation',async()=>{
+ for(const error of [new RefreshLedgerError('REFRESH_LEDGER_INVALID'),Error('REFRESH_LEDGER_UNAVAILABLE'),Object.assign(Error('upstream'),{code:'REFRESH_LEDGER_UNAVAILABLE'})]){
+  const storage=persistence();losePublishAcknowledgement(storage,{error});
+  await assert.rejects(new ContinuousSnapshotService(storage.ledger,async()=>collection(),null,()=>now,45000,storage.corpus).refresh(),error);
+  assert.equal(storage.calls.filter(value=>value==='snapshot-publish').length,1);
+  assert.equal(storage.calls.filter(value=>value==='snapshot-read').length,1);
+  assert.equal(storage.calls.some(value=>value.startsWith('corpus-read:')),false);
+  assert.deepEqual(storage.failures,['publish-unavailable']);
+ }
+});
+
+test('legacy snapshot-only publication errors cannot recover without the corpus fence binding',async()=>{
+ const storage=persistence();losePublishAcknowledgement(storage);
+ await assert.rejects(new ContinuousSnapshotService(storage.ledger,async()=>collection().snapshot,null,()=>now,45000,storage.corpus).refresh(),/REFRESH_LEDGER_UNAVAILABLE/u);
+ assert.equal(storage.stageCalls.length,0);assert.equal(storage.calls.filter(value=>value==='snapshot-read').length,1);
+ assert.equal(storage.calls.filter(value=>value==='snapshot-publish').length,1);assert.deepEqual(storage.failures,['publish-unavailable']);
+});
+
+test('a malformed successful acknowledgement still fails validation without recovering',async()=>{
+ const storage=persistence(),publish=storage.ledger.publish.bind(storage.ledger);
+ storage.ledger.publish=async(...args)=>({...await publish(...args),privateField:'fixture'});
+ await assert.rejects(new ContinuousSnapshotService(storage.ledger,async()=>collection(),null,()=>now,45000,storage.corpus).refresh(),/CONTINUOUS_SNAPSHOT_UNAVAILABLE/u);
+ assert.equal(storage.calls.filter(value=>value==='snapshot-publish').length,1);
+ assert.equal(storage.calls.filter(value=>value==='snapshot-read').length,2);
+ assert.equal(storage.calls.some(value=>value.startsWith('corpus-read:')),false);
+ assert.deepEqual(storage.failures,['publish-unavailable']);
+});
+
+test('recovery diagnostics contain only a constant marker after complete persisted readback',async()=>{
+ const storage=persistence(),info=[],warnings=[],originalInfo=console.info,originalWarn=console.warn;
+ losePublishAcknowledgement(storage);
+ console.info=(...args)=>info.push(args);console.warn=(...args)=>warnings.push(args);
+ try{
+  await new ContinuousSnapshotService(storage.ledger,async()=>collection(),null,()=>now,45000,storage.corpus).refresh();
+ }finally{console.info=originalInfo;console.warn=originalWarn;}
+ assert.deepEqual(info,[['DLKT_ICEO_REFRESH_PUBLICATION_RECONCILED']]);assert.deepEqual(warnings,[]);
+});
+
+test('actual ledger adapter reconciles a transport loss after the controlled commit',async()=>{
+ const storage=persistence(),routes=[],value=collection();
+ const environment={DLKT_INFO_SUPABASE_PROJECT_REF:'abcdefghijklmnopqrst',DLKT_INFO_SUPABASE_URL:'https://abcdefghijklmnopqrst.supabase.co',
+  DLKT_INFO_SUPABASE_PUBLISHABLE_KEY:'sb_publishable_'+'x'.repeat(30),DLKT_INFO_SHARE_ARCHIVE_WRITE_KEY:'s'.repeat(43)};
+ const fetcher=async(url,init)=>{
+  const path=new URL(url).pathname.split('/').at(-1),args=JSON.parse(init.body);routes.push(path);
+  const json=value=>new Response(JSON.stringify(value),{headers:{'content-type':'application/json'}});
+  if(path==='dlkt_info_claim_public_refresh')return json(await storage.ledger.claim(args.p_worker_id,args.p_trigger));
+  if(path==='dlkt_info_read_public_snapshot')return json(await storage.ledger.read());
+  if(path==='dlkt_info_publish_public_snapshot'){
+   const claim=storage.stageCalls[0].claim;assert.equal(args.p_fence,claim.fence);assert.equal(args.p_lease_token,claim.leaseToken);
+   await storage.ledger.publish(claim,args.p_snapshot,args.p_digest);throw Error('CONTROLLED_TRANSPORT_LOSS');
+  }
+  assert.fail('unexpected write or RPC '+path);
+ };
+ const ledger=createRefreshLedger(environment,fetcher);assert.ok(ledger);
+ const receipt=await new ContinuousSnapshotService(ledger,async()=>value,null,()=>now,45000,storage.corpus).refresh();
+ assert.equal(receipt.persistedReadback,true);assert.equal(receipt.snapshotDigest,publicSnapshotDigest(value.snapshot));
+ assert.equal(routes.filter(path=>path==='dlkt_info_publish_public_snapshot').length,1);
+ assert.equal(routes.filter(path=>path==='dlkt_info_read_public_snapshot').length,2);
+ assert.deepEqual(storage.failures,[]);assert.equal(storage.stageCalls.length,1);
 });

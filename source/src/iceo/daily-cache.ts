@@ -10,7 +10,7 @@ import {NEWS_DISCOVERY_INDEXES} from './news-sources.js';
 import { ICEO_SOURCES } from './registry.js';
 import { safeLink } from './source-links.js';
 import { PUBLIC_TOPICS } from './topics.js';
-import {CONTINUOUS_REFRESH_INTERVAL_MS,CONTINUOUS_REFRESH_DEADLINE_MS,createRefreshLedger,publicSnapshotDigest,validSharedEnvelope,validRefreshTrigger,
+import {CONTINUOUS_REFRESH_INTERVAL_MS,CONTINUOUS_REFRESH_DEADLINE_MS,createRefreshLedger,publicSnapshotDigest,validSharedEnvelope,validRefreshTrigger,RefreshLedgerError,
   type RefreshLedger,type RefreshTrigger,type RefreshFailure,type SharedSnapshotEnvelope} from './refresh-ledger.js';
 
 export const DAILY_CACHE_SLOT_MS = 15 * 60_000;
@@ -330,9 +330,24 @@ export class ContinuousSnapshotService {
       phase='corpus-stage';
       const staged=collection?await this.corpusStore!.stage(claim,collection.corpus,collection.diagnostics):null;
       phase='snapshot-publish';
-      const published=await this.ledger.publish(claim,snapshot,snapshotDigest);
+      let published:SharedSnapshotEnvelope,reconciled=false;
+      try{published=await this.ledger.publish(claim,snapshot,snapshotDigest);}
+      catch(error){
+        // A lost acknowledgement does not establish whether the write committed.
+        // Reconcile this fenced corpus once; never replay publication or collection.
+        if(!(error instanceof RefreshLedgerError)||error.code!=='REFRESH_LEDGER_UNAVAILABLE'
+          ||!staged||staged.epoch!==String(claim.fence))throw error;
+        phase='snapshot-readback';
+        const recovered=await this.ledger.read(),view=this.publicView(recovered);
+        if(recovered.digest!==snapshotDigest||view.snapshot.generatedAt!==snapshot.generatedAt
+          ||recovered.status!=='ready'||recovered.retryAt!==null
+          ||Date.parse(recovered.refreshedAt??'')<started
+          ||trigger.kind==='scheduled'&&recovered.lastScheduledSuccessAt!==recovered.refreshedAt)
+          throw new Error('CONTINUOUS_READBACK_FAILED');
+        published=recovered;reconciled=true;
+      }
       phase='snapshot-readback';
-      const confirmed=await this.ledger.read();
+      const confirmed=reconciled?published:await this.ledger.read();
       this.publicView(published);const result=this.publicView(confirmed);
       if(published.digest!==snapshotDigest||confirmed.revision<published.revision
         ||confirmed.revision===published.revision&&confirmed.digest!==snapshotDigest)throw new Error('CONTINUOUS_READBACK_FAILED');
@@ -344,7 +359,9 @@ export class ContinuousSnapshotService {
       phase='receipt';
       this.memory=undefined;this.remember(result);
       // SQL owns the snapshot and receipt. Runtime cache writes never decide scheduler success.
-      return this.receipt('published',trigger,claim.slot,published,true,published.retryAt);
+      const receipt=this.receipt('published',trigger,claim.slot,published,true,published.retryAt);
+      if(reconciled)console.info('DLKT_ICEO_REFRESH_PUBLICATION_RECONCILED');
+      return receipt;
     }catch(error){
       // Phase and bounded code only. No source URLs, data, credentials or stack traces.
       console.warn('DLKT_ICEO_REFRESH_PHASE_FAILED',phase,safeRefreshFailureCode(error));
