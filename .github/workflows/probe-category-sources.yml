@@ -8,8 +8,12 @@ on:
       - codex/probe-local-source-photos-20261126
       - codex/readback-local-source-photos-20261126
       - codex/diagnose-local-source-photos-20261126
+      - codex/probe-knowledge-intelligence-20261126
     paths:
       - scripts/probe-category-sources.mjs
+      - scripts/knowledge-editorial-evidence.mjs
+      - scripts/knowledge-claim-evidence.mjs
+      - scripts/knowledge-editorial-revalidation.mjs
       - scripts/probe-local-source-photos.mjs
       - scripts/verify-local-source-photos.mjs
       - scripts/diagnose-local-source-photos.mjs
@@ -26,9 +30,9 @@ concurrency:
 jobs:
   probe:
     name: Bounded publisher metadata observations
-    if: github.ref == 'refs/heads/codex/iceo-category-coverage-20261123' || github.ref == 'refs/heads/codex/iceo-ro-source-supply-20261124' || github.ref == 'refs/heads/codex/probe-local-source-photos-20261126' || github.ref == 'refs/heads/codex/readback-local-source-photos-20261126' || github.ref == 'refs/heads/codex/diagnose-local-source-photos-20261126'
+    if: github.ref == 'refs/heads/codex/iceo-category-coverage-20261123' || github.ref == 'refs/heads/codex/iceo-ro-source-supply-20261124' || github.ref == 'refs/heads/codex/probe-local-source-photos-20261126' || github.ref == 'refs/heads/codex/readback-local-source-photos-20261126' || github.ref == 'refs/heads/codex/diagnose-local-source-photos-20261126' || github.ref == 'refs/heads/codex/probe-knowledge-intelligence-20261126'
     env:
-      DLKT_SOURCE_PROBE_GROUP: ${{ github.ref == 'refs/heads/codex/iceo-ro-source-supply-20261124' && 'ro-admitted' || 'protv-compatibility' }}
+      DLKT_SOURCE_PROBE_GROUP: ${{ github.ref == 'refs/heads/codex/probe-knowledge-intelligence-20261126' && 'knowledge-editorial' || github.ref == 'refs/heads/codex/iceo-ro-source-supply-20261124' && 'ro-admitted' || 'protv-compatibility' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:
