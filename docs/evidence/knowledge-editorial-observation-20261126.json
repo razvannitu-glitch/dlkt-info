@@ -1,0 +1,165 @@
+{
+  "kind": "observed-evidence-not-approval",
+  "workflowRun": 45888933255,
+  "workflowJob": 140146505166,
+  "probe": "dlkt-knowledge-editorial-evidence-1",
+  "commit": "bad1a13a88cb2c132aaf72f6bd50d600559b6c53",
+  "startedAt": "2026-11-26T20:09:41.326Z",
+  "finishedAt": "2026-11-26T20:09:46.619Z",
+  "attempts": {
+    "robots": 2,
+    "feed": 0,
+    "article": 4
+  },
+  "limits": {
+    "robots": 2,
+    "feed": 0,
+    "article": 4
+  },
+  "robotsParserChecks": {
+    "state": "passed",
+    "cases": 16
+  },
+  "state": "observations-collected",
+  "activationAllowed": false,
+  "reports": [
+    {
+      "id": "dlkt-elsewhere-nsw-fuelcheck",
+      "revision": 1,
+      "sourceUrl": "https://www.nsw.gov.au/legal-and-justice/consumer-rights-and-protection/advertising-product-packaging-and-pricing-laws/fuel-pricing-discounts-and-signage/check-fuel-prices",
+      "policyUrl": "https://www.nsw.gov.au/nsw-government/about-website/copyright",
+      "candidateDigest": "772d754d42ceb10260b4c02c1b4c97fcb1949ddbf61d6b0cd17fb2b88fa1c88b",
+      "activationAllowed": false,
+      "semanticReviewRequired": true,
+      "rightsReviewRequired": true,
+      "translationReviewRequired": true,
+      "state": "observed-for-review",
+      "reason": null,
+      "robots": {
+        "url": "https://www.nsw.gov.au/robots.txt",
+        "status": 200,
+        "contentType": "text/plain",
+        "complete": true,
+        "bodySha256": "5548b32a233fdb5eee9fd81cb309d2d6618f1585baaf92272fc2ed8567898c68"
+      },
+      "access": {
+        "source": {
+          "allowed": true,
+          "reason": "no-matching-disallow"
+        },
+        "policy": {
+          "allowed": true,
+          "reason": "no-matching-disallow"
+        }
+      },
+      "source": {
+        "url": "https://www.nsw.gov.au/legal-and-justice/consumer-rights-and-protection/advertising-product-packaging-and-pricing-laws/fuel-pricing-discounts-and-signage/check-fuel-prices",
+        "status": 200,
+        "contentType": "text/html",
+        "complete": true,
+        "bodySha256": "3ec5151cf994cee39fe2433adaed19cf2d48637795082af55a4f341f6abfb5dc",
+        "state": "observed-for-review",
+        "reason": null,
+        "canonicalObserved": true,
+        "mainSha256": "6e0f9e89df158b5826e804bec1779f62e4157145ba44e3e671081838670a8f28",
+        "signals": {
+          "service": true,
+          "free": true,
+          "pricing": true,
+          "realTime": true,
+          "driving": true
+        }
+      },
+      "terms": {
+        "url": "https://www.nsw.gov.au/nsw-government/about-website/copyright",
+        "status": 200,
+        "contentType": "text/html",
+        "complete": true,
+        "bodySha256": "2b1ae6d268f8b9ed0b49c5f885093417d0992da5f87298a901413659b54a5e2e",
+        "state": "observed-for-review",
+        "reason": null,
+        "canonicalObserved": true,
+        "mainSha256": "b6ea1cbbb9801efc493f87f157a195dec1b099eac023fa00d5a07df76a44af09",
+        "signals": {
+          "licence": true,
+          "credit": true,
+          "exceptions": true,
+          "thirdParty": true,
+          "marks": true
+        }
+      },
+      "observedAt": "2026-11-26T20:09:43.944Z",
+      "candidateIdentity": "exact-laboratory-card-digest-not-admission"
+    },
+    {
+      "id": "dlkt-elsewhere-nz-unit-pricing",
+      "revision": 1,
+      "sourceUrl": "https://www.comcom.govt.nz/regulated-industries/grocery/information-for-consumers/",
+      "policyUrl": "https://www.comcom.govt.nz/using-our-website/copyright/",
+      "candidateDigest": "e42b9287c79f455ec5ee9c2b8654f76038b849c3ba40eda4a2eb4612880d5999",
+      "activationAllowed": false,
+      "semanticReviewRequired": true,
+      "rightsReviewRequired": true,
+      "translationReviewRequired": true,
+      "state": "observed-for-review",
+      "reason": null,
+      "robots": {
+        "url": "https://www.comcom.govt.nz/robots.txt",
+        "status": 200,
+        "contentType": "text/plain",
+        "complete": true,
+        "bodySha256": "da91c62fffe522340551a6f3cb535feda23389de9e7b44cdd7b244ec8fc05e0f"
+      },
+      "access": {
+        "source": {
+          "allowed": true,
+          "reason": "no-matching-disallow"
+        },
+        "policy": {
+          "allowed": true,
+          "reason": "no-matching-disallow"
+        }
+      },
+      "source": {
+        "url": "https://www.comcom.govt.nz/regulated-industries/grocery/information-for-consumers/",
+        "status": 200,
+        "contentType": "text/html",
+        "complete": true,
+        "bodySha256": "da9023feb107851a03ba5bdc1880ccb899c91c3f4c9d535cdea86611d79f3c2a",
+        "state": "observed-for-review",
+        "reason": null,
+        "canonicalObserved": true,
+        "mainSha256": "9ea596bb4b6ebcc442d755246da641420b9f184dd2e1f2c139d8735568ccb6e8",
+        "signals": {
+          "unitPricing": true,
+          "retailerScope": true,
+          "display": true,
+          "exception": true,
+          "comparison": true
+        }
+      },
+      "terms": {
+        "url": "https://www.comcom.govt.nz/using-our-website/copyright/",
+        "status": 200,
+        "contentType": "text/html",
+        "complete": true,
+        "bodySha256": "f4f4381f82a94a67c5458795a80b232120f3b6fe7a5a1c278bd83bce9131ec83",
+        "state": "observed-for-review",
+        "reason": null,
+        "canonicalObserved": true,
+        "mainSha256": "09842ef91ec3d8e995d9c85b04be0e2499b53834ef666560b8075f4db4303fb9",
+        "signals": {
+          "licence": true,
+          "credit": true,
+          "exceptions": true,
+          "thirdParty": true,
+          "marks": true,
+          "imagery": true
+        }
+      },
+      "observedAt": "2026-11-26T20:09:46.619Z",
+      "candidateIdentity": "exact-laboratory-card-digest-not-admission"
+    }
+  ],
+  "boundary": "Read-only evidence for exact laboratory content; no semantic, translation, licence or publication approval."
+}

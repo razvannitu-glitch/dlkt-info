@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
+import {readFileSync} from 'node:fs';
 import {XMLParser, XMLValidator} from 'fast-xml-parser';
 import {parseDocument, DomUtils} from 'htmlparser2';
 import {readNewsArticleMetadata, readPublisherNewsCandidates} from '../source/.build/src/iceo/news-discovery.js';
 import {NEWS_DISCOVERY_INDEXES, publisherForNewsUrl} from '../source/.build/src/iceo/news-sources.js';
 import {observeKnowledgeEvidence} from './knowledge-editorial-evidence.mjs';
+import {assessKnowledgeRevalidation} from './knowledge-editorial-revalidation.mjs';
 
 // Observational evidence only. Never changes a registry, publishes a card,
 // follows a redirect, bypasses a denial or uses credentials.
@@ -328,11 +330,13 @@ function verifyRobotsParsing(){
 }
 const robotsParserChecks=verifyRobotsParsing();
 if(probeGroup==='knowledge-editorial'){
-  const [{knowledgeRightsCandidates},{validKnowledgeCard,knowledgeRightsForCard},{knowledgeContentDigest}]=await Promise.all([
+  const [{knowledgeRightsCandidates},{validKnowledgeCard,knowledgeRightsForCard,knowledgeEditorialPayload,KNOWLEDGE_EDITORIAL_APPROVALS},{knowledgeContentDigest}]=await Promise.all([
     import('../source/tests/fixtures/knowledge-rights-candidates.mjs'),
     import('../source/.build/src/iceo/knowledge.js'),
     import('../source/.build/src/share/knowledge-resolution.js'),
   ]);
+  const previous=JSON.parse(readFileSync(new URL('../docs/evidence/knowledge-editorial-observation-20261126.json',import.meta.url),'utf8'));
+  if(previous.kind!=='observed-evidence-not-approval'||previous.workflowRun!==45888933255||previous.commit!=='bad1a13a88cb2c132aaf72f6bd50d600559b6c53'||previous.activationAllowed!==false||!Array.isArray(previous.reports)||previous.reports.length!==SOURCES.length)throw Error('KNOWLEDGE_BASELINE_PROVENANCE_INVALID');
   const reports=[];
   for(const source of SOURCES){
     try{
@@ -340,7 +344,14 @@ if(probeGroup==='knowledge-editorial'){
       if(!card||!validKnowledgeCard(card))throw Error('KNOWLEDGE_PROBE_CANDIDATE_INVALID');
       const rights=knowledgeRightsForCard(card);
       if(!rights)throw Error('KNOWLEDGE_PROBE_RIGHTS_BINDING_MISSING');
-      reports.push(await observeKnowledgeEvidence({id:card.id,revision:card.revision,sourceUrl:card.source.url,policyUrl:rights.policyUrl,candidateDigest:knowledgeContentDigest(card),get:boundedGet,parseRobots:robotsPolicy,decideRobots:robotsDecision,clock:Date.now}));
+      const candidateDigest=knowledgeContentDigest(card),identity={id:card.id,revision:card.revision,digest:candidateDigest,payload:knowledgeEditorialPayload(card),sourceUrl:card.source.url,policyUrl:rights.policyUrl,reviewedAt:card.reviewedAt,publishAt:card.publishAt,reviewBy:card.reviewBy};
+      const observation=await observeKnowledgeEvidence({id:card.id,revision:card.revision,sourceUrl:card.source.url,policyUrl:rights.policyUrl,candidateDigest,get:boundedGet,parseRobots:robotsPolicy,decideRobots:robotsDecision,clock:Date.now});
+      const prior=previous.reports.filter(item=>item.id===card.id);
+      if(prior.length!==1)throw Error('KNOWLEDGE_BASELINE_IDENTITY_INVALID');
+      const approvals=KNOWLEDGE_EDITORIAL_APPROVALS.filter(item=>item.id===card.id);
+      // The baseline file is evidence only. No trusted review is manufactured.
+      const revalidation=assessKnowledgeRevalidation({identity,observation,previousObservation:prior[0],feedApproval:approvals.length===1?approvals[0]:null,now:Date.now()});
+      reports.push({...observation,revalidation});
     }catch(error){reports.push({id:source.id,state:'held',activationAllowed:false,reason:clean(error instanceof Error?error.message:'unknown',100)});}
   }
   const complete=reports.every(report=>report.state==='observed-for-review');

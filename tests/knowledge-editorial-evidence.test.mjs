@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {observeKnowledgeEvidence} from '../scripts/knowledge-editorial-evidence.mjs';
-const origin='https://www.nsw.gov.au',sourceUrl=origin+'/example',policyUrl=origin+'/copyright';
+const origin='https://www.nsw.gov.au',sourceUrl="https://www.nsw.gov.au/legal-and-justice/consumer-rights-and-protection/advertising-product-packaging-and-pricing-laws/fuel-pricing-discounts-and-signage/check-fuel-prices",policyUrl="https://www.nsw.gov.au/nsw-government/about-website/copyright";
 const hash=text=>createHash('sha256').update(text,'utf8').digest('hex');
 const page=(title,text,canonical)=>'<html><head>'+(canonical?'<link rel="canonical" href="'+canonical+'">':'')+'</head><body><main><h1>'+title+'</h1><p>'+text+'</p></main></body></html>';
 const sourceText='FuelCheck is free, with real-time fuel prices. Never use your phone while driving.';
@@ -23,7 +23,7 @@ test('exact source and terms observations remain proposals, not permission',asyn
  assert.ok(!JSON.stringify(r).includes(sourceText));assert.ok(!JSON.stringify(r).includes(termsText));
 });
 test('unknown origin or malformed identity causes no network requests',async()=>{
- for(const patch of [{sourceUrl:'https://example.com/a'},{policyUrl:origin+'/copyright?other=1'},{candidateDigest:'fake'},{revision:0},{id:'unknown'}]){
+ for(const patch of [{sourceUrl:'https://example.com/a'},{sourceUrl:origin+'/different-public-page'},{policyUrl:origin+'/different-terms'},{policyUrl:policyUrl+'?other=1'},{candidateDigest:'fake'},{revision:0},{id:'unknown'}]){
   const h=harness(),r=await observeKnowledgeEvidence({...h.input,...patch});assert.equal(r.state,'held');assert.equal(r.activationAllowed,false);assert.equal(h.requests.length,0);
  }
 });
@@ -33,7 +33,7 @@ test('robots denial, redirect, missing and malformed evidence prevent page reads
  }
 });
 test('source identity, hidden signals, partial content and digest mismatch fail closed',async()=>{
- for(const options of [{source:{partial:true}},{source:{sha256:'f'.repeat(64)}},{sourceBody:page('Different heading',sourceText,sourceUrl)},{sourceBody:page('Check fuel prices',sourceText,origin+'/wrong')},{sourceBody:page('Check fuel prices','<span hidden>'+sourceText+'</span>',sourceUrl)},{sourceBody:page('Check fuel prices','FuelCheck is free.',sourceUrl)}]){
+ for(const options of [{source:{partial:true}},{source:{sha256:'f'.repeat(64)}},{sourceBody:page('Different heading',sourceText,sourceUrl)},{sourceBody:page('Check fuel prices',sourceText,origin+'/wrong')},{sourceBody:page('Check fuel prices',sourceText)},{sourceBody:page('Check fuel prices','<span hidden>'+sourceText+'</span>',sourceUrl)},{sourceBody:page('Check fuel prices','FuelCheck is free.',sourceUrl)}]){
   const h=harness(options),r=await observeKnowledgeEvidence(h.input);assert.equal(r.state,'held');assert.equal(r.activationAllowed,false);assert.equal(h.requests.length,2);
  }
 });

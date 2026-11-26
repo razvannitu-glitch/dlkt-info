@@ -3,12 +3,12 @@ import {parseDocument,DomUtils} from 'htmlparser2';
 
 const NSW='dlkt-elsewhere-nsw-fuelcheck',NZ='dlkt-elsewhere-nz-unit-pricing';
 const subjects=Object.freeze({
- [NSW]:Object.freeze({origin:'https://www.nsw.gov.au',sourceTitle:'check fuel prices',policyTitle:'copyright',sourceSignals:Object.freeze({
+ [NSW]:Object.freeze({origin:'https://www.nsw.gov.au',sourceUrl:"https://www.nsw.gov.au/legal-and-justice/consumer-rights-and-protection/advertising-product-packaging-and-pricing-laws/fuel-pricing-discounts-and-signage/check-fuel-prices",policyUrl:"https://www.nsw.gov.au/nsw-government/about-website/copyright",sourceTitle:'check fuel prices',policyTitle:'copyright',sourceSignals:Object.freeze({
   service:/\bfuelcheck\b/iu,free:/\bfree\b/iu,pricing:/\bfuel prices\b/iu,realTime:/\breal[- ]time\b/iu,driving:/\bnever use your phone while driving\b/iu,
  }),policySignals:Object.freeze({
   licence:/\bcreative commons attribution 4\.0\b/iu,credit:/\bstate of new south wales\b/iu,exceptions:/\bexcept as noted\b/iu,thirdParty:/\bthird[- ]party material\b/iu,marks:/\blogos\b/iu,
  })}),
- [NZ]:Object.freeze({origin:'https://www.comcom.govt.nz',sourceTitle:'information for consumers',policyTitle:'copyright',sourceSignals:Object.freeze({
+ [NZ]:Object.freeze({origin:'https://www.comcom.govt.nz',sourceUrl:"https://www.comcom.govt.nz/regulated-industries/grocery/information-for-consumers/",policyUrl:"https://www.comcom.govt.nz/using-our-website/copyright/",sourceTitle:'information for consumers',policyTitle:'copyright',sourceSignals:Object.freeze({
   unitPricing:/\bunit pricing regulations\b/iu,retailerScope:/\bcertain grocery retailers\b/iu,display:/\bdisplay the unit price\b/iu,exception:/\bnot every grocery retailer\b/iu,comparison:/\bcompare products\b/iu,
  }),policySignals:Object.freeze({
   licence:/\bcreative commons attribution 4\.0\b/iu,credit:/\bcommerce commission\b/iu,exceptions:/\bunless indicated otherwise\b/iu,thirdParty:/\bthird part(?:y|ies)\b/iu,marks:/\blogos\b/iu,imagery:/\bimagery\b/iu,
@@ -20,6 +20,10 @@ const safeUrl=(value,origin)=>{
  if(typeof value!=='string'||value.length>1000||/[\u0000-\u0020\u007f\\]/u.test(value))return false;
  try{const u=new URL(value);return u.protocol==='https:'&&u.origin===origin&&u.href===value&&!u.username&&!u.password&&!u.port&&!u.search&&!u.hash&&u.pathname.length>1;}catch{return false;}
 };
+export function knowledgeEvidenceSubject(id){
+ if(typeof id!=='string'||!Object.hasOwn(subjects,id))return null;
+ const spec=subjects[id];return Object.freeze({origin:spec.origin,sourceUrl:spec.sourceUrl,policyUrl:spec.policyUrl,sourceSignals:Object.freeze(Object.keys(spec.sourceSignals).sort()),policySignals:Object.freeze(Object.keys(spec.policySignals).sort())});
+}
 const requestMetadata=response=>({url:response?.url??null,status:response?.status??null,contentType:response?.contentType??null,complete:response?.ok===true&&response.partial===false,bodySha256:typeof response?.text==='string'&&response.ok===true&&response.partial===false?sha(response.text):null});
 function visibleText(root){
  const pending=[root],parts=[];let nodes=0;
@@ -43,7 +47,7 @@ function inspectPage(response,url,title,signals){
   const main=mains[0],headings=DomUtils.getElementsByTagName('h1',main,true).map(visibleText);
   if(headings.length!==1||headings[0].toLowerCase()!==title)return reject('unexpected-page-heading');
   const canonicals=DomUtils.getElementsByTagName('link',doc,true).filter(n=>(n.attribs.rel??'').toLowerCase().split(/\s+/u).includes('canonical'));
-  if(canonicals.length>1||canonicals.some(n=>{try{return new URL(n.attribs.href??'',url).href!==url;}catch{return true;}}))return reject('canonical-url-mismatch');
+  if(canonicals.length!==1||canonicals.some(n=>{try{return new URL(n.attribs.href??'',url).href!==url;}catch{return true;}}))return reject('canonical-url-mismatch');
   const text=visibleText(main),observations=Object.fromEntries(Object.entries(signals).map(([name,re])=>[name,re.test(text)]));
   const complete=Object.values(observations).every(Boolean);
   return {...metadata,state:complete?'observed-for-review':'held',reason:complete?null:'expected-source-signals-missing',canonicalObserved:canonicals.length===1,mainSha256:sha(text),signals:observations};
@@ -57,8 +61,8 @@ function inspectPage(response,url,title,signals){
 export async function observeKnowledgeEvidence({id,revision,sourceUrl,policyUrl,candidateDigest,get,parseRobots,decideRobots,clock}){
  const base={id,revision,sourceUrl,policyUrl,candidateDigest,activationAllowed:false,semanticReviewRequired:true,rightsReviewRequired:true,translationReviewRequired:true};
  const hold=(reason,extra={})=>({...base,...extra,state:'held',reason});
- const spec=Object.hasOwn(subjects,id)?subjects[id]:null;
- if(!spec||!Number.isSafeInteger(revision)||revision<1||!/^[a-f0-9]{64}$/u.test(candidateDigest)||!safeUrl(sourceUrl,spec.origin)||!safeUrl(policyUrl,spec.origin)||sourceUrl===policyUrl)return hold('candidate-binding-invalid');
+ const spec=typeof id==='string'&&Object.hasOwn(subjects,id)?subjects[id]:null;
+ if(!spec||!Number.isSafeInteger(revision)||revision<1||!/^[a-f0-9]{64}$/u.test(candidateDigest)||!safeUrl(sourceUrl,spec.origin)||!safeUrl(policyUrl,spec.origin)||sourceUrl!==spec.sourceUrl||policyUrl!==spec.policyUrl)return hold('candidate-binding-invalid');
  const started=clock();
  if(!Number.isSafeInteger(started)||started<=0)return hold('clock-invalid');
  const robotsUrl=spec.origin+'/robots.txt';
