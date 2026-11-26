@@ -333,3 +333,31 @@ test('identity metadata retains script and regional BCP47 variants before the al
  const overlong='en-x-'+Array(9).fill('abcdefgh').join('-');assert.ok(overlong.length>80);
  for(const value of ['ro%26lang%3Den','zh--Hant','en-123456789','en-a','en-K',overlong,undefined,[],false])assert.equal(readIdentityLocale(value),'en');
 });
+
+test('identity origin follows received Host and ignores spoofed forwarded-host claims', async () => {
+  const { handleIdentityRequest } = await import('../.build/api/auth.js');
+  const bad = request({ method:'GET', host:'www.dlkt.ee', origin:'https://attacker.example' });
+  bad.headers['x-forwarded-host'] = 'attacker.example';
+  const denied = response();
+  await handleIdentityRequest(bad, denied.value, { environment:{}, fetch:async()=>{throw Error('unexpected upstream request');} });
+  assert.equal(denied.value.statusCode,403);
+  assert.deepEqual(denied.json(),{error:'INVALID_REQUEST_ORIGIN'});
+  const good = request({ method:'GET', host:'www.dlkt.ee', origin:'https://www.dlkt.ee' });
+  good.headers['x-forwarded-host'] = 'attacker.example';
+  const accepted = response();
+  await handleIdentityRequest(good, accepted.value, { environment:{}, fetch:async()=>{throw Error('unexpected upstream request');} });
+  assert.equal(accepted.value.statusCode,200);
+  assert.equal(accepted.json().enabled,false);
+});
+
+test('identity origin rejects non-origin URLs even when their host matches', async () => {
+  const { handleIdentityRequest } = await import('../.build/api/auth.js');
+  for(const origin of ['https://preview.example/path','https://preview.example/?foo=1','https://user@preview.example/','https://preview.example/#frag','https://attacker.example']){
+    const denied = response();
+    await handleIdentityRequest(request({method:'GET',origin}),denied.value,{environment:{},fetch:async()=>{throw Error('unexpected upstream request');}});
+    assert.equal(denied.value.statusCode,403,origin);
+  }
+  const accepted=response();
+  await handleIdentityRequest(request({method:'GET',origin:null}),accepted.value,{environment:{},fetch:async()=>{throw Error('unexpected upstream request');}});
+  assert.equal(accepted.value.statusCode,200,'trusted same-origin Fetch Metadata remains supported');
+});
