@@ -240,7 +240,8 @@ class VercelDailyCacheStore implements DailyCacheStore {
   }
 }
 
-export const CONTINUOUS_PUBLIC_CACHE_MS = 10_000;
+/** Bound internal Supabase snapshot reads to half the 2-minute publish cadence. Public CDN cache remains 10s. */
+export const CONTINUOUS_PUBLIC_CACHE_MS = 60_000;
 export interface PublicIceoRead {
   readonly snapshot: IceoSnapshot;
   readonly collection: Omit<SharedSnapshotEnvelope,'snapshot'|'digest'|'version'>;
@@ -298,7 +299,7 @@ export class ContinuousSnapshotService {
     }catch{/* Cache eviction or outage never turns a reader into a source worker. */}
     const envelope=await this.ledger.read(),result=this.publicView(envelope);
     if(this.cache){const entry:ContinuousReadEntry={version:'iceo-continuous-read-1',readAt:this.clock(),envelope};
-      try{await cacheIO(()=>this.cache!.write(key,entry,10));}catch{/* The durable read already succeeded. */}}
+      try{await cacheIO(()=>this.cache!.write(key,entry,CONTINUOUS_PUBLIC_CACHE_MS/1000));}catch{/* The durable read already succeeded. */}}
     return this.remember(result);
   }
   async refresh(trigger:RefreshTrigger={kind:'manual'}):Promise<ContinuousRefreshReceipt>{
