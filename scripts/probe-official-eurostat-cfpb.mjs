@@ -29,6 +29,11 @@ async function inspect(entry) {
     entryCountInSample: 0,
     publishedDatePresent: false,
     articleLinkHost: null,
+    articlePathSample: null,
+    feedHome: null,
+    atomNamespace: null,
+    dateSample: null,
+    descriptionPresent: false,
     reason: null,
   };
   let response;
@@ -83,13 +88,22 @@ async function inspect(entry) {
     : /<(?:feed)\b/iu.test(text.slice(0,1024)) ? 'atom'
     : 'unrecognized';
   result.title = maxContent(text.match(/<title(?:\s[^>]*)?>([^<]{1,220})<\/title>/iu)?.[1]);
+  const header = text.split(/<(?:entry|item)(?:\s|>)/iu)[0] || '';
+  result.atomNamespace = result.root==='atom' ? text.match(/<feed[^>]*xmlns=["']([^"']+)["']/iu)?.[1] || null : null;
+  const declaredHome = result.root==='rss'
+    ? header.match(/<channel\b[\s\S]{0,3000}?<link>([^<]{1,300})<\/link>/iu)?.[1]
+    : header.match(/<link[^>]*rel=["']alternate["'][^>]*href=["'](https:\/\/[^"']{1,300})["']/iu)?.[1]
+      || header.match(/<link[^>]*href=["'](https:\/\/[^"']{1,300})["'][^>]*rel=["']alternate["']/iu)?.[1];
+  try {const u=new URL(declaredHome || ''); if(u.protocol==='https:') result.feedHome=u.origin+u.pathname;} catch {}
+  result.dateSample = text.match(/<(?:pubDate|published|updated)(?:\s[^>]*)?>([^<]{1,100})<\/\w+>/iu)?.[1] || null;
+  result.descriptionPresent = /<(?:description|summary)(?:\s|>)/iu.test(text);
   result.entryCountInSample = (text.match(/<(?:entry|item)(?:\s|>)/giu) || []).length;
   result.publishedDatePresent = /<(?:pubDate|published|updated)(?:\s|>)/iu.test(text);
   const rssLink = text.match(/<item\b[\s\S]{0,3000}?<link>(https:\/\/[^<]{1,250})<\/link>/iu)?.[1];
   const atomLink = text.match(/<entry\b[\s\S]{0,3000}?<link[^>]*href=["'](https:\/\/[^"']{1,250})["']/iu)?.[1];
   try {
     const link = new URL(rssLink || atomLink || '');
-    if (link.protocol === 'https:') result.articleLinkHost = link.hostname;
+    if (link.protocol === 'https:') {result.articleLinkHost = link.hostname;result.articlePathSample=link.pathname;}
   } catch { /* no article link observed in bounded prefix */ }
   if (!result.title || result.entryCountInSample === 0) result.reason='feed-structure-needs-review';
   return result;
