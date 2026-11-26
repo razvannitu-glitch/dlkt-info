@@ -19,7 +19,8 @@ export function knowledgeCardNode(card:KnowledgeCard,scope:KnowledgeScope):HTMLE
  article.dataset.liveSignature=JSON.stringify([card.id,card.revision,language,scope]);article.dataset.editionPart='stream';
  article.lang=language;article.dir='auto';article.tabIndex=-1;
  const formatLabels:Record<KnowledgeFormat,string>={'did-you-know':copy.know,'on-this-day':copy.history,recipe:copy.recipe,care:copy.care,useful:copy.useful,elsewhere:copy.elsewhere};
- const meta=make('div','knowledge-card-meta');meta.append(make('span','knowledge-category-tag',formatLabels[card.format??'did-you-know']),make('span','knowledge-topic',scope==='global'?copy.global:(card.geography?.label[language]??copy.global)));
+ const originLabel=scope==='global'&&card.distribution!=='cross-border'?copy.global:(card.geography?.label[language]??copy.global);
+ const meta=make('div','knowledge-card-meta');meta.append(make('span','knowledge-category-tag',formatLabels[card.format??'did-you-know']),make('span','knowledge-topic',originLabel));
  const title=make('h3','knowledge-card-title',value.title);title.id='news-know-title-'+card.id;article.setAttribute('aria-labelledby',title.id);
  const detail=make('details','knowledge-context');detail.append(make('summary','',copy.context),make('p','',value.connection));
  const provenance=make('p','knowledge-provenance'),reviewed=make('time','',new Intl.DateTimeFormat(language,{year:'numeric',month:'short',day:'numeric'}).format(new Date(card.reviewedAt)));
