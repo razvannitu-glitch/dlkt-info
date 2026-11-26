@@ -308,3 +308,19 @@ test('an original article denial remains on its own category, never copied to un
    assert.equal(health?.count,0,category);
  }
 });
+
+test('an unrelated index rate limit does not impose a retry deadline on empty categories',async()=>{
+ const result=await discoverNewsWithDiagnostics(async url=>String(url)===NEWS_INDEX_URL
+   ?xmlResponse(rss([]))
+   :new Response('temporarily rate limited',{status:429,headers:{'retry-after':'120'}}),now,[],undefined,{
+   publisherIndexBatch:1,frontpageHighlights:false,maxArticleRequests:2,
+ });
+ assert.equal(result.diagnostics.indexes.find(row=>row.indexId==='gdelt-gal')?.state,'verified');
+ assert.equal(result.diagnostics.indexes.find(row=>row.indexId!=='gdelt-gal')?.reason,'rate-limited');
+ for(const category of ['money','family','housing']){
+   const health=result.sources.find(source=>source.health.id==='news-'+category)?.health;
+   assert.equal(health?.state,'partial',category);
+   assert.equal(health?.error,null,category);
+   assert.equal(health?.retryAt,null,category);
+ }
+});
