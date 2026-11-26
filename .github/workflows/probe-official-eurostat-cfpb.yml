@@ -1,0 +1,27 @@
+name: Probe DLKT official Eurostat and CFPB feeds
+
+on:
+  push:
+    branches:
+      - audit/dlkt-official-feeds-20261126
+
+permissions:
+  contents: read
+
+jobs:
+  observe:
+    name: Check original public feed metadata without publication
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Checkout exact probe
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Node 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - name: Read-only bounded official feeds
+        run: node scripts/probe-official-eurostat-cfpb.mjs
