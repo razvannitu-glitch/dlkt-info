@@ -78,3 +78,20 @@ test('expiry is exact and new observations never extend prior approval',()=>{
  // This is older than the reviewed baseline; a newer clock cannot rehabilitate it.
  assert.notEqual(limited.feed.state,'reuse-eligible');
 });
+
+test('standalone reuse cannot outlive the feed decision even with a later standalone approval',()=>{
+ const shorter={...feedReview,expiresAt:new Date(now+1000).toISOString()};
+ const r=call({...trusted,feedReview:shorter});
+ assert.equal(r.feed.state,'reuse-eligible');assert.equal(r.standalone.state,'reuse-eligible');
+ assert.equal(r.feed.validUntil,shorter.expiresAt);assert.equal(r.standalone.validUntil,shorter.expiresAt);
+});
+test('a change since the latest observation requires review even if bytes return to an older approved state',()=>{
+ const previous={...baseline,source:{...baseline.source,bodySha256:'f'.repeat(64)}};
+ const r=call({...trusted,previousObservation:previous});
+ assert.equal(r.comparison.state,'changed');assert.equal(r.feed.state,'review-required');assert.equal(r.standalone.state,'review-required');
+});
+test('a prior decision cannot be based on observations already stale at review time',()=>{
+ const reviewedAt=new Date(Date.parse(baseline.observedAt)+86400000).toISOString(),later=Date.parse(reviewedAt)+1000;
+ const r=call({...trusted,now:later,observation:{...current,observedAt:new Date(later-100).toISOString()},feedReview:{...feedReview,reviewedAt}});
+ assert.equal(r.feed.state,'review-required');assert.equal(r.standalone.state,'review-required');
+});

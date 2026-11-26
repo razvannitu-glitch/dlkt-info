@@ -75,7 +75,7 @@ function scopeDecision({scope,identity,current,priorReview,approval,now}){
  const baseline=receiptSnapshot(identity,priorReview.observation,now),reviewed=instant(priorReview.reviewedAt),expires=instant(priorReview.expiresAt);
  const cardReviewed=instant(identity.reviewedAt),cardExpires=instant(identity.reviewBy),release=instant(identity.publishAt??identity.reviewedAt);
  if(!baseline||priorReview.evidenceDigest!==baseline.evidenceDigest||reviewed===null||expires===null||cardReviewed===null||cardExpires===null||release===null||
-  reviewed<cardReviewed||reviewed<baseline.observed||reviewed>now||expires<=reviewed||expires>cardExpires)return reviewRequired('review-evidence-or-window-invalid');
+  reviewed<cardReviewed||reviewed<baseline.observed||reviewed-baseline.observed>=MAX_OBSERVATION_AGE||reviewed>now||expires<=reviewed||expires>cardExpires)return reviewRequired('review-evidence-or-window-invalid');
  if(now>=expires||now>=cardExpires)return hold('existing-review-expired');
  if(now<release)return hold('editorial-release-not-due');
  if(current.observed<baseline.observed)return hold('observation-precedes-reviewed-evidence');
@@ -104,8 +104,9 @@ export function assessKnowledgeRevalidation({identity,observation,previousObserv
  if(previousObservation!==null&&!previous)return denied('previous-evidence-binding-invalid');
  const comparison=compare(current,previous);
  if(comparison.state==='out-of-order')return denied('out-of-order-observation');
- const feed=scopeDecision({scope:'feed',identity,current,priorReview:feedReview,approval:feedApproval,now});
+ const feed=comparison.state==='changed'?reviewRequired('latest-observed-source-or-terms-changed'):scopeDecision({scope:'feed',identity,current,priorReview:feedReview,approval:feedApproval,now});
  // Standalone distribution must not imply bypassing the existing feed approval.
- const standalone=feed.state==='reuse-eligible'?scopeDecision({scope:'standalone',identity,current,priorReview:standaloneReview,approval:standaloneApproval,now}):reviewRequired('feed-authorization-not-reusable');
+ const share=feed.state==='reuse-eligible'?scopeDecision({scope:'standalone',identity,current,priorReview:standaloneReview,approval:standaloneApproval,now}):reviewRequired('feed-authorization-not-reusable');
+ const standalone=share.state==='reuse-eligible'?Object.freeze({...share,validUntil:new Date(Math.min(Date.parse(feed.validUntil),Date.parse(share.validUntil))).toISOString()}):share;
  return Object.freeze({activationAllowed:false,comparison:Object.freeze({...comparison,changed:Object.freeze(comparison.changed)}),feed,standalone,evidenceDigest:current.evidenceDigest});
 }
