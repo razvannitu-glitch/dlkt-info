@@ -9,6 +9,7 @@ import {extname,join,resolve,sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {personalProfileFixture,verifyPersonalProfileFlow,verifyAccountPreferencesFlow} from './qa-personal-profile.mjs';
 import {syntheticEmailFixture,verifyAuthenticationEmailPreview} from './qa-auth-email.mjs';
+import {knowledgeDistributionFixture,verifyKnowledgeDistribution} from './qa-knowledge-distribution.mjs';
 
 const root=resolve(fileURLToPath(new URL('..',import.meta.url)));
 const publicDir=join(root,'.dlkt-local-build','public-launch');
@@ -42,7 +43,7 @@ function localPhotoRaster(){
 }
 const localPhotoPixels=localPhotoRaster();
 
-function localServer(fixture,personal){
+function localServer(fixture,personal,knowledge){
  if(!existsSync(join(publicDir,'index.html')))throw Error('DLKT_UI_BUILD_MISSING');
  const config=JSON.parse(readFileSync(join(root,'vercel.json'),'utf8'));
  const csp=(config.headers??[]).flatMap(x=>x.headers??[]).find(x=>x.key==='Content-Security-Policy')?.value;
@@ -56,6 +57,7 @@ function localServer(fixture,personal){
   let url;try{url=new URL(req.url??'', 'http://'+HOST);}catch{res.writeHead(400).end();return;}
   // Private mutations exist only during the explicitly activated loopback QA phase.
   if(personal.handle(req,res,url))return;
+  if(knowledge.handle(req,res,url))return;
   if(!['GET','HEAD'].includes(req.method)){res.writeHead(405).end();return;}
   const email=syntheticEmailFixture(url);
   if(email){res.setHeader('Content-Security-Policy',"default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");res.setHeader('Content-Type','text/html; charset=utf-8');res.writeHead(email.status).end(req.method==='HEAD'?undefined:email.html);return;}
@@ -1615,7 +1617,7 @@ async function run(){
  const outputDir=join(process.env.RUNNER_TEMP??profile,'dlkt-ui-screenshots');
  mkdirSync(outputDir,{recursive:true});
  const fixture=await newsFixture();
- const personal=await personalProfileFixture(fixture),server=localServer(fixture,personal);
+ const personal=await personalProfileFixture(fixture),knowledge=await knowledgeDistributionFixture(),server=localServer(fixture,personal,knowledge);
  let browser=null,ws=null;
  try{
   await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,HOST,resolve);});
@@ -1639,6 +1641,8 @@ async function run(){
   ws=await connectChrome(port);
   const cdp=rpcClient(ws);
   await cdp('Page.enable');await cdp('Runtime.enable');
+  const knowledgeDistribution=await verifyKnowledgeDistribution({fixture:knowledge,origin:'http://'+HOST+':'+binding.port,openIsolated:()=>openIsolatedChrome(port),evaluate,loaded,focusSelector,keyboard,pause,outputDir});
+  await cdp('Page.bringToFront');
   const observations=[];
   for(const f of formats){
    const previousLocalRequests=fixture.localRequests;
@@ -1709,7 +1713,7 @@ async function run(){
   const localePreference=await verifyLocalePreference({openIsolated:()=>openIsolatedChrome(port),
    origin:'http://'+HOST+':'+binding.port,fixture,personal});
   const result={version:'dlkt-info-offline-browser-smoke-3',status:'OFFLINE_BROWSER_PASS',
-   scope:'local-built-reader-with-controlled-news-local-and-private-profile-transport',viewports:observations,continuousLocal,account,personalProfile,savedNavigation,accountPreferences,authenticationEmail,localePreference,fixture:{storyCount:fixture.storyCount,articleTotal:fixture.articleTotal,groupOriginals:fixture.urls.length,sourceOnlyOriginals:fixture.sourceOnly.length,localCards:fixture.localIds.length,localContract:'currentLocalSnapshot'},
+   scope:'local-built-reader-with-controlled-news-local-and-private-profile-transport',viewports:observations,knowledgeDistribution,continuousLocal,account,personalProfile,savedNavigation,accountPreferences,authenticationEmail,localePreference,fixture:{storyCount:fixture.storyCount,articleTotal:fixture.articleTotal,groupOriginals:fixture.urls.length,sourceOnlyOriginals:fixture.sourceOnly.length,localCards:fixture.localIds.length,localContract:'currentLocalSnapshot'},
    limitations:['News pages use the actual service over controlled corpus fixtures. The additional private phase uses synthetic account identities; no external publisher request, hosted authentication, payment or production runtime availability is tested.',
     'The three grouped publisher headlines and four reviewed-source originals reproduce observed metadata; source-check and publication dates are controlled fixtures.',
     'Local weather and CMTEB records are synthetic controlled fixtures validated by the actual city/source contracts, not live operator or forecast checks.',

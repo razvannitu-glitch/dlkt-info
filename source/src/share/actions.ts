@@ -1,16 +1,18 @@
 import type {EvidenceCard} from '../iceo/contracts.js';
-import {cardLink,cardPath,cardImagePath} from './link.js';
+import {cardLink,cardPath,cardImagePath,knowledgeCardLink} from './link.js';
+import type {KnowledgeCard,KnowledgeLanguage} from '../iceo/knowledge.js';
 export interface ShareElements {readonly button:HTMLButtonElement;readonly fallback:HTMLInputElement;readonly announce:(message:string)=>void}
 export interface ShareDestination {readonly label:'Facebook'|'X'|'Threads';readonly href:string}
 /** Fixed public destinations receive only the exact public card link, never a briefing or visitor state. */
-export function shareDestinations(card:EvidenceCard):readonly ShareDestination[]{
- const url=cardLink(card);
+function destinationsForLink(url:string):readonly ShareDestination[]{
  return [
   {label:'Facebook',href:'https://www.facebook.com/sharer/sharer.php?'+new URLSearchParams({u:url}).toString()},
   {label:'X',href:'https://x.com/intent/tweet?'+new URLSearchParams({url}).toString()},
   {label:'Threads',href:'https://www.threads.com/intent/post?'+new URLSearchParams({text:url}).toString()},
  ];
 }
+export function shareDestinations(card:EvidenceCard):readonly ShareDestination[]{return destinationsForLink(cardLink(card));}
+export function knowledgeShareDestinations(card:KnowledgeCard,language:KnowledgeLanguage,digest:string):readonly ShareDestination[]{return destinationsForLink(knowledgeCardLink(card,language,digest));}
 let active:HTMLDialogElement|null=null;
 /** Opening prepares only this public edition. Posting and copying still require a separate user action. */
 export async function shareCard(card:EvidenceCard,elements:ShareElements):Promise<void>{

@@ -1,6 +1,7 @@
 import {PUBLIC_TOPICS} from '../iceo/topics.js';
 import type {EvidenceCard,Topic} from '../iceo/contracts.js';
 import {validCard} from '../iceo/card-validation.js';
+import {validKnowledgeCard,type KnowledgeCard,type KnowledgeLanguage} from '../iceo/knowledge.js';
 export const PUBLIC_ORIGIN='https://www.dlkt.ee' as const;
 export const SHARE_TOPICS=PUBLIC_TOPICS;
 export interface CardReference {readonly id:string;readonly revision:string|null}
@@ -22,6 +23,40 @@ export function parseCardReference(raw:string):CardReference|null {
     return{id,revision};
   }catch{return null;}
 }
+/** Separate editorial identity, never an EvidenceCard ID or content hash. */
+export interface KnowledgeCardReference {readonly id:string;readonly revision:number;readonly language:KnowledgeLanguage;readonly digest:string}
+const KNOWLEDGE_SHARE_ID=/^dlkt-elsewhere-[a-z0-9][a-z0-9-]{0,64}$/u;
+function validKnowledgeShareLanguage(value:unknown):value is KnowledgeLanguage {
+ return value==='en'||value==='ro'||value==='it';
+}
+export function knowledgeShareEligible(card:unknown):card is KnowledgeCard {
+ return validKnowledgeCard(card)&&KNOWLEDGE_SHARE_ID.test(card.id)&&card.format==='elsewhere'&&card.distribution==='cross-border'&&card.geography!==undefined;
+}
+export function knowledgeReferencePath(reference:KnowledgeCardReference):string {
+ if(!KNOWLEDGE_SHARE_ID.test(reference.id)||!Number.isSafeInteger(reference.revision)||reference.revision<1||!validKnowledgeShareLanguage(reference.language)||!/^[a-f0-9]{64}$/u.test(reference.digest))throw Error('KNOWLEDGE_SHARE_REFERENCE_INVALID');
+ return '/card/'+reference.id+'?v='+String(reference.revision)+'&lang='+reference.language+'&h='+reference.digest;
+}
+export function knowledgeCardLink(card:KnowledgeCard,language:KnowledgeLanguage,digest:string):string {
+ if(!knowledgeShareEligible(card))throw Error('KNOWLEDGE_SHARE_CARD_INVALID');
+ return PUBLIC_ORIGIN+knowledgeReferencePath({id:card.id,revision:card.revision,language,digest});
+}
+/** Accept only the canonical direct route or its existing Vercel rewrite. */
+export function parseKnowledgeCardReference(raw:string):KnowledgeCardReference|null {
+ if(typeof raw!=='string'||raw.length>512||/[^!-~]|[%#\\+]/u.test(raw))return null;
+ const parts=raw.split('?');if(parts.length!==2)return null;
+ const [path,query]=parts;if(path===undefined||query===undefined)return null;
+ const direct=/^\/card\/(dlkt-elsewhere-[a-z0-9][a-z0-9-]{0,64})$/u.exec(path);
+ if(!direct&&path!=='/api/card')return null;
+ const allowed=direct?['v','lang','h']:['id','v','lang','h'];
+ const pairs=query.split('&');if(pairs.length!==allowed.length||pairs.some(pair=>!/^(?:id|v|lang|h)=[a-z0-9-]+$/u.test(pair)))return null;
+ const params=new URLSearchParams(query);
+ if([...params.keys()].some(key=>!allowed.includes(key))||allowed.some(key=>params.getAll(key).length!==1))return null;
+ const id=direct?.[1]??params.get('id'),version=params.get('v'),language=params.get('lang'),digest=params.get('h');
+ if(typeof id!=='string'||!KNOWLEDGE_SHARE_ID.test(id)||version===null||!/^[1-9]\d{0,15}$/u.test(version)||!validKnowledgeShareLanguage(language)||digest===null||!/^[a-f0-9]{64}$/u.test(digest))return null;
+ const revision=Number(version);if(!Number.isSafeInteger(revision)||String(revision)!==version)return null;
+ return {id,revision,language,digest};
+}
+
 export function sharedTopic(hash:string):Topic|null {
   const value=/^#briefing-topic=([a-z-]+)$/u.exec(hash)?.[1];
   return SHARE_TOPICS.includes(value as Topic)?value as Topic:null;
