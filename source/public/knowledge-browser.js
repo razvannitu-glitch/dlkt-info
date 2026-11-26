@@ -27,8 +27,9 @@ export function knowledgeCardNode(card, scope) {
     article.dir = 'auto';
     article.tabIndex = -1;
     const formatLabels = { 'did-you-know': copy.know, 'on-this-day': copy.history, recipe: copy.recipe, care: copy.care, useful: copy.useful, elsewhere: copy.elsewhere };
+    const originLabel = scope === 'global' && card.distribution !== 'cross-border' ? copy.global : (card.geography?.label[language] ?? copy.global);
     const meta = make('div', 'knowledge-card-meta');
-    meta.append(make('span', 'knowledge-category-tag', formatLabels[card.format ?? 'did-you-know']), make('span', 'knowledge-topic', scope === 'global' ? copy.global : (card.geography?.label[language] ?? copy.global)));
+    meta.append(make('span', 'knowledge-category-tag', formatLabels[card.format ?? 'did-you-know']), make('span', 'knowledge-topic', originLabel));
     const title = make('h3', 'knowledge-card-title', value.title);
     title.id = 'news-know-title-' + card.id;
     article.setAttribute('aria-labelledby', title.id);

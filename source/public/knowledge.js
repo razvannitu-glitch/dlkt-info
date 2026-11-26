@@ -46,6 +46,7 @@ export function validKnowledgeCard(value) {
         !Number.isSafeInteger(value.revision) || Number(value.revision) < 1 || !isNewsCategoryId(value.category) ||
         !object(value.source) || !text(value.source.publisher, 100) || !safeKnowledgeSource(value.source.url) ||
         value.geography !== undefined && !validKnowledgeGeography(value.geography) ||
+        value.distribution !== undefined && (!Object.hasOwn(value, 'distribution') || value.distribution !== 'cross-border' || !Object.hasOwn(value, 'format') || value.format !== 'elsewhere' || !Object.hasOwn(value, 'geography') || value.geography === undefined) ||
         value.format !== undefined && !['did-you-know', 'on-this-day', 'recipe', 'care', 'useful', 'elsewhere'].includes(String(value.format)) ||
         value.format === 'on-this-day' && (!/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/u.test(String(value.calendarDay)) || !Number.isFinite(Date.parse('2024-' + String(value.calendarDay) + 'T12:00:00.000Z')) || new Date('2024-' + String(value.calendarDay) + 'T12:00:00.000Z').toISOString().slice(5, 10) !== value.calendarDay) ||
         value.format !== 'on-this-day' && value.calendarDay !== undefined ||
