@@ -1,3 +1,5 @@
+import { publisherForNewsUrl } from './news-sources.js';
+import { newsSourceForUrl } from './local-news-policy.js';
 const PATH = '/api/article-photo';
 const ORIGIN = 'https://www.dlkt.ee';
 const globalId = /^[a-f0-9]{24}$/u;
@@ -51,4 +53,53 @@ export function parseArticlePhotoReference(input) {
     catch {
         return null;
     }
+}
+/** The same reviewed photo eligibility policy is used by browser and server. */
+export function parseArticlePhotoUrl(value, base) {
+    if (typeof value !== 'string' || value.length > 3000 || /[\u0000-\u0020\u007f<>\\]/u.test(value))
+        return null;
+    try {
+        const parsed = base ? new URL(value, base) : new URL(value);
+        return parsed.protocol === 'https:' && !parsed.username && !parsed.password && !parsed.port ? parsed : null;
+    }
+    catch {
+        return null;
+    }
+}
+export function photoPublisher(articleUrl) {
+    const parsed = parseArticlePhotoUrl(articleUrl);
+    if (!parsed || parsed.hash || parsed.href !== articleUrl || parsed.pathname === '/')
+        return null;
+    if (parsed.origin === 'https://arcub.ro' && !parsed.search && /^\/eveniment\/[a-z0-9-]+$/u.test(parsed.pathname))
+        return 'bucharest-arcub';
+    const local = newsSourceForUrl(articleUrl);
+    if (local)
+        return local.id;
+    const reviewed = publisherForNewsUrl(articleUrl);
+    if (reviewed)
+        return Object.hasOwn(ASSET_PATHS, reviewed.id) ? reviewed.id : null;
+    if (['www.nasa.gov', 'science.nasa.gov'].includes(parsed.hostname))
+        return 'nasa';
+    return null;
+}
+const ASSET_PATHS = Object.freeze({
+    // ARCUB original page-header images, observed in probe45726653109; generic social metadata is excluded below.
+    'bucharest-arcub': { 'arcub.ro': ['/img/'] },
+    'bucharest-b365': { 'b365.ro': ['/wp-content/uploads/'] },
+    'bucharest-buletin': { 'buletin.de': ['/bucuresti/wp-content/uploads/', '/wp-content/uploads/'] },
+    // Exact article metadata and same-origin upload path verified by primary probe45051739949.
+    'hotnews': { 'hotnews.ro': ['/wp-content/uploads/'] },
+    'digi24': { 's.iw.ro': ['/gateway/g/'] },
+    // Primary metadata receipt45070034177: both originals bind this exact publisher CDN upload path.
+    'repubblica': { 'www.repstatic.it': ['/content/nazionale/img/'] },
+    'guardian': { 'i.guim.co.uk': ['/img/media/'], 'media.guim.co.uk': ['/'] },
+    'bbc': { 'ichef.bbci.co.uk': ['/news/', '/ace/', '/images/ic/'], 'ichef.bbci.co.uk.edgesuite.net': ['/news/'] },
+    'the-hindu': { 'th-i.thgim.com': ['/public/', '/incoming/'], 'www.thehindu.com': ['/incoming/', '/news/', '/sport/'] },
+    'france24': { 's.france24.com': ['/media/display/'] },
+    'dw': { 'static.dw.com': ['/image/'] },
+    'global-voices': { 'globalvoices.org': ['/wp-content/uploads/'], 'www.globalvoices.org': ['/wp-content/uploads/'] },
+    'nasa': { 'www.nasa.gov': ['/wp-content/uploads/'], 'science.nasa.gov': ['/wp-content/uploads/'], 'images-assets.nasa.gov': ['/image/'] },
+});
+export function articlePhotoAssetPaths(publisher, hostname) {
+    return ASSET_PATHS[publisher]?.[hostname];
 }
