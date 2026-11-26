@@ -5,8 +5,10 @@ on:
     branches:
       - codex/iceo-category-coverage-20261123
       - codex/iceo-ro-source-supply-20261124
+      - codex/probe-local-source-photos-20261126
     paths:
       - scripts/probe-category-sources.mjs
+      - scripts/probe-local-source-photos.mjs
       - .github/workflows/probe-category-sources.yml
   workflow_dispatch:
 
@@ -20,7 +22,7 @@ concurrency:
 jobs:
   probe:
     name: Bounded publisher metadata observations
-    if: github.ref == 'refs/heads/codex/iceo-category-coverage-20261123' || github.ref == 'refs/heads/codex/iceo-ro-source-supply-20261124'
+    if: github.ref == 'refs/heads/codex/iceo-category-coverage-20261123' || github.ref == 'refs/heads/codex/iceo-ro-source-supply-20261124' || github.ref == 'refs/heads/codex/probe-local-source-photos-20261126'
     env:
       DLKT_SOURCE_PROBE_GROUP: ${{ github.ref == 'refs/heads/codex/iceo-ro-source-supply-20261124' && 'ro-admitted' || 'protv-compatibility' }}
     runs-on: ubuntu-24.04
@@ -40,4 +42,9 @@ jobs:
       - name: Build existing parsers
         run: npm run build
       - name: Observe declared feeds and original metadata
-        run: node scripts/probe-category-sources.mjs
+        run: |
+          if [ "$GITHUB_REF" = "refs/heads/codex/probe-local-source-photos-20261126" ]; then
+            node scripts/probe-local-source-photos.mjs
+          else
+            node scripts/probe-category-sources.mjs
+          fi
