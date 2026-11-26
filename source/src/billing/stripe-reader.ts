@@ -20,6 +20,14 @@ export interface FinancialRiskLink {
  readonly riskState:'review_required';
 }
 
+export interface CheckoutLink {
+ readonly accountId:string; readonly liveMode:false; readonly sessionId:string; readonly intentId:string; readonly customerId:string;
+}
+export type CheckoutTerminalObservation=Readonly<CheckoutLink & {
+ priceId:string; ownerId:string; expiresAt:number;
+} & ({status:'complete';paymentStatus:'paid';subscriptionId:string;itemId:string}
+ | {status:'expired';paymentStatus:'unpaid';subscriptionId:null;itemId:null})>;
+
 export interface StripeSubscriptionObservation {
   readonly accountId: string;
   readonly liveMode: false;
@@ -64,12 +72,23 @@ export class StripeReadClient {
     this.#fetch = fetchImpl;
   }
 
-  async #read(path: string, paymentIntent?: string, deadline?: AbortSignal): Promise<unknown> {
+  async #read(path: string, filterId?: string, deadline?: AbortSignal): Promise<unknown> {
     try {
       // Paths are composed exclusively from private literals and strictly validated Stripe IDs.
-      if (!/^\/v1\/(?:account|products\/prod_[A-Za-z0-9]+|prices\/price_[A-Za-z0-9]+|subscriptions\/sub_[A-Za-z0-9]+|invoices\/in_[A-Za-z0-9]+|charges\/ch_[A-Za-z0-9]+|payment_intents\/pi_[A-Za-z0-9]+|disputes\/du_[A-Za-z0-9]+|radar\/early_fraud_warnings\/issfr_[A-Za-z0-9]+|invoice_payments)$/u.test(path)) return fail();
-      if((path==='/v1/invoice_payments'&&!providerId(paymentIntent,'pi_'))||(path!=='/v1/invoice_payments'&&paymentIntent!==undefined))return fail();
-      const query=paymentIntent===undefined?'':'?'+new URLSearchParams({'payment[type]':'payment_intent','payment[payment_intent]':paymentIntent,limit:'2'}).toString();
+      if (!/^\/v1\/(?:account|products\/prod_[A-Za-z0-9]+|prices\/price_[A-Za-z0-9]+|subscriptions\/sub_[A-Za-z0-9]+|invoices\/in_[A-Za-z0-9]+|charges\/ch_[A-Za-z0-9]+|payment_intents\/pi_[A-Za-z0-9]+|disputes\/du_[A-Za-z0-9]+|radar\/early_fraud_warnings\/issfr_[A-Za-z0-9]+|invoice_payments|checkout\/sessions(?:\/cs_test_[A-Za-z0-9]+(?:\/line_items)?)?|customers\/cus_[A-Za-z0-9]+|subscriptions)$/u.test(path)) return fail();
+      let params:URLSearchParams|undefined;
+      if(path==='/v1/invoice_payments'){
+        if(!providerId(filterId,'pi_'))return fail();
+        params=new URLSearchParams({'payment[type]':'payment_intent','payment[payment_intent]':filterId,limit:'2'});
+      }else if(path==='/v1/checkout/sessions'||path==='/v1/subscriptions'){
+        if(!stripeId(filterId,'cus'))return fail();
+        params=new URLSearchParams({customer:filterId,limit:'2'});
+        if(path==='/v1/subscriptions')params.set('status','all');
+      }else{
+        if(filterId!==undefined)return fail();
+        if(path.endsWith('/line_items'))params=new URLSearchParams({limit:'2'});
+      }
+      const query=params?'?'+params.toString():'';
       const url = ORIGIN + path + query;
       const response = await this.#fetch(url,{method:'GET',redirect:'error',cache:'no-store',
         headers:{Authorization:'Bearer '+this.#key,'Stripe-Version':STRIPE_BILLING_API_VERSION,Accept:'application/json'},
@@ -98,14 +117,14 @@ export class StripeReadClient {
     } catch { return fail(); }
   }
 
-  async loadCatalog(): Promise<PremiumCatalog> {
+  async loadCatalog(deadline?: AbortSignal): Promise<PremiumCatalog> {
     const configuration = this.#catalog;
-    const account = record(await this.#read('/v1/account'));
+    const account = record(await this.#read('/v1/account',undefined,deadline));
     if (field(account,'object') !== 'account' || field(account,'id') !== configuration.accountId) return fail();
     const [product,monthly,annual] = await Promise.all([
-      this.#read('/v1/products/'+configuration.productId),
-      this.#read('/v1/prices/'+configuration.monthlyPriceId),
-      this.#read('/v1/prices/'+configuration.annualPriceId),
+      this.#read('/v1/products/'+configuration.productId,undefined,deadline),
+      this.#read('/v1/prices/'+configuration.monthlyPriceId,undefined,deadline),
+      this.#read('/v1/prices/'+configuration.annualPriceId,undefined,deadline),
     ]);
     return verifyPremiumCatalog(configuration,field(account,'id'),product,monthly,annual);
   }
@@ -182,17 +201,84 @@ export class StripeReadClient {
       invoiceId,customerId,subscriptionId,riskState:'review_required'});
   }
 
+  /** Exact authenticated Checkout reference. Its intent reference is only
+   * a candidate lookup key; durable owner/intent binding must be read next. */
+  async observeCheckoutLink(sessionId:unknown):Promise<CheckoutLink>{
+    if(!providerId(sessionId,'cs_test_'))return fail();
+    const signal=AbortSignal.timeout(8000);
+    const account=record(await this.#read('/v1/account',undefined,signal));
+    if(field(account,'object')!=='account'||field(account,'id')!==this.#catalog.accountId)return fail();
+    const s=record(await this.#read('/v1/checkout/sessions/'+sessionId,undefined,signal));
+    const intentId=field(s,'client_reference_id'),customerId=field(s,'customer');
+    if(field(s,'object')!=='checkout.session'||field(s,'id')!==sessionId||field(s,'livemode')!==false||
+       field(s,'mode')!=='subscription'||!isUuid(intentId)||!stripeId(customerId,'cus')||signal.aborted)return fail();
+    return Object.freeze({accountId:this.#catalog.accountId,liveMode:false,sessionId,intentId,customerId});
+  }
+
+  /** Read-only terminal reconciliation for the first-purchase sandbox. No
+   * write key, create/expire call, hosted URL return or entitlement proof. */
+  async observeCheckoutTerminal(binding:unknown,sessionId:unknown,returnOrigin:unknown):Promise<CheckoutTerminalObservation>{
+    const b=record(binding),ownerId=field(b,'ownerId'),intentId=field(b,'intentId'),customerId=field(b,'customerId'),priceId=field(b,'priceId'),
+      createdAt=field(b,'createdAt'),expiresAt=field(b,'expiresAt'),known=field(b,'sessionId');
+    if(field(b,'accountId')!==this.#catalog.accountId||field(b,'liveMode')!==false||!isUuid(ownerId)||!isUuid(intentId)||
+      !stripeId(customerId,'cus')||!stripeId(priceId,'price')||!providerId(sessionId,'cs_test_')||
+      !unixSeconds(createdAt)||!unixSeconds(expiresAt)||expiresAt!==createdAt+3600||
+      (known!==null&&known!==sessionId)||typeof returnOrigin!=='string'||returnOrigin.length>253)return fail();
+    let origin:URL;
+    try{origin=new URL(returnOrigin);}catch{return fail();}
+    if(origin.protocol!=='https:'||origin.origin!==returnOrigin||origin.username||origin.password||origin.port||!origin.hostname.includes('.'))return fail();
+    const signal=AbortSignal.timeout(18000);
+    const read=async(path:string,filter?:string)=>record(await this.#read(path,filter,signal));
+    const catalog=await this.loadCatalog(signal),plan=premiumPlanForPrice(catalog,priceId);
+    if(!plan||catalog.taxBehavior!=='inclusive')return fail();
+    const amount=PREMIUM_PLANS[plan].unitAmount;
+    const [s,customer,sessions,lines,subscriptions]=await Promise.all([
+      read('/v1/checkout/sessions/'+sessionId),read('/v1/customers/'+customerId),
+      read('/v1/checkout/sessions',customerId),read('/v1/checkout/sessions/'+sessionId+'/line_items'),read('/v1/subscriptions',customerId)
+    ]);
+    const same=(v:Record<string,unknown>|null,values:Readonly<Record<string,unknown>>)=>Object.entries(values).every(([k,x])=>field(v,k)===x);
+    const list=(v:Record<string,unknown>|null,count:number):unknown[]=>{
+      const d=field(v,'data');
+      if(field(v,'object')!=='list'||field(v,'has_more')!==false||!Array.isArray(d)||d.length!==count)return fail();
+      return d;
+    };
+    const pm=field(s,'payment_method_types'),created=field(s,'created');
+    if(!same(s,{object:'checkout.session',id:sessionId,livemode:false,mode:'subscription',ui_mode:'hosted_page',customer:customerId,
+      client_reference_id:intentId,currency:'eur',amount_total:amount,amount_subtotal:amount,expires_at:expiresAt,
+      success_url:returnOrigin+'/billing/return',cancel_url:returnOrigin+'/billing/cancel',allow_promotion_codes:false})||
+      !unixSeconds(created)||created<createdAt||created>createdAt+600||
+      !Array.isArray(pm)||pm.length!==1||pm[0]!=='card'||field(record(field(s,'automatic_tax')),'enabled')!==false||
+      !same(customer,{object:'customer',id:customerId,livemode:false})||field(customer,'deleted')===true||
+      !same(record(field(customer,'metadata')),{application:'dlkt_info',environment:'sandbox'}))return fail();
+    const listed=record(list(sessions,1)[0]),line=record(list(lines,1)[0]);
+    if(!same(listed,{id:sessionId,object:'checkout.session',livemode:false,customer:customerId,client_reference_id:intentId})||
+      !same(line,{object:'item',quantity:1,currency:'eur',amount_total:amount,amount_subtotal:amount})||
+      !same(record(field(line,'price')),{id:priceId,product:catalog.productId,livemode:false,currency:'eur',unit_amount:amount}))return fail();
+    const common={accountId:catalog.accountId,liveMode:false as const,sessionId,intentId,customerId,ownerId,priceId,expiresAt};
+    if(same(s,{status:'expired',payment_status:'unpaid',subscription:null})){
+      list(subscriptions,0);if(signal.aborted)return fail();
+      return Object.freeze({...common,status:'expired',paymentStatus:'unpaid',subscriptionId:null,itemId:null});
+    }
+    const subscriptionId=field(s,'subscription');
+    if(field(s,'status')!=='complete'||field(s,'payment_status')!=='paid'||!stripeId(subscriptionId,'sub')||
+      !same(record(list(subscriptions,1)[0]),{id:subscriptionId,object:'subscription',livemode:false,customer:customerId}))return fail();
+    const observation=await this.observeSubscription(ownerId,{accountId:catalog.accountId,liveMode:false,customerId,subscriptionId,ownerId},signal);
+    if(signal.aborted||observation.priceId!==priceId||observation.customerId!==customerId||observation.subscriptionId!==subscriptionId||
+       observation.fundsConfirmed!==false||observation.riskState!=='unknown')return fail();
+    return Object.freeze({...common,status:'complete',paymentStatus:'paid',subscriptionId,itemId:observation.itemId});
+  }
+
   /** The owner and binding must come from an authenticated session and private server-owned store.
    * This is an observation, not authorization. It cannot assert payment funding, invoice-line coverage
    * or risk clearance, and it cannot grant access even when Stripe reports an active subscription.
    */
-  async observeSubscription(ownerId: unknown, binding: unknown): Promise<StripeSubscriptionObservation> {
+  async observeSubscription(ownerId: unknown, binding: unknown, deadline?:AbortSignal): Promise<StripeSubscriptionObservation> {
     const b = record(binding), c = this.#catalog;
     const customerId = field(b,'customerId'), subscriptionId = field(b,'subscriptionId');
     if (!isUuid(ownerId) || field(b,'ownerId') !== ownerId || field(b,'accountId') !== c.accountId
       || field(b,'liveMode') !== false || !stripeId(customerId,'cus') || !stripeId(subscriptionId,'sub')) return fail();
-    const catalog = await this.loadCatalog();
-    const s = record(await this.#read('/v1/subscriptions/'+subscriptionId));
+    const catalog = await this.loadCatalog(deadline);
+    const s = record(await this.#read('/v1/subscriptions/'+subscriptionId,undefined,deadline));
     const status = field(s,'status'), cancelAt = field(s,'cancel_at'), cancelAtPeriodEnd = field(s,'cancel_at_period_end');
     const paused = field(s,'pause_collection'), list = record(field(s,'items')), items = field(list,'data');
     if (field(s,'object') !== 'subscription' || field(s,'id') !== subscriptionId
@@ -214,7 +300,7 @@ export class StripeReadClient {
     let latestInvoice: StripeSubscriptionObservation['latestInvoice'] = null;
     if (invoiceId !== null) {
       if (!stripeId(invoiceId,'in')) return fail();
-      const i = record(await this.#read('/v1/invoices/'+invoiceId));
+      const i = record(await this.#read('/v1/invoices/'+invoiceId,undefined,deadline));
       const parent = record(field(i,'parent')), details = record(field(parent,'subscription_details'));
       const invoiceStatus = field(i,'status'), amountDue = field(i,'amount_due'), amountPaid = field(i,'amount_paid'), amountRemaining = field(i,'amount_remaining');
       if (field(i,'object') !== 'invoice' || field(i,'id') !== invoiceId || field(i,'livemode') !== false

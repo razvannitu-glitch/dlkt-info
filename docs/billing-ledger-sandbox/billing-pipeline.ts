@@ -6,6 +6,8 @@ import type {StripeReadClient,StripeSubscriptionObservation} from '../../source/
 import {resolveInvoiceNotice,type InvoiceRoute,type InvoiceBindingReader} from './invoice-routing.js';
 import {resolveRiskNotice,type RiskRoute} from './risk-routing.js';
 
+import {resolveCheckoutNotice,type CheckoutNoticeStore} from './checkout-routing.js';
+
 const get=(x:unknown,k:string)=>field(record(x),k);
 const id=(x:unknown,prefix:string):x is string=>typeof x==='string'&&x.length<=255&&x.startsWith(prefix)&&/^[A-Za-z0-9]+$/u.test(x.slice(prefix.length));
 type Notice=Extract<VerifiedStripeNotice,{kind:'reconcile'}>;
@@ -61,7 +63,7 @@ function reconcileClaim(x:unknown,account:string,now:number):ReconcileClaim|null
  * Every SQL statement below is fixed. The SQL functions themselves must
  * enforce current lease, exact binding, atomic receipt, and role ACL. */
 export interface BillingQueryPort{query(sql:string,params:readonly (string|null)[]):Promise<unknown>;}
-export type BillingPorts=Readonly<{ingress:BillingQueryPort;worker:BillingQueryPort;invoice:BillingQueryPort;risk:BillingQueryPort;reconcile:BillingQueryPort}>;
+export type BillingPorts=Readonly<{ingress:BillingQueryPort;worker:BillingQueryPort;invoice:BillingQueryPort;risk:BillingQueryPort;reconcile:BillingQueryPort;checkout?:Readonly<{port:BillingQueryPort;returnOrigin:string;reader:Pick<StripeReadClient,'observeCheckoutLink'|'observeCheckoutTerminal'>}>}>;
 const SQL=Object.freeze({
  ingest:'SELECT dlkt_info_billing.ingest_notice($1::text,$2::text,$3::text,$4::text,$5::bigint) AS outcome',
  claim:'SELECT * FROM dlkt_info_billing.claim_notice($1::text)',
@@ -70,6 +72,8 @@ const SQL=Object.freeze({
  binding:'SELECT * FROM dlkt_info_billing.read_invoice_binding($1::text,$2::text)',
  invoice:'SELECT dlkt_info_billing.route_invoice_notice($1::text,$2::text,$3::integer,$4::text,$5::text,$6::uuid,$7::text,$8::text,$9::text) AS ok',
  risk:'SELECT dlkt_info_billing.route_risk_notice($1::text,$2::text,$3::integer,$4::text,$5::text,$6::text,$7::text,$8::text,$9::uuid,$10::text,$11::text,$12::text) AS ok',
+ checkoutBinding:'SELECT * FROM dlkt_info_billing.read_checkout_notice_binding($1::text,$2::text,$3::integer,$4::uuid,$5::text,$6::text)',
+ checkout:'SELECT dlkt_info_billing.route_checkout_notice($1::text,$2::text,$3::integer,$4::uuid,$5::uuid,$6::text,$7::text,$8::text,$9::bigint,$10::text,$11::text,$12::text,$13::text) AS ok',
  reconcile:'SELECT * FROM dlkt_info_billing.claim_subscription($1::text)',
  observe:'SELECT dlkt_info_billing.record_subscription_observation($1::text,$2::text,$3::bigint,$4::bigint,$5::uuid,$6::text,$7::text,$8::text,$9::text) AS ok',
  failReconcile:'SELECT dlkt_info_billing.fail_subscription($1::text,$2::text,$3::bigint,$4::bigint,$5::text) AS ok'
@@ -87,6 +91,14 @@ function bindingReader(port:BillingQueryPort):InvoiceBindingReader{
   const x=await one(port,SQL.binding,[a,s]);if(x===null)return null;
   return {accountId:get(x,'account_id'),ownerId:get(x,'owner_id'),customerId:get(x,'customer_id'),subscriptionId:get(x,'subscription_id'),
     itemId:get(x,'item_id'),priceId:get(x,'price_id'),liveMode:get(x,'live_mode')};
+ }};
+}
+function checkoutBindingReader(port:BillingQueryPort):CheckoutNoticeStore{
+ return {async readCheckoutBinding(a,e,n,i,s,c){
+  const x=await one(port,SQL.checkoutBinding,[a,e,String(n),i,s,c]);if(x===null)return null;
+  return {accountId:get(x,'account_id'),intentId:get(x,'intent_id'),ownerId:get(x,'owner_id'),customerId:get(x,'customer_id'),
+   priceId:get(x,'price_id'),sessionId:get(x,'session_id'),liveMode:get(x,'live_mode'),state:get(x,'state'),
+   createdAt:safeInteger(get(x,'created_at')),expiresAt:safeInteger(get(x,'expires_at')),completedSubscriptionId:get(x,'completed_subscription_id')};
  }};
 }
 export async function acceptBillingDelivery(account:unknown,body:unknown,signature:unknown,secret:unknown,port:BillingQueryPort,clock:()=>number=Date.now):Promise<IntakeOutcome>{
@@ -124,10 +136,14 @@ export async function routeNextBillingNotice(account:unknown,ports:BillingPorts,
    if(r.kind==='risk_route'&&fresh(clock,now,c.leaseUntil)){
     const v:RiskRoute=r;routed=await ok(ports.risk,SQL.risk,[...args,v.objectId,v.chargeId,v.paymentIntentId,v.invoiceId,v.subscriptionId,v.ownerId,v.customerId,v.itemId,v.priceId]);
    }
+  }else if(c.eventType.startsWith('checkout.session.')&&ports.checkout){
+   const checkout=ports.checkout;
+   const v=await resolveCheckoutNotice(account,c,checkoutBindingReader(checkout.port),checkout.reader,checkout.returnOrigin,clock);
+   if(v.kind==='checkout_route'&&fresh(clock,now,c.leaseUntil))
+    routed=await ok(checkout.port,SQL.checkout,[...args,v.intentId,v.ownerId,v.customerId,v.priceId,v.sessionId,String(v.expiresAt),v.status,v.paymentStatus,v.subscriptionId,v.itemId]);
   }
-  // Checkout notices deliberately remain unresolved until an atomic,
-  // verified terminal-intent routing function is implemented. They must
-  // not disappear or grant access; bounded retries ultimately dead-letter.
+  // Open, unpaid/ambiguous or unbound sessions remain retryable. No
+  // terminal transition is inferred from an event name or missing response.
   if(routed)return result('routed');
   if(!fresh(clock,now,c.leaseUntil))return unavailable;
   return await ok(ports.worker,SQL.fail,[...args,'retry'])?result('retry_recorded'):unavailable;

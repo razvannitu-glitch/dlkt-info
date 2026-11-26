@@ -15,6 +15,7 @@ const roleFunctions={
  dlkt_billing_worker:['claim_notice','route_subscription_notice','fail_notice'],
  dlkt_billing_invoice_router:['read_invoice_binding','route_invoice_notice'],
  dlkt_billing_risk_router:['read_invoice_binding','route_risk_notice'],
+ dlkt_billing_checkout_router:['read_checkout_notice_binding','route_checkout_notice'],
  dlkt_billing_reconciler:['claim_subscription','record_subscription_observation','fail_subscription']
 };
 function sqlFixture(sql,vars=[]){
@@ -26,9 +27,9 @@ function sqlFixture(sql,vars=[]){
 function port(role){
  return {async query(statement,params){
   const m=statement.match(/^SELECT (?:\* FROM )?dlkt_info_billing\.([a-z_]+)\(\$\d+::[a-z]+(?:,\$\d+::[a-z]+)*\)(?: AS (?:ok|outcome))?$/u);
-  if(!m||!roleFunctions[role]?.includes(m[1])||params.some(v=>typeof v!=='string'||!/^[A-Za-z0-9_.\-]+$/u.test(v)))throw Error('FIXTURE_QUERY_REJECTED');
-  const args=params.map((v,i)=>'--set=p'+(i+1)+'='+v);
-  const q=statement.replace(/\$(\d+)/gu,(_,n)=>":'p"+n+"'");
+  if(!m||!roleFunctions[role]?.includes(m[1])||params.some(v=>v!==null&&(typeof v!=='string'||!/^[A-Za-z0-9_.\-]+$/u.test(v))))throw Error('FIXTURE_QUERY_REJECTED');
+  const args=params.flatMap((v,i)=>v===null?[]:['--set=p'+(i+1)+'='+v]);
+  const q=statement.replace(/\$(\d+)/gu,(_,n)=>params[Number(n)-1]===null?'NULL':":'p"+n+"'");
   const out=sqlFixture('SET ROLE '+role+';\nSELECT coalesce(jsonb_agg(to_jsonb(x)),\'[]\'::jsonb)::text FROM ('+q+') x;\n',args);
   return JSON.parse(out);
  }};
@@ -71,16 +72,27 @@ assert.deepEqual(await routeNextBillingNotice(account,ports,reader),{kind:'route
 assert.deepEqual(await reconcileNextBillingSubscription(account,ports.reconcile,reader),{kind:'observed'});
 assert.deepEqual(await accept(signed('evt_PipelineCheckout','checkout.session.completed','checkout.session','cs_test_PipelineIntegration')),{kind:'accepted'});
 assert.deepEqual(await routeNextBillingNotice(account,ports,reader),{kind:'retry_recorded'});
+const checkoutOwner='00000000-0000-4000-8000-000000000019',checkoutIntent='20000000-0000-4000-8000-000000000019',checkoutCustomer='cus_PipelineCheckout',checkoutSession='cs_test_PipelineComplete',checkoutSub='sub_PipelineComplete',checkoutItem='si_PipelineComplete',origin='https://sandbox.example.test';
+const timing=JSON.parse(sqlFixture("SELECT jsonb_build_object('created',extract(epoch from created_at)::bigint,'expiry',expires_at)::text FROM dlkt_info_billing.checkout_intents WHERE intent_id='20000000-0000-4000-8000-000000000019';"));
+const checkout={object:'checkout.session',id:checkoutSession,livemode:false,mode:'subscription',ui_mode:'hosted_page',customer:checkoutCustomer,client_reference_id:checkoutIntent,currency:'eur',amount_total:699,amount_subtotal:699,created:timing.created,expires_at:timing.expiry,success_url:origin+'/billing/return',cancel_url:origin+'/billing/cancel',allow_promotion_codes:false,payment_method_types:['card'],automatic_tax:{enabled:false},status:'complete',payment_status:'paid',subscription:checkoutSub};
+const checkoutSubscription={...remote['/v1/subscriptions/'+sub],id:checkoutSub,customer:checkoutCustomer,latest_invoice:null,items:{object:'list',has_more:false,data:[{object:'subscription_item',id:checkoutItem,subscription:checkoutSub,quantity:1,price:price(false),current_period_start:now-60,current_period_end:now+2592000}]}};
+Object.assign(remote,{['/v1/checkout/sessions/'+checkoutSession]:checkout,['/v1/customers/'+checkoutCustomer]:{object:'customer',id:checkoutCustomer,livemode:false,metadata:{application:'dlkt_info',environment:'sandbox'}},'/v1/checkout/sessions':{object:'list',has_more:false,data:[checkout]},['/v1/checkout/sessions/'+checkoutSession+'/line_items']:{object:'list',has_more:false,data:[{object:'item',quantity:1,currency:'eur',amount_total:699,amount_subtotal:699,price:price(false)}]},'/v1/subscriptions':{object:'list',has_more:false,data:[checkoutSubscription]},['/v1/subscriptions/'+checkoutSub]:checkoutSubscription});
+const withCheckout={...ports,checkout:{port:port('dlkt_billing_checkout_router'),reader,returnOrigin:origin}};
+assert.deepEqual(await accept(signed('evt_PipelineComplete','checkout.session.completed','checkout.session',checkoutSession)),{kind:'accepted'});
+assert.deepEqual(await routeNextBillingNotice(account,withCheckout,reader),{kind:'routed'});
+assert.deepEqual(await reconcileNextBillingSubscription(account,ports.reconcile,reader),{kind:'observed'});
 const receipt=JSON.parse(sqlFixture(`SELECT jsonb_build_object(
  'notices',(select count(*) from dlkt_info_billing.event_notices where account_id='acct_PipelineIntegration'),
  'routed',(select count(*) from dlkt_info_billing.event_jobs where account_id='acct_PipelineIntegration' and state='routed'),
  'checkout_retry',(select count(*) from dlkt_info_billing.event_jobs where account_id='acct_PipelineIntegration' and event_id='evt_PipelineCheckout' and state='pending' and outcome='retry'),
  'invoice_links',(select count(*) from dlkt_info_billing.invoice_links where account_id='acct_PipelineIntegration'),
  'risk_receipts',(select count(*) from dlkt_info_billing.risk_notice_routes where account_id='acct_PipelineIntegration'),
- 'generation',(select generation from dlkt_info_billing.subscription_reconcile where account_id='acct_PipelineIntegration'),
- 'funds_confirmed',(select funds_confirmed from dlkt_info_billing.subscription_reconcile where account_id='acct_PipelineIntegration'),
- 'risk_state',(select risk_state from dlkt_info_billing.subscription_reconcile where account_id='acct_PipelineIntegration'),
+ 'generation',(select generation from dlkt_info_billing.subscription_reconcile where account_id='acct_PipelineIntegration' and subscription_id='sub_PipelineIntegration'),
+ 'checkout_terminal',(select count(*) from dlkt_info_billing.checkout_notice_routes where account_id='acct_PipelineIntegration' and terminal_state='complete'),
+ 'checkout_binding',(select count(*) from dlkt_info_billing.subscription_bindings where account_id='acct_PipelineIntegration' and subscription_id='sub_PipelineComplete'),
+ 'funds_confirmed',(select funds_confirmed from dlkt_info_billing.subscription_reconcile where account_id='acct_PipelineIntegration' and subscription_id='sub_PipelineIntegration'),
+ 'risk_state',(select risk_state from dlkt_info_billing.subscription_reconcile where account_id='acct_PipelineIntegration' and subscription_id='sub_PipelineIntegration'),
  'fixture_grants',(select count(*) from dlkt_info_billing.entitlement_fixture_candidates where account_id='acct_PipelineIntegration')
  )::text;\n`));
-assert.deepEqual(receipt,{notices:3,routed:2,checkout_retry:1,invoice_links:1,risk_receipts:1,generation:2,funds_confirmed:false,risk_state:'unknown',fixture_grants:0});
+assert.deepEqual(receipt,{notices:4,routed:3,checkout_retry:1,invoice_links:1,risk_receipts:1,generation:2,checkout_terminal:1,checkout_binding:1,funds_confirmed:false,risk_state:'unknown',fixture_grants:0});
 console.log('DLKT_INTEGRATED_BILLING_SQL_OK '+JSON.stringify(receipt));

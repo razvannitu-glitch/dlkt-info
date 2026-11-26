@@ -15,7 +15,8 @@
     "external-cleanup.ts",
     "invoice-routing.ts",
     "risk-routing.ts",
-    "billing-pipeline.ts"
+    "billing-pipeline.ts",
+    "checkout-routing.ts"
   ],
   "exclude": []
 }

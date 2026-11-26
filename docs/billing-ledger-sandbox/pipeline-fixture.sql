@@ -10,4 +10,9 @@ insert into dlkt_info_billing.customer_bindings(account_id,customer_id,owner_id)
  ('acct_PipelineIntegration','cus_PipelineIntegration','00000000-0000-4000-8000-000000000018');
 insert into dlkt_info_billing.subscription_bindings(account_id,customer_id,subscription_id,item_id,price_id) values
  ('acct_PipelineIntegration','cus_PipelineIntegration','sub_PipelineIntegration','si_PipelineIntegration','price_PipelineMonth');
+insert into auth.users(id) values('00000000-0000-4000-8000-000000000019');
+insert into dlkt_info_billing.customer_bindings(account_id,customer_id,owner_id) values('acct_PipelineIntegration','cus_PipelineCheckout','00000000-0000-4000-8000-000000000019');
+set role dlkt_billing_checkout_api;
+select * from dlkt_info_billing.reserve_checkout('acct_PipelineIntegration','00000000-0000-4000-8000-000000000019','monthly','20000000-0000-4000-8000-000000000019');
+reset role;
 select 'BILLING_PIPELINE_FIXTURE_READY';
