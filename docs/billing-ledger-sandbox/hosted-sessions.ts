@@ -22,10 +22,10 @@ function httpsOrigin(v:unknown):string{
   if(u.protocol!=='https:'||u.username||u.password||u.port||u.origin!==v||!u.hostname.includes('.'))return reject();
   return u.origin;
 }
-function hostedUrl(v:unknown,host:string,prefix:string):string{
+function hostedUrl(v:unknown,host:string,path:string,exact=false):string{
   if(typeof v!=='string'||v.length>4096||/[\s\\]/u.test(v))return reject();
   const u=new URL(v);
-  if(u.protocol!=='https:'||u.hostname!==host||u.port||u.username||u.password||!u.pathname.startsWith(prefix))return reject();
+  if(u.protocol!=='https:'||u.hostname!==host||u.port||u.username||u.password||(exact?u.pathname!==path:!u.pathname.startsWith(path)))return reject();
   return v;
 }
 type Binding=Readonly<{ownerId:string;accountId:string;customerId:string;liveMode:false}>;
@@ -90,7 +90,10 @@ export class SandboxHostedSessions {
       headers['Idempotency-Key']=options.idempotency as string;
     }
     const init:RequestInit={method,headers,redirect:'error',cache:'no-store',signal:AbortSignal.timeout(8000)};
-    if(method==='POST')init.body=options.body;
+    if(method==='POST'){
+      if(!options.body)return reject();
+      init.body=options.body;
+    }
     const response=await this.#fetch(url,init);
     const length=response.headers.get('content-length');
     if(response.status!==200||response.redirected||(response.url!==''&&response.url!==url)
@@ -148,7 +151,7 @@ export class SandboxHostedSessions {
     const line=lines[0],price=get(line,'price');
     if(lines.length!==1||!same(line,{object:'item',quantity:1,currency:'eur',amount_total:amount,amount_subtotal:amount})
       ||!same(price,{id:i.priceId,product:c.productId,livemode:false,currency:'eur',unit_amount:amount}))return reject();
-    const url=hostedUrl(get(s,'url'),'checkout.stripe.com','/c/pay/'+sessionId);
+    const url=hostedUrl(get(s,'url'),'checkout.stripe.com','/c/pay/'+sessionId,true);
     return Object.freeze({kind:'checkout',sessionId,url,expiresAt:i.expiresAt});
   }
 
