@@ -1,11 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {parseDocument,DomUtils} from 'htmlparser2';
 import {handleCard} from '../.build/api/card.js';
 import {KNOWLEDGE_CARDS} from '../.build/src/iceo/knowledge-catalog.js';
 import {knowledgeCardLink,knowledgeReferencePath,parseKnowledgeCardReference,parseCardReference,parseCardImageReference,knowledgeShareEligible} from '../.build/src/share/link.js';
 import {knowledgeShareDestinations} from '../.build/src/share/actions.js';
-import {resolveKnowledgeShare} from '../.build/src/share/knowledge-resolution.js';
+import {resolveKnowledgeShare,resolveKnowledgeShareFromCatalogue} from '../.build/src/share/knowledge-resolution.js';
+import {knowledgeRightsForCard} from '../.build/src/iceo/knowledge.js';
 import {renderSharedKnowledgeCard} from '../.build/src/share/render.js';
 import {knowledgeRightsCandidates} from './fixtures/knowledge-rights-candidates.mjs';
 
@@ -15,11 +17,15 @@ const now=Date.parse('2026-11-26T12:00:00.000Z');
 const reference={id:helsinki.id,revision:helsinki.revision,language:'en'};
 const path=knowledgeReferencePath(reference);
 const find=(doc,name,attr,value)=>DomUtils.findOne(node=>node.name===name&&node.attribs?.[attr]===value,doc.children);
-async function invoke({url=path,method='GET',at=now,clock=()=>at,headers={}}={}){
+// Synthetic decisions exercise the positive path; they are not real source approvals.
+const testAdmission=card=>Object.freeze({id:card.id,revision:card.revision,digest:createHash('sha256').update(JSON.stringify([card,knowledgeRightsForCard(card)])).digest('hex'),reviewedAt:Date.parse(card.reviewedAt),expiresAt:Date.parse(card.reviewBy)});
+const labAdmissions=Object.freeze([helsinki,paris].map(testAdmission));
+const labResolve=async(ref,at)=>resolveKnowledgeShareFromCatalogue(ref,at,KNOWLEDGE_CARDS,labAdmissions);
+async function invoke({url=path,method='GET',at=now,clock=()=>at,headers={},resolver=labResolve}={}){
  let body='',loads=0,explanations=0,archiveReads=0,archiveWrites=0;const h={};
  const res={statusCode:200,setHeader(k,v){h[k.toLowerCase()]=v;},end(v=''){body=String(v);}};
  const archive={async read(){archiveReads++;throw Error('ARCHIVE_READ_FORBIDDEN');},async write(){archiveWrites++;throw Error('ARCHIVE_WRITE_FORBIDDEN');}};
- await handleCard({method,url,headers},res,async()=>{loads++;throw Error('LIVE_LOAD_FORBIDDEN');},async()=>{explanations++;throw Error('INSIGHT_FORBIDDEN');},clock,archive);
+ await handleCard({method,url,headers},res,async()=>{loads++;throw Error('LIVE_LOAD_FORBIDDEN');},async()=>{explanations++;throw Error('INSIGHT_FORBIDDEN');},clock,archive,resolver);
  assert.equal(loads+explanations+archiveReads+archiveWrites,0,'knowledge route must not touch news or archive services');
  return {status:res.statusCode,body,headers:h};
 }
@@ -125,4 +131,45 @@ test('licensed lab renderer preserves exact attribution while fixtures stay outs
   assert.match(find(doc,'meta','property','og:description').attribs.content,/CC BY 4\.0/);
   assert.equal(await resolveKnowledgeShare({id:card.id,revision:card.revision,language},Date.parse(card.publishAt)),null);
  }
+});
+
+
+test('production resolver denies every unapproved standalone editorial revision even when eligible in the feed',async()=>{
+ for(const card of [helsinki,paris])for(const language of ['en','ro','it']){
+  const url=new URL(knowledgeCardLink(card,language)),ref={id:card.id,revision:card.revision,language};
+  assert.equal(await resolveKnowledgeShare(ref,now),null);
+  const result=await invoke({url:url.pathname+url.search,resolver:resolveKnowledgeShare});
+  assert.equal(result.status,404);assert.ok(!result.body.includes(card.copy[language].title));
+ }
+});
+
+test('approval is bound to a single exact content digest and revision, not merely a source or format',()=>{
+ const approval=testAdmission(helsinki);
+ const resolve=(cards,admissions)=>resolveKnowledgeShareFromCatalogue(reference,now,cards,admissions);
+ assert.ok(resolve([helsinki],[approval]));
+ const altered=structuredClone(helsinki);altered.copy.en.title+=' — different wording';
+ assert.equal(resolve([altered],[approval]),null);
+ assert.equal(resolve([helsinki],[{...approval,digest:'0'.repeat(64)}]),null);
+ assert.equal(resolve([helsinki],[{...approval,revision:1}]),null);
+ assert.equal(resolve([helsinki],[approval,approval]),null);
+ assert.equal(resolve([helsinki,helsinki],[approval]),null);
+ assert.equal(resolve([helsinki],[]),null);
+ assert.equal(resolve([helsinki],[testAdmission(paris)]),null);
+});
+
+test('standalone approval has its own review window and the rendered deadline is the earliest valid cutoff',async()=>{
+ const approval=testAdmission(helsinki),resolve=(admission,at=now)=>resolveKnowledgeShareFromCatalogue(reference,at,[helsinki],[admission]);
+ for(const invalid of [
+  {...approval,reviewedAt:now+1},{...approval,reviewedAt:Date.parse(helsinki.reviewedAt)-1},
+  {...approval,expiresAt:now},{...approval,expiresAt:NaN},{...approval,reviewedAt:0},
+ ])assert.equal(resolve(invalid),null);
+ const limited={...approval,expiresAt:now+1000},view=resolve(limited);assert.equal(view.validUntil,now+1000);
+ assert.equal(resolve(limited,now+1000),null);
+ const res=await invoke({resolver:async(ref,at)=>resolveKnowledgeShareFromCatalogue(ref,at,[helsinki],[limited])});
+ assert.equal(res.status,200);
+ const doc=parseDocument(res.body);
+ assert.ok(find(doc,'time','datetime',new Date(now+1000).toISOString()));
+ assert.equal(find(doc,'p','id','shared-freshness').attribs['data-valid-until'],String(now+1000));
+ const later={...approval,expiresAt:Date.parse(helsinki.reviewBy)+1000};
+ assert.equal(resolve(later).validUntil,Date.parse(helsinki.reviewBy));
 });

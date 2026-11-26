@@ -68,7 +68,7 @@ export function renderSharedKnowledgeCard(view:SharedKnowledgeView):string {
   '<div class="card-content"><h1>'+e(copy.title)+'</h1><p class="card-meta">'+e(card.source.publisher)+'</p><p class="card-context">'+e(copy.explanation)+'</p>'+
   '<div class="card-guide"><p><strong>'+e(labels.use)+': </strong>'+e(copy.connection)+'</p></div>'+
   '<p id="shared-freshness" class="privacy-note" data-valid-until="'+validUntil+'" data-expired-message="'+e(labels.expired)+'" role="status" aria-live="polite">'+
-  e(labels.checked)+' <time datetime="'+e(card.reviewedAt)+'">'+e(review)+'</time> · '+e(labels.until)+' <time datetime="'+e(card.reviewBy)+'">'+e(expiry)+'</time>.</p>'+
+  e(labels.checked)+' <time datetime="'+e(card.reviewedAt)+'">'+e(review)+'</time> · '+e(labels.until)+' <time datetime="'+e(new Date(validUntil).toISOString())+'">'+e(expiry)+'</time>.</p>'+
   credit+'<p class="privacy-note">'+e(labels.boundary)+'</p>'+
   '<div class="card-actions"><a href="'+e(card.source.url)+'" class="source-link" target="_blank" rel="noopener noreferrer">'+e(labels.source)+'</a>'+
   '<button id="shared-copy" class="secondary" type="button" data-card-url="'+e(url)+'" data-copy-success="'+e(labels.copied)+'" data-copy-fallback="'+e(labels.fallback)+'" hidden>'+e(labels.copy)+'</button></div>'+

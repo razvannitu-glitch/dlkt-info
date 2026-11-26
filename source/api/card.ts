@@ -14,7 +14,7 @@ import {parseCardReference,parseKnowledgeCardReference} from '../src/share/link.
 import {resolveKnowledgeShare} from '../src/share/knowledge-resolution.js';
 import {renderSharedCard,renderSharedError,renderSharedKnowledgeCard,renderSharedKnowledgeUnavailable} from '../src/share/render.js';
 /** Read-only route. References can select an existing public record but cannot supply its content or URL. */
-export async function handleCard(req:IncomingMessage,res:ServerResponse,load:()=>Promise<IceoSnapshot>=publicIceoSnapshot,explain:(c:EvidenceCard)=>Promise<SourceInsight>=c=>insightService.read(c),clock:()=>number=Date.now,archive:ArchiveStore|null=createArchiveStore(process.env)):Promise<void>{
+export async function handleCard(req:IncomingMessage,res:ServerResponse,load:()=>Promise<IceoSnapshot>=publicIceoSnapshot,explain:(c:EvidenceCard)=>Promise<SourceInsight>=c=>insightService.read(c),clock:()=>number=Date.now,archive:ArchiveStore|null=createArchiveStore(process.env),resolveKnowledge:typeof resolveKnowledgeShare=resolveKnowledgeShare):Promise<void>{
   res.setHeader('Content-Type','text/html; charset=utf-8');res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('X-Frame-Options','DENY');res.setHeader('Referrer-Policy','no-referrer');res.setHeader('X-Robots-Tag','noindex, nofollow');
   res.setHeader('Content-Security-Policy',"default-src 'none'; manifest-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; font-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'");
   const send=(status:number,html:string):void=>{res.statusCode=status;if(status===503)res.setHeader('Retry-After','60');res.end(req.method==='HEAD'?'':html);};
@@ -22,7 +22,7 @@ export async function handleCard(req:IncomingMessage,res:ServerResponse,load:()=
   const raw=req.url??'',knowledgeRef=parseKnowledgeCardReference(raw);
   if(knowledgeRef!==null){
     try{
-      const started=clock(),view=await resolveKnowledgeShare(knowledgeRef,started);
+      const started=clock(),view=await resolveKnowledge(knowledgeRef,started);
       if(view===null){send(404,renderSharedKnowledgeUnavailable(knowledgeRef.language));return;}
       const html=renderSharedKnowledgeCard(view),completed=clock();
       if(!Number.isSafeInteger(completed)||completed<started)throw Error('KNOWLEDGE_SHARE_CLOCK_INVALID');
