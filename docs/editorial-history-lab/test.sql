@@ -42,7 +42,7 @@ reset time zone;
 
 set role dlkt_history_worker;
 do $$
-declare a record; observed timestamptz; evidence text; foreign_evidence text; payload text;
+declare a record; observed timestamptz; evidence text; foreign_evidence text; payload text; altered_f jsonb; altered_evidence text;
         f jsonb:=to_jsonb(array_fill(repeat('b',64),array[5])); d text:=repeat('a',64);
 begin
   select * into a from dlkt_history_lab.start_attempt('lab-main',1,d,'00000000-0000-4000-8000-000000000001');
@@ -120,6 +120,62 @@ begin
   exception when check_violation then
     if sqlerrm<>'HISTORY_EVIDENCE_BINDING_INVALID' then raise; end if;
   end;
+  -- Even a valid unkeyed SHA-256 cannot establish the attestor's authorization.
+  begin
+    perform dlkt_history_lab.finish_attempt('lab-main',1,d,'00000000-0000-4000-8000-000000000002',
+      'observed',null,observed,f,evidence);
+    raise exception 'unattested positive result accepted';
+  exception when check_violation then
+    if sqlerrm<>'HISTORY_ATTESTATION_REQUIRED' then raise; end if;
+  end;
+  begin
+    perform dlkt_history_lab.attest_observation('lab-main',1,d,'00000000-0000-4000-8000-000000000002',observed,f,evidence);
+    raise exception 'worker can attest own observation';
+  exception when insufficient_privilege then null; end;
+  begin
+    insert into dlkt_history_lab.observation_attestations values('00000000-0000-4000-8000-000000000002',evidence,observed,clock_timestamp());
+    raise exception 'worker direct attestation allowed';
+  exception when insufficient_privilege then null; end;
+  altered_f:=jsonb_set(f,'{0}',to_jsonb(repeat('c',64)));
+  altered_evidence:=encode(sha256(convert_to(format('["dlkt-knowledge-observation-v1","lab-main",1,"%s","https://example.invalid/source/main","https://example.invalid/policy/main","%s",%s]',
+    d,to_char(observed at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),replace(altered_f::text,', ', ',')),'UTF8')),'hex');
+  -- Role switching here is performed by the disposable test harness's
+  -- superuser session, not a capability available to the worker in production.
+  execute 'set local role dlkt_history_attestor';
+  begin
+    perform dlkt_history_lab.attest_observation('lab-main',1,d,'00000000-0000-4000-8000-000000000002',observed,f,foreign_evidence);
+    raise exception 'attestor accepted foreign evidence';
+  exception when check_violation then
+    if sqlerrm<>'HISTORY_EVIDENCE_BINDING_INVALID' then raise; end if;
+  end;
+  begin
+    perform dlkt_history_lab.attest_observation('lab-other',1,d,'00000000-0000-4000-8000-000000000002',observed,f,evidence);
+    raise exception 'foreign attempt attested';
+  exception when raise_exception then
+    if sqlerrm<>'HISTORY_ATTEMPT_UNKNOWN' then raise; end if;
+  end;
+  if dlkt_history_lab.attest_observation('lab-main',1,d,'00000000-0000-4000-8000-000000000002',observed,f,evidence)
+    is distinct from 'attested' then raise exception 'attestation failed'; end if;
+  if dlkt_history_lab.attest_observation('lab-main',1,d,'00000000-0000-4000-8000-000000000002',observed,f,evidence)
+    is distinct from 'replay' then raise exception 'attestation replay failed'; end if;
+  begin
+    perform dlkt_history_lab.attest_observation('lab-main',1,d,'00000000-0000-4000-8000-000000000002',observed,altered_f,altered_evidence);
+    raise exception 'attestation overwrite accepted';
+  exception when raise_exception then
+    if sqlerrm<>'HISTORY_ATTESTATION_CONFLICT' then raise; end if;
+  end;
+  begin
+    perform dlkt_history_lab.finish_attempt('lab-main',1,d,'00000000-0000-4000-8000-000000000002','observed',null,observed,f,evidence);
+    raise exception 'attestor can finalize own observation';
+  exception when insufficient_privilege then null; end;
+  execute 'set local role dlkt_history_worker';
+  begin
+    perform dlkt_history_lab.finish_attempt('lab-main',1,d,'00000000-0000-4000-8000-000000000002',
+      'observed',null,observed,altered_f,altered_evidence);
+    raise exception 'different valid digest reused attestation';
+  exception when check_violation then
+    if sqlerrm<>'HISTORY_ATTESTATION_REQUIRED' then raise; end if;
+  end;
   if dlkt_history_lab.finish_attempt('lab-main',1,d,'00000000-0000-4000-8000-000000000002',
     'observed',null,observed,f,evidence) is distinct from 'recorded' then raise exception 'observation failed'; end if;
   if dlkt_history_lab.finish_attempt('lab-main',1,d,'00000000-0000-4000-8000-000000000002',
@@ -152,6 +208,7 @@ begin
     or jsonb_array_length(h->'attempts') is distinct from 2
     or h #>> '{attempts,0,outcome}' is distinct from 'held'
     or h #>> '{attempts,1,outcome}' is distinct from 'observed'
+    or h #>> '{attempts,1,attestedAt}' is null
     or h->'activationAllowed' is distinct from 'false'::jsonb then raise exception 'history omitted terminal failure'; end if;
   h:=dlkt_history_lab.read_history('lab-other',1,d);
   if h->>'state' is distinct from 'empty' or h->>'tip' is distinct from '0'
@@ -333,6 +390,42 @@ end;
 $$;
 reset role;
 
+-- Independently of the previous corrupt-digest case, a positive result
+-- with a correct hash but no attestation must be held at readback.
+insert into dlkt_history_lab.candidates(card_id,revision,digest,source_url,policy_url,tip)
+values('lab-unattested',1,repeat('a',64),'https://example.invalid/source/unattested','https://example.invalid/policy/unattested',1);
+insert into dlkt_history_lab.attempts values('00000000-0000-4000-8000-000000000015',
+  'lab-unattested',1,repeat('a',64),1,'2026-01-01T00:00:00Z'::timestamptz);
+insert into dlkt_history_lab.results
+select '00000000-0000-4000-8000-000000000015'::uuid,'2026-01-01T00:00:02Z'::timestamptz,
+  'observed',null,'2026-01-01T00:00:01Z'::timestamptz,f,
+  dlkt_history_lab.observation_digest('lab-unattested',1,repeat('a',64),'https://example.invalid/source/unattested',
+    'https://example.invalid/policy/unattested','2026-01-01T00:00:01Z'::timestamptz,f)
+from (select to_jsonb(array_fill(repeat('b',64),array[5])) f) as fixture;
+set role dlkt_history_reader;
+do $$
+begin
+  if dlkt_history_lab.read_history('lab-unattested',1,repeat('a',64))->>'state' is distinct from 'integrity-held' then
+    raise exception 'valid digest without attestation accepted at readback';
+  end if;
+end;
+$$;
+reset role;
+
+-- Tamper with the previously valid attestation as the trusted admin for
+-- fault injection only; the worker and reader cannot modify this table.
+update dlkt_history_lab.observation_attestations set evidence_digest=repeat('0',64)
+where attempt_id='00000000-0000-4000-8000-000000000002';
+set role dlkt_history_reader;
+do $$
+begin
+  if dlkt_history_lab.read_history('lab-main',1,repeat('a',64))->>'state' is distinct from 'integrity-held' then
+    raise exception 'tampered attestation accepted at readback';
+  end if;
+end;
+$$;
+reset role;
+
 -- Test all ordinary application roles, including BYPASSRLS, have no access.
 do $$
 declare r text;
@@ -346,6 +439,11 @@ begin
     begin
       perform dlkt_history_lab.start_attempt('lab-other',1,repeat('a',64),'00000000-0000-4000-8000-000000000008');
       raise exception 'application role write accepted: %',r;
+    exception when insufficient_privilege then null; end;
+    begin
+      perform dlkt_history_lab.attest_observation('lab-other',1,repeat('a',64),
+        '00000000-0000-4000-8000-000000000008',clock_timestamp(),null,null);
+      raise exception 'application role attestation accepted: %',r;
     exception when insufficient_privilege then null; end;
     execute 'reset role';
   end loop;

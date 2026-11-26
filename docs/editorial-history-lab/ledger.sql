@@ -6,12 +6,13 @@ create role dlkt_history_owner nologin noinherit;
 create role dlkt_history_worker nologin noinherit;
 create role dlkt_history_reader nologin noinherit;
 create role dlkt_history_reaper nologin noinherit;
+create role dlkt_history_attestor nologin noinherit;
 create role anon nologin;
 create role authenticated nologin;
 create role service_role nologin bypassrls;
 create schema dlkt_history_lab authorization dlkt_history_owner;
 revoke all on schema dlkt_history_lab from public, anon, authenticated, service_role;
-grant usage on schema dlkt_history_lab to dlkt_history_worker, dlkt_history_reader, dlkt_history_reaper;
+grant usage on schema dlkt_history_lab to dlkt_history_worker, dlkt_history_reader, dlkt_history_reaper, dlkt_history_attestor;
 set local role dlkt_history_owner;
 
 create table dlkt_history_lab.candidates (
@@ -96,11 +97,22 @@ create table dlkt_history_lab.results (
   )
 );
 
+-- A positive observation requires an exact attestation from a distinct
+-- database role. This is a synthetic trust-boundary experiment, not a
+-- statement that any real source has been observed or independently reviewed.
+create table dlkt_history_lab.observation_attestations (
+  attempt_id uuid primary key references dlkt_history_lab.attempts,
+  evidence_digest text not null check (evidence_digest ~ '^[0-9a-f]{64}$'),
+  observed_at timestamptz not null check (isfinite(observed_at)),
+  attested_at timestamptz not null check (isfinite(attested_at) and attested_at>=observed_at)
+);
+
 -- No direct table grants. The non-login schema owner is the SECURITY DEFINER
--- role; ordinary worker/reader/reaper calls are restricted to the functions.
+-- role; worker/reader/reaper/attestor calls are restricted to the functions.
 alter table dlkt_history_lab.candidates enable row level security;
 alter table dlkt_history_lab.attempts enable row level security;
 alter table dlkt_history_lab.results enable row level security;
+alter table dlkt_history_lab.observation_attestations enable row level security;
 
 -- Caller holds a candidate lock. All attempts, including unresolved starts,
 -- contribute to the contiguous prefix. No hash claims to authenticate it.
@@ -132,16 +144,30 @@ begin
     where (a.card_id,a.revision,a.digest)=(p_card,p_revision,p_digest)
       and (r.attempt_id is null or b.started_at<=r.finished_at)
   ) then return 'integrity-held'; end if;
+  -- Attestations are bound to their attempt and cannot be carried forward.
+  -- An attested but failed/abandoned attempt remains a hold, never a success.
+  if exists (
+    select 1 from dlkt_history_lab.attempts a
+    join dlkt_history_lab.observation_attestations o using (attempt_id)
+    left join dlkt_history_lab.results r using (attempt_id)
+    where (a.card_id,a.revision,a.digest)=(p_card,p_revision,p_digest)
+      and (o.observed_at<a.started_at or o.attested_at>checked_at
+        or o.attested_at>=a.started_at+interval '5 minutes'
+        or (r.attempt_id is not null and o.attested_at>r.finished_at))
+  ) then return 'integrity-held'; end if;
   -- Recompute every stored positive binding, including historical attempts.
   -- Never treat a digest supplied by the worker as authoritative by itself.
   if exists (
     select 1 from dlkt_history_lab.attempts a
     join dlkt_history_lab.results r using (attempt_id)
     join dlkt_history_lab.candidates c on (a.card_id,a.revision,a.digest)=(c.card_id,c.revision,c.digest)
+    left join dlkt_history_lab.observation_attestations o on o.attempt_id=a.attempt_id
     where (a.card_id,a.revision,a.digest)=(p_card,p_revision,p_digest)
       and r.outcome='observed'
-      and r.evidence_digest is distinct from dlkt_history_lab.observation_digest(
+      and (r.evidence_digest is distinct from dlkt_history_lab.observation_digest(
         c.card_id,c.revision,c.digest,c.source_url,c.policy_url,r.observed_at,r.fingerprints)
+        or o.attempt_id is null or o.evidence_digest is distinct from r.evidence_digest
+        or o.observed_at is distinct from r.observed_at)
   ) then return 'integrity-held'; end if;
   if open_n=1 then
     if checked_at>=open_started+interval '5 minutes' then return 'expired-open'; end if;
@@ -201,6 +227,52 @@ begin
 end;
 $$;
 
+-- Only the separately authenticated attestor role can record this exact
+-- positive-evidence attestation. The worker cannot invoke or modify it.
+-- An existing identical attestation is idempotent, not a new authorization.
+create function dlkt_history_lab.attest_observation(
+  p_card text,p_revision integer,p_digest text,p_attempt uuid,
+  p_observed timestamptz,p_fingerprints jsonb,p_evidence text
+) returns text language plpgsql security definer set search_path=pg_catalog as $$
+declare c dlkt_history_lab.candidates%rowtype;
+        a dlkt_history_lab.attempts%rowtype;
+        o dlkt_history_lab.observation_attestations%rowtype;
+        expected_digest text; ts timestamptz;
+begin
+  select * into c from dlkt_history_lab.candidates k
+  where (k.card_id,k.revision,k.digest)=(p_card,p_revision,p_digest) for update;
+  if not found then raise exception 'HISTORY_CANDIDATE_UNKNOWN'; end if;
+  if dlkt_history_lab.history_state(p_card,p_revision,p_digest,c.tip)='integrity-held' then
+    raise exception 'HISTORY_INTEGRITY_HELD';
+  end if;
+  select * into a from dlkt_history_lab.attempts k where k.attempt_id=p_attempt
+    and (k.card_id,k.revision,k.digest)=(p_card,p_revision,p_digest);
+  if not found then raise exception 'HISTORY_ATTEMPT_UNKNOWN'; end if;
+  expected_digest:=dlkt_history_lab.observation_digest(c.card_id,c.revision,c.digest,
+    c.source_url,c.policy_url,p_observed,p_fingerprints);
+  if expected_digest is null or p_evidence is distinct from expected_digest then
+    raise exception using errcode='23514', message='HISTORY_EVIDENCE_BINDING_INVALID';
+  end if;
+  select * into o from dlkt_history_lab.observation_attestations k where k.attempt_id=p_attempt;
+  if found then
+    if (o.evidence_digest,o.observed_at) is distinct from (p_evidence,p_observed) then
+      raise exception 'HISTORY_ATTESTATION_CONFLICT';
+    end if;
+    return 'replay';
+  end if;
+  if exists(select 1 from dlkt_history_lab.results r where r.attempt_id=p_attempt) then
+    raise exception 'HISTORY_ATTEMPT_TERMINAL';
+  end if;
+  ts:=clock_timestamp();
+  if a.sequence_no<>c.tip or ts<a.started_at or p_observed<a.started_at or p_observed>ts then
+    raise exception 'HISTORY_CLOCK_OR_SEQUENCE_INVALID';
+  end if;
+  if ts>=a.started_at+interval '5 minutes' then raise exception 'HISTORY_ATTEMPT_EXPIRED'; end if;
+  insert into dlkt_history_lab.observation_attestations values(p_attempt,p_evidence,p_observed,ts);
+  return 'attested';
+end;
+$$;
+
 create function dlkt_history_lab.finish_attempt(
   p_card text,p_revision integer,p_digest text,p_attempt uuid,
   p_outcome text,p_reason text,p_observed timestamptz,p_fingerprints jsonb,p_evidence text
@@ -242,6 +314,11 @@ begin
     if expected_digest is null or p_evidence is distinct from expected_digest then
       raise exception using errcode='23514', message='HISTORY_EVIDENCE_BINDING_INVALID';
     end if;
+    if not exists (
+      select 1 from dlkt_history_lab.observation_attestations o
+      where o.attempt_id=p_attempt and o.evidence_digest=p_evidence
+        and o.observed_at=p_observed and o.attested_at<=ts
+    ) then raise exception using errcode='23514', message='HISTORY_ATTESTATION_REQUIRED'; end if;
   end if;
   insert into dlkt_history_lab.results values(p_attempt,ts,p_outcome,p_reason,p_observed,p_fingerprints,p_evidence);
   return 'recorded';
@@ -285,9 +362,11 @@ begin
   select coalesce(jsonb_agg(jsonb_build_object(
     'sequence',a.sequence_no,'attemptId',a.attempt_id,'startedAt',a.started_at,
     'finishedAt',r.finished_at,'outcome',coalesce(r.outcome,'open'),'reason',r.reason,
-    'observedAt',r.observed_at,'fingerprints',r.fingerprints,'evidenceDigest',r.evidence_digest
+    'observedAt',r.observed_at,'fingerprints',r.fingerprints,'evidenceDigest',r.evidence_digest,
+    'attestedAt',o.attested_at
   ) order by a.sequence_no),'[]'::jsonb) into entries
   from dlkt_history_lab.attempts a left join dlkt_history_lab.results r using(attempt_id)
+  left join dlkt_history_lab.observation_attestations o on o.attempt_id=a.attempt_id
   where (a.card_id,a.revision,a.digest)=(p_card,p_revision,p_digest);
   return jsonb_build_object('cardId',c.card_id,'revision',c.revision,'digest',c.digest,
     'sourceUrl',c.source_url,'policyUrl',c.policy_url,'tip',c.tip,'state',state,
@@ -296,12 +375,14 @@ end;
 $$;
 
 revoke all on all tables in schema dlkt_history_lab from public,anon,authenticated,service_role,
-  dlkt_history_worker,dlkt_history_reader,dlkt_history_reaper;
+  dlkt_history_worker,dlkt_history_reader,dlkt_history_reaper,dlkt_history_attestor;
 revoke execute on all functions in schema dlkt_history_lab from public,anon,authenticated,service_role,
-  dlkt_history_worker,dlkt_history_reader,dlkt_history_reaper;
+  dlkt_history_worker,dlkt_history_reader,dlkt_history_reaper,dlkt_history_attestor;
 grant execute on function dlkt_history_lab.start_attempt(text,integer,text,uuid),
   dlkt_history_lab.finish_attempt(text,integer,text,uuid,text,text,timestamptz,jsonb,text)
   to dlkt_history_worker;
 grant execute on function dlkt_history_lab.abandon_attempt(text,integer,text,uuid) to dlkt_history_reaper;
 grant execute on function dlkt_history_lab.read_history(text,integer,text) to dlkt_history_reader;
+grant execute on function dlkt_history_lab.attest_observation(text,integer,text,uuid,timestamptz,jsonb,text)
+  to dlkt_history_attestor;
 commit;
