@@ -31,7 +31,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat docs/billing-ledger-sandbox/{setup,ledger,test,queue,queue-test,reconcile,reconcile-test}.sql |
+          cat docs/billing-ledger-sandbox/{setup,ledger,test,queue,queue-test,reconcile,reconcile-test,checkout,checkout-test}.sql |
             docker exec -i "$TEST_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d billing_test
 
       - name: Verify simultaneous intake and lease claims in independent sessions
@@ -81,6 +81,26 @@ jobs:
           test "$(cat "$tmp/claim1" "$tmp/claim2" | sort | paste -sd, -)" = 0,1
           test "$(psql_test -c "SELECT count(*) FROM dlkt_info_billing.subscription_reconcile WHERE account_id='acct_ReconcileRace' AND state='leased' AND generation=1 AND fence=1 AND attempt=1;")" = 1
           echo BILLING_RECONCILIATION_PARALLEL_SESSIONS_OK
+
+      - name: Verify simultaneous checkout reservation
+        env:
+          TEST_CONTAINER: ${{ job.services.postgres.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          psql_test() { docker exec -i "$TEST_CONTAINER" psql -X -qAt -v ON_ERROR_STOP=1 -U postgres -d billing_test "$@"; }
+          psql_test -c "SET ROLE dlkt_billing_checkout_api; SELECT intent_id FROM dlkt_info_billing.reserve_checkout('acct_Checkout','00000000-0000-4000-8000-000000000007','monthly','20000000-0000-4000-8000-000000000007');" > "$tmp/one" &
+          p1=$!
+          psql_test -c "SET ROLE dlkt_billing_checkout_api; SELECT intent_id FROM dlkt_info_billing.reserve_checkout('acct_Checkout','00000000-0000-4000-8000-000000000007','monthly','30000000-0000-4000-8000-000000000007');" > "$tmp/two" &
+          p2=$!
+          wait "$p1"
+          wait "$p2"
+          test -s "$tmp/one"
+          cmp "$tmp/one" "$tmp/two"
+          test "$(psql_test -c "SELECT count(*) FROM dlkt_info_billing.checkout_intents WHERE account_id='acct_Checkout' AND customer_id='cus_Race';")" = 1
+          echo BILLING_CHECKOUT_PARALLEL_RESERVATIONS_OK
 
   payment-proof:
     runs-on: ubuntu-24.04
