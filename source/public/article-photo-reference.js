@@ -15,7 +15,8 @@ function validReference(value) {
         return keys.length === 2 && globalId.test(item.id);
     if (keys.length !== 3 || typeof item.cityId !== 'string' || !cityId.test(item.cityId))
         return false;
-    return localId.exec(item.id)?.[1] === item.cityId;
+    return localId.exec(item.id)?.[1] === item.cityId
+        || item.cityId === '683506' && /^bucharest:arcub:[a-f0-9]{24}$/u.test(item.id);
 }
 /** A public record ID and exact evidence revision only; never a remotely supplied image/article URL. */
 export function articlePhotoPath(ref) {
