@@ -400,6 +400,14 @@ function personalSurface() {
 export async function verifyPersonalProfileFlow({call, origin, fixture, evaluate, loaded, focusSelector, keyboard,
   openIsolated, outputDir, emitVisualPreview}) {
   const expected = fixture.expected, observations = [];
+  const readerPreference = await evaluate(call, 'localStorage.getItem("dlkt-reader-language-v1")');
+  const language = async value => {
+    await evaluate(call, '(function(value){const select=document.getElementById("reader-language");if(!(select instanceof HTMLSelectElement))throw Error("WALLET_LANGUAGE_PICKER_MISSING");select.value=value;select.dispatchEvent(new Event("change",{bubbles:true}));return select.value;})('+JSON.stringify(value)+')');
+    await waitFor(call, evaluate, 'document.documentElement.lang==='+JSON.stringify(value), 'WALLET_LANGUAGE_'+value);
+  };
+  const languageState = () => evaluate(call, '(function(){const form=document.getElementById("wallet-profile-form");return {fields:[...form.querySelectorAll("input")].map(n=>({id:n.id,name:n.name,value:n.value,checked:n.checked})),cards:[...document.querySelectorAll("#wallet-personal-cards article")].map(n=>({id:n.dataset.personalId,title:n.querySelector("h3")?.textContent,links:[...n.querySelectorAll("a")].map(a=>a.getAttribute("href"))})),focus:document.activeElement?.id,summary:document.getElementById("wallet-profile-summary").textContent};})()');
+  const privateRequestCount = () => fixture.requests.filter(request => ['/api/wallet','/api/account-session','/api/connections'].includes(request.path)).length;
+
   const probe = () => evaluate(call, '(' + privateProbe.toString() + ')()');
   const click = selector => activate(call, evaluate, focusSelector, keyboard, selector);
   const awaitCards = async (owner, ids) => waitFor(call, evaluate,
@@ -423,6 +431,7 @@ export async function verifyPersonalProfileFlow({call, origin, fixture, evaluate
     await setCookie(call, origin, A);
     await call('Page.navigate', {url: origin + '/wallet'}); await loaded(call);
     await awaitCards(A, [expected.technology]);
+    await language('en'); // Existing owner/race assertions below retain their original English semantics.
     const initial = await probe();
     assert.equal(initial.city, '');
     assert.deepEqual(initial.needs, []);
@@ -452,10 +461,35 @@ export async function verifyPersonalProfileFlow({call, origin, fixture, evaluate
     assert.ok(alpha.cards.find(card => card.id === expected.technology)?.urls.includes(expected.techUrl), 'nonlocal interest card retains the exact original source URL');
     assert.ok(alpha.coverage.trim(), 'partial local source coverage remains visible');
 
+
+    await waitFor(call, evaluate, 'document.getElementById("wallet-connections").getAttribute("aria-busy")==="false"', 'WALLET_CONNECTIONS_SETTLED');
+    await evaluate(call, '(function(){document.getElementById("wallet-display-name").value="QA_UNSAVED_LOCALE";document.getElementById("wallet-locale").value="ro-RO";document.querySelector("#wallet-interests input[value=science]").checked=true;window.__dlktLocaleCard=document.querySelector("#wallet-personal-cards article[data-personal-id]");window.__dlktLocaleInput=document.getElementById("wallet-display-name");window.__dlktLocaleInput.focus();return true;})()');
+    const draftBeforeLanguage = await languageState(), requestsBeforeLanguage = privateRequestCount(), writesBeforeLanguage = fixture.writes.length;
+    await language('ro');
+    let draftAfterLanguage = await languageState();
+    assert.deepEqual(draftAfterLanguage.fields, draftBeforeLanguage.fields, 'locale changes preserve every native unsaved value and choice');
+    assert.deepEqual(draftAfterLanguage.cards, draftBeforeLanguage.cards, 'locale changes preserve original source titles, source URLs and card identities');
+    assert.equal(draftAfterLanguage.focus, draftBeforeLanguage.focus, 'locale updates do not steal native input focus');
+    assert.equal(await evaluate(call, 'window.__dlktLocaleCard===document.querySelector("#wallet-personal-cards article[data-personal-id]")&&window.__dlktLocaleInput===document.getElementById("wallet-display-name")'), true, 'locale updates retain actual card and form nodes');
+    assert.equal(await evaluate(call, 'document.getElementById("wallet-save").textContent'), 'Salveaza profilul');
+    assert.equal(await evaluate(call, 'document.getElementById("wallet-saved").textContent'), 'Cardurile salvate in acest browser');
+    assert.match(await evaluate(call, 'document.getElementById("wallet-status").textContent'), /Profilul privat este salvat/u);
+    assert.match(await evaluate(call, 'document.getElementById("wallet-personal-status").textContent'), /carduri potrivite/u);
+    await language('ar');
+    const fallback = await evaluate(call, '(function(){const root=document.querySelector("main.reader-shell");return {lang:root.lang,dir:root.dir,save:document.getElementById("wallet-save").textContent};})()');
+    assert.deepEqual(fallback, {lang:'en',dir:'ltr',save:'Save profile'}, 'unsupported utility locale has honest English/LTR fallback');
+    await language('ro');
+    assert.deepEqual((await languageState()).fields, draftBeforeLanguage.fields);
+    assert.equal(privateRequestCount(), requestsBeforeLanguage, 'locale changes trigger no profile, identity or provider request');
+    assert.equal(fixture.writes.length, writesBeforeLanguage, 'locale changes never save private preferences');
+    await evaluate(call, '(function(){document.getElementById("wallet-display-name").value='+JSON.stringify(alpha.name)+';document.getElementById("wallet-locale").value='+JSON.stringify(alpha.locale)+';document.querySelector("#wallet-interests input[value=science]").checked=false;delete window.__dlktLocaleCard;delete window.__dlktLocaleInput;return true;})()');
+
     for (const width of [320, 390, 1440]) {
       await call('Emulation.setDeviceMetricsOverride', {width, height: width === 1440 ? 900 : 844, deviceScaleFactor: 1, mobile: width < 768, scale: 1});
       const measured = await evaluate(call, '(' + personalSurface.toString() + ')()');
       assert.ok(measured.root && measured.documentWidth <= width + 2, 'private cards fit the viewport at ' + width);
+      const pickerBox = await evaluate(call, '(function(){const n=document.getElementById("reader-language"),r=n.getBoundingClientRect();return {width:r.width,height:r.height,left:r.left,right:r.right};})()');
+      assert.ok(pickerBox.width >= 44 && pickerBox.height >= 44 && pickerBox.left >= -1 && pickerBox.right <= width + 1, 'language control fits the existing header at '+width);
       for (const box of [measured.root, ...measured.cards]) assert.ok(box.left >= -1 && box.right <= width + 1, 'personal content stays within viewport');
       assert.ok(measured.controls.some(control => control.id === 'wallet-city'), 'confirmed city checkbox label is measured');
       for (const control of measured.controls) {
@@ -467,6 +501,7 @@ export async function verifyPersonalProfileFlow({call, origin, fixture, evaluate
     }
     await call('Emulation.setDeviceMetricsOverride', {width: 390, height: 844, deviceScaleFactor: 1, mobile: true, scale: 1});
 
+    await language('en');
     const additional = fixture.expandTechnology(22);
     await click('#wallet-personal-refresh'); await awaitCards(A, [expected.utility, expected.technology]);
     assert.equal((await probe()).cards.length, 20, 'the initial private scrolling page is bounded');
@@ -498,6 +533,10 @@ export async function verifyPersonalProfileFlow({call, origin, fixture, evaluate
     const savedLink = await evaluate(call, '(function(){const a=document.querySelector(' + JSON.stringify(savedLinkSelector) + ');return a?{href:a.getAttribute("href"),target:a.target,text:a.textContent}:null;})()');
     assert.deepEqual(savedLink, {href: '/#saved', target: '', text: 'Open saved cards in this browser'},
       'a committed public save exposes a same-tab browser-only collection link');
+    await language('ro');
+    const translatedSavedLink = await evaluate(call, '(function(){const a=document.querySelector('+JSON.stringify(savedLinkSelector)+');return a?{href:a.getAttribute("href"),text:a.textContent}:null;})()');
+    assert.deepEqual(translatedSavedLink, {href:'/#saved',text:'Vezi cardurile salvate in browser'}, 'successful save retains its exact navigation link through a locale change');
+    await language('en');
     const memoryAfterSave = await evaluate(call, '(async function(){const {DeviceMemory}=await import("/device-memory.js");return await new DeviceMemory().read();})()');
     assert.equal(memoryBeforeSave.cards.some(card => card.id === savedId), false, 'the selected public fixture was not previously saved');
     assert.equal(memoryAfterSave.cards.length, memoryBeforeSave.cards.length + 1, 'the explicit source action saves one public card');
@@ -701,6 +740,9 @@ export async function verifyPersonalProfileFlow({call, origin, fixture, evaluate
     await click('#wallet-signout');
     await waitFor(call, evaluate, 'document.getElementById("wallet-signin").hidden===false', 'SIGNOUT');
     emptyPrivate(await probe()); signoutGate.release(); await pause(150); emptyPrivate(await probe());
+    await language('ro'); emptyPrivate(await probe());
+    assert.equal(await evaluate(call, 'document.getElementById("wallet-profile-summary").textContent'), '', 'locale changes after sign-out cannot resurrect the private summary');
+    await language('en');
     assert.equal(await dailyMemory(call, evaluate), originalDaily, 'the full private profile journey leaves browser-only DailyState unchanged');
 
     const publicRequests = fixture.requests.filter(request => ['/api/places', '/api/local', '/api/iceo'].includes(request.path));
@@ -713,6 +755,7 @@ export async function verifyPersonalProfileFlow({call, origin, fixture, evaluate
     assert.ok(signedInWalletReads.every(request => request.ownerHeader !== null), 'every new private Wallet operation carries its verified expected owner');
     return {
       status: 'CONTROLLED_PERSONAL_PROFILE_PASS', viewports: observations,
+      walletLanguage: {romanianAndEnglish:true,explicitEnglishFallback:true,dirtyFieldsPreserved:true,sourceIdentityPreserved:true,noPrivateRequestsOrWrites:true,savedLinkPreserved:true,clearedStateNotResurrected:true},
       legacyReadWithoutWrite: true, explicitSaveBeforeSelection: true,
       boundedScrollingPagination: true, explicitPublicCardSaveOnly: true, confirmedProfileDeletion: true,
       savedCardLink: {id: savedId, sourceUrl: expected.techUrl, href: savedLink.href}, failedStorageWithoutSuccessLink: true,
@@ -740,7 +783,10 @@ export async function verifyPersonalProfileFlow({call, origin, fixture, evaluate
       if (typeof image === 'string') writeFileSync(join(outputDir, 'failed-personal-wallet.png'), Buffer.from(image, 'base64'), {mode: 0o600});
     } catch {/* Preserve the original failed assertion. */}
     throw error;
-  } finally {fixture.deactivate();}
+  } finally {
+    await evaluate(call, '(function(value){if(value===null)localStorage.removeItem("dlkt-reader-language-v1");else localStorage.setItem("dlkt-reader-language-v1",value);return true;})('+JSON.stringify(readerPreference)+')');
+    fixture.deactivate();
+  }
 }
 
 function accountPreferencesProbe(){

@@ -1,0 +1,25 @@
+# Wallet language continuity — 2026-11-26
+
+Owner: root. Independent reviewer: /root/dlkt_wallet_locale_review, read-only. Project: DLKT INFO, razvannitu-glitch/dlkt-info, www.dlkt.ee. Base commit: 4c47125b576fcbb86bcbb596c409e3b0174635f1, verified against the public release receipt and GitHub main before work. User has authorized continued development, verification and publication.
+
+Objective: make the Wallet's own controls, profile guidance and feedback follow the existing reader language preference without losing draft choices, exposing private state, modifying original source content or authorizing external accounts.
+
+Confirmed cause: Wallet has no reader-language selector or shared language setup and hardcodes English UI and navigator-language defaults; Account already uses the shared resolver and RO/EN utility presentation.
+
+Permitted source changes: source/public/wallet.html; new source/src/wallet/presentation.ts; source/src/wallet/browser.ts; source/src/personal/browser.ts; source/src/connections/browser.ts; source/scripts/sync-reader-assets.mjs; source/scripts/prepare-public-release.mjs; directly affected source/tests/wallet-ui.test.mjs and connections-ui.test.mjs; new source/tests/wallet-presentation.test.mjs; scripts/qa-personal-profile.mjs; this contract. Only allow additional small integration edits if a named existing mandatory check demonstrates necessity. Generated browser modules, release manifest and SOURCE-PIN.json must come exclusively from the existing verified CI export and match exact input and hashes. No authored generated JavaScript.
+
+C1 Language: reuse setupLanguage({updateUrl:false}), initializeCountryLanguage and getLocale; manual choice outranks country/browser; profile locale is separate. New null-profile defaults await the bounded public country hint and then revalidate operation and owner. Existing saved BCP47 values remain exact. Utility UI coverage is explicitly Romanian/English, with English fallback and correct language/direction for other reader locales.
+
+C2 Native state: a language event changes only owned leaf text and presentation attributes. It does not reload or save a profile, change draft inputs/checks, replace card/control identity, remove source links, change focus, or start private/provider requests.
+
+C3 Privacy: retain generation, abort, foreground, owner and revision guards; invalidate clears private form, cards and feedback. Canonical dynamic presentation state is private ephemeral memory only, never data attributes/storage, and clearing a node removes its binding. A later locale event must not resurrect cleared content or links. Existing session/owner race and mutation tests remain.
+
+C4 Provenance: original titles, publisher/context/excerpts, source URLs/IDs, provider-returned account labels, actors and activity remain exact. Translate only known DLKT-owned UI call sites. Local photos, feed ordering, article translation/provider availability, database and auth/email settings remain unchanged. No new spending or external messages.
+
+C5 Usability: reuse the existing Account header selector classes and all current styles. No CSS/brand redesign. Native language control and controls must fit 320/390/1440 widths with existing target dimensions. Test RO/EN switching with dirty form, original card identity/link, saved success link, cleared private state and unsupported utility locale fallback.
+
+C6 Release: strict source compilation, full required package/application tests, generated import closure, controlled Chromium coverage and independent raw-diff review of the final exact head. Merge only the reviewed tree; create and explicitly promote the exact merged SHA; verify production release receipt and changed public module/HTML identity. Controlled private fixture tests are not live authentication evidence.
+
+Budget: one initial implementation/generation and at most two corrective generations for observed failures; at most two final browser verification executions unless a concrete required-gate failure remains; bounded production polling/readback. Read only scoped current files. GitHub connector + CI + Vercel only; no terminal and no CUA while manual handoff is pending.
+
+Status at contract creation: planned. No implementation, tests or publication claimed. No payment, provider activation or commercial commitment is part of this change.

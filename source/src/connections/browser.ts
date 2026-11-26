@@ -1,3 +1,4 @@
+import {walletCopy, walletNode} from '../wallet/presentation.js';
 import {isRecord, isUuid} from '../data/guards.js';
 import {getWalletProviders, isWalletProviderId, WALLET_PROVIDER_IDS, type WalletProviderId} from '../wallet/providers.js';
 import {isWalletInstant, validatePersonalEvent, type PersonalEvent} from '../wallet/events.js';
@@ -129,7 +130,7 @@ export function createConnectionsWallet(onSessionExpired: () => void = () => {})
     return node;
   }
   function status(value: string, warning = false): void {
-    notice.textContent = value;
+    notice.replaceChildren(walletNode('span', value));
     notice.dataset.level = warning ? 'warning' : 'normal';
   }
   function setBusy(value: boolean): void {
@@ -156,10 +157,10 @@ export function createConnectionsWallet(onSessionExpired: () => void = () => {})
         : account === 'signed-out' ? 'Sign in to check availability'
         : account === 'checking' ? 'Checking availability'
         : snapshot ? 'Not enabled for DLKT yet' : 'Availability not confirmed';
-      label.append(heading, text('p', state, 'wallet-provider-state'), text('p', description.accountType, 'wallet-provider-type'));
+      label.append(heading, walletNode('p', state, 'wallet-provider-state'), walletNode('p', description.accountType, 'wallet-provider-type'));
       if (view?.connection) {
         label.append(text('p', view.connection.accountLabel, 'wallet-provider-account'));
-        label.append(text('p', view.connection.lastSyncAt
+        label.append(walletNode('p', view.connection.lastSyncAt
           ? `Last checked: ${new Date(view.connection.lastSyncAt).toLocaleString()}`
           : 'No updates checked yet.', 'wallet-provider-time'));
       }
@@ -168,8 +169,7 @@ export function createConnectionsWallet(onSessionExpired: () => void = () => {})
         const node = document.createElement('button');
         node.type = 'button';
         node.className = action === 'connect' ? 'primary' : 'secondary';
-        node.textContent = title;
-        node.setAttribute('aria-label', `${title}: ${description.name}`);
+        walletCopy(node, title, description.name);
         node.dataset.available = String(action !== null && account === 'signed-in');
         node.dataset.providerId = description.id;
         node.dataset.action = action ?? 'unavailable';
@@ -185,12 +185,12 @@ export function createConnectionsWallet(onSessionExpired: () => void = () => {})
       main.append(label, actions);
       const details = document.createElement('details');
       details.className = 'wallet-provider-details';
-      details.append(text('summary', 'Permissions & limits'));
-      for (const capability of description.capabilities) details.append(text('p', capability));
+      details.append(walletNode('summary', 'Permissions & limits'));
+      for (const capability of description.capabilities) details.append(walletNode('p', capability));
       for (const limit of description.limitations) {
         // Legacy catalog availability is not evidence of the current server configuration.
         if (limit.startsWith('Connection is not available') || limit.startsWith('Google must approve')) continue;
-        details.append(text('p', limit));
+        details.append(walletNode('p', limit));
       }
       row.append(main, details);
       list.append(row);
@@ -202,18 +202,18 @@ export function createConnectionsWallet(onSessionExpired: () => void = () => {})
     const events: PersonalEvent[] = results.flatMap(entry => [...entry.result.events])
       .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
     if (results.length === 0) {
-      activityState.textContent = snapshot?.providers.some(provider => provider.connection) ? 'Ready when you are' : 'No personal updates loaded';
-      activityCopy.textContent = account === 'signed-in'
+      walletCopy(activityState, snapshot?.providers.some(provider => provider.connection) ? 'Ready when you are' : 'No personal updates loaded');
+      walletCopy(activityCopy, account === 'signed-in'
         ? 'Connect an available account, then choose Check updates. This page does not run automatic or background synchronization.'
-        : 'Sign in to check your connections. Personal updates stay private and are cleared when you leave this page.';
+        : 'Sign in to check your connections. Personal updates stay private and are cleared when you leave this page.');
       return;
     }
     const partial = results.some(entry => entry.result.state === 'partial');
-    activityState.textContent = partial ? 'Some updates could not be retrieved' : `${events.length} updates retrieved`;
-    activityCopy.textContent = partial
+    walletCopy(activityState, partial ? 'Some updates could not be retrieved' : `${events.length} updates retrieved`);
+    walletCopy(activityCopy, partial
       ? 'These are the updates the service returned. This is not a complete activity history. Try Check updates again.'
       : events.length === 0 ? 'The latest check returned no updates within the supported window. This does not mean the account has no activity.'
-        : 'Only activity returned by your authorized services is shown. Open an item to read it at the source.';
+        : 'Only activity returned by your authorized services is shown. Open an item to read it at the source.');
     for (const event of events) {
       const item = text('li', '', 'wallet-update');
       const link = document.createElement('a');
@@ -224,7 +224,7 @@ export function createConnectionsWallet(onSessionExpired: () => void = () => {})
       const provider = CATALOG.find(entry => entry.id === event.providerId)?.name ?? event.providerId;
       const actor = event.actor?.displayName ?? event.actor?.providerActorId ?? '';
       item.append(link, text('p', `${provider} · ${new Date(event.occurredAt).toLocaleString()}${actor ? ` · ${actor}` : ''}`, 'wallet-update-meta'));
-      if (event.actor?.provenance === 'sender-header') item.append(text('p', 'Sender as reported in the email header.', 'wallet-update-meta'));
+      if (event.actor?.provenance === 'sender-header') item.append(walletNode('p', 'Sender as reported in the email header.', 'wallet-update-meta'));
       if (event.excerpt) item.append(text('p', event.excerpt));
       if (event.metrics.length) item.append(text('p', event.metrics.map(metric => `${metric.count} ${metric.name}`).join(' · ')));
       updates.append(item);
@@ -346,7 +346,7 @@ export function createConnectionsWallet(onSessionExpired: () => void = () => {})
         const link = document.createElement('a');
         link.href = '/account?returnTo=wallet';
         link.className = 'text-button';
-        link.textContent = 'Sign in to DLKT';
+        walletCopy(link, 'Sign in to DLKT');
         notice.append(link);
         if (restoreFocus) link.focus();
       } else if (restoreFocus) {

@@ -1,3 +1,4 @@
+import {walletCopy, walletNode} from '../wallet/presentation.js';
 import {PERSONAL_LOCAL_VERSION, type LocalNeed} from './contracts.js';
 import {parsePersonalSession} from './session.js';
 import {selectPersonalLocalEdition, type PersonalLocalEdition} from '../iceo/personal-relevance.js';
@@ -99,7 +100,7 @@ export function createPersonalReader(onInvalidated: () => void): PersonalReader 
     saved = null; owner = null; city = null; local = null; topics = null; topicPrior = null; currentSelection = null;
     displayed = PAGE_SIZE; rendered.clear();
     ui.panel.hidden = true; ui.panel.setAttribute('aria-busy', 'false');
-    ui.status.textContent = ''; ui.coverage.replaceChildren(); ui.cards.replaceChildren();
+    walletCopy(ui.status, ''); ui.coverage.replaceChildren(); ui.cards.replaceChildren();
     ui.refresh.disabled = false; ui.more.hidden = true; ui.more.disabled = false;
   }
   function link(label: string, address: string): HTMLAnchorElement | null {
@@ -130,7 +131,7 @@ export function createPersonalReader(onInvalidated: () => void): PersonalReader 
     article.dataset.personalId = item.id; article.dataset.sourceId = card.id;
     const category = editorialCategory(card);
     if (category !== null) article.dataset.editorialCategory = category;
-    const header = node('header'); header.append(node('span', TOPIC_LABELS[card.topic], 'card-topic'));
+    const header = node('header'); header.append(walletNode('span', TOPIC_LABELS[card.topic], 'card-topic'));
     const citation = pressReviewCitation(card.sourceUrl);
     if (citation) { const credit = link(citation.label, citation.homeUrl); if (credit) header.append(credit); }
     else header.append(node('span', card.publisher, 'card-index'));
@@ -138,16 +139,17 @@ export function createPersonalReader(onInvalidated: () => void): PersonalReader 
     content.append(title, node('p', item.reason, 'card-kind personal-reason'), node('p', view.context, 'card-context'),
       node('p', view.dateLabel + ': ' + card.date, 'card-date'));
     const credits = cardCreditsNode(card); if (credits) content.append(credits);
-    const original = link(citation?.originalLabel ?? 'Open original source', card.sourceUrl); if (original) content.append(original);
-    const details = node('details', '', 'evidence'); details.append(node('summary', 'Source and coverage'),
-      node('p', 'Source checked ' + card.observedAt, 'card-boundary'),
+    const original = link(citation?.originalLabel ?? 'Open original source', card.sourceUrl);
+    if (original) { if (!citation) walletCopy(original, 'Open source'); content.append(original); }
+    const details = node('details', '', 'evidence'); details.append(walletNode('summary', 'Source and coverage'),
+      walletNode('p', 'Source checked ' + card.observedAt, 'card-boundary'),
       node('p', card.boundary, 'card-boundary'), node('p', card.attribution, 'card-boundary'));
     for (const related of view.related) { const source = link(related.publisher + ' · ' + related.title, related.sourceUrl); if (source) details.append(source); }
     if (item.change === 'different') {
-      content.append(node('p', 'Changed since the previous source check in this session.', 'daily-change'));
+      content.append(walletNode('p', 'Changed since the previous source check in this session.', 'daily-change'));
       for (const change of item.changes) details.append(node('p', changeExplanation(change), 'card-boundary'));
-    } else if (item.change === 'coverage') content.append(node('p', 'Additional publisher coverage of this existing story.', 'daily-change'));
-    const save = node('button', 'Save card in this browser', 'text-button'); save.type = 'button';
+    } else if (item.change === 'coverage') content.append(walletNode('p', 'Additional publisher coverage of this existing story.', 'daily-change'));
+    const save = walletNode('button', 'Save card in this browser', 'text-button'); save.type = 'button';
     save.dataset.personalSave = card.id; const feedback = node('p', '', 'card-boundary'); feedback.setAttribute('role', 'status');
     save.addEventListener('click', () => {
       if (save.disabled || !owner || !current(ticket, controller)) return;
@@ -163,11 +165,11 @@ export function createPersonalReader(onInvalidated: () => void): PersonalReader 
         try {
           await memory.save(card);
           if (current(ticket, controller)) {
-            const savedLink = node('a', 'Open saved cards in this browser', 'source-link'); savedLink.href = '/#saved';
-            feedback.replaceChildren(node('span', 'This public source card was saved in this browser. Your private profile was not copied. '), savedLink);
+            const savedLink = walletNode('a', 'Open saved cards in this browser', 'source-link'); savedLink.href = '/#saved';
+            feedback.replaceChildren(walletNode('span', 'This public source card was saved in this browser. Your private profile was not copied. '), savedLink);
           }
         } catch {
-          if (current(ticket, controller)) feedback.textContent = 'Saving in this browser could not be confirmed.';
+          if (current(ticket, controller)) walletCopy(feedback, 'Saving in this browser could not be confirmed.');
         } finally { if (current(ticket, controller)) save.disabled = false; }
       })();
     });
@@ -211,21 +213,21 @@ export function createPersonalReader(onInvalidated: () => void): PersonalReader 
       if (position !== card) ui.cards.insertBefore(card, position ?? null);
     }
     if (focusWasInside && focused instanceof HTMLElement && !ui.cards.contains(focused)) ui.refresh.focus();
-    ui.more.hidden = displayed >= rows.length; ui.more.textContent = 'Show more matched cards (' + Math.max(0, rows.length - displayed) + ')';
+    ui.more.hidden = displayed >= rows.length; walletCopy(ui.more, 'Show more matched cards (' + Math.max(0, rows.length - displayed) + ')');
     ui.coverage.replaceChildren();
-    if (value.localNeeds.length && value.cityId === null) ui.coverage.append(node('p', 'Confirm a city to match the local needs you selected.', 'privacy-note'));
+    if (value.localNeeds.length && value.cityId === null) ui.coverage.append(walletNode('p', 'Confirm a city to match the local needs you selected.', 'privacy-note'));
     for (const entry of result.coverage) {
       ui.coverage.append(node('p', NEED_LABELS[entry.need] + ' · ' + entry.state + '. ' + entry.note, 'privacy-note'));
     }
     for (const note of topicSelection?.notes ?? []) ui.coverage.append(node('p', note, 'privacy-note'));
     const localSelected = value.cityId !== null && value.localNeeds.length > 0;
     const interestState = topicSelection?.edition.topicState ?? 'not-selected';
-    ui.status.textContent = !localSelected && !value.interests.length
+    walletCopy(ui.status, !localSelected && !value.interests.length
       ? 'Choose interests or confirm a city and select local needs, then save your profile.'
       : rows.length + ' matched card' + (rows.length === 1 ? '' : 's') + ' from available checked sources. '
         + (localSelected ? 'Local coverage: ' + result.state + '. ' : '')
         + (value.interests.length ? 'Interest sources: ' + interestState + '. ' : '')
-        + 'Missing checks do not mean that nothing happened.';
+        + 'Missing checks do not mean that nothing happened.');
     if (expiry !== null) window.clearTimeout(expiry); expiry = null;
     const boundaries = [result.expiresAt,
       value.interests.length ? nextReadingBoundary(daily, validTopics, null, now) : null,
@@ -240,7 +242,7 @@ export function createPersonalReader(onInvalidated: () => void): PersonalReader 
     saved = profile; owner = userId; topicPrior = previous;
     const ticket = generation, controller = new AbortController(); active = controller;
     ui.panel.hidden = false; ui.panel.setAttribute('aria-busy', 'true'); ui.refresh.disabled = true;
-    ui.status.textContent = 'Checking sources for your saved preferences.';
+    walletCopy(ui.status, 'Checking sources for your saved preferences.');
     const timeout = window.setTimeout(() => controller.abort(), 20_000);
     try {
       const [localResult, topicResult] = await Promise.allSettled([
@@ -262,7 +264,7 @@ export function createPersonalReader(onInvalidated: () => void): PersonalReader 
         ui.panel.setAttribute('aria-busy', 'false'); ui.refresh.disabled = false;
         if (controller.signal.aborted) {
           ui.cards.replaceChildren(); ui.coverage.replaceChildren(); ui.more.hidden = true;
-          ui.status.textContent = 'Source checks timed out. Reload your Wallet to retry.';
+          walletCopy(ui.status, 'Source checks timed out. Reload your Wallet to retry.');
         }
       }
     }

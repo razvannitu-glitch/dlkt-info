@@ -140,3 +140,19 @@ for(const [source,target] of [['account/presentation','account-presentation'],['
   .replaceAll("'./presentation.js'","'./account-presentation.js'");
  writeFileSync('public/account-browser.js',compiled);
 }
+
+// Wallet utility presentation reuses the same reader preference and country hint as Account.
+{
+ const compiled=readFileSync('.build/src/wallet/presentation.js','utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'')
+  .replaceAll("'../i18n/browser.js'","'./i18n-browser.js'")
+  .replaceAll("'../account/presentation.js'","'./account-presentation.js'");
+ writeFileSync('public/wallet-presentation.js',compiled);
+}
+for(const name of ['wallet-browser','personal-browser','connections-browser']){
+ const compiled=readFileSync('public/'+name+'.js','utf8')
+  .replaceAll("'../i18n/browser.js'","'./i18n-browser.js'")
+  .replaceAll("'../i18n/country-hint.js'","'./i18n-country-hint.js'")
+  .replaceAll("'./presentation.js'","'./wallet-presentation.js'")
+  .replaceAll("'../wallet/presentation.js'","'./wallet-presentation.js'");
+ writeFileSync('public/'+name+'.js',compiled);
+}

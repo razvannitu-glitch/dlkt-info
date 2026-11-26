@@ -59,7 +59,7 @@ class Element extends Target {
   focus() { this.document.activeElement = this; }
 }
 
-function harness(home = false) {
+function harness(home = false, readerLocale = 'en', languageReady = Promise.resolve()) {
   const document = new Target();
   document.hidden = false;
   document.focused = true;
@@ -111,6 +111,10 @@ function harness(home = false) {
     .replace(/^import [^\n]+\n/gmu, '');
   runInNewContext(source, {document, window, navigator: {language: 'en'}, BroadcastChannel: Channel,
     fetch, AbortController, parseWalletProfile, parseWalletSnapshot, walletSnapshot, parsePersonalSession, LOCAL_NEEDS, DAILY_TOPICS, TOPIC_LABELS, TOPIC_DESCRIPTIONS,
+    getLocale: () => readerLocale, setupLanguage: () => {}, initializeCountryLanguage: () => languageReady,
+    walletCopy: (node, value) => { node.textContent = value; },
+    walletNode: (tag, value, className = '') => { const node = document.createElement(tag); node.textContent = value; node.className = className; return node; },
+    applyWalletPresentation: () => {}, presentWalletProfileLabels: () => {},
     createPersonalReader: () => readers,
     loadPersonalInbox, personalInboxProviderName, personalInboxStatus, PersonalInboxError,
     createConnectionsWallet: onExpired => {connections.onExpired = onExpired; return connections;}, Intl, Date, JSON, Error}, {filename: home ? 'wallet-home-browser.js' : 'wallet-browser.js'});
@@ -511,4 +515,36 @@ test('Null-revision creation stays bound to its displayed owner after a silent s
   assert.equal(ui.get('wallet-profile-panel').hidden, true);
   assert.equal(ui.readers.loads.length, 0);
   assert.doesNotMatch(ui.get('wallet-status').textContent, /profile is saved/u);
+});
+
+
+test('New Wallet drafts use the settled reader locale, while saved profile variants remain exact', async () => {
+  const draft = harness(false, 'ro'); await draft.answer(0, walletSnapshot('signed-in'));
+  assert.equal(draft.get('wallet-locale').value, 'ro');
+  assert.equal(draft.requests.length, 1, 'choosing a new draft default does not write a profile');
+  const existing = harness(false, 'ro');
+  await existing.answer(0, walletSnapshot('signed-in', state({...profile, locale: 'en-GB'})));
+  assert.equal(existing.get('wallet-locale').value, 'en-GB');
+  assert.equal(existing.requests.length, 1);
+});
+
+test('A pending country hint cannot restore private fields after blur or a changed owner', async () => {
+  let release;
+  const languageReady = new Promise(resolve => {release = resolve;});
+  const ui = harness(false, 'ro', languageReady);
+  await ui.answer(0, walletSnapshot('signed-in'));
+  assert.equal(ui.get('wallet-profile-panel').hidden, true);
+  const before = ui.identityRequests.length;
+  ui.window.dispatch('blur'); release(); await tick();
+  assert.equal(ui.get('wallet-locale').value, '');
+  assert.equal(ui.get('wallet-profile-panel').hidden, true);
+  assert.equal(ui.identityRequests.length, before, 'invalidated readiness cannot launch another private request');
+  let releaseOwner;
+  const ownerReady = new Promise(resolve => {releaseOwner = resolve;});
+  const race = harness(false, 'ro', ownerReady);
+  await race.answer(0, walletSnapshot('signed-in'));
+  race.setOwner(nextRevision); releaseOwner(); await tick();
+  assert.equal(race.get('wallet-profile-panel').hidden, true);
+  assert.equal(race.get('wallet-locale').value, '');
+  assert.match(race.get('wallet-status').textContent, /session changed/u);
 });
