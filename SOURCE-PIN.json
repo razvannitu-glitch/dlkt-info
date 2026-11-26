@@ -3,7 +3,7 @@
   "product": "dlkt-info",
   "version": "0.9.46",
   "manifestPath": "RELEASE-0.9.46.json",
-  "sourceSha256": "86911e2ff4c013e5c02fae19b8f21cdcc13f075f9c4ac4f1c677b9f8bb4e8e7d",
+  "sourceSha256": "f23ea60f8e50b9143f8906e611118f74ae2699ab9f71e541a70ea3501fced23c",
   "files": {
     "ACCOUNT-EDITION-BRIDGE.md": "39ad69d9c61c8281d1fc9f65ed31a6208af6b60872b3cf6e9087fbcbb0475f5b",
     "ACTION-INBOX-FOLLOW-UP.md": "4c0912d248892ab24f5850ac2a95e541e2ff1c1e81133c7dff0861325a9377b7",
@@ -113,7 +113,7 @@
     "RELEASE-0.9.43.json": "693bb7cfb43f38814553d5f9641fb6c64b58aebfb5df6f9ad87a0ab08f971b27",
     "RELEASE-0.9.44.json": "92d767a0e09dad0ae43d31514bede761fc03b84821dadeb981e7a5ed8c8f1f23",
     "RELEASE-0.9.45.json": "450a0801ab6f4a0413340f34d5fefc30900d359439256e314d315038ce3ea8e5",
-    "RELEASE-0.9.46.json": "3602f8549c88a199a8baa677dec61f84cef46aa5b232c5da9a5c1a5ab1541e89",
+    "RELEASE-0.9.46.json": "ebef4934802e6d939c44c1194fd0cc3a9f491b24d068d7587398016dea40f036",
     "RELEASE-0.9.5.json": "d15bfa9d650d5f63f7d5dff2bbb1e07506cccd08e7b54e8f4dd6c461cfbef8db",
     "RELEASE-0.9.6.json": "d71dc7a8157b26f8a9ff0b333988c9ebe81cc07a88c0f2dab0d0058840d0899a",
     "RELEASE-0.9.7.json": "72e761c2172da09d2bf265b37900d257a781ec8ff2afc9442d86a299f61cce36",
@@ -133,7 +133,7 @@
     "VISUAL-REVIEW-CONSOLE.md": "2cf3e997860f4179c4a57980b32050daf5ffb235a597d8f7969223324cc667b9",
     "api/account-session.ts": "35a3b0066827e39b546732e27eb62323e94cda82dfd4c0a0e8226f96b2191c17",
     "api/account.ts": "5df58c5b88649b7ca605022f5e0f85fd990bf1bf5146fef8406e11560acb6cb1",
-    "api/admin.ts": "a3b91a080091f8f6d817695a9bdb4a9fd536a94af6b250f0420f08b4a33656d5",
+    "api/admin.ts": "4b62bfe8c46ac963344f23b7e68c23daa5f85ab8080828e01fb825dafc7dbe1f",
     "api/article-photo.ts": "26eb86e88e086a26c83192cb0af9cab093ad152b44d4b8cafe8dc08126d4b493",
     "api/auth.ts": "36c1c33ca2b632fc7415247138b945e7b1ddd4c47fa2d70025b92525ddbd1e5a",
     "api/card-image.ts": "b52103c68e8dcf6c26d041d95deceee2aeabaa3b298c5ffed45ae79a712f1e10",
@@ -442,7 +442,7 @@
     "src/activation/index.ts": "a5661ed14db3bc95580715fe2915e54e2ba5631c16b7a85a93f919a0ade2f71b",
     "src/activation/projection.ts": "2efd15eb002417cca6d25ba25f0efdb68f47a4ee88e5e5b1923e877e7689f0d2",
     "src/admin/README.md": "944b97b2a0ba14a460832b74b472a6e7d20138bb919e4a4e76aa267549801d38",
-    "src/admin/analytics.ts": "b688a25faa67bcd0de88e34bebcb653f1f166d53e0859a01fbd08f593ea06367",
+    "src/admin/analytics.ts": "8a73b9c7597049d1f81eb1d23cadbccf12351329f85026c093430b9730578ff6",
     "src/admin/render.ts": "7f7186b99b85b9edc97527901038c71c9d6b932be47a2986207e536f50ceccef",
     "src/brand/identity.ts": "c518f5ba10e34f5b9e389751fe615835945cfa37746b32b696030f6604de1bc7",
     "src/brand/welcome-copy.ts": "4f7165a41839ca6e4ec8dbaa31ab791f77e5bfa5e42738c854b769a779984fc0",
@@ -777,7 +777,7 @@
     "tests/action-inbox-ui.test.mjs": "73d6d51fceb8afd507fd9cfa1356c7a8096eebd0c9199322b84142733df4e436",
     "tests/action-inbox.test.mjs": "50c67539261375a7e77dc29e0202caaf4e8d8b6fe893117a363bff87870d40b7",
     "tests/activation-account-handoff.test.mjs": "0da8b8e3f034f4d6913c2d31b61dcf0e865425e27cb9d68365336b0321e80d97",
-    "tests/admin-analytics.test.mjs": "f8789399b3f0d9a55259a6abe7eb2a5bfbef912ac9a644455bd692cee2f469d2",
+    "tests/admin-analytics.test.mjs": "99d48cdc6da436e5e1d4528623a2508684fe9ad47e97099a2b785bad0ec44813",
     "tests/arcub-detail.test.mjs": "01ed07397e4891d9eb6ad53f32b7fa065fcb6acb19ccf51abf1ecdbf4f4bc791",
     "tests/article-photo-reference.test.mjs": "d278c0c66c94163798cdcfe3b8b80992648ad9ac7b840bad05bcf00cde3de320",
     "tests/article-photo.test.mjs": "ea31d9479aaab63fbba5d120b89ba11d7b4ece9992f06dabaa02b8c44927f350",
@@ -1053,6 +1053,6 @@
     "tsconfig.json": "a6fe6af5c5cee7adc34f2441b6dc72ea311da623378df0240f39a389a2a13d36",
     "vercel.json": "33c38fc50e8e528a56cda7d75a528447132f667e2732b60db909340fb4e91407",
     "vercel.public.json": "dd5146bb70afb07c8bef482a7fb3e2784133a3ff3c26b97e7ce5620374dad69e",
-    "verify-release.mjs": "379342d628753fca15caa16927353046e3c29ccca1ed69fc3ca829dced2e8027"
+    "verify-release.mjs": "d04e2a6d61dd604b2546bba3988fad1c2be6fdf7bc958038a4f738f031736dac"
   }
 }

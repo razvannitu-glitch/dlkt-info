@@ -1,15 +1,15 @@
 import type {Environment} from '../account/http.js';
 import {boundedJson} from '../account/http.js';
+import {isUuid} from '../data/guards.js';
 import type {ReadyPersistenceConfiguration} from '../persistence/contracts.js';
 
 export const RANGES = ['24h','7d','30d','90d','all'] as const;
 export type Range = typeof RANGES[number];
 const DAY = 86_400_000;
 const LIMITS: Record<Exclude<Range,'all'>,number> = {'24h':DAY,'7d':7*DAY,'30d':30*DAY,'90d':90*DAY};
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 export function adminIds(env:Environment):ReadonlySet<string>{
  const ids=(env.DLKT_INFO_ADMIN_USER_IDS??'').split(',').map(s=>s.trim().toLowerCase());
- return env.DLKT_INFO_ADMIN_ENABLED==='1'&&ids.length<=20&&ids.every(id=>UUID.test(id))?new Set(ids):new Set();
+ return env.DLKT_INFO_ADMIN_ENABLED==='1'&&ids.length<=20&&ids.every(isUuid)?new Set(ids):new Set();
 }
 export function parseRange(value:string|null):Range|null{
  return value===null?'7d':RANGES.includes(value as Range)?value as Range:null;

@@ -2,6 +2,8 @@ import type {IncomingMessage,ServerResponse} from 'node:http';
 import {accountReadiness} from '../src/account/readiness.js';
 import type {Environment} from '../src/account/http.js';
 import {resolveIdentitySession} from '../src/identity/session.js';
+import {readIdentityCookies} from '../src/identity/cookies.js';
+import type {ProvisioningProjection} from '../src/provisioning/index.js';
 import {adminIds,parseRange,readAnalytics} from '../src/admin/analytics.js';
 import {renderDashboard,renderUnavailable} from '../src/admin/render.js';
 
@@ -18,7 +20,7 @@ function send(res:ServerResponse,status:number,body:string):void{
  res.setHeader('Content-Security-Policy',"default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'");
  res.end(body);
 }
-export async function handleAdmin(req:IncomingMessage,res:ServerResponse,deps:{environment?:Environment;fetch?:typeof fetch}={}):Promise<void>{
+export async function handleAdmin(req:IncomingMessage,res:ServerResponse,deps:{environment?:Environment;fetch?:typeof fetch;provisioning?:ProvisioningProjection}={}):Promise<void>{
  const env=deps.environment??process.env,request=deps.fetch??fetch;
  const ids=adminIds(env);
  if(ids.size===0){send(res,404,renderUnavailable('Not found'));return;}
@@ -35,7 +37,9 @@ export async function handleAdmin(req:IncomingMessage,res:ServerResponse,deps:{e
  }catch{range=null;}
  if(range===null){send(res,400,renderUnavailable('Invalid time range'));return;}
  try{
-  const ready=await accountReadiness(env,request);
+  const cookies=readIdentityCookies(req.headers.cookie);
+  if(!cookies.accessToken&&!cookies.refreshToken){send(res,401,renderUnavailable('Sign in required',true));return;}
+  const ready=await accountReadiness(env,request,deps.provisioning);
   if(!ready.enabled||ready.configuration.state!=='ready'){send(res,503,renderUnavailable('Control unavailable'));return;}
   const session=await resolveIdentitySession(req,res,ready.configuration,request);
   if(!session){send(res,401,renderUnavailable('Sign in required',true));return;}
