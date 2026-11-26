@@ -83,7 +83,7 @@ test('public photo modules exactly match compilation and make only validated sam
 });
 
 test('unsupported source-photo publisher emits no guaranteed-miss image request on shared recipient pages',()=>{
- const sourceUrl='https://www.ign.com/articles/photo-policy-fixture',card={...cards[0],id:'d'.repeat(24),identity:sourceUrl,sourceUrl,title:'A complete original gaming report',publisher:'IGN',sourceIds:['news-gaming'],topic:'gaming',contentHash:'e'.repeat(64)};
+ const sourceUrl='https://www.ign.com/articles/photo-policy-fixture',card={...cards[0],id:'d'.repeat(24),identity:sourceUrl,sourceUrl,title:'A complete original gaming report',publisher:'IGN',sourceIds:['news-gaming'],topic:'culture',contentHash:'e'.repeat(64)};
  const checkedAt=Math.max(...CONTEXT_PHOTOS.map(photo=>Date.parse(photo.reviewedAt)))+1000;
  assert.equal(displayPhotoFor(card,checkedAt),null);
  const output=renderSharedCard({card,insight:null,now:checkedAt,validUntil:checkedAt+60000,changed:false,partial:false});
