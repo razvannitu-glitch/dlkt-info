@@ -784,8 +784,9 @@ export async function verifyPersonalProfileFlow({call, origin, fixture, evaluate
     } catch {/* Preserve the original failed assertion. */}
     throw error;
   } finally {
-    await evaluate(call, '(function(value){if(value===null)localStorage.removeItem("dlkt-reader-language-v1");else localStorage.setItem("dlkt-reader-language-v1",value);return true;})('+JSON.stringify(readerPreference)+')');
-    fixture.deactivate();
+    try {
+      await evaluate(call, '(function(value){if(value===null)localStorage.removeItem("dlkt-reader-language-v1");else localStorage.setItem("dlkt-reader-language-v1",value);return true;})('+JSON.stringify(readerPreference)+')');
+    } finally {fixture.deactivate();}
   }
 }
 

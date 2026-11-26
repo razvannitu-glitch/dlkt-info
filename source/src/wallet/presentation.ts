@@ -206,9 +206,9 @@ export function walletText(value: string, locale: Locale = getLocale()): string 
   if (updates) return updates[1] + (updates[1] === '1' ? ' noutate preluata' : ' noutati preluate');
   const more = /^Show more matched cards \((\d+)\)$/u.exec(value);
   if (more) return 'Arata mai multe carduri potrivite (' + more[1] + ')';
-  const matches = /^(\d+) matched cards? from available checked sources\. (?:Local coverage: (ready|partial|unavailable|not-selected|no-city|no-needs)\. )?(?:Interest sources: (ready|partial|unavailable|not-selected)\. )?Missing checks do not mean that nothing happened\.$/u.exec(value);
+  const matches = /^(\d+) matched cards? from available checked sources\. (?:Local coverage: (ready|partial|unavailable|not-selected|not-configured|no-match)\. )?(?:Interest sources: (ready|partial|unavailable|not-selected)\. )?Missing checks do not mean that nothing happened\.$/u.exec(value);
   if (matches) {
-    const states: Readonly<Record<string, string>> = {ready: 'disponibila', partial: 'partiala', unavailable: 'indisponibila', 'not-selected': 'neselectata', 'no-city': 'fara oras', 'no-needs': 'fara nevoi selectate'};
+    const states: Readonly<Record<string, string>> = {ready: 'disponibila', partial: 'partiala', unavailable: 'indisponibila', 'not-selected': 'neselectata', 'not-configured': 'neconfigurata', 'no-match': 'fara rezultate potrivite'};
     return matches[1] + (matches[1] === '1' ? ' card potrivit' : ' carduri potrivite') + ' din sursele disponibile verificate. '
       + (matches[2] ? 'Acoperire locala: ' + (states[matches[2]] ?? matches[2]) + '. ' : '')
       + (matches[3] ? 'Acoperirea intereselor: ' + (states[matches[3]] ?? matches[3]) + '. ' : '')

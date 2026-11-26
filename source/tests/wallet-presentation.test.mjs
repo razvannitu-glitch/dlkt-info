@@ -43,6 +43,7 @@ test('Wallet copy translates owned status semantics and declares English fallbac
   assert.equal(ui.walletText('Show more matched cards (21)', 'ro'), 'Arata mai multe carduri potrivite (21)');
   const status = '2 matched cards from available checked sources. Local coverage: partial. Interest sources: ready. Missing checks do not mean that nothing happened.';
   assert.match(ui.walletText(status, 'ro'), /2 carduri potrivite.*Acoperire locala: partiala.*Acoperirea intereselor: disponibila/u);
+  assert.match(ui.walletText('0 matched cards from available checked sources. Local coverage: no-match. Missing checks do not mean that nothing happened.', 'ro'), /Acoperire locala: fara rezultate potrivite/u);
   ui.setLocale('ar');
   ui.applyWalletPresentation();
   assert.equal(ui.root.lang, 'en');
