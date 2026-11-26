@@ -2,6 +2,7 @@ import { displayPhotoFor } from './card-photo-catalog.js';
 import { articlePhotoPath } from './article-photo-reference.js';
 import { safeLink } from './card-validation.js';
 import { newsSourceForUrl } from './local-news-policy.js';
+import { arcubPhotoSource } from './local-photo-reference.js';
 import { translate as tr, getLocale } from './i18n-browser.js';
 const watched = new WeakSet();
 /** Cover parser-time errors as well as failures after lazy loading; retain all text/actions. */
@@ -108,7 +109,7 @@ function renderArticlePhotoNode(card, reference) {
         return null;
     }
     const localSource = reference.cityId === undefined ? undefined : newsSourceForUrl(card.sourceUrl);
-    const source = reference.cityId === undefined ? safeLink(card.sourceUrl) : localSource && localSource.cityId === reference.cityId && reference.id.startsWith('local-news:' + localSource.cityId + ':' + localSource.id + ':') ? card.sourceUrl : null;
+    const source = reference.cityId === undefined ? safeLink(card.sourceUrl) : (localSource && localSource.cityId === reference.cityId && reference.id.startsWith('local-news:' + localSource.cityId + ':' + localSource.id + ':') || arcubPhotoSource(card.sourceUrl, reference)) ? card.sourceUrl : null;
     if (!source)
         return null;
     const figure = document.createElement('figure');

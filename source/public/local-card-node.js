@@ -3,6 +3,7 @@ import { localReading, localReadingPreview, localCardCategory } from './local-pr
 import { localEventCalendar } from './local-event-calendar.js';
 import { weatherMotionNode } from './glance-weather-motion.js';
 import { contextPhotoNode } from './card-photo-browser.js';
+import { localCardPhotoReference } from './local-photo-reference.js';
 import { getLocale, translate } from './i18n-browser.js';
 const romanianKinds = { forecast: 'Vreme', transport: 'Transport', 'transport-notice': 'Transport', 'utility-notice': 'Termoficare si apa calda', event: 'Eveniment', 'municipal-news': 'Administratie', 'local-news': 'Stiri locale' };
 const node = (tag, text = '', className = '') => { const n = document.createElement(tag); n.textContent = text; n.className = className; return n; };
@@ -132,7 +133,7 @@ export function localCardNode(card, c, now = Date.now(), options = {}) {
     a.dataset.editorialCategory = category;
     a.append(head);
     // Private readers can omit image requests; existing public cards retain their photos.
-    const photo = options.photos === false ? null : contextPhotoNode({ title: reading.title, sourceUrl: card.sourceUrl, editorialCategory: category }, now, card.kind === 'local-news' && card.news ? { id: card.news.id, revision: card.news.documentHash, cityId: c.id } : undefined);
+    const photo = options.photos === false ? null : contextPhotoNode({ title: reading.title, sourceUrl: card.sourceUrl, editorialCategory: category }, now, localCardPhotoReference(card, c.id, now));
     if (photo)
         a.append(photo);
     if (compact) {

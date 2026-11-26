@@ -12,6 +12,7 @@ import {handleArticlePhoto,resolvePhotoArticle} from '../.build/api/article-phot
 import {articlePhotoPath} from '../.build/src/media/article-photo-reference.js';
 import {findCity} from '../.build/src/local/cities.js';
 import {parseLocalNews} from '../.build/src/local/news-service.js';
+import {ARCUB_PHOTO_ROWS,ARCUB_GENERIC_IMAGE,arcubPhotoDocument,arcubPhotoFixture,arcubPhotoArticle} from './fixtures/arcub-photos.mjs';
 
 const now=Date.parse('2026-11-22T16:00:00.000Z');
 const article={id:'a'.repeat(24),revision:'b'.repeat(64),sourceUrl:'https://www.theguardian.com/world/2026/nov/22/source-article',
@@ -301,4 +302,106 @@ test('la Repubblica CDN admission rejects host, path, raster and cross-publisher
  assert.equal(articleImageUrl(photo,row.sourceUrl.replace('www.repubblica.it','repubblica.it')),null,'article origin stays the reviewed www origin');
  const wrong=repubblicaDocument(row).replace('<link rel="canonical" href="'+row.sourceUrl+'">','<link rel="canonical" href="https://www.repubblica.it/other">');
  assert.equal(readArticlePhoto(wrong,{...article,...row,publisher:'la Repubblica'}),null);
+});
+
+test('ARCUB selects each exact event hero and ignores the shared social tile without inventing publication dates',()=>{
+ const listing=arcubPhotoFixture(now);assert.equal(listing.cards.length,2);
+ const chosen=listing.cards.map((card,index)=>{
+  const row=ARCUB_PHOTO_ROWS[index],item=arcubPhotoArticle(card),photo=readArticlePhoto(arcubPhotoDocument(row),item);
+  assert.equal(item.publishedAt,'');assert.equal(photo?.basis,'local-event-hero');
+  assert.equal(photo.imageUrl,row.image);assert.equal(photo.articleUrl,row.url);assert.equal(photo.credit,null);assert.equal(photo.caption,null);
+  assert.equal(articleImageUrl(ARCUB_GENERIC_IMAGE,row.url),null);
+  assert.equal(readArticlePhoto(arcubPhotoDocument(row),{...item,documentKind:undefined}),null);
+  return photo.imageUrl;
+ });
+ assert.notEqual(chosen[0],chosen[1],'different original events do not reuse the default image');
+});
+test('official event photos reject wrong pages, titles, ambiguous heroes and arbitrary assets',()=>{
+ const item=arcubPhotoArticle(arcubPhotoFixture(now).cards[0]),row=ARCUB_PHOTO_ROWS[0],body=arcubPhotoDocument(row);
+ for(const candidate of [
+  body.replace('</head>','<link rel="canonical" href="'+ARCUB_PHOTO_ROWS[1].url+'"></head>'),
+  body.replace('</head>','<meta property="og:url" content="'+ARCUB_PHOTO_ROWS[1].url+'"></head>'),
+  body.replace('<h1 class="title">','<h1 class="title">Unrelated '),
+  body.replace('content="Muzeul','content="Unrelated Muzeul'),
+  body.replace('class="bg"','class="recommendation"'),
+  body.replace('class="page-header with-bg tall"','class="recommended"'),
+  body.replace('</picture>','<img class="bg" src="'+row.image+'"></picture>'),
+  body.replace('</body>','<header class="page-header with-bg tall"></header></body>'),
+  body.replace(/<header[\s\S]+?<\/header>/u,''),
+  body.slice(0,body.indexOf('</header>')),
+ ])assert.equal(readArticlePhoto(candidate,item),null);
+ assert.equal(readArticlePhoto(body,item,ARCUB_PHOTO_ROWS[1].url),null);
+ for(const invalid of [
+  row.image.replace('arcub.ro','evil.example'),row.image.replace('/img/','/uploads/'),
+  row.image.replace('foto-1.jpeg','logo.jpeg'),row.image+'&url=https%3A%2F%2Fevil.example%2Fx.jpg',
+  row.image+'&fit=crop',row.image+'&unknown=1',row.image.replace('15a05216-5dbc-408e-9981-070a02d379aa','unreviewed'),
+ ])assert.equal(articleImageUrl(invalid,row.url),null);
+ assert.equal(readArticlePhoto(html(),{...article,documentKind:'local-event'}),null,'news metadata rules are not broadened');
+});
+test('official photo resolution requires the exact current source record and original city/revision',async()=>{
+ const listing=arcubPhotoFixture(now),card=listing.cards[0],reference={id:card.id,revision:card.context.documentHash,cityId:'683506'};
+ const officialServices={...services,global:async()=>{throw Error('unexpected global lookup');},local:async()=>{throw Error('unexpected news lookup');},
+  corpus:{lookup:async()=>{throw Error('official records never use the news corpus');}},official:async()=>listing};
+ assert.deepEqual(await resolvePhotoArticle(reference,officialServices),arcubPhotoArticle(card));
+ for(const ref of [{...reference,revision:'0'.repeat(64)},{...reference,cityId:'2512989'},{...reference,id:'bucharest:arcub:'+'0'.repeat(24)}])
+  assert.equal(await resolvePhotoArticle(ref,officialServices),null);
+ assert.equal(await resolvePhotoArticle(reference,{...officialServices,official:undefined}),null);
+ for(const changed of [
+  [],[{...card,sourceUrl:ARCUB_PHOTO_ROWS[1].url}],[{...card,kind:'utility-notice'}],
+  [{...card,publisher:'Other'}],[{...card,validTo:new Date(now).toISOString()}],
+  [{...card,checkedAt:new Date(now-300001).toISOString(),validFrom:new Date(now-300001).toISOString()}],
+  [{...card,context:{...card.context,documentUrl:'https://evil.example/event'}}],
+ ])assert.equal(await resolvePhotoArticle(reference,{...officialServices,official:async()=>({...listing,cards:changed})}),null);
+});
+test('source-photo cache isolates record identity and page kind while preserving ordinary coalescing',async()=>{
+ const m=mock(),service=new ArticlePhotoService(m.fetcher,()=>now);
+ assert.ok(await service.read(article));
+ assert.ok(await service.read({...article,id:'c'.repeat(24)}));
+ assert.equal(m.calls.filter(call=>call.url===article.sourceUrl).length,2,'a second card has its own acquisition');
+ assert.equal(await service.read({...article,documentKind:'local-event'}),null,'page kinds cannot reuse an article cache entry');
+});
+
+test('official HTTP photo requests acquire only a current exact source record and return its actual raster',async()=>{
+ const listing=arcubPhotoFixture(now),card=listing.cards[0],row=ARCUB_PHOTO_ROWS[0];
+ const reference={id:card.id,revision:card.context.documentHash,cityId:'683506'},path=articlePhotoPath(reference);
+ let active=listing;const acquisitions=[];
+ const fetcher=async(address)=>{
+  const url=String(address);acquisitions.push(url);
+  if(url==='https://arcub.ro/robots.txt')return new Response('User-agent: *\nAllow: /',{headers:{'content-type':'text/plain'}});
+  if(url===card.sourceUrl)return new Response(arcubPhotoDocument(row),{headers:{'content-type':'text/html'}});
+  if(url===row.image)return new Response(pixels,{headers:{'content-type':'image/png'}});
+  throw Error('Unexpected public request');
+ };
+ const officialServices={...services,official:async()=>active,photos:new ArticlePhotoService(fetcher,()=>now)};
+ const server=createServer((req,res)=>{void handleArticlePhoto(req,res,officialServices);}).listen(0,'127.0.0.1');await once(server,'listening');
+ const base='http://127.0.0.1:'+server.address().port;
+ try {
+  const response=await fetch(base+path);
+  assert.equal(response.status,200);assert.equal(response.headers.get('content-type'),'image/png');
+  assert.equal(response.headers.get('x-dlkt-photo-basis'),'local-event-hero');
+  assert.equal(response.headers.get('link'),'<'+card.sourceUrl+'>; rel="canonical"');
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()),pixels);
+  assert.deepEqual(acquisitions,['https://arcub.ro/robots.txt',card.sourceUrl,row.image]);
+  const count=acquisitions.length;
+  assert.equal((await fetch(base+articlePhotoPath({...reference,revision:'0'.repeat(64)}))).status,404);
+  assert.equal((await fetch(base+path.replace('city=683506','city=2512989'))).status,400);
+  active={...listing,cards:[]};assert.equal((await fetch(base+path)).status,404);
+  assert.equal(acquisitions.length,count,'rejected HTTP identities never acquire a publisher image');
+ } finally {server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
+});
+
+test('official source robots policy also protects image paths and every image redirect',async()=>{
+ const card=arcubPhotoFixture(now).cards[0],item=arcubPhotoArticle(card),row=ARCUB_PHOTO_ROWS[0],other=ARCUB_PHOTO_ROWS[1].image;
+ for(const redirected of [false,true]){
+  const calls=[],policy='User-agent: *\nAllow: /eveniment/\nDisallow: '+(redirected?new URL(other).pathname:'/img/')+'\n';
+  const service=new ArticlePhotoService(async address=>{
+   const url=String(address);calls.push(url);
+   if(url==='https://arcub.ro/robots.txt')return new Response(policy,{headers:{'content-type':'text/plain'}});
+   if(url===card.sourceUrl)return new Response(arcubPhotoDocument(row),{headers:{'content-type':'text/html'}});
+   if(redirected&&url===row.image)return new Response(null,{status:302,headers:{location:other}});
+   throw Error('A robots-disallowed image must never be requested');
+  },()=>now);
+  assert.equal(await service.read(item),null);
+  assert.deepEqual(calls,['https://arcub.ro/robots.txt',card.sourceUrl,...(redirected?[row.image]:[])]);
+ }
 });

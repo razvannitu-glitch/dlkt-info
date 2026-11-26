@@ -1,4 +1,5 @@
 import type {IncomingMessage,ServerResponse} from 'node:http';
+import {createHash} from 'node:crypto';
 import {publicIceoSnapshot} from '../src/iceo/daily-cache.js';
 import type {IceoSnapshot} from '../src/iceo/contracts.js';
 import {validCard} from '../src/iceo/card-validation.js';
@@ -6,7 +7,9 @@ import {validArchiveCard} from '../src/share/archive.js';
 import {validNewsGlobalCard} from '../src/iceo/news-page-contracts.js';
 import {createNewsCorpusStore,type NewsCorpusStore} from '../src/iceo/news-corpus-store.js';
 import {findCity} from '../src/local/cities.js';
-import type {City} from '../src/local/contracts.js';
+import {currentLocalSnapshot,type City} from '../src/local/contracts.js';
+import {localPublicationService,type LocalPublications} from '../src/local/publications.js';
+import {localCardPhotoReference} from '../src/local/photo-reference.js';
 import {localNewsService} from '../src/local/news-service.js';
 import {validLocalNewsArticle,type CityNewsSnapshot} from '../src/local/news-policy.js';
 import {parseArticlePhotoReference,type ArticlePhotoReference} from '../src/media/article-photo-reference.js';
@@ -19,11 +22,26 @@ export interface ArticlePhotoDependencies {
  readonly photos:{read(article:PhotoArticle):Promise<ArticlePhotoResult|null>};
  readonly clock:()=>number;
  readonly corpus?:Pick<NewsCorpusStore,'lookup'>;
+ readonly official?:(city:City)=>Promise<LocalPublications>;
 }
 const corpusStore=createNewsCorpusStore(process.env);
-const dependencies:ArticlePhotoDependencies={...(corpusStore?{corpus:corpusStore}:{}),global:publicIceoSnapshot,local:city=>localNewsService.snapshot(city),photos:articlePhotoService,clock:Date.now};
+const dependencies:ArticlePhotoDependencies={...(corpusStore?{corpus:corpusStore}:{}),global:publicIceoSnapshot,local:city=>localNewsService.snapshot(city),official:city=>localPublicationService.snapshot(city),photos:articlePhotoService,clock:Date.now};
 /** Resolve server-side from a current, validated listing. No remote URL is accepted by this endpoint. */
 export async function resolvePhotoArticle(reference:ArticlePhotoReference,services:ArticlePhotoDependencies):Promise<PhotoArticle|null>{
+ if(reference.id.startsWith('bucharest:arcub:')){
+  if(reference.cityId!=='683506'||!services.official)return null;
+  const city=findCity(reference.cityId);if(!city)return null;
+  const listing=await services.official(city),now=services.clock();
+  const card=listing.cards.find(value=>value.id===reference.id&&value.context?.documentHash===reference.revision);
+  if(!card||card.id!=='bucharest:arcub:'+createHash('sha256').update(card.sourceUrl).digest('hex').slice(0,24)
+   ||!localCardPhotoReference(card,city.id,now))return null;
+  // This projection retains the source check times; it does not stamp a new successful check.
+  const snapshot={version:'dlkt-local-1',city,checkedAt:card.checkedAt,state:'partial',weatherState:'unavailable',transportState:'not-covered',
+   cards:[card],coverage:listing.coverage.filter(value=>value.domain==='events')};
+  if(!currentLocalSnapshot(snapshot,city,now)||photoPublisher(card.sourceUrl)!=='bucharest-arcub')return null;
+  return{id:card.id,revision:reference.revision,sourceUrl:card.sourceUrl,title:card.title,publisher:card.publisher,
+   publishedAt:'',documentKind:'local-event',validUntil:Date.parse(card.validTo)};
+ }
  if(services.corpus){
   try{
    const item=await services.corpus.lookup(reference),now=services.clock();

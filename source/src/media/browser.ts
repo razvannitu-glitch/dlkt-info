@@ -2,6 +2,7 @@ import {displayPhotoFor,type ReviewedPhoto,type ContextPhotoInput} from './catal
 import {articlePhotoPath,type ArticlePhotoReference} from './article-photo-reference.js';
 import {safeLink} from '../iceo/card-validation.js';
 import {newsSourceForUrl} from '../local/news-policy.js';
+import {arcubPhotoSource} from '../local/photo-reference.js';
 import type {ContextPhoto} from './context-photos.js';
 import type {EditorialPhoto} from './editorial-photos.js';
 import type {EvidenceCard} from '../iceo/contracts.js';
@@ -68,7 +69,7 @@ function renderArticlePhotoNode(card:ContextPhotoInput,reference:ArticlePhotoRef
  if(!card.sourceUrl)return null;
  let path:string;try{path=articlePhotoPath(reference);}catch{return null;}
  const localSource=reference.cityId===undefined?undefined:newsSourceForUrl(card.sourceUrl);
- const source=reference.cityId===undefined?safeLink(card.sourceUrl):localSource&&localSource.cityId===reference.cityId&&reference.id.startsWith('local-news:'+localSource.cityId+':'+localSource.id+':')?card.sourceUrl:null;
+ const source=reference.cityId===undefined?safeLink(card.sourceUrl):(localSource&&localSource.cityId===reference.cityId&&reference.id.startsWith('local-news:'+localSource.cityId+':'+localSource.id+':')||arcubPhotoSource(card.sourceUrl,reference))?card.sourceUrl:null;
  if(!source)return null;
  const figure=document.createElement('figure');figure.className='card-photo';figure.dataset.photoKind='source';figure.dataset.photoId='article:'+reference.id+':'+reference.revision;
  const frame=document.createElement('div');frame.className='card-photo-frame';

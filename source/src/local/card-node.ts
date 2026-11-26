@@ -3,6 +3,7 @@ import {localReading,localReadingPreview,localCardCategory} from './presentation
 import {localEventCalendar} from './event-calendar.js';
 import {weatherMotionNode} from '../glance/weather-motion.js';
 import {contextPhotoNode} from '../media/browser.js';
+import {localCardPhotoReference} from './photo-reference.js';
 import {getLocale,translate} from '../i18n/browser.js';
 const romanianKinds:Readonly<Record<LocalCard['kind'],string>>={forecast:'Vreme',transport:'Transport','transport-notice':'Transport','utility-notice':'Termoficare si apa calda',event:'Eveniment','municipal-news':'Administratie','local-news':'Stiri locale'};
 const node=<K extends keyof HTMLElementTagNameMap>(tag:K,text='',className=''):HTMLElementTagNameMap[K]=>{const n=document.createElement(tag);n.textContent=text;n.className=className;return n;};
@@ -60,6 +61,6 @@ export function localCardNode(card:LocalCard,c:City,now=Date.now(),options:{read
   const category=localCardCategory(card);a.dataset.editorialCategory=category;
   a.append(head);
   // Private readers can omit image requests; existing public cards retain their photos.
-  const photo=options.photos===false?null:contextPhotoNode({title:reading.title,sourceUrl:card.sourceUrl,editorialCategory:category},now,card.kind==='local-news'&&card.news?{id:card.news.id,revision:card.news.documentHash,cityId:c.id}:undefined);if(photo)a.append(photo);
+  const photo=options.photos===false?null:contextPhotoNode({title:reading.title,sourceUrl:card.sourceUrl,editorialCategory:category},now,localCardPhotoReference(card,c.id,now));if(photo)a.append(photo);
   if(compact){const actions=node('div','','local-utility-actions');actions.append(source,details);a.append(body,actions);}else a.append(body,details);return a;
  }

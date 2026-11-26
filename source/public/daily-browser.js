@@ -2,6 +2,7 @@ import { translate as tr } from './i18n-browser.js';
 import { sourceLanguage } from './news-sources.js';
 import { contextForCard } from './context.js';
 import { photoNode, contextPhotoNode } from './card-photo-browser.js';
+import { localCardPhotoReference } from './local-photo-reference.js';
 import { editorialCategory as categoryForCard } from './editorial-categories.js';
 import { cardGuideNode } from './card-guide.js';
 import { cardCreditsNode } from './credits.js';
@@ -279,7 +280,7 @@ function renderItem(item) {
     }
     body.append(actions);
     a.append(head);
-    const photograph = item.topic ? photoNode(item.topic.card) : item.local ? contextPhotoNode({ title: headline, sourceUrl: item.local.sourceUrl, ...(category ? { editorialCategory: category } : {}) }, Date.now(), item.local.kind === 'local-news' && item.local.news ? { id: item.local.news.id, revision: item.local.news.documentHash, cityId: item.local.news.cityId } : undefined) : null;
+    const photograph = item.topic ? photoNode(item.topic.card) : item.local ? contextPhotoNode({ title: headline, sourceUrl: item.local.sourceUrl, ...(category ? { editorialCategory: category } : {}) }, Date.now(), localCardPhotoReference(item.local, city?.id ?? item.local.news?.cityId ?? '', Date.now())) : null;
     if (photograph)
         a.append(photograph);
     a.append(body, details);

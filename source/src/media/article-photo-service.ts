@@ -33,7 +33,7 @@ export class ArticlePhotoService {
  async read(article:PhotoArticle):Promise<ArticlePhotoResult|null> {
   const now=this.clock();
   if(!photoPublisher(article.sourceUrl)||!/^[a-f0-9]{64}$/u.test(article.revision)||!Number.isFinite(article.validUntil)||article.validUntil<=now)return null;
-  const key=article.sourceUrl+'\n'+article.revision,hit=this.cache.get(key);
+  const key=(article.documentKind??'article')+'\n'+article.id+'\n'+article.sourceUrl+'\n'+article.revision,hit=this.cache.get(key);
   if(hit&&hit.until>now)return hit.result;
   const running=this.pending.get(key);if(running)return running;
   if(this.pending.size>=8)throw Error('ARTICLE_PHOTO_BUSY');
@@ -75,10 +75,11 @@ export class ArticlePhotoService {
   })();
   this.pendingRobots.set(origin,job);try{return await job;}finally{this.pendingRobots.delete(origin);}
  }
- private async imageBytes(address:string,articleUrl:string,signal:AbortSignal):Promise<Buffer> {
+ private async imageBytes(address:string,articleUrl:string,signal:AbortSignal,sourcePolicy?:string):Promise<Buffer> {
   let current=address;
   for(let redirects=0;redirects<=2;redirects++){
    if(articleImageUrl(current,articleUrl)!==current)throw Error('ARTICLE_PHOTO_IMAGE_URL');
+   if(sourcePolicy!==undefined&&!robotsAllowed(sourcePolicy,current))throw Error('ARTICLE_PHOTO_IMAGE_ROBOTS');
    const response=await this.request(current,'image/jpeg, image/png, image/webp',signal);
    if(response.status>=300&&response.status<400){
     const target=response.headers.get('location');await response.body?.cancel();
@@ -102,7 +103,8 @@ export class ArticlePhotoService {
  }
  private async acquire(article:PhotoArticle):Promise<ArticlePhotoResult|null> {
   const signal=AbortSignal.timeout(12000),origin=new URL(article.sourceUrl).origin;
-  if(!robotsAllowed(await this.robotsBody(origin,signal),article.sourceUrl))return null;
+  const sourcePolicy=await this.robotsBody(origin,signal);
+  if(!robotsAllowed(sourcePolicy,article.sourceUrl))return null;
   const response=await this.request(article.sourceUrl,'text/html, application/xhtml+xml',signal);
   // The article URL is already canonical in the verified catalog. A redirect cannot silently switch identity.
   if(response.status!==200||!['text/html','application/xhtml+xml'].includes((response.headers.get('content-type')??'').split(';')[0]?.trim().toLowerCase()??'')){
@@ -110,7 +112,7 @@ export class ArticlePhotoService {
   }
   const html=await readBounded(response,PHOTO_HTML_LIMIT),metadata=readArticlePhoto(html,article);
   if(!metadata)return null;
-  const bytes=await this.imageBytes(metadata.imageUrl,article.sourceUrl,signal),raster=inspectPhotoRaster(bytes),checkedAt=this.clock();
+  const bytes=await this.imageBytes(metadata.imageUrl,article.sourceUrl,signal,article.documentKind==='local-event'?sourcePolicy:undefined),raster=inspectPhotoRaster(bytes),checkedAt=this.clock();
   if(!raster||checkedAt>=article.validUntil)return null;
   if(metadata.expectedDimensions&&(raster.width!==metadata.expectedDimensions.width||raster.height!==metadata.expectedDimensions.height))return null;
   return{...raster,bytes,sha256:createHash('sha256').update(bytes).digest('hex'),metadata,checkedAt,until:Math.min(article.validUntil,checkedAt+PHOTO_TTL)};

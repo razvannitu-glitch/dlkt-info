@@ -13,6 +13,8 @@ import {newsFeed} from '../.build/src/local/news-policy.js';
 import {newsCard} from '../.build/src/local/service.js';
 import {localReading,localCardCategory} from '../.build/src/local/presentation.js';
 import {localCardLabel} from '../.build/src/local/contracts.js';
+import {localCardPhotoReference} from '../.build/src/local/photo-reference.js';
+import {arcubPhotoFixture} from './fixtures/arcub-photos.mjs';
 
 // This DOM fixture tests node ownership/error recovery; visual layout is checked separately.
 class TextFixture {
@@ -165,7 +167,7 @@ test('Daily renders the same local article reference and preserves its source wh
  // Execute the actual compiled renderer in isolation; no Daily startup, storage or network is invoked.
  const compiled=readFileSync('.build/src/daily/browser.js','utf8'),definition=compiled.match(/^function renderItem\(item\) \{[\s\S]+?(?=^function render\()/mu)?.[0];assert.ok(definition);
  const make=(tag,text='',className='')=>{const element=document.createElement(tag);element.textContent=text;element.className=className;return element;};
- const renderItem=runInNewContext(definition+'\nrenderItem',{make,city,feedback:[],Date:{now:()=>time},date:value=>value,localReading,localCardCategory,localCardLabel,contextPhotoNode});
+ const renderItem=runInNewContext(definition+'\nrenderItem',{make,city,feedback:[],Date:{now:()=>time},date:value=>value,localReading,localCardCategory,localCardLabel,contextPhotoNode,localCardPhotoReference});
  const article=renderItem({id:record.id,local:card,topic:null}),figure=article.querySelector('figure'),heading=article.querySelector('h3');
  assert.ok(figure);assert.equal(heading.textContent,title);
  const image=figure.querySelector('img');
@@ -176,4 +178,26 @@ test('Daily renders the same local article reference and preserves its source wh
  image.dispatchEvent(new Event('error'));await Promise.resolve();
  assert.equal(article.querySelector('figure'),null);assert.equal(article.querySelector('h3'),heading);assert.equal(source.href,record.url);assert.equal(JSON.stringify(card),before);
  const withoutNews=renderItem({id:card.id,local:{...card,news:undefined},topic:null});assert.equal(withoutNews.querySelector('figure'),null);
+});
+
+test('official event photos share exact identity across recent, city and Daily and fail without losing actions',async t=>{
+ dom(t);const city=findCity('683506'),time=Date.parse('2026-11-26T00:00:00.000Z'),card=arcubPhotoFixture(time).cards[0];
+ assert.ok(city);assert.ok(card);
+ const compiled=readFileSync('.build/src/daily/browser.js','utf8'),definition=compiled.match(/^function renderItem\(item\) \{[\s\S]+?(?=^function render\()/mu)?.[0];assert.ok(definition);
+ const make=(tag,text='',className='')=>{const element=document.createElement(tag);element.textContent=text;element.className=className;return element;};
+ const renderItem=runInNewContext(definition+'\nrenderItem',{make,city,feedback:[],Date:{now:()=>time},date:value=>value,localReading,localCardCategory,localCardLabel,contextPhotoNode,localCardPhotoReference});
+ const reference={id:card.id,revision:card.context.documentHash,cityId:city.id},before=JSON.stringify(card);
+ for(const node of [localCardNode(card,city,time,{compact:true}),localCardNode(card,city,time),renderItem({id:card.id,local:card,topic:null})]){
+  const figure=node.querySelector('figure'),image=figure?.querySelector('img'),title=node.querySelector('h3');assert.ok(image);
+  assert.deepEqual(parseArticlePhotoReference(image.src),reference);assert.equal(title.textContent,card.title);
+  image.dispatchEvent(new Event('load'));assert.equal(figure.querySelector('.card-photo-caption').hidden,false);
+  assert.ok(node.querySelectorAll('a').some(link=>link.href===card.sourceUrl&&link.textContent==='Open source'));
+  image.dispatchEvent(new Event('error'));await Promise.resolve();assert.equal(node.querySelector('figure'),null);assert.equal(node.querySelector('h3'),title);
+  assert.ok(node.querySelectorAll('a').some(link=>link.href===card.sourceUrl&&link.textContent==='Open source'));
+ }
+ assert.equal(JSON.stringify(card),before);
+ assert.equal(localCardNode(card,city,time,{photos:false}).querySelector('figure'),null,'private reader image opt-out is retained');
+ assert.equal(localCardPhotoReference(card,'2512989',time),undefined);
+ assert.equal(localCardPhotoReference(card,city.id,time+300000),undefined);
+ assert.equal(contextPhotoNode({title:card.title,sourceUrl:'https://evil.example/event'},time,reference),null);
 });
