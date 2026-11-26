@@ -34,6 +34,9 @@ jobs:
         run: node scripts/generate-release-manifest.mjs
       - name: Pin exact candidate
         run: npm run source:pin
+      - name: Verify branch deployment remains disabled after generation
+        run: |
+          node --input-type=module -e "import fs from 'node:fs'; import assert from 'node:assert/strict'; const a=JSON.parse(fs.readFileSync('source/vercel.public.json','utf8')); const b=JSON.parse(fs.readFileSync('vercel.json','utf8')); const expected={deploymentEnabled:{'billing-lab/integration-20261126':false}}; assert.deepEqual(a.git,expected); assert.deepEqual(b.git,expected); console.log('DLKT_INTEGRATION_DEPLOYMENT_DISABLED');"
       - name: Full release verification
         run: npm run verify:release
       - name: Local package build
