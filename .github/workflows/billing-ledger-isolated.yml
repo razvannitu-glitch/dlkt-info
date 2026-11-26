@@ -31,7 +31,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat docs/billing-ledger-sandbox/{setup,ledger,test,queue,queue-test,reconcile,reconcile-test,checkout,checkout-test,entitlement,entitlement-test,vault-setup,vault,vault-test,lifecycle,lifecycle-test}.sql |
+          cat docs/billing-ledger-sandbox/{setup,ledger,test,queue,queue-test,reconcile,reconcile-test,checkout,checkout-test,entitlement,entitlement-test,vault-setup,vault,vault-test,lifecycle,lifecycle-test,cleanup,cleanup-test}.sql |
             docker exec -i "$TEST_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d billing_test
 
       - name: Verify simultaneous intake and lease claims in independent sessions
@@ -140,6 +140,25 @@ jobs:
           cmp "$tmp/one" "$tmp/two"
           test "$(psql_test -c "SELECT count(*) FROM dlkt_info_account_lifecycle.closure_tasks t JOIN dlkt_info_account_lifecycle.closure_requests c ON c.request_id=t.request_id WHERE c.owner_id='00000000-0000-4000-8000-000000000012';")" = 6
           echo SECURE_ACCOUNT_LIFECYCLE_PARALLEL_OK
+
+      - name: Verify concurrent external cleanup claims
+        env:
+          TEST_CONTAINER: ${{ job.services.postgres.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          psql_test() { docker exec -i "$TEST_CONTAINER" psql -X -qAt -v ON_ERROR_STOP=1 -U postgres -d billing_test "$@"; }
+          claim="SET ROLE dlkt_account_cleanup_worker; SELECT count(*) FROM dlkt_info_account_lifecycle.claim_grant_cleanup('30000000-0000-4000-8000-000000000014');"
+          psql_test -c "$claim" > "$tmp/one" &
+          p1=$!
+          psql_test -c "$claim" > "$tmp/two" &
+          p2=$!
+          wait "$p1"
+          wait "$p2"
+          test "$(cat "$tmp/one" "$tmp/two" | sort | paste -sd, -)" = 0,1
+          echo EXTERNAL_CLEANUP_PARALLEL_OK
 
   payment-proof:
     runs-on: ubuntu-24.04
