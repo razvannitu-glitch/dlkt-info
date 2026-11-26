@@ -31,7 +31,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat docs/billing-ledger-sandbox/{setup,ledger,test,queue,queue-test}.sql |
+          cat docs/billing-ledger-sandbox/{setup,ledger,test,queue,queue-test,reconcile,reconcile-test}.sql |
             docker exec -i "$TEST_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d billing_test
 
       - name: Verify simultaneous intake and lease claims in independent sessions
@@ -61,3 +61,23 @@ jobs:
           test "$(cat "$tmp/claim1" "$tmp/claim2" | sort | paste -sd, -)" = 0,1
           test "$(psql_test -c "SELECT count(*) FROM dlkt_info_billing.event_jobs WHERE account_id='acct_Concurrent' AND state='leased' AND attempt=1;")" = 1
           echo BILLING_QUEUE_PARALLEL_SESSIONS_OK
+
+      - name: Verify concurrent reconciliation claims
+        env:
+          TEST_CONTAINER: ${{ job.services.postgres.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          psql_test() { docker exec -i "$TEST_CONTAINER" psql -X -qAt -v ON_ERROR_STOP=1 -U postgres -d billing_test "$@"; }
+          claim="SET ROLE dlkt_billing_reconciler; SELECT count(*) FROM dlkt_info_billing.claim_subscription('acct_ReconcileRace');"
+          psql_test -c "$claim" > "$tmp/claim1" &
+          p1=$!
+          psql_test -c "$claim" > "$tmp/claim2" &
+          p2=$!
+          wait "$p1"
+          wait "$p2"
+          test "$(cat "$tmp/claim1" "$tmp/claim2" | sort | paste -sd, -)" = 0,1
+          test "$(psql_test -c "SELECT count(*) FROM dlkt_info_billing.subscription_reconcile WHERE account_id='acct_ReconcileRace' AND state='leased' AND generation=1 AND fence=1 AND attempt=1;")" = 1
+          echo BILLING_RECONCILIATION_PARALLEL_SESSIONS_OK
