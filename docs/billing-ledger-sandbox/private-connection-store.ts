@@ -53,6 +53,16 @@ const SQL=Object.freeze({
  put:'SELECT dlkt_info_connection_vault.put_authorization($1::uuid,$2::uuid,$3::text,$4::text,$5::text,$6::text,$7::timestamptz) AS ok',
  consume:'SELECT * FROM dlkt_info_connection_vault.consume_authorization($1::uuid,$2::uuid,$3::text,$4::text,$5::text)'
 });
+function readSession(session:ResolvedIdentitySession,callbackProvider:WalletProviderId|null,clock:()=>number){
+  try{
+    const now=clock();
+    if(!Number.isFinite(now)||now<0||!isUuid(session.user.id)||!isAccessToken(session.accessToken)||(callbackProvider!==null&&!isWalletProviderId(callbackProvider)))return badSession();
+    const payload:unknown=JSON.parse(Buffer.from(session.accessToken.split('.')[1]??'','base64url').toString('utf8'));
+    if(!isRecord(payload)||payload.sub!==session.user.id||payload.role!=='authenticated'||!isUuid(payload.session_id)
+      ||payload.is_anonymous===true||typeof payload.exp!=='number'||!Number.isSafeInteger(payload.exp)||payload.exp<=Math.floor(now/1000))return badSession();
+    return Object.freeze({owner:session.user.id,session:payload.session_id,sessionHash:verifiedSessionHash(session.accessToken,session.user.id),expires:payload.exp});
+  }catch{return badSession();}
+}
 /** Constructor accepts only the result of the existing provider-verified
  * resolveIdentitySession call. JWT decoding here is NOT signature verification.
  * The database independently confirms the current auth.sessions row. */
@@ -65,15 +75,10 @@ export class PrivateConnectionVaultStore implements ConnectionStore{
   readonly #callbackProvider:WalletProviderId|null;
   readonly #clock:()=>number;
   constructor(session:ResolvedIdentitySession,db:VaultQuery,callbackProvider:WalletProviderId|null=null,clock:()=>number=Date.now){
-    try{
-      if(!isUuid(session.user.id)||!isAccessToken(session.accessToken)||(callbackProvider!==null&&!isWalletProviderId(callbackProvider)))return badSession();
-      const payload:unknown=JSON.parse(Buffer.from(session.accessToken.split('.')[1]??'','base64url').toString('utf8'));
-      if(!isRecord(payload)||payload.sub!==session.user.id||payload.role!=='authenticated'||!isUuid(payload.session_id)
-        ||payload.is_anonymous===true||typeof payload.exp!=='number'||!Number.isSafeInteger(payload.exp)||payload.exp<=Math.floor(clock()/1000))return badSession();
-      this.#owner=session.user.id;this.#session=payload.session_id;
-      this.#sessionHash=verifiedSessionHash(session.accessToken,this.#owner);
-      this.#expires=payload.exp;this.#db=db;this.#callbackProvider=callbackProvider;this.#clock=clock;
-    }catch{return badSession();}
+    const identity=readSession(session,callbackProvider,clock);
+    this.#owner=identity.owner;this.#session=identity.session;
+    this.#sessionHash=identity.sessionHash;this.#expires=identity.expires;
+    this.#db=db;this.#callbackProvider=callbackProvider;this.#clock=clock;
   }
   #ensureSession():void{
     const now=this.#clock();
