@@ -210,7 +210,7 @@ begin
   ) then raise exception using errcode='28000',message='VAULT_SESSION_INVALID'; end if;
   perform dlkt_info_account_lifecycle.require_open_account(p_owner);
 end;
-$;
+$$;
 create or replace function dlkt_info_billing.reserve_checkout(p_account text,p_owner uuid,p_plan text,p_intent uuid)
 returns table(intent_id uuid,account_id text,customer_id text,owner_id uuid,price_id text,created_at bigint,expires_at bigint,session_id text,state text)
 language plpgsql security definer set search_path=pg_catalog as $$
