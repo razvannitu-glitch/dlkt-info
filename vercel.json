@@ -53,6 +53,9 @@
     },
     "api/news-page.ts": {
       "maxDuration": 15
+    },
+    "api/admin.ts": {
+      "maxDuration": 45
     }
   },
   "buildCommand": "node bootstrap.mjs",
@@ -126,6 +129,10 @@
     {
       "source": "/contact",
       "destination": "/contact.html"
+    },
+    {
+      "source": "/admin",
+      "destination": "/api/admin"
     }
   ],
   "redirects": [
