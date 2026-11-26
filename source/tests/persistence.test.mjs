@@ -333,3 +333,52 @@ test('persistence API rejects malformed successful upstream response', async () 
   assert.equal(res.value.statusCode, 502);
   assert.deepEqual(res.json(), { error: 'PERSISTENCE_UPSTREAM_FAILED' });
 });
+
+
+test('user RPC transport rejects oversized streamed replies before buffering the full body', async () => {
+  const { readPersistenceConfiguration, SupabaseUserRpcTransport } = await import('../.build/src/persistence/index.js');
+  const configuration = readPersistenceConfiguration(READY_ENV);
+  assert.equal(configuration.state, 'ready');
+  let delivered = 0;
+  let cancelled = false;
+  const stream = new ReadableStream({
+    pull(controller) {
+      delivered++;
+      controller.enqueue(new Uint8Array(65_536));
+    },
+    cancel() { cancelled = true; },
+  });
+  const transport = new SupabaseUserRpcTransport(configuration, async () => new Response(stream, {
+    status: 200, headers: { 'content-type': 'application/json' },
+  }));
+  await assert.rejects(() => transport.call('dlkt_info_read_companion_configuration', {}, ACCESS_ONE), /DLKT_INFO_SUPABASE_RESPONSE_TOO_LARGE/u);
+  assert.equal(cancelled, true);
+  assert.ok(delivered <= 10, 'the reader stops after the first over-limit chunk');
+});
+
+test('user RPC transport accepts bounded chunked JSON and preserves upstream errors', async () => {
+  const { readPersistenceConfiguration, SupabaseUserRpcTransport } = await import('../.build/src/persistence/index.js');
+  const configuration = readPersistenceConfiguration(READY_ENV);
+  assert.equal(configuration.state, 'ready');
+  const data = Buffer.from(JSON.stringify(PROJECTION), 'utf8');
+  const transport = new SupabaseUserRpcTransport(configuration, async () => new Response(new ReadableStream({
+    start(controller) {
+      controller.enqueue(data.subarray(0, 37));
+      controller.enqueue(data.subarray(37));
+      controller.close();
+    },
+  }), {status: 200, headers: {'content-type': 'application/json'}}));
+  assert.deepEqual(await transport.call('dlkt_info_read_companion_configuration', {}, ACCESS_ONE), PROJECTION);
+  const denied = new SupabaseUserRpcTransport(configuration, async () => Response.json({error: 'no_access'}, {status: 403}));
+  await assert.rejects(() => denied.call('dlkt_info_read_companion_configuration', {}, ACCESS_ONE), /DLKT_INFO_SUPABASE_RPC_HTTP_403/u);
+});
+
+test('user RPC transport rejects wrong content type and oversized declared lengths', async () => {
+  const { readPersistenceConfiguration, SupabaseUserRpcTransport } = await import('../.build/src/persistence/index.js');
+  const configuration = readPersistenceConfiguration(READY_ENV);
+  assert.equal(configuration.state, 'ready');
+  const wrongType = new SupabaseUserRpcTransport(configuration, async () => new Response('{}', {headers: {'content-type': 'text/html'}}));
+  await assert.rejects(() => wrongType.call('dlkt_info_read_companion_configuration', {}, ACCESS_ONE), /DLKT_INFO_SUPABASE_RESPONSE_CONTENT_TYPE_INVALID/u);
+  const declared = new SupabaseUserRpcTransport(configuration, async () => new Response('{}', {headers: {'content-type': 'application/json', 'content-length': '524289'}}));
+  await assert.rejects(() => declared.call('dlkt_info_read_companion_configuration', {}, ACCESS_ONE), /DLKT_INFO_SUPABASE_RESPONSE_TOO_LARGE/u);
+});
