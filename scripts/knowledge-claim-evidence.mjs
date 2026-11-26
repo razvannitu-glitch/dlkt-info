@@ -164,7 +164,10 @@ export function knowledgeClaimAnchors(id,role){
  */
 export function observeClaimAnchors(main,expected,visibleText){
  if(!record(expected)||Object.keys(expected).length>20||Object.values(expected).some(x=>!hex(x)))throw Error('KNOWLEDGE_CLAIM_ANCHORS_INVALID');
- const counts=new Map(Object.values(expected).map(digest=>[digest,0])),pending=[main];
+ const counts=new Map(Object.values(expected).map(digest=>[digest,0])),pending=[];
+ let ancestor=main,depth=0,excluded=false;
+ while(ancestor){if(++depth>128||hidden(ancestor)){excluded=true;break;}ancestor=ancestor.parent;}
+ if(!excluded)pending.push(main);
  let nodes=0;
  while(pending.length){
   const node=pending.pop();if(++nodes>50000)throw Error('KNOWLEDGE_CLAIM_DOM_LIMIT');
@@ -196,10 +199,20 @@ export function assessKnowledgeClaimEvidence(identity,observation){
  const held=reason=>Object.freeze({state:'held',reason,activationAllowed:false,independentReviewRequired:true,claimChecks:[],fields:[]});
  const spec=record(identity)&&typeof identity.id==='string'&&Object.hasOwn(specs,identity.id)?specs[identity.id]:null;
  if(!spec||identity.digest!==spec.digest||typeof identity.payload!=='string'||identity.payload.length>20000||hash(identity.payload)!==spec.digest)return held('exact-candidate-text-changed-or-unmapped');
+ try{
+  const payload=JSON.parse(identity.payload);
+  if(!Array.isArray(payload)||payload.length!==15||payload[0]!=='dlkt-knowledge-editorial-v1'||payload[1]!=='knowledge'||
+   payload[2]!==identity.id||payload[3]!==identity.revision||payload[8]?.[1]!==identity.sourceUrl||payload[14]?.[2]!==identity.policyUrl)
+   return held('candidate-metadata-not-bound-to-exact-payload');
+ }catch{return held('candidate-metadata-not-bound-to-exact-payload');}
  if(!record(observation)||observation.id!==identity.id||observation.revision!==identity.revision||observation.candidateDigest!==spec.digest||
   observation.sourceUrl!==identity.sourceUrl||observation.policyUrl!==identity.policyUrl||observation.activationAllowed!==false||observation.state!=='observed-for-review'||
   observation.source?.state!=='observed-for-review'||observation.terms?.state!=='observed-for-review'||
-  observation.source?.canonicalObserved!==true||observation.terms?.canonicalObserved!==true)return held('observation-unavailable-or-unbound');
+  observation.source?.canonicalObserved!==true||observation.terms?.canonicalObserved!==true||
+  ![observation.source,observation.terms].every(page=>page.status===200&&page.complete===true&&hex(page.bodySha256)&&hex(page.mainSha256))||
+  observation.source.url!==identity.sourceUrl||observation.terms.url!==identity.policyUrl||
+  observation.robots?.url!==new URL(identity.sourceUrl).origin+'/robots.txt'||observation.robots?.status!==200||observation.robots?.complete!==true||!hex(observation.robots?.bodySha256)||
+  observation.access?.source?.allowed!==true||observation.access?.policy?.allowed!==true)return held('observation-unavailable-or-unbound');
  const source=observation.source.claimAnchors,terms=observation.terms.claimAnchors;
  const claimChecks=spec.claims.map(claim=>Object.freeze({...claim,anchors:Object.freeze([...claim.anchors]),state:claim.anchors.every(key=>source?.[key]?.digest===spec.source[key]&&source[key].matches===1)?'supporting-passages-matched':'review-required'}));
  const fields=['en','ro','it'].flatMap(language=>Object.entries(spec.fields).map(([field,claims])=>Object.freeze({language,field,claims:Object.freeze([...claims])})));

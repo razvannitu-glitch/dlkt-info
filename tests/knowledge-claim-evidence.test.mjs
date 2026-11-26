@@ -64,3 +64,22 @@ test('missing, duplicate, wrong or changed evidence cannot become semantic appro
  const {identity,receipt}=fixture(0);receipt.source.canonicalObserved=false;
  assert.equal(assessKnowledgeClaimEvidence(identity,receipt).state,'held');
 });
+
+test('metadata cannot impersonate the exact candidate digest or observed pages',()=>{
+ const {identity,receipt}=fixture(0);
+ for(const [idPatch,receiptPatch] of [
+  [{revision:2},{revision:2}],
+  [{sourceUrl:'https://www.nsw.gov.au/different'},{sourceUrl:'https://www.nsw.gov.au/different'}],
+  [{policyUrl:'https://www.nsw.gov.au/different'},{policyUrl:'https://www.nsw.gov.au/different'}],
+  [{},{source:{...receipt.source,url:'https://www.nsw.gov.au/different'}}],
+  [{},{terms:{...receipt.terms,status:403}}],
+  [{},{robots:{...receipt.robots,complete:false}}],
+  [{},{access:{...receipt.access,policy:{allowed:false}}}],
+ ]){
+  const r=assessKnowledgeClaimEvidence({...identity,...idPatch},{...receipt,...receiptPatch});assert.equal(r.state,'held');assert.equal(r.activationAllowed,false);
+ }
+});
+test('a main nested in a hidden ancestor cannot contribute evidence',()=>{
+ const main=DomUtils.getElementsByTagName('main',parseDocument('<div hidden><main><p>Controlled evidence.</p></main></div>'),true)[0];
+ assert.equal(observeClaimAnchors(main,{fact:hash('Controlled evidence.')},DomUtils.textContent).fact.matches,0);
+});
