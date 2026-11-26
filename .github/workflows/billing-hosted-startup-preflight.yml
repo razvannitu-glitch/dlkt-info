@@ -1,0 +1,78 @@
+name: DLKT credential-free pooler protocol preflight
+on:
+  push:
+    branches: [billing-lab/integration-20261126]
+    paths:
+      - '.github/workflows/billing-hosted-startup-preflight.yml'
+permissions:
+  contents: read
+jobs:
+  startup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Inspect initial protocol response only; no password or SQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json, socket, ssl, struct
+          from pathlib import Path
+
+          host = 'aws-0-eu-central-1.pooler.supabase.com'
+          ca = Path('docs/hosted-integration/transport/prod-ca-2021.crt')
+          assert hashlib.sha256(ca.read_bytes()).hexdigest() == '700723581420dd1ac98fd7e9ac529f0ef210eadcaf87fc868a3ad7d114c2f3b7'
+          ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+          ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+          ctx.load_verify_locations(cafile=str(ca))
+          assert ctx.verify_mode == ssl.CERT_REQUIRED and ctx.check_hostname
+
+          def read_exact(sock, n):
+              out = bytearray()
+              while len(out) < n:
+                  data = sock.recv(n-len(out))
+                  if not data:
+                      raise EOFError()
+                  out.extend(data)
+              return bytes(out)
+
+          result = {'verified_tls':False,'initial_response':'UNAVAILABLE','password_sent':False,'query_sent':False}
+          try:
+              with socket.create_connection((host,5432),timeout=5) as raw:
+                  raw.settimeout(5)
+                  raw.sendall(struct.pack('!II',8,80877103))
+                  if read_exact(raw,1)!=b'S':
+                      raise ValueError('TLS negotiation unavailable')
+                  with ctx.wrap_socket(raw,server_hostname=host) as tls:
+                      result['verified_tls']=True
+                      # The one known, disabled, read-only test identity.
+                      # No authentication response is sent; close immediately
+                      # after the first bounded server message.
+                      params = b'user\x00dlkt_rt_probe.hziavqdhsqnihxuuxzhn\x00database\x00postgres\x00application_name\x00dlkt-credential-free-preflight\x00\x00'
+                      body=struct.pack('!I',196608)+params
+                      tls.sendall(struct.pack('!I',len(body)+4)+body)
+                      kind=read_exact(tls,1)
+                      size=struct.unpack('!I',read_exact(tls,4))[0]
+                      if not 4<=size<=8192:
+                          raise ValueError('Invalid message length')
+                      payload=read_exact(tls,size-4)
+                      if kind==b'R' and len(payload)>=4:
+                          method=struct.unpack('!I',payload[:4])[0]
+                          result['initial_response']={0:'AUTH_OK_UNEXPECTED',3:'PASSWORD_REQUESTED',5:'MD5_REQUESTED',10:'SASL_REQUESTED'}.get(method,'OTHER_AUTH_REQUEST')
+                      elif kind==b'E':
+                          result['initial_response']='SERVER_REJECTION'
+                          # Only preapproved SQLSTATE values, never message text.
+                          for part in payload.split(b'\x00'):
+                              if part in (b'C28000',b'C28P01',b'C3D000',b'C42501',b'C53300',b'C57P03'):
+                                  result['sqlstate']=part[1:].decode('ascii')
+                      else:
+                          result['initial_response']='OTHER_PROTOCOL_MESSAGE'
+          except (OSError,EOFError,ValueError):
+              result['initial_response']='NETWORK_OR_PROTOCOL_UNAVAILABLE'
+          print('DLKT_STARTUP_PREFLIGHT '+json.dumps(result,sort_keys=True))
+          if not result['verified_tls'] or result['initial_response']=='AUTH_OK_UNEXPECTED':
+              raise SystemExit(1)
+          PY
