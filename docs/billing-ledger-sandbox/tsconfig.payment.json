@@ -9,7 +9,8 @@
     "payment-proof.ts",
     "../../source/src/billing/entitlement.ts",
     "hosted-sessions.ts",
-    "checkout-lifecycle.ts"
+    "checkout-lifecycle.ts",
+    "entitlement-gate.ts"
   ],
   "exclude": []
 }
