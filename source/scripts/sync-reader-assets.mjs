@@ -25,11 +25,11 @@ for(const name of ['state','selection','geography','browser']){
  writeFileSync(`public/explore-${name}.js`,compiled);
 }
 for(const name of ['home-local','personal-relevance','news-reading-state','news-page-contracts']){
- const localImports=readFileSync(`public/${name}.js`,'utf8').replaceAll("'../local/contracts.js'","'./local-contracts.js'").replaceAll("'../local/news-policy.js'","'./local-news-policy.js'");writeFileSync(`public/${name}.js`,localImports);
+ const localImports=readFileSync(`public/${name}.js`,'utf8').replaceAll("'../local/contracts.js'","'./local-contracts.js'").replaceAll("'../local/news-policy.js'","'./local-news-policy.js'").replaceAll("'../local/photo-reference.js'","'./local-photo-reference.js'");writeFileSync(`public/${name}.js`,localImports);
 }
 
-for(const name of ['browser','contracts','memory','presentation','card-node','event-calendar','places','discovery','reference-places','news-policy','startup']){
- const compiled=readFileSync(`.build/src/local/${name}.js`,'utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'').replaceAll("'./contracts.js'","'./local-contracts.js'").replaceAll("'./news-policy.js'","'./local-news-policy.js'").replaceAll("'./startup.js'","'./local-startup.js'").replaceAll("'./memory.js'","'./local-memory.js'").replaceAll("'./presentation.js'","'./local-presentation.js'").replaceAll("'./places.js'","'./local-places.js'").replaceAll("'./reference-places.js'","'./local-reference-places.js'").replaceAll("'./discovery.js'","'./local-discovery.js'").replaceAll("'./card-node.js'","'./local-card-node.js'").replaceAll("'./event-calendar.js'","'./local-event-calendar.js'").replaceAll('../iceo/','./').replaceAll("'../glance/weather-motion.js'","'./glance-weather-motion.js'").replaceAll("'../i18n/browser.js'","'./i18n-browser.js'").replaceAll("'../media/browser.js'","'./card-photo-browser.js'");
+for(const name of ['browser','contracts','memory','presentation','card-node','photo-reference','event-calendar','places','discovery','reference-places','news-policy','startup']){
+ const compiled=readFileSync(`.build/src/local/${name}.js`,'utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'').replaceAll("'./contracts.js'","'./local-contracts.js'").replaceAll("'./news-policy.js'","'./local-news-policy.js'").replaceAll("'./startup.js'","'./local-startup.js'").replaceAll("'./memory.js'","'./local-memory.js'").replaceAll("'./presentation.js'","'./local-presentation.js'").replaceAll("'./places.js'","'./local-places.js'").replaceAll("'./reference-places.js'","'./local-reference-places.js'").replaceAll("'./discovery.js'","'./local-discovery.js'").replaceAll("'./card-node.js'","'./local-card-node.js'").replaceAll("'./photo-reference.js'","'./local-photo-reference.js'").replaceAll("'./event-calendar.js'","'./local-event-calendar.js'").replaceAll('../iceo/','./').replaceAll("'../glance/weather-motion.js'","'./glance-weather-motion.js'").replaceAll("'../i18n/browser.js'","'./i18n-browser.js'").replaceAll("'../media/browser.js'","'./card-photo-browser.js'");
  writeFileSync(`public/local-${name}.js`,compiled);
 }
 
@@ -40,7 +40,7 @@ for(const name of ['browser','state','header']){
 
 for(const name of ['contracts','selection','reading','interests','browser']){
  let compiled=readFileSync(`.build/src/daily/${name}.js`,'utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'');
- compiled=compiled.replaceAll('../iceo/','./').replaceAll("'../local/contracts.js'","'./local-contracts.js'").replaceAll("'../local/presentation.js'","'./local-presentation.js'").replaceAll("'../local/memory.js'","'./local-memory.js'").replaceAll("'../local/news-policy.js'","'./local-news-policy.js'").replaceAll("'./contracts.js'","'./daily-contracts.js'").replaceAll("'./selection.js'","'./daily-selection.js'").replaceAll("'./reading.js'","'./daily-reading.js'").replaceAll("'./interests.js'","'./daily-interests.js'");
+ compiled=compiled.replaceAll('../iceo/','./').replaceAll("'../local/contracts.js'","'./local-contracts.js'").replaceAll("'../local/presentation.js'","'./local-presentation.js'").replaceAll("'../local/memory.js'","'./local-memory.js'").replaceAll("'../local/news-policy.js'","'./local-news-policy.js'").replaceAll("'../local/photo-reference.js'","'./local-photo-reference.js'").replaceAll("'./contracts.js'","'./daily-contracts.js'").replaceAll("'./selection.js'","'./daily-selection.js'").replaceAll("'./reading.js'","'./daily-reading.js'").replaceAll("'./interests.js'","'./daily-interests.js'");
  writeFileSync(`public/daily-${name}.js`,compiled);
 }
 for(const name of ['device-memory','saved-updates']){
@@ -73,7 +73,7 @@ for(const name of ['entry-browser','iceo']){
 await import('./generate-legal-pages.mjs');
 
 for(const [name,target]of [['catalog','card-photo-catalog'],['reviewed-photos','reviewed-photos'],['context-photos','context-photos'],['editorial-photos','editorial-photos'],['article-photo-reference','article-photo-reference'],['browser','card-photo-browser']]){
- const js=readFileSync(`.build/src/media/${name}.js`,'utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'').replaceAll('../iceo/','./').replaceAll("'../local/news-policy.js'","'./local-news-policy.js'").replaceAll("'./catalog.js'","'./card-photo-catalog.js'").replaceAll("'../i18n/browser.js'","'./i18n-browser.js'");
+ const js=readFileSync(`.build/src/media/${name}.js`,'utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'').replaceAll('../iceo/','./').replaceAll("'../local/news-policy.js'","'./local-news-policy.js'").replaceAll("'../local/photo-reference.js'","'./local-photo-reference.js'").replaceAll("'./catalog.js'","'./card-photo-catalog.js'").replaceAll("'../i18n/browser.js'","'./i18n-browser.js'");
  writeFileSync(`public/${target}.js`,js);
 }
 for(const name of ['iceo','daily-browser','shared-card-browser','edition-browser']){

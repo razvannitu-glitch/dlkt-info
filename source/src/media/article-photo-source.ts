@@ -5,9 +5,10 @@ import {newsSourceForUrl} from '../local/news-policy.js';
 export interface PhotoArticle {
  readonly id:string; readonly revision:string; readonly sourceUrl:string; readonly title:string;
  readonly publisher:string; readonly publishedAt:string; readonly validUntil:number;
+ readonly documentKind?:'local-event';
 }
 export interface ArticlePhotoMetadata {
- readonly articleUrl:string; readonly imageUrl:string; readonly basis:'article-jsonld'|'article-opengraph';
+ readonly articleUrl:string; readonly imageUrl:string; readonly basis:'article-jsonld'|'article-opengraph'|'local-event-hero';
  readonly alt:string; readonly credit:string|null; readonly caption:string|null;
  readonly expectedDimensions?:{readonly width:number;readonly height:number};
 }
@@ -23,12 +24,15 @@ function url(value:unknown,base?:string):URL|null {
 }
 export function photoPublisher(articleUrl:string):string|null {
  const parsed=url(articleUrl);if(!parsed||parsed.hash||parsed.href!==articleUrl||parsed.pathname==='/')return null;
+ if(parsed.origin==='https://arcub.ro'&&!parsed.search&&/^\/eveniment\/[a-z0-9-]+$/u.test(parsed.pathname))return'bucharest-arcub';
  const local=newsSourceForUrl(articleUrl);if(local)return local.id;
  const reviewed=publisherForNewsUrl(articleUrl);if(reviewed)return Object.hasOwn(ASSET_PATHS,reviewed.id)?reviewed.id:null;
  if(['www.nasa.gov','science.nasa.gov'].includes(parsed.hostname))return'nasa';
  return null;
 }
 const ASSET_PATHS:Readonly<Record<string,Readonly<Record<string,readonly string[]>>>>=Object.freeze({
+ // ARCUB original page-header images, observed in probe45726653109; generic social metadata is excluded below.
+ 'bucharest-arcub':{'arcub.ro':['/img/']},
  'bucharest-b365':{'b365.ro':['/wp-content/uploads/']},
  'bucharest-buletin':{'buletin.de':['/bucuresti/wp-content/uploads/','/wp-content/uploads/']},
  // Exact article metadata and same-origin upload path verified by primary probe45051739949.
@@ -53,6 +57,12 @@ export function articleImageUrl(value:unknown,articleUrl:string):string|null {
  if(/[\\\u0000-\u0020\u007f]/u.test(pathname)||/(?:^|\/)\.\.?(?:\/|$)/u.test(pathname)
   ||/(?:^|[/_.-])(?:logo|favicon|placeholder|default-image|default-share|tracking-pixel)(?:[/_.-]|$)/iu.test(pathname))return null;
  if(!/\.(?:jpe?g|png|webp)(?:\/|$)/iu.test(pathname)&&!['guardian','bbc','dw','france24'].includes(publisher))return null;
+ if(publisher==='bucharest-arcub'){
+  if(!/^\/img\/[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\/[a-zA-Z0-9._-]+\.(?:jpe?g|png|webp)$/u.test(pathname)
+   ||pathname.startsWith('/img/aa956136-95fe-4c72-acd5-0e0639d08984/'))return null;
+  const keys=[...candidate.searchParams.keys()];
+  if(new Set(keys).size!==keys.length||keys.some(key=>!['crop','fit','fm','q','s','w','h'].includes(key)))return null;
+ }
  for(const [key,item] of candidate.searchParams){
   if(/url|src|source|redirect|proxy|host|callback/iu.test(key)||/^https?:/iu.test(item)||item.length>512)return null;
  }
@@ -92,7 +102,9 @@ function oversizedWordPressPreview(first:ArticlePhotoMetadata,article:PhotoArtic
 const articleTypes=new Set(['NewsArticle','Article','ReportageNewsArticle','AnalysisNewsArticle','BlogPosting','TechArticle','ScholarlyArticle','LiveBlogPosting']);
 /** Read only explicitly article-bound metadata; recommendations and site logos are not candidates. */
 export function readArticlePhoto(html:string,article:PhotoArticle,finalUrl=article.sourceUrl):ArticlePhotoMetadata|null {
- if(Buffer.byteLength(html)>PHOTO_HTML_LIMIT||!photoPublisher(article.sourceUrl)||finalUrl!==article.sourceUrl)return null;
+ const publisher=photoPublisher(article.sourceUrl);
+ if(Buffer.byteLength(html)>PHOTO_HTML_LIMIT||!publisher||finalUrl!==article.sourceUrl
+  ||(article.documentKind==='local-event')!==(publisher==='bucharest-arcub'))return null;
  const document=parseDocument(html,{decodeEntities:true,withStartIndices:true,withEndIndices:true});
  const complete=(node:{readonly startIndex:number|null;readonly endIndex:number|null},script=false):boolean=>{
   if(node.startIndex===null||node.endIndex===null)return false;
@@ -104,6 +116,27 @@ export function readArticlePhoto(html:string,article:PhotoArticle,finalUrl=artic
  for(const meta of metas){const key=(meta.attribs.property??meta.attribs.name??'').toLowerCase(),value=meta.attribs.content;if(value){const values=fields.get(key)??[];values.push(value);fields.set(key,values);}}
  const bindings=[...canonical.map(node=>node.attribs.href),...(fields.get('og:url')??[])];
  if(bindings.some(value=>!samePage(value,article.sourceUrl)))return null;
+ if(article.documentKind==='local-event'){
+  // ARCUB's OG image is a shared site tile. Only the original event hero is eligible.
+  // The exact fetched URL plus unique matching H1 and OG title bind this source-specific layout.
+  const titles=fields.get('og:title')??[];
+  const headings=DomUtils.getElementsByTagName('h1',document,true);
+  const hasClass=(value:string|undefined,name:string):boolean=>(value??'').split(/\s+/u).includes(name);
+  if(article.publisher!=='ARCUB'||titles.length!==1||!matchesTitle(titles[0],article)
+   ||headings.length!==1||!headings[0]||!complete(headings[0])||!matchesTitle(DomUtils.textContent(headings[0]),article))return null;
+  const headers=DomUtils.getElementsByTagName('header',document,true)
+   .filter(node=>hasClass(node.attribs.class,'page-header')&&hasClass(node.attribs.class,'with-bg'));
+  const header=headers[0];
+  if(headers.length!==1||!header||header.startIndex===null||header.endIndex===null
+   ||!/<\/header\s*>$/iu.test(html.slice(header.startIndex,header.endIndex+1)))return null;
+  const candidates=DomUtils.getElementsByTagName('img',header,true).filter(node=>hasClass(node.attribs.class,'bg')
+   &&node.parent?.type==='tag'&&node.parent.name==='picture'&&node.parent.parent===header&&complete(node));
+  const image=candidates[0];
+  if(candidates.length!==1||!image)return null;
+  const imageUrl=articleImageUrl(image.attribs.src,article.sourceUrl);
+  if(!imageUrl)return null;
+  return{articleUrl:article.sourceUrl,imageUrl,basis:'local-event-hero',alt:clean(image.attribs.alt)??'',credit:null,caption:null};
+ }
  const expectedDate=Date.parse(article.publishedAt);
  if((fields.get('article:published_time')??[]).some(value=>!Number.isFinite(Date.parse(value))||Number.isFinite(expectedDate)&&Math.abs(Date.parse(value)-expectedDate)>86400000))return null;
  const documents:unknown[]=[],imageObjects=new Map<string,Record<string,unknown>>(),conflictingImages=new Set<string>();let indexed=0;

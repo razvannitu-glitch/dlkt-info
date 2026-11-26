@@ -33,7 +33,7 @@ export class ArticlePhotoService {
  async read(article:PhotoArticle):Promise<ArticlePhotoResult|null> {
   const now=this.clock();
   if(!photoPublisher(article.sourceUrl)||!/^[a-f0-9]{64}$/u.test(article.revision)||!Number.isFinite(article.validUntil)||article.validUntil<=now)return null;
-  const key=article.sourceUrl+'\n'+article.revision,hit=this.cache.get(key);
+  const key=(article.documentKind??'article')+'\n'+article.id+'\n'+article.sourceUrl+'\n'+article.revision,hit=this.cache.get(key);
   if(hit&&hit.until>now)return hit.result;
   const running=this.pending.get(key);if(running)return running;
   if(this.pending.size>=8)throw Error('ARTICLE_PHOTO_BUSY');

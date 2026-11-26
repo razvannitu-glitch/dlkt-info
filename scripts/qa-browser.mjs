@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
+import {deflateSync} from 'node:zlib';
 import {spawn} from 'node:child_process';
 import {createServer} from 'node:http';
 import {existsSync,mkdtempSync,readFileSync,writeFileSync,mkdirSync,rmSync,statSync} from 'node:fs';
@@ -28,6 +29,19 @@ const formats=[
 ];
 const pause=ms=>new Promise(ok=>setTimeout(ok,ms));
 
+// Real raster bytes for loopback layout acceptance only, never publisher/source evidence.
+function localPhotoRaster(){
+ const chunk=(type,data)=>{const payload=Buffer.concat([Buffer.from(type),data]);let crc=0xffffffff;
+  for(const byte of payload){crc^=byte;for(let bit=0;bit<8;bit++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}
+  const length=Buffer.alloc(4),end=Buffer.alloc(4);length.writeUInt32BE(data.length);end.writeUInt32BE((crc^0xffffffff)>>>0);
+  return Buffer.concat([length,payload,end]);};
+ const width=640,height=360,ihdr=Buffer.alloc(13),rows=Buffer.alloc((width*3+1)*height);
+ ihdr.writeUInt32BE(width);ihdr.writeUInt32BE(height,4);ihdr[8]=8;ihdr[9]=2;
+ for(let y=0;y<height;y++)for(let x=0;x<width;x++){const at=y*(width*3+1)+1+x*3;rows[at]=32+Math.floor(x/4);rows[at+1]=64+Math.floor(y/3);rows[at+2]=124;}
+ return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),chunk('IHDR',ihdr),chunk('IDAT',deflateSync(rows)),chunk('IEND',Buffer.alloc(0))]);
+}
+const localPhotoPixels=localPhotoRaster();
+
 function localServer(fixture,personal){
  if(!existsSync(join(publicDir,'index.html')))throw Error('DLKT_UI_BUILD_MISSING');
  const config=JSON.parse(readFileSync(join(root,'vercel.json'),'utf8'));
@@ -45,6 +59,11 @@ function localServer(fixture,personal){
   if(!['GET','HEAD'].includes(req.method)){res.writeHead(405).end();return;}
   const email=syntheticEmailFixture(url);
   if(email){res.setHeader('Content-Security-Policy',"default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");res.setHeader('Content-Type','text/html; charset=utf-8');res.writeHead(email.status).end(req.method==='HEAD'?undefined:email.html);return;}
+  if(url.pathname==='/api/article-photo'){
+   const photo=fixture.photo(url);
+   res.setHeader('Content-Type',photo?'image/png':'application/json; charset=utf-8');
+   res.writeHead(photo?200:404).end(req.method==='HEAD'?undefined:photo??JSON.stringify({error:'CONTROLLED_PHOTO_UNAVAILABLE'}));return;
+  }
   if(url.pathname.startsWith('/api/')){
    res.setHeader('Content-Type','application/json; charset=utf-8');
    void fixture.response(url).then(({status,value})=>res.writeHead(status).end(JSON.stringify(value))).catch(()=>res.writeHead(500).end(JSON.stringify({error:'DLKT_QA_FIXTURE_FAILED'})));return;
@@ -169,6 +188,7 @@ async function newsFixture(){
   import('../source/tests/fixtures/romanian-specialists.mjs'),import('../source/.build/src/iceo/source-links.js'),
   import('../source/.build/src/local/contracts.js'),import('../source/.build/src/iceo/home-local.js'),import('../source/.build/src/local/presentation.js'),
  ]);
+ const {parseArticlePhotoReference}=await import('../source/.build/src/media/article-photo-reference.js');
  const now=Date.now(),city=findCity('683506');assert.ok(city,'controlled Bucharest city is registered');
  const cmtebUrl='https://www.cmteb.ro/functionare_sistem_termoficare.php';
  const weatherUrl='https://api.met.no/weatherapi/locationforecast/2.0/compact?lat='+city.lat.toFixed(4)+'&lon='+city.lon.toFixed(4);
@@ -332,8 +352,13 @@ async function newsFixture(){
   localIds,updates,owned,get localExpected(){return localExpected();},get localRequests(){return localRequests;},
   setLocalExpansion(enabled){
    assert.equal(typeof enabled,'boolean');
-   localIds.splice(2,localIds.length-2,...(enabled?Array.from({length:8},(_,index)=>'bucharest:arcub:'+hash('inline-local-'+index).slice(0,24)):[]));
+   localIds.splice(2,localIds.length-2,...(enabled?Array.from({length:8},(_,index)=>'bucharest:arcub:'+hash('https://arcub.ro/eveniment/controlled-agenda-'+(index+1)).slice(0,24)):[]));
    servedLocal=localSnapshot(Date.now());
+  },
+  photo(url){
+   const reference=parseArticlePhotoReference(url.pathname+url.search),card=servedLocal.cards.find(value=>value.id===reference?.id);
+   return reference&&reference.cityId===city.id&&card?.id===localIds[2]&&card.kind==='event'
+    &&card.context?.documentHash===reference.revision?localPhotoPixels:null;
   },
   async response(url){
    if(url.pathname==='/api/places'&&url.searchParams.get('hint')==='1')return {status:200,value:{city,countryCode:city.countryCode,estimated:true}};
@@ -512,6 +537,19 @@ async function measureReader(call,fixture){
 }
 
 
+function localPhotosProbe(ids){
+ const first=document.querySelector('#home-local-cards article[data-local-id="'+ids[0]+'"]'),failed=document.querySelector('#home-local-cards article[data-local-id="'+ids[1]+'"]');
+ const image=first?.querySelector('img[data-article-photo]'),figure=image?.closest('figure'),caption=figure?.querySelector('figcaption');
+ const bounds=figure?.getBoundingClientRect(),card=first?.getBoundingClientRect();
+ return {loaded:Boolean(image?.complete&&image.naturalWidth>0),width:image?.naturalWidth??0,request:image?.getAttribute('src')??null,
+  remainingImages:document.querySelectorAll('#home-local-cards img[data-article-photo]').length,
+  creditVisible:Boolean(caption&&!caption.hidden&&caption.getBoundingClientRect().height>0),
+  sourceIntact:first?.querySelector('.local-utility-actions>.source-link')?.getAttribute('href')==='https://arcub.ro/eveniment/controlled-agenda-1',
+  failedTitleIntact:failed?.querySelector('h3')?.textContent==='Controlled ARCUB agenda event 2',
+  failedRemoved:Boolean(failed&&!failed.querySelector('figure.card-photo')),
+  figureFits:Boolean(bounds&&card&&bounds.left>=card.left&&bounds.right<=card.right&&bounds.left>=0&&bounds.right<=innerWidth)};
+}
+
 /** Additional source-valid records must be visible without opening a group. */
 async function verifyInlineLocalFlow(call,origin,fixture,outputDir){
  const observations=[];
@@ -520,6 +558,22 @@ async function verifyInlineLocalFlow(call,origin,fixture,outputDir){
   for(const format of [{width:320,height:750,mobile:true},{width:390,height:844,mobile:true},{width:1440,height:900,mobile:false}]){
    await call('Emulation.setDeviceMetricsOverride',{width:format.width,height:format.height,deviceScaleFactor:1,mobile:format.mobile,scale:1});
    await call('Page.navigate',{url:origin+'/'});await loaded(call);await selectControlledEdition(call,fixture);
+   await evaluate(call,'(()=>{window.scrollTo(0,0);return true;})()');
+   // Exercise real lazy image loading for every local event, including controlled 404s.
+   for(const id of fixture.localIds.slice(2)){
+    await evaluate(call,'(()=>{document.querySelector('+JSON.stringify('#home-local-cards article[data-local-id="'+id+'"]')+').scrollIntoView({block:"center",behavior:"instant"});return true;})()');await pause(70);
+   }
+   let photoState;
+   for(let attempt=0;attempt<40;attempt++){
+    photoState=await evaluate(call,'('+localPhotosProbe.toString()+')('+JSON.stringify(fixture.localIds.slice(2,4))+')');
+    if(photoState?.loaded&&photoState.remainingImages===1&&photoState.failedRemoved)break;
+    if(attempt===39)throw Error('DLKT_LOCAL_PHOTO_FIXTURE_TIMEOUT');await pause(50);
+   }
+   assert.equal(photoState.loaded,true);assert.equal(photoState.width,640);
+   assert.equal(photoState.creditVisible,true);assert.equal(photoState.sourceIntact,true);assert.equal(photoState.failedTitleIntact,true);
+   assert.equal(photoState.failedRemoved,true);assert.equal(photoState.figureFits,true);
+   const actual=await evaluate(call,'fetch('+JSON.stringify('/api/article-photo?id='+encodeURIComponent(fixture.localIds[2])+'&v='+'0'.repeat(64)+'&city='+fixture.city.id)+').then(response=>response.status)');
+   assert.equal(actual,404,'wrong fixture revision has no photograph');
    await evaluate(call,'(()=>{window.scrollTo(0,0);return true;})()');
    const measured=await measureReader(call,fixture);
    assertReaderGeometry(measured,format,fixture);assertReadingLayout(measured,format,fixture,{compact:false});
@@ -561,7 +615,10 @@ async function verifyInlineLocalFlow(call,origin,fixture,outputDir){
     const expanded=await measureReader(call,fixture);assertReaderGeometry(expanded,format,fixture);assertReadingLayout(expanded,format,fixture,{compact:false});
     assert.equal(expanded.local.find(card=>card.id===fixture.localIds.at(-1))?.readingOpen,true,'last formerly hidden event has keyboard-accessible evidence');
    }
-   observations.push({viewport:format.width,localCards:structure.allIds.length,structure,actionSpacing:measured.actionSpacing,screenshot});
+   const photoScreenshot='dlkt-local-source-photo-'+format.width+'.png';
+   await evaluate(call,'(()=>{document.querySelector('+JSON.stringify('#home-local-cards article[data-local-id="'+fixture.localIds[2]+'"]')+').scrollIntoView({block:"start",behavior:"instant"});return true;})()');
+   writeFileSync(join(outputDir,photoScreenshot),Buffer.from((await call('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false})).data,'base64'),{mode:0o600});
+   observations.push({viewport:format.width,localCards:structure.allIds.length,structure,actionSpacing:measured.actionSpacing,photos:photoState,screenshot,photoScreenshot});
   }
  }finally{fixture.setLocalExpansion(false);fixture.updates.reset();}
  return {status:'CONTINUOUS_LOCAL_PASS',observations};
@@ -1581,7 +1638,7 @@ async function run(){
     'The 440px DPR 3 scenario is Chrome at visual scale 1. Font-size doubling is a test-only typography stress, not physical Safari zoom or Safari text autosizing.',
     'The original anonymous account-layout checks remain unchanged. The private Wallet and account-preference phases use synthetic loopback profiles; login, OTP delivery and hosted account isolation are not claimed as verified.',
     'Palette checks use actual computed card paints and visible text at 390 and 1440px. Existing body copy is measured where rendered; source-only articles are not given fabricated excerpts.',
-    'Article-photo requests remain unavailable in this offline fixture. Failed-photo panels are measured; successful publisher photography requires separate live inspection.',
+    'One exact local-event reference serves a real synthetic PNG in the loopback fixture; other photo requests fail. Loaded and failed local-photo layouts are measured separately from live publisher image verification.',
     'Same-card update scenarios use controlled edition publication through the real page service and real refresh handler; no external publisher change is attested.',
     'Owned-card exposure runs at390 and1440px against20 distinct controlled stories. It verifies actual foreground dwell and local history, not actual reading, autonomous editorial generation or continuous source research.',
     'Programmatic layout metrics and screenshots do not replace manual visual review.']};

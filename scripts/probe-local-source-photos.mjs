@@ -40,7 +40,7 @@ try {
  if(!robotsAllowed(policy,ARCUB_AGENDA))throw Error('LOCAL_PHOTO_ROBOTS_AGENDA');
  const agenda=await get(ARCUB_AGENDA,'agenda'),checkedAt=new Date().toISOString(),parsed=parseArcubAgenda({body:agenda.bytes.toString('utf8'),checkedAt},Date.now());
  report.agenda={url:ARCUB_AGENDA,sha256:digest(agenda.bytes),checkedAt,count:parsed.cards.length};
- const selected=parsed.cards.slice(0,2);if(selected.length!==2)throw Error('LOCAL_PHOTO_TWO_EVENTS_REQUIRED');
+ const selected=parsed.cards.filter(card=>/Magia Cr|identitate prin tradi/iu.test(card.title)).slice(0,2);if(selected.length!==2)throw Error('LOCAL_PHOTO_TWO_EVENTS_REQUIRED');
  for(const card of selected){
   if(!robotsAllowed(policy,card.sourceUrl))throw Error('LOCAL_PHOTO_ROBOTS_PAGE');
   const response=await get(card.sourceUrl,'page'),html=response.bytes.toString('utf8'),document=parseDocument(html);
@@ -50,7 +50,8 @@ try {
   const headings=DomUtils.getElementsByTagName('h1',document,true).map(element=>DomUtils.textContent(element).trim().slice(0,500));
   const images=DomUtils.getElementsByTagName('img',document,true).filter(element=>sourceImage(element.attribs.src,card.sourceUrl)).slice(0,8).map(element=>{const parents=[];for(let p=element.parent;p&&parents.length<5;p=p.parent)if(p.type==='tag')parents.push({tag:p.name,...attrs(p)});return {...attrs(element),parents};});
   const article={id:card.id,revision:card.context.documentHash,sourceUrl:card.sourceUrl,title:card.title,publisher:'ARCUB',publishedAt:'',validUntil:Date.now()+300000,documentKind:'local-event'};
-  const photo=readArticlePhoto(html,article),candidate=photo?.imageUrl??sourceImage(meta.find(element=>element.property==='og:image')?.content,card.sourceUrl)??sourceImage(images[0]?.src,card.sourceUrl);
+  const photo=readArticlePhoto(html,article),candidate=photo?.imageUrl;
+  if(!photo||photo.basis!=='local-event-hero')throw Error('LOCAL_PHOTO_EXACT_HERO_REQUIRED');
   const entry={id:card.id,title:card.title,url:card.sourceUrl,htmlSha256:digest(response.bytes),meta,canonical,headings,images,structured,publisher:photoPublisher(card.sourceUrl),parser:photo};
   report.pages.push(entry);
   if(!candidate)throw Error('LOCAL_PHOTO_SOURCE_IMAGE_MISSING');

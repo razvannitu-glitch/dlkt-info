@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import {articlePhotoPath,parseArticlePhotoReference} from '../.build/src/media/article-photo-reference.js';
 
 const globalRef=Object.freeze({id:'a'.repeat(24),revision:'b'.repeat(64)});
+const eventRef=Object.freeze({id:'bucharest:arcub:'+'e'.repeat(24),revision:'f'.repeat(64),cityId:'683506'});
 const localRef=Object.freeze({id:'local-news:683506:bucharest-b365:'+'c'.repeat(24),revision:'d'.repeat(64),cityId:'683506'});
 test('article photo references round-trip exact record revisions without accepting a source URL',()=>{
- for(const reference of [globalRef,localRef]){
+ for(const reference of [globalRef,localRef,eventRef]){
   const before=JSON.stringify(reference),path=articlePhotoPath(reference),parsed=parseArticlePhotoReference(path);
   assert.deepEqual(parsed,reference);assert.ok(Object.isFrozen(parsed));assert.equal(JSON.stringify(reference),before);
   assert.deepEqual(parseArticlePhotoReference(new URL(path,'https://www.dlkt.ee')),reference);
@@ -18,7 +19,8 @@ test('article photo references round-trip exact record revisions without accepti
 });
 test('article photo references reject ambiguous, injected and mismatched record identities',()=>{
  for(const reference of [
-  null,[],{}, {...globalRef,id:'A'.repeat(24)},{...globalRef,id:'a'.repeat(23)},
+  null,[],{}, {id:eventRef.id,revision:eventRef.revision},{...eventRef,cityId:'2512989'},
+  {...eventRef,id:eventRef.id.replace('arcub','unknown')},{...eventRef,id:eventRef.id.slice(0,-1)}, {...globalRef,id:'A'.repeat(24)},{...globalRef,id:'a'.repeat(23)},
   {...globalRef,id:'https://example.org/article'},{...globalRef,revision:'b'.repeat(63)},
   {...globalRef,revision:'B'.repeat(64)},{...globalRef,cityId:'683506'},{...globalRef,cityId:undefined},
   {...globalRef,url:'https://example.org/photo.jpg'},{...globalRef,[Symbol('hidden')]:true},
