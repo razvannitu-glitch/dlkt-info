@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 import {parseDocument,DomUtils} from 'htmlparser2';
-import {knowledgeClaimAnchors,observeClaimAnchors} from './knowledge-claim-evidence.mjs';
+import {knowledgeClaimAnchors,observeClaimAnchors,isExcludedEvidenceNode,hasExcludedEvidenceAncestor} from './knowledge-claim-evidence.mjs';
 
 const NSW='dlkt-elsewhere-nsw-fuelcheck',NZ='dlkt-elsewhere-nz-unit-pricing';
 const subjects=Object.freeze({
@@ -27,11 +27,12 @@ export function knowledgeEvidenceSubject(id){
 }
 const requestMetadata=response=>({url:response?.url??null,status:response?.status??null,contentType:response?.contentType??null,complete:response?.ok===true&&response.partial===false,bodySha256:typeof response?.text==='string'&&response.ok===true&&response.partial===false?sha(response.text):null});
 function visibleText(root){
+ if(hasExcludedEvidenceAncestor(root))return '';
  const pending=[root],parts=[];let nodes=0;
  while(pending.length){
   const node=pending.pop();if(++nodes>50000)throw Error('KNOWLEDGE_EVIDENCE_DOM_LIMIT');
   if(node.type==='text'){parts.push(node.data);continue;}
-  if(['script','style','template','noscript','svg','nav','footer'].includes(node.name)||node.attribs?.['aria-hidden']==='true'||Object.hasOwn(node.attribs??{},'hidden')||/(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden)\b/iu.test(node.attribs?.style??''))continue;
+  if(isExcludedEvidenceNode(node))continue;
   if(node.children)for(let i=node.children.length-1;i>=0;i--)pending.push(node.children[i]);
  }
  return normalize(parts.join(' '));
@@ -45,10 +46,16 @@ function inspectPage(response,url,title,signals,anchors){
   const doc=parseDocument(response.text,{decodeEntities:true});
   const mains=DomUtils.getElementsByTagName('main',doc,true);
   if(mains.length!==1)return reject('ambiguous-main-content');
-  const main=mains[0],headings=DomUtils.getElementsByTagName('h1',main,true).map(visibleText);
+  const main=mains[0];
+  if(hasExcludedEvidenceAncestor(main))return reject('main-content-excluded');
+  const headings=DomUtils.getElementsByTagName('h1',main,true).map(visibleText);
   if(headings.length!==1||headings[0].toLowerCase()!==title)return reject('unexpected-page-heading');
   const canonicals=DomUtils.getElementsByTagName('link',doc,true).filter(n=>(n.attribs.rel??'').toLowerCase().split(/\s+/u).includes('canonical'));
-  if(canonicals.length!==1||canonicals.some(n=>{try{return new URL(n.attribs.href??'',url).href!==url;}catch{return true;}}))return reject('canonical-url-mismatch');
+  // Finite pilot: require an explicit absolute declaration of this exact page.
+  // Never resolve an absent/empty href against the request URL, or accept a
+  // relative declaration whose meaning may depend on the document's base tag.
+  const canonical=canonicals.length===1?canonicals[0].attribs.href:undefined;
+  if(typeof canonical!=='string'||canonical.length===0||canonical!==url)return reject('canonical-url-mismatch');
   const text=visibleText(main),observations=Object.fromEntries(Object.entries(signals).map(([name,re])=>[name,re.test(text)]));
   const complete=Object.values(observations).every(Boolean);
   return {...metadata,state:complete?'observed-for-review':'held',reason:complete?null:'expected-source-signals-missing',canonicalObserved:canonicals.length===1,mainSha256:sha(text),signals:observations,claimAnchors:observeClaimAnchors(main,anchors,visibleText)};
@@ -82,4 +89,14 @@ export async function observeKnowledgeEvidence({id,revision,sourceUrl,policyUrl,
  const finished=clock();
  if(!Number.isSafeInteger(finished)||finished<started||finished-started>75_000)return hold('clock-invalid',{robots,access,source,terms});
  return {...base,state:'observed-for-review',reason:null,robots,access,source,terms,observedAt:new Date(finished).toISOString(),candidateIdentity:'exact-laboratory-card-digest-not-admission'};
+}
+
+/** Both collection and complete claim coverage are necessary for the dossier
+ * workflow to pass. Neither means independent editorial approval. */
+export function assessKnowledgeProbeOutcome(reports,expectedIds){
+ const valid=Array.isArray(expectedIds)&&expectedIds.length>0&&expectedIds.length<=20&&expectedIds.every(id=>typeof id==='string'&&id.length>0)&&new Set(expectedIds).size===expectedIds.length&&
+  Array.isArray(reports)&&reports.length===expectedIds.length&&expectedIds.every(id=>reports.filter(report=>report?.id===id).length===1);
+ const collected=valid&&reports.every(report=>report.state==='observed-for-review'&&report.activationAllowed===false);
+ const claims=collected&&reports.every(report=>report.claimEvidence?.state==='evidence-ready-for-independent-review'&&report.claimEvidence.activationAllowed===false&&report.claimEvidence.independentReviewRequired===true);
+ return Object.freeze({state:collected&&claims?'evidence-ready-for-independent-review':'held',collectionState:collected?'observations-collected':'held',claimState:claims?'complete':'held',complete:collected&&claims,activationAllowed:false});
 }

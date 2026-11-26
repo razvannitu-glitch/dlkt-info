@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
-import {assessKnowledgeRevalidation} from '../scripts/knowledge-editorial-revalidation.mjs';
+import {assessKnowledgeRevalidation,compareKnowledgeObservations} from '../scripts/knowledge-editorial-revalidation.mjs';
 import {knowledgeRightsCandidates} from '../source/tests/fixtures/knowledge-rights-candidates.mjs';
 const hash=value=>createHash('sha256').update(value,'utf8').digest('hex');
 const file=JSON.parse(readFileSync(new URL('../docs/evidence/knowledge-editorial-observation-20261126.json',import.meta.url),'utf8'));
@@ -19,7 +19,7 @@ const first=call({observation:baseline,previousObservation:null,now:Date.parse(b
 const reviewedAt='2026-11-26T21:00:00.000Z';
 const feedReview={scope:'feed',id:identity.id,revision:identity.revision,digest:identity.digest,decision:'permitted',claims:'verified',translations:'verified',origin:'verified',usefulness:'verified',attribution:'verified',exceptions:'cleared',observation:baseline,evidenceDigest:first.evidenceDigest,reviewedAt,expiresAt:'2026-11-28T00:00:00.000Z'};
 const standaloneReview={...feedReview,scope:'standalone'};
-const trusted={feedApproval,standaloneApproval,feedReview,standaloneReview};
+const trusted={feedApproval,standaloneApproval,feedReview,standaloneReview,trustedHistory:[baseline]};
 test('real receipt provenance binds the exact laboratory payload, not a review',()=>{
  assert.equal(file.kind,'observed-evidence-not-approval');assert.equal(file.workflowRun,45888933255);assert.equal(file.commit,'bad1a13a88cb2c132aaf72f6bd50d600559b6c53');
  assert.equal(identity.digest,baseline.candidateDigest);assert.ok(first.evidenceDigest);
@@ -28,7 +28,7 @@ test('real receipt provenance binds the exact laboratory payload, not a review',
 test('existing independent synthetic approvals can be reused only in their original windows',()=>{
  const r=call(trusted);assert.equal(r.feed.state,'reuse-eligible');assert.equal(r.standalone.state,'reuse-eligible');assert.equal(r.activationAllowed,false);
  assert.equal(r.feed.validUntil,feedReview.expiresAt);assert.equal(r.standalone.validUntil,new Date(standaloneApproval.expiresAt).toISOString());
- const feed=call({feedApproval,feedReview});assert.equal(feed.feed.state,'reuse-eligible');assert.equal(feed.standalone.state,'review-required');
+ const feed=call({feedApproval,feedReview,trustedHistory:[baseline]});assert.equal(feed.feed.state,'reuse-eligible');assert.equal(feed.standalone.state,'review-required');
  const share=call({standaloneApproval,standaloneReview});assert.equal(share.feed.state,'review-required');assert.equal(share.standalone.state,'review-required');
  assert.equal(call({...trusted,now:Date.parse(identity.publishAt)-1}).feed.state,'held');
 });
@@ -86,12 +86,40 @@ test('standalone reuse cannot outlive the feed decision even with a later standa
  assert.equal(r.feed.validUntil,shorter.expiresAt);assert.equal(r.standalone.validUntil,shorter.expiresAt);
 });
 test('a change since the latest observation requires review even if bytes return to an older approved state',()=>{
- const previous={...baseline,source:{...baseline.source,bodySha256:'f'.repeat(64)}};
- const r=call({...trusted,previousObservation:previous});
+ const previous={...baseline,observedAt:new Date(now-120000).toISOString(),source:{...baseline.source,bodySha256:'f'.repeat(64)}};
+ const r=call({...trusted,previousObservation:previous,trustedHistory:[baseline,previous]});
  assert.equal(r.comparison.state,'changed');assert.equal(r.feed.state,'review-required');assert.equal(r.standalone.state,'review-required');
 });
 test('a prior decision cannot be based on observations already stale at review time',()=>{
  const reviewedAt=new Date(Date.parse(baseline.observedAt)+86400000).toISOString(),later=Date.parse(reviewedAt)+1000;
  const r=call({...trusted,now:later,observation:{...current,observedAt:new Date(later-100).toISOString()},feedReview:{...feedReview,reviewedAt}});
  assert.equal(r.feed.state,'review-required');assert.equal(r.standalone.state,'review-required');
+});
+
+test('fixed-baseline comparison is never reusable even with valid synthetic approvals and reviews',()=>{
+ const r=call({...trusted,trustedHistory:null});
+ assert.equal(r.mode,'comparison-only');assert.equal(r.comparison.state,'unchanged');
+ assert.equal(r.feed.state,'review-required');assert.equal(r.feed.reason,'trusted-observation-history-required');assert.equal(r.standalone.state,'review-required');assert.equal(r.activationAllowed,false);
+ const pilot=compareKnowledgeObservations({identity,observation:current,baselineObservation:baseline,now,...trusted});
+ assert.equal(pilot.mode,'comparison-only');assert.equal(pilot.feed.state,'review-required');assert.equal(pilot.standalone.state,'review-required');
+});
+test('trusted A→B→A→A history latches unresolved drift until a later review bound to the latest observation',()=>{
+ const changed={...baseline,observedAt:new Date(now-240000).toISOString(),source:{...baseline.source,bodySha256:'f'.repeat(64)}};
+ const restored={...baseline,observedAt:new Date(now-120000).toISOString()};
+ const r=call({...trusted,previousObservation:restored,trustedHistory:[baseline,changed,restored]});
+ assert.equal(r.mode,'trusted-history-advisory');assert.equal(r.comparison.state,'unchanged');assert.equal(r.feed.state,'review-required');assert.equal(r.feed.reason,'unresolved-observed-change');assert.equal(r.standalone.state,'review-required');
+ const restoredSnapshot=call({observation:restored,previousObservation:null,now:Date.parse(restored.observedAt)});
+ const reReview={...feedReview,observation:restored,evidenceDigest:restoredSnapshot.evidenceDigest,reviewedAt:new Date(now-90000).toISOString()};
+ const resumed=call({...trusted,previousObservation:restored,trustedHistory:[baseline,changed,restored],feedReview:reReview,standaloneReview:{...reReview,scope:'standalone'}});
+ assert.equal(resumed.feed.state,'reuse-eligible');assert.equal(resumed.standalone.state,'reuse-eligible');assert.equal(resumed.activationAllowed,false);
+ const staleReview=call({...trusted,previousObservation:restored,trustedHistory:[baseline,changed,restored],feedReview:{...feedReview,reviewedAt:new Date(now-90000).toISOString()}});
+ assert.equal(staleReview.feed.state,'review-required');assert.equal(staleReview.feed.reason,'review-not-bound-to-latest-known-evidence');
+});
+test('history cannot silently skip a known failed observation, duplicate timestamp or mismatched latest receipt',()=>{
+ const later={...baseline,observedAt:new Date(now-120000).toISOString()};
+ for(const [history,previous] of [[[],null],[[baseline,baseline],baseline],[[later,baseline],baseline],[[baseline,{...later,state:'held'}],later],[[baseline,later],baseline],[[baseline,{...later,observedAt:current.observedAt}],null]]){
+  const r=call({...trusted,trustedHistory:history,previousObservation:previous});assert.equal(r.feed.state,'held');assert.equal(r.standalone.state,'held');assert.equal(r.activationAllowed,false);
+ }
+ const missing=call({...trusted,trustedHistory:[later],previousObservation:later});
+ assert.equal(missing.feed.state,'review-required');assert.equal(missing.feed.reason,'review-not-bound-to-latest-known-evidence');
 });

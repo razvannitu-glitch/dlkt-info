@@ -147,9 +147,14 @@ const specs={
 };
 const hash=value=>createHash('sha256').update(value,'utf8').digest('hex');
 const normalizeBlock=value=>value.replace(/[\u200B-\u200D\uFEFF]/gu,'').replace(/\s+/gu,' ').replace(/\s+([,.;:!?])/gu,'$1').trim();
-const hidden=node=>['script','style','template','noscript','svg','nav','footer','aside'].includes(node.name)||
+export const isExcludedEvidenceNode=node=>['script','style','template','noscript','svg','nav','footer','aside'].includes(node.name)||
  node.attribs?.['aria-hidden']==='true'||Object.hasOwn(node.attribs??{},'hidden')||
  /(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden)\b/iu.test(node.attribs?.style??'');
+export function hasExcludedEvidenceAncestor(node){
+ let ancestor=node,depth=0;
+ while(ancestor){if(++depth>128||isExcludedEvidenceNode(ancestor))return true;ancestor=ancestor.parent;}
+ return false;
+}
 const record=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 const hex=value=>typeof value==='string'&&/^[a-f0-9]{64}$/u.test(value);
 export function knowledgeClaimAnchors(id,role){
@@ -164,14 +169,11 @@ export function knowledgeClaimAnchors(id,role){
  */
 export function observeClaimAnchors(main,expected,visibleText){
  if(!record(expected)||Object.keys(expected).length>20||Object.values(expected).some(x=>!hex(x)))throw Error('KNOWLEDGE_CLAIM_ANCHORS_INVALID');
- const counts=new Map(Object.values(expected).map(digest=>[digest,0])),pending=[];
- let ancestor=main,depth=0,excluded=false;
- while(ancestor){if(++depth>128||hidden(ancestor)){excluded=true;break;}ancestor=ancestor.parent;}
- if(!excluded)pending.push(main);
+ const counts=new Map(Object.values(expected).map(digest=>[digest,0])),pending=hasExcludedEvidenceAncestor(main)?[]:[main];
  let nodes=0;
  while(pending.length){
   const node=pending.pop();if(++nodes>50000)throw Error('KNOWLEDGE_CLAIM_DOM_LIMIT');
-  if(hidden(node))continue;
+  if(isExcludedEvidenceNode(node))continue;
   if(['p','li'].includes(node.name)){
    // Nested paragraphs/lists cannot count the same passage twice.
    const nested=node.children?.some(child=>['p','li','ul','ol','div'].includes(child.name));

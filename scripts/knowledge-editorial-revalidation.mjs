@@ -63,7 +63,7 @@ function compare(current,previous){
  const changed=Object.keys(current.fingerprints).filter(key=>current.fingerprints[key]!==previous.fingerprints[key]);
  return {state:changed.length?'changed':'unchanged',changed};
 }
-function scopeDecision({scope,identity,current,priorReview,approval,now}){
+function scopeDecision({scope,identity,current,history,priorReview,approval,now}){
  // Only compare against an explicitly supplied trusted prior review. A previous
  // source observation or an existing source licence is never this review.
  if(!object(approval)||!object(priorReview))return reviewRequired('existing-exact-approval-and-reviewed-baseline-required');
@@ -79,8 +79,13 @@ function scopeDecision({scope,identity,current,priorReview,approval,now}){
  if(now>=expires||now>=cardExpires)return hold('existing-review-expired');
  if(now<release)return hold('editorial-release-not-due');
  if(current.observed<baseline.observed)return hold('observation-precedes-reviewed-evidence');
- const comparison=compare(current,baseline);
- if(comparison.state!=='unchanged')return reviewRequired('reviewed-source-or-terms-changed');
+ // Locate the exact reviewed receipt in the trusted complete chronological
+ // history. A review cannot silently skip a later observation already known
+ // at its review time. Any subsequent change remains latched, even A→B→A.
+ const all=[...history,current];
+ const index=all.findIndex(entry=>entry.evidenceDigest===baseline.evidenceDigest);
+ if(index<0||all.some((entry,i)=>i>index&&entry.observed<=reviewed))return reviewRequired('review-not-bound-to-latest-known-evidence');
+ if(all.slice(index+1).some(entry=>compare(entry,baseline).state!=='unchanged'))return reviewRequired('unresolved-observed-change');
  let validUntil=Math.min(expires,cardExpires,current.observed+MAX_OBSERVATION_AGE);
  if(scope==='standalone'){
   if(!clock(approval.reviewedAt)||!clock(approval.expiresAt)||approval.reviewedAt<cardReviewed||approval.reviewedAt>now||approval.expiresAt<=approval.reviewedAt||approval.expiresAt<=now)return hold('standalone-admission-window-invalid');
@@ -89,24 +94,47 @@ function scopeDecision({scope,identity,current,priorReview,approval,now}){
  if(now>=validUntil)return hold('revalidation-window-expired');
  return Object.freeze({state:'reuse-eligible',reason:'unchanged-exact-evidence-within-existing-authorization',validUntil:new Date(validUntil).toISOString()});
 }
-/** Advisory, read-only revalidation of existing permissions. This function
- * cannot authorize publication, create an approval, extend a review window,
- * write a registry, or convert an observed source into a reviewed decision.
- * The trusted review records and existing scope-specific approvals must come
- * from the independently reviewed repository, never a fetched page or visitor.
+/** Advisory, read-only assessment. The fixed-baseline mode compares evidence
+ * only and cannot yield reuse-eligible even if approval arguments are present.
+ * The history mode is a pure planner for an authoritative, complete ordered
+ * history supplied by a trusted caller; it cannot authenticate that history or
+ * prove omitted observations did not occur. No such persistent trusted reader
+ * exists in the pilot. Never substitute a fixed baseline for that history.
+ * No mode authorizes publication, creates approvals or extends review windows.
  */
-export function assessKnowledgeRevalidation({identity,observation,previousObservation=null,feedApproval=null,standaloneApproval=null,feedReview=null,standaloneReview=null,now}){
- const denied=reason=>({activationAllowed:false,comparison:{state:'unavailable',changed:[]},feed:hold(reason),standalone:hold(reason),evidenceDigest:null});
+export function assessKnowledgeRevalidation({identity,observation,previousObservation=null,trustedHistory=null,feedApproval=null,standaloneApproval=null,feedReview=null,standaloneReview=null,now}){
+ const mode=trustedHistory===null?'comparison-only':'trusted-history-advisory';
+ const denied=reason=>Object.freeze({mode,activationAllowed:false,comparison:{state:'unavailable',changed:[]},feed:hold(reason),standalone:hold(reason),evidenceDigest:null});
  if(!clock(now)||!validIdentity(identity))return denied('invalid-candidate-or-clock');
  const current=receiptSnapshot(identity,observation,now,{fresh:true});
  if(!current)return denied('current-evidence-invalid-or-stale');
  const previous=previousObservation===null?null:receiptSnapshot(identity,previousObservation,now);
  if(previousObservation!==null&&!previous)return denied('previous-evidence-binding-invalid');
- const comparison=compare(current,previous);
+ let history=[],latest=previous;
+ if(trustedHistory!==null){
+  // The trusted store must provide every observation from the review baseline
+  // through the last observation, including failed/denied attempts. A missing,
+  // held or malformed record cannot be treated as a successful history.
+  if(!Array.isArray(trustedHistory)||trustedHistory.length===0||trustedHistory.length>256)return denied('trusted-history-invalid');
+  for(const entry of trustedHistory){
+   const snapshot=receiptSnapshot(identity,entry,now);
+   if(!snapshot||history.length&&snapshot.observed<=history[history.length-1].observed)return denied('trusted-history-invalid-or-unresolved-failure');
+   history.push(snapshot);
+  }
+  latest=history[history.length-1];
+  if(previous&&previous.evidenceDigest!==latest.evidenceDigest)return denied('previous-observation-not-history-tip');
+  if(current.observed<=latest.observed)return denied('out-of-order-observation');
+ }
+ const comparison=compare(current,latest);
  if(comparison.state==='out-of-order')return denied('out-of-order-observation');
- const feed=comparison.state==='changed'?reviewRequired('latest-observed-source-or-terms-changed'):scopeDecision({scope:'feed',identity,current,priorReview:feedReview,approval:feedApproval,now});
- // Standalone distribution must not imply bypassing the existing feed approval.
- const share=feed.state==='reuse-eligible'?scopeDecision({scope:'standalone',identity,current,priorReview:standaloneReview,approval:standaloneApproval,now}):reviewRequired('feed-authorization-not-reusable');
+ const feed=mode==='comparison-only'?reviewRequired('trusted-observation-history-required'):
+  comparison.state==='changed'?reviewRequired('latest-observed-source-or-terms-changed'):
+  scopeDecision({scope:'feed',identity,current,history,priorReview:feedReview,approval:feedApproval,now});
+ const share=feed.state==='reuse-eligible'?scopeDecision({scope:'standalone',identity,current,history,priorReview:standaloneReview,approval:standaloneApproval,now}):reviewRequired('feed-authorization-not-reusable');
  const standalone=share.state==='reuse-eligible'?Object.freeze({...share,validUntil:new Date(Math.min(Date.parse(feed.validUntil),Date.parse(share.validUntil))).toISOString()}):share;
- return Object.freeze({activationAllowed:false,comparison:Object.freeze({...comparison,changed:Object.freeze(comparison.changed)}),feed,standalone,evidenceDigest:current.evidenceDigest});
+ return Object.freeze({mode,activationAllowed:false,comparison:Object.freeze({...comparison,changed:Object.freeze(comparison.changed)}),feed,standalone,evidenceDigest:current.evidenceDigest});
+}
+/** Actual pilot entry: deliberately cannot accept approval/history arguments. */
+export function compareKnowledgeObservations({identity,observation,baselineObservation,now}){
+ return assessKnowledgeRevalidation({identity,observation,previousObservation:baselineObservation,now});
 }
