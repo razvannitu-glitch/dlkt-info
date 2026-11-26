@@ -10,7 +10,8 @@
     "../../source/src/billing/entitlement.ts",
     "hosted-sessions.ts",
     "checkout-lifecycle.ts",
-    "entitlement-gate.ts"
+    "entitlement-gate.ts",
+    "private-connection-store.ts"
   ],
   "exclude": []
 }
