@@ -142,3 +142,20 @@ test('unsupported authenticated event is ignored; malformed or oversized bodies 
  const body=bytes(event('product.updated','product','prod_fixture'));assert.deepEqual(verify(body,sign(body)),{kind:'ignored',eventId:'evt_fixture',created:now-3600});
  for(const bad of [Buffer.from('{'),Buffer.alloc(513*1024),Buffer.from([255])])assert.throws(()=>verify(bad,sign(bad)),/STRIPE_WEBHOOK_REJECTED/u);
 });
+
+test('historical invoice link verifies the account and exact parent; payment state is not authority',async()=>{
+ const past={...invoice(),id:'in_historical',status:'open',amount_paid:0,metadata:{ownerId:other}};
+ const f=fixture({'/v1/invoices/in_historical':past});
+ assert.deepEqual(await f.reader.observeInvoiceLink('in_historical'),{accountId:cfg.accountId,liveMode:false,invoiceId:'in_historical',customerId:b.customerId,subscriptionId:b.subscriptionId});
+ assert.equal(f.calls.length,2);
+ assert.deepEqual(f.calls.map(x=>new URL(x.url).pathname),['/v1/account','/v1/invoices/in_historical']);
+});
+test('historical invoice link rejects wrong identity, one-off invoices, live mode and foreign currency',async()=>{
+ for(const p of [{id:'in_other'},{customer:null},{livemode:true},{currency:'usd'},{parent:null},{parent:{type:'quote_details',subscription_details:{subscription:b.subscriptionId}}},{parent:{type:'subscription_details',subscription_details:{subscription:'sub_invalid/path'}}}]){
+  const f=fixture({'/v1/invoices/in_fixture':{...invoice(),...p}});
+  await assert.rejects(f.reader.observeInvoiceLink('in_fixture'),/STRIPE_BILLING_READ_REJECTED/u);
+ }
+ const f=fixture({'/v1/account':{...account,id:'acct_other'}});
+ await assert.rejects(f.reader.observeInvoiceLink('in_fixture'),/STRIPE_BILLING_READ_REJECTED/u);assert.equal(f.calls.length,1);
+ const g=fixture();await assert.rejects(g.reader.observeInvoiceLink('in_/bad'),/STRIPE_BILLING_READ_REJECTED/u);assert.equal(g.calls.length,0);
+});

@@ -12,7 +12,8 @@
     "checkout-lifecycle.ts",
     "entitlement-gate.ts",
     "private-connection-store.ts",
-    "external-cleanup.ts"
+    "external-cleanup.ts",
+    "invoice-routing.ts"
   ],
   "exclude": []
 }

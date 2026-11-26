@@ -100,6 +100,26 @@ export class StripeReadClient {
     return verifyPremiumCatalog(configuration,field(account,'id'),product,monthly,annual);
   }
 
+  /** Resolve an arbitrary historical invoice to its subscription. The signed
+   * event contains only the invoice ID; neither event metadata nor invoice
+   * payment status is authorization evidence. Account identity is checked
+   * directly; the caller must verify the immutable binding separately. */
+  async observeInvoiceLink(invoiceId: unknown): Promise<Readonly<{
+    accountId:string; liveMode:false; invoiceId:string; customerId:string; subscriptionId:string;
+  }>> {
+    if(!stripeId(invoiceId,'in')) return fail();
+    const account=record(await this.#read('/v1/account'));
+    if(field(account,'object')!=='account'||field(account,'id')!==this.#catalog.accountId) return fail();
+    const invoice=record(await this.#read('/v1/invoices/'+invoiceId));
+    const parent=record(field(invoice,'parent')), details=record(field(parent,'subscription_details'));
+    const customerId=field(invoice,'customer'), subscriptionId=field(details,'subscription');
+    if(field(invoice,'object')!=='invoice'||field(invoice,'id')!==invoiceId||
+       field(invoice,'livemode')!==false||field(invoice,'currency')!=='eur'||
+       !stripeId(customerId,'cus')||field(parent,'type')!=='subscription_details'||
+       !stripeId(subscriptionId,'sub')) return fail();
+    return Object.freeze({accountId:this.#catalog.accountId,liveMode:false,invoiceId,customerId,subscriptionId});
+  }
+
   /** The owner and binding must come from an authenticated session and private server-owned store.
    * This is an observation, not authorization. It cannot assert payment funding, invoice-line coverage
    * or risk clearance, and it cannot grant access even when Stripe reports an active subscription.
