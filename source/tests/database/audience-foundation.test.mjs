@@ -28,7 +28,7 @@ test('isolated schema has no anonymous or normal authenticated access',async()=>
   });
  }
  const tables=(await db.query("select relname,relrowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='dlkt_audience' and c.relkind='r' order by relname")).rows;
- assert.equal(tables.length,3);assert.ok(tables.every(row=>row.relrowsecurity));
+ assert.equal(tables.length,4);assert.ok(tables.every(row=>row.relrowsecurity));
  const functions=(await db.query("select prosecdef from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='dlkt_audience'")).rows;
  assert.equal(functions.length,4);assert.ok(functions.every(row=>!row.prosecdef));
 });
@@ -55,10 +55,10 @@ test('cities and countries are shown only above the distinct-browser privacy thr
  assert.equal(await record(key(3),'pageview',event(4),'RO','Bucharest','direct'),'accepted');
  assert.equal(await record(key(4),'pageview',event(5),'US','New York','referral'),'accepted');
  const s=await snapshot();
- assert.equal(s.visitors,4);assert.equal(s.pageviews,4);assert.equal(s.sessionStarts,5);assert.equal(s.active5m,4);
+ assert.equal(s.visitors,4);assert.equal(s.pageviews,5);assert.equal(s.sessionStarts,5);assert.equal(s.active5m,4);
  assert.deepEqual(s.countries,[{country:'RO',visitors:3,sessions:4}]);
  assert.deepEqual(s.cities,[{country:'RO',city:'Bucharest',visitors:3,sessions:4}]);
- assert.equal(s.series.reduce((a,b)=>a+b.pageviews,0),4);
+ assert.equal(s.series.reduce((a,b)=>a+b.pageviews,0),5);
  assert.equal(s.series.reduce((a,b)=>a+b.sessionStarts,0),5);
  assert.equal(s.bucket,'hour');assert.equal((await snapshot(168)).bucket,'day');
  await assert.rejects(snapshot(1),{code:'22023'});
@@ -67,16 +67,19 @@ test('per-browser event limit bounds bursts without converting duplicate retries
  for(let n=100;n<130;n++)assert.equal(await record(key(5),'pageview',event(n),null,null,'unknown'),'accepted');
  assert.equal(await record(key(5),'pageview',event(130),null,null,'unknown'),'throttled');
  assert.equal(await record(key(5),'pageview',event(100),null,null,'unknown'),'duplicate');
- assert.equal((await snapshot()).pageviews,34);
+ assert.equal((await snapshot()).pageviews,35);
 });
 test('withdrawal removes all linked session and pageview rows; expiry prunes retained history',async()=>{
  await asRole('service_role',()=>db.query('select dlkt_audience.forget_browser($1)',[key(5)]));
- assert.equal((await snapshot()).visitors,4);assert.equal((await snapshot()).pageviews,4);
+ assert.equal((await snapshot()).visitors,4);assert.equal((await snapshot()).pageviews,5);
+ assert.equal(await record(key(5),'pageview',event(131),null,null,'unknown'),'revoked');
+ assert.equal(await record(key(5),'presence'),'revoked');
+ assert.equal((await snapshot()).pageviews,5);
  await db.query("update dlkt_audience.pageviews set observed_at=now()-interval '91 days' where browser_key=$1",[key(4)]);
  await db.query("update dlkt_audience.sessions set started_at=now()-interval '91 days',last_seen=now()-interval '91 days' where browser_key=$1",[key(4)]);
- await db.query("update dlkt_audience.browsers set created_at=now()-interval '91 days' where browser_key=$1",[key(4)]);
+ await db.query("update dlkt_audience.revocations set expires_at=now()-interval '1 second' where browser_key=$1",[key(5)]);
  const purged=await asRole('service_role',async()=>(await db.query('select dlkt_audience.purge_expired() as value')).rows[0].value);
- assert.deepEqual(purged,{pageviews:1,sessions:1,browsers:1});
+ assert.deepEqual(purged,{pageviews:1,sessions:1,browsers:1,revocations:1});
  assert.equal((await snapshot(null)).visitors,3);
- assert.equal((await snapshot(null)).pageviews,3);
+ assert.equal((await snapshot(null)).pageviews,4);
 });
