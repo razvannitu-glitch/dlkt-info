@@ -114,7 +114,7 @@ update dlkt_history_lab.attempts set started_at=clock_timestamp()-interval '6 mi
 where attempt_id='00000000-0000-4000-8000-000000000003';
 -- Even before the reaper commits a result, the expired worker is fenced.
 set role dlkt_history_worker;
-do $
+do $$
 declare a record; d text:=repeat('a',64);
 begin
   begin
@@ -128,10 +128,10 @@ begin
   if (a.sequence_no,a.disposition) is distinct from (null::integer,'busy'::text)
     then raise exception 'expired unresolved start bypassed'; end if;
 end;
-$;
+$$;
 reset role;
 set role dlkt_history_reader;
-do $
+do $$
 declare h jsonb;
 begin
   h:=dlkt_history_lab.read_history('lab-abandon',1,repeat('a',64));
@@ -139,7 +139,7 @@ begin
     or h #>> '{attempts,0,outcome}' is distinct from 'open'
     then raise exception 'expired unresolved start not exposed'; end if;
 end;
-$;
+$$;
 reset role;
 set role dlkt_history_reaper;
 do $$
