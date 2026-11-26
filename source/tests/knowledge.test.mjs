@@ -7,8 +7,8 @@ import {NEWS_CATEGORIES} from '../.build/src/iceo/news-taxonomy.js';
 const now=Date.parse('2026-11-23T12:00:00.000Z');
 const copy=value=>JSON.parse(JSON.stringify(value));
 test('knowledge preview keeps original multilingual copy, primary provenance and bounded review dates',()=>{
- assert.equal(KNOWLEDGE_CARDS.length,25);assert.equal(new Set(KNOWLEDGE_CARDS.filter(card=>!['useful','elsewhere'].includes(card.format)).map(card=>card.category)).size,9);
- assert.equal(validateKnowledgeCatalog(KNOWLEDGE_CARDS).length,25);
+ assert.equal(KNOWLEDGE_CARDS.length,26);assert.equal(new Set(KNOWLEDGE_CARDS.filter(card=>!['useful','elsewhere'].includes(card.format)).map(card=>card.category)).size,9);
+ assert.equal(validateKnowledgeCatalog(KNOWLEDGE_CARDS).length,26);
  for(const card of KNOWLEDGE_CARDS){
   assert.ok(validKnowledgeCard(card));assert.ok(NEWS_CATEGORIES.some(category=>category.id===card.category));
   for(const language of ['en','ro','it'])for(const field of ['title','explanation','connection'])assert.ok(card.copy[language][field].trim().length>15);

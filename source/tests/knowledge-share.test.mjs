@@ -7,7 +7,7 @@ import {KNOWLEDGE_CARDS} from '../.build/src/iceo/knowledge-catalog.js';
 import {knowledgeCardLink,knowledgeReferencePath,parseKnowledgeCardReference,parseCardReference,parseCardImageReference,knowledgeShareEligible} from '../.build/src/share/link.js';
 import {knowledgeShareDestinations} from '../.build/src/share/actions.js';
 import {resolveKnowledgeShare,resolveKnowledgeShareFromCatalogue,knowledgeContentDigest} from '../.build/src/share/knowledge-resolution.js';
-import {knowledgeEditorialPayload} from '../.build/src/iceo/knowledge.js';
+import {knowledgeEditorialPayload,knowledgeRightsForCard} from '../.build/src/iceo/knowledge.js';
 import {renderSharedKnowledgeCard} from '../.build/src/share/render.js';
 import {knowledgeRightsCandidates} from './fixtures/knowledge-rights-candidates.mjs';
 
@@ -193,4 +193,24 @@ test('reapproval of changed text at the same revision cannot make an old exact l
  const next=await invoke({url:knowledgeReferencePath(newRef),resolver});assert.equal(next.status,200);
  assert.ok(next.body.includes('Changed wording.'));
  assert.throws(()=>renderSharedKnowledgeCard({...view,digest:old.digest}),/KNOWLEDGE_SHARE_DIGEST_INVALID/);
+});
+
+test('actual standalone admission resolves only the exact NSW release candidate, with all language and attribution conditions',async()=>{
+ const card=KNOWLEDGE_CARDS.find(item=>item.id==='dlkt-elsewhere-nsw-fuelcheck');
+ assert.ok(card);assert.equal(contentHash(card),'d4c1df98ae87865402292c04c46811d60eee7ed3bde9583f1e16cd243611110e');
+ const rights=knowledgeRightsForCard(card),at=Date.parse(card.reviewedAt)+1000,deadline=Date.parse(card.reviewBy);
+ for(const language of ['en','ro','it']){
+  const ref=refFor(card,language),url=knowledgeReferencePath(ref),view=await resolveKnowledgeShare(ref,at);
+  assert.ok(view);assert.equal(view.validUntil,deadline);assert.strictEqual(view.card,card);
+  const r=await invoke({url,at,resolver:resolveKnowledgeShare}),doc=parseDocument(r.body);
+  assert.equal(r.status,200);assert.equal(find(doc,'meta','property','og:title').attribs.content,card.copy[language].title);
+  assert.ok(DomUtils.textContent(doc).includes(card.copy[language].connection));assert.ok(DomUtils.textContent(doc).includes(rights.credit));
+  assert.ok(find(doc,'a','href',rights.licenseUrl));assert.ok(find(doc,'a','href',rights.policyUrl));assert.ok(find(doc,'a','href',card.source.url));
+  assert.equal(find(doc,'meta','property','og:image'),null);assert.equal(r.headers['cache-control'],'no-store');assert.equal(r.headers['x-robots-tag'],'noindex, nofollow');
+  assert.equal(await resolveKnowledgeShare(ref,Date.parse(card.reviewedAt)-1),null);
+  assert.equal(await resolveKnowledgeShare(ref,deadline),null);
+  assert.equal((await invoke({url,at:deadline,resolver:resolveKnowledgeShare})).status,404);
+  assert.equal((await invoke({url:knowledgeReferencePath({...ref,digest:contentHash(knowledgeRightsCandidates[0])}),at,resolver:resolveKnowledgeShare})).status,404);
+  assert.equal((await invoke({url:knowledgeReferencePath({...ref,digest:'f'.repeat(64)}),at,resolver:resolveKnowledgeShare})).status,404);
+ }
 });

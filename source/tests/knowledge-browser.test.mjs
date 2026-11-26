@@ -35,8 +35,9 @@ test('knowledge renderer creates only inline news cards with unique accessible i
    ids.push(...descendants(inline).filter(node=>node.id).map(node=>node.id));
    assert.equal(descendants(inline).some(node=>node.tagName==='img'),false);
    assert.equal(descendants(inline).some(node=>node.className==='knowledge-explore'),false);
-   const links=descendants(inline).filter(node=>node.tagName==='a');assert.equal(links.length,1);
-   assert.equal(links[0].href,card.source.url);
+   const links=descendants(inline).filter(node=>node.tagName==='a'),rights=knowledgeRightsForCard(card);
+   assert.deepEqual(links.map(node=>node.href),rights?[rights.licenseUrl,rights.policyUrl,card.source.url]:[card.source.url]);
+   assert.ok(links.every(link=>link.target==='_blank'&&link.rel==='noopener noreferrer'));
   }
   assert.equal(new Set(ids).size,ids.length);
  }
@@ -88,9 +89,9 @@ test('reviewed cross-border cards retain their real geographic origin in the glo
 });
 
 
-test('licensed pilot fixtures render exact credits and safe links inside existing provenance in each language',()=>{
+test('licensed laboratory and release-candidate cards render exact credits and safe links inside existing provenance in each language',()=>{
  const disclosures={en:'Original DLKT synthesis and translations',ro:'Sinteza originala si traduceri DLKT',it:'Sintesi originale e traduzioni DLKT'};
- for(const card of knowledgeRightsCandidates){
+ for(const card of [...knowledgeRightsCandidates,...KNOWLEDGE_CARDS.filter(item=>knowledgeRightsForCard(item)!==null)]){
   const rights=knowledgeRightsForCard(card);assert.ok(rights);
   for(const language of ['en','ro','it']){
    const node=renderer(language)(card,'global'),all=descendants(node);
