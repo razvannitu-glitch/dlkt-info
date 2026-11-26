@@ -21,11 +21,10 @@ jobs:
           package-manager-cache: false
       - name: Install existing strict compiler
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Resolve pinned driver and install locked transport dependencies
+      - name: Install locked transport dependency
         working-directory: docs/hosted-integration/transport
         run: |
           set -euo pipefail
-          if [ ! -f package-lock.json ]; then npm install --package-lock-only --ignore-scripts --no-audit --no-fund; fi
           npm ci --ignore-scripts --no-audit --no-fund
           npm audit --omit=dev --audit-level=high
           ../../../node_modules/.bin/tsc -p tsconfig.json
