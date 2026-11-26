@@ -1,5 +1,5 @@
 -- DISPOSABLE POSTGRESQL LAB ONLY. Not a production migration.
--- Synthetic identity and fixed evidence projection; no publication permission.
+-- Synthetic identities and one exact canonical laboratory fixture; no publication permission.
 \set ON_ERROR_STOP on
 begin;
 create role dlkt_history_owner nologin noinherit;
@@ -15,14 +15,33 @@ revoke all on schema dlkt_history_lab from public, anon, authenticated, service_
 grant usage on schema dlkt_history_lab to dlkt_history_worker, dlkt_history_reader, dlkt_history_reaper, dlkt_history_attestor;
 set local role dlkt_history_owner;
 
+-- The additional NSW identity is the DENIED historical lab fixture, not #92's
+-- final reviewed card. The adapter experiment uses controlled transport only.
+create function dlkt_history_lab.valid_subject(
+  p_card text,p_revision integer,p_digest text,p_source text,p_policy text
+) returns boolean language sql immutable strict security invoker set search_path=pg_catalog as $$
+  select (
+    p_card ~ '^lab-[a-z0-9][a-z0-9-]{0,62}$'
+    and p_revision>0 and p_digest ~ '^[0-9a-f]{64}$'
+    and p_source ~ '^https://example[.]invalid/source/[a-z0-9-]{1,63}$'
+    and p_policy ~ '^https://example[.]invalid/policy/[a-z0-9-]{1,63}$'
+  ) or (
+    p_card='dlkt-elsewhere-nsw-fuelcheck' and p_revision=1
+    and p_digest='772d754d42ceb10260b4c02c1b4c97fcb1949ddbf61d6b0cd17fb2b88fa1c88b'
+    and p_source='https://www.nsw.gov.au/legal-and-justice/consumer-rights-and-protection/advertising-product-packaging-and-pricing-laws/fuel-pricing-discounts-and-signage/check-fuel-prices'
+    and p_policy='https://www.nsw.gov.au/nsw-government/about-website/copyright'
+  );
+$$;
+
 create table dlkt_history_lab.candidates (
-  card_id text not null check (card_id ~ '^lab-[a-z0-9][a-z0-9-]{0,62}$'),
-  revision integer not null check (revision > 0),
-  digest text not null check (digest ~ '^[0-9a-f]{64}$'),
-  source_url text not null check (source_url ~ '^https://example[.]invalid/source/[a-z0-9-]{1,63}$'),
-  policy_url text not null check (policy_url ~ '^https://example[.]invalid/policy/[a-z0-9-]{1,63}$'),
+  card_id text not null,
+  revision integer not null,
+  digest text not null,
+  source_url text not null,
+  policy_url text not null,
   tip integer not null default 0 check (tip between 0 and 256),
-  primary key (card_id,revision,digest)
+  primary key (card_id,revision,digest),
+  check (dlkt_history_lab.valid_subject(card_id,revision,digest,source_url,policy_url))
 );
 
 create table dlkt_history_lab.attempts (
@@ -55,10 +74,7 @@ create function dlkt_history_lab.observation_digest(
 ) returns text language plpgsql stable strict security invoker set search_path=pg_catalog as $$
 declare stamp text; hashes text; payload text;
 begin
-  if p_card !~ '^lab-[a-z0-9][a-z0-9-]{0,62}$' or p_revision<=0
-     or p_digest !~ '^[0-9a-f]{64}$'
-     or p_source !~ '^https://example[.]invalid/source/[a-z0-9-]{1,63}$'
-     or p_policy !~ '^https://example[.]invalid/policy/[a-z0-9-]{1,63}$'
+  if not dlkt_history_lab.valid_subject(p_card,p_revision,p_digest,p_source,p_policy)
      or not isfinite(p_observed)
      or p_observed<'1970-01-01T00:00:00Z'::timestamptz
      or p_observed>='10000-01-01T00:00:00Z'::timestamptz

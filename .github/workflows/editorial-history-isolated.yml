@@ -86,3 +86,49 @@ jobs:
         run: npm run build
       - name: Replay pinned historical evidence without network or database access
         run: node --test docs/editorial-history-lab/historical-observation.test.mjs
+
+  transaction-adapter:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'editorial-lab/history-20261126'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: local-test-only
+          POSTGRES_DB: editorial_history_adapter_test
+          POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+        options: >-
+          --health-cmd "pg_isready -U postgres -d editorial_history_adapter_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - name: Install existing locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Build canonical modules and strictly typecheck isolated adapter
+        run: |
+          set -euo pipefail
+          npm run build
+          ./node_modules/.bin/tsc --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --target ES2022 --module NodeNext --moduleResolution NodeNext --types node --outDir "$RUNNER_TEMP/editorial-history-adapter" docs/editorial-history-lab/transaction-adapter.mts
+      - name: Initialize disposable database and independent login identities
+        env:
+          TEST_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          cat docs/editorial-history-lab/ledger.sql docs/editorial-history-lab/adapter-fixtures.sql |
+            docker exec -i "$TEST_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d editorial_history_adapter_test
+      - name: Exercise authenticated committed operations and controlled observation
+        env:
+          TEST_CONTAINER: ${{ job.services.postgres.id }}
+          DLKT_HISTORY_ADAPTER_BUILD: ${{ runner.temp }}/editorial-history-adapter
+        run: node --test docs/editorial-history-lab/transaction-adapter.test.mjs
