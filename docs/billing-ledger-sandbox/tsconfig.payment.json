@@ -14,7 +14,8 @@
     "private-connection-store.ts",
     "external-cleanup.ts",
     "invoice-routing.ts",
-    "risk-routing.ts"
+    "risk-routing.ts",
+    "billing-pipeline.ts"
   ],
   "exclude": []
 }
