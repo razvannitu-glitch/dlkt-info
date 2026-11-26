@@ -1,8 +1,9 @@
 import {RANGES,type Analytics,type Row} from './analytics.js';
 const number=new Intl.NumberFormat('en-US');
 const fmt=(n:number|null|undefined)=>n===null||n===undefined?'—':number.format(n);
+const HTML_ENTITIES:Readonly<Record<string,string>>={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
 export function escapeHtml(s:string):string{
- return s.replace(/[&<>"']/gu,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]??c));
+ return s.replace(/[&<>"']/gu,c=>HTML_ENTITIES[c]??c);
 }
 function shell(content:string,title:string):string{
  return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>'+escapeHtml(title)+' · DLKT</title><link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/admin.css"></head><body><header><a href="/"><img src="/kate-head.png" alt="" width="34" height="34"><strong>DLKT</strong></a><span>CONTROL</span><a class="exit" href="/account">Account</a></header><main>'+content+'</main></body></html>';
@@ -30,5 +31,5 @@ export function renderDashboard(a:Analytics):string{
  card('Reader profiles',a.profiles,'All-time · Supabase profiles, not visitor count')+
  card('New profiles',a.newProfiles,'Created in selected period')+
  card('Online now',null,'Concurrent sessions not measured')+
- '</div><div class="grid panels">'+table('Traffic by day',a.daily,true)+table('Countries',a.countries)+table('Traffic sources',a.referrers)+table('Most viewed pages',a.pages)+table('Devices',a.devices)+'<section class="panel"><h2>Cities &amp; other metrics</h2><p class="empty">City-level data, session counts, returning visitors, editorial card interactions and revenue are not currently available from a verified source.</p></section></div><footer>Updated '+escapeHtml(a.asOf)+' · UTC. '+(a.audienceSince?'Audience query starts '+escapeHtml(a.audienceSince)+'. Provider retention may limit coverage. ':'')+'Unique visitors are provider estimates; breakdowns are not necessarily additive. A dash means unavailable, not zero.</footer>','Control');
+ '</div><div class="grid panels">'+table('Traffic by day',a.daily,true)+table('Countries',a.countries)+table('Traffic sources',a.referrers)+table('Most viewed pages',a.pages)+table('Devices',a.devices)+'<section class="panel"><h2>Cities &amp; other metrics</h2><p class="empty">City-level data, session counts, returning visitors, editorial card interactions and revenue are not currently available from a verified source.</p></section></div><footer>Updated '+escapeHtml(a.asOf)+' · UTC. '+(a.audienceSince?'Audience query starts '+escapeHtml(a.audienceSince)+'. Provider retention and the 100-row query limit may restrict coverage. ':'')+'Unique visitors are provider estimates; breakdowns are not necessarily additive. A dash means unavailable, not zero.</footer>','Control');
 }

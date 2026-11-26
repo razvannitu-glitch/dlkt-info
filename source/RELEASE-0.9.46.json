@@ -456,7 +456,7 @@
     "src/activation/projection.ts": "2efd15eb002417cca6d25ba25f0efdb68f47a4ee88e5e5b1923e877e7689f0d2",
     "src/admin/README.md": "944b97b2a0ba14a460832b74b472a6e7d20138bb919e4a4e76aa267549801d38",
     "src/admin/analytics.ts": "b688a25faa67bcd0de88e34bebcb653f1f166d53e0859a01fbd08f593ea06367",
-    "src/admin/render.ts": "ff1c50e72ce31cba76aa99477037c3ec831cf57d1cca6cc11568bf4afb65299b",
+    "src/admin/render.ts": "7f7186b99b85b9edc97527901038c71c9d6b932be47a2986207e536f50ceccef",
     "src/brand/identity.ts": "c518f5ba10e34f5b9e389751fe615835945cfa37746b32b696030f6604de1bc7",
     "src/brand/welcome-copy.ts": "4f7165a41839ca6e4ec8dbaa31ab791f77e5bfa5e42738c854b769a779984fc0",
     "src/bridge/contracts.ts": "40335b8832170d6c45590abdbd355a45ab1dfbceaa6def090f8747c247c19c44",
