@@ -486,5 +486,5 @@ test('independent official workers resolve the same event photo across irrelevan
  for(const invalid of [null,123,'x'.repeat(64),'0'.repeat(63)])assert.equal(currentLocalSnapshot({...snapshot,cards:[{...cardB,photoRevision:invalid}]},city,now+1000),false);
  const evidenceOnly={...cardB,checkedAt:new Date(now+2000).toISOString(),validFrom:new Date(now+2000).toISOString(),validTo:new Date(now+302000).toISOString(),
   context:{...cardB.context,documentHash:'f'.repeat(64),sourceDate:'2026-11-23'}};
- assert.equal(arcubPhotoRevision(evidenceOnly,city.id),original,'retrieval metadata does not redefine event identity');
+ assert.equal(arcubPhotoRevision(evidenceOnly,city.id),cardB.photoRevision,'retrieval metadata does not redefine event identity');
 });
