@@ -2,6 +2,11 @@ import {before,after,test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {PGlite} from '@electric-sql/pglite';
+import {Readable} from 'node:stream';
+import {SupabaseAudienceStore} from '../../.build/src/audience/storage.js';
+import {handleAudienceGateway} from '../../.build/src/audience/gateway.js';
+import {readAnalytics} from '../../.build/src/admin/analytics.js';
+import {renderDashboard} from '../../.build/src/admin/render.js';
 let db;
 const key=n=>n.toString(16).padStart(64,'0');
 const event=n=>'00000000-0000-4000-8000-'+n.toString(16).padStart(12,'0');
@@ -87,4 +92,52 @@ test('withdrawal removes all linked session and pageview rows; expiry prunes ret
  assert.deepEqual(purged,{pageviews:1,sessions:1,browsers:1,revocations:1});
  assert.equal((await snapshot(null)).visitors,3);
  assert.equal((await snapshot(null)).pageviews,4);
+});
+
+test('integrated consent, gateway, SQL storage, admin snapshot and withdrawal use the same verified data contract',async()=>{
+ const config={projectRef:'abcdefghijklmnopqrst',secretKey:'sb_secret_'+'x'.repeat(30)};
+ const secret=Buffer.alloc(32,9).toString('base64url');
+ const env={DLKT_INFO_AUDIENCE_COLLECT_ENABLED:'1',DLKT_INFO_AUDIENCE_RETENTION_READY:'1',DLKT_INFO_AUDIENCE_CONSENT_READY:'1',
+  DLKT_INFO_AUDIENCE_READ_ENABLED:'1',DLKT_INFO_AUDIENCE_SUPABASE_PROJECT_REF:config.projectRef,DLKT_INFO_AUDIENCE_SUPABASE_SECRET_KEY:config.secretKey,
+  DLKT_INFO_AUDIENCE_ACTIVATED_AT:new Date(Date.now()-86400000).toISOString()};
+ const request=async(url,init)=>{
+  const u=new URL(url),p=JSON.parse(init.body);
+  assert.equal(u.origin,'https://'+config.projectRef+'.supabase.co');
+  assert.equal(init.headers['Content-Profile'],'dlkt_audience');
+  let value;
+  switch(u.pathname){
+   case '/rest/v1/rpc/snapshot':value=await snapshot(p.p_hours);break;
+   case '/rest/v1/rpc/record_activity':value=await record(p.p_browser,p.p_kind,p.p_event,p.p_country,p.p_city,p.p_source);break;
+   case '/rest/v1/rpc/forget_browser':
+    await asRole('service_role',()=>db.query('select dlkt_audience.forget_browser($1)',[p.p_browser]));
+    return new Response(null,{status:204});
+   default:throw Error('UNEXPECTED_RPC');
+  }
+  return new Response(JSON.stringify(value),{headers:{'content-type':'application/json'}});
+ };
+ const store=new SupabaseAudienceStore(config,request);
+ const deps={environment:env,store,secret,permit:async()=>true,trustedMetadata:true};
+ async function send(body,cookie){
+  const req=Readable.from([Buffer.from(JSON.stringify(body))]);req.method='POST';req.url='/api/audience';
+  req.headers={host:'www.dlkt.ee',origin:'https://www.dlkt.ee','x-forwarded-proto':'https','x-dlkt-info-request':'audience-v1','content-type':'application/json','x-vercel-ip-country':'RO','x-vercel-ip-city':'Bucharest',...(cookie?{cookie}:{})};
+  const res={statusCode:0,headers:new Map(),body:'',setHeader(k,v){this.headers.set(k,v);},end(v){this.body=v;}};
+  await handleAudienceGateway(req,res,deps);return res;
+ }
+ const before=await store.snapshot(24);
+ assert.equal((await send({action:'event',event:{kind:'pageview',id:event(999),source:'direct'}})).statusCode,401);
+ const opt=await send({action:'enable'});assert.equal(opt.statusCode,200);
+ const cookie=opt.headers.get('Set-Cookie').split(';')[0];
+ const view={action:'event',event:{kind:'pageview',id:event(999),source:'direct'}};
+ const first=await send(view,cookie);assert.equal(first.statusCode,200);assert.equal(JSON.parse(first.body).result,'accepted');
+ const duplicate=await send(view,cookie);assert.equal(duplicate.statusCode,200);assert.equal(JSON.parse(duplicate.body).result,'duplicate');
+ const stats=await readAnalytics({url:'https://example.supabase.co'},env,'24h',request,new Date());
+ assert.equal(stats.firstParty.status,'ready');
+ const measured=stats.firstParty.snapshot;
+ assert.equal(measured.visitors,before.visitors+1);assert.equal(measured.pageviews,before.pageviews+1);
+ assert.equal(measured.sessionStarts,before.sessionStarts+1);
+ const html=renderDashboard(stats);assert.match(html,/Consenting browsers/);assert.match(html,/Bucharest/);
+ assert.doesNotMatch(html,/__Host-dlkt_audience|sb_secret_|[a-f0-9]{64}/);
+ const withdrew=await send({action:'withdraw'},cookie);assert.equal(withdrew.statusCode,200);
+ assert.equal((await send(view,cookie)).statusCode,401);
+ const after=await store.snapshot(24);assert.equal(after.visitors,before.visitors);assert.equal(after.pageviews,before.pageviews);
 });
