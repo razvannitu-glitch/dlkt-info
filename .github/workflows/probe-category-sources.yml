@@ -7,10 +7,12 @@ on:
       - codex/iceo-ro-source-supply-20261124
       - codex/probe-local-source-photos-20261126
       - codex/readback-local-source-photos-20261126
+      - codex/diagnose-local-source-photos-20261126
     paths:
       - scripts/probe-category-sources.mjs
       - scripts/probe-local-source-photos.mjs
       - scripts/verify-local-source-photos.mjs
+      - scripts/diagnose-local-source-photos.mjs
       - .github/workflows/probe-category-sources.yml
   workflow_dispatch:
 
@@ -24,7 +26,7 @@ concurrency:
 jobs:
   probe:
     name: Bounded publisher metadata observations
-    if: github.ref == 'refs/heads/codex/iceo-category-coverage-20261123' || github.ref == 'refs/heads/codex/iceo-ro-source-supply-20261124' || github.ref == 'refs/heads/codex/probe-local-source-photos-20261126' || github.ref == 'refs/heads/codex/readback-local-source-photos-20261126'
+    if: github.ref == 'refs/heads/codex/iceo-category-coverage-20261123' || github.ref == 'refs/heads/codex/iceo-ro-source-supply-20261124' || github.ref == 'refs/heads/codex/probe-local-source-photos-20261126' || github.ref == 'refs/heads/codex/readback-local-source-photos-20261126' || github.ref == 'refs/heads/codex/diagnose-local-source-photos-20261126'
     env:
       DLKT_SOURCE_PROBE_GROUP: ${{ github.ref == 'refs/heads/codex/iceo-ro-source-supply-20261124' && 'ro-admitted' || 'protv-compatibility' }}
     runs-on: ubuntu-24.04
@@ -45,7 +47,9 @@ jobs:
         run: npm run build
       - name: Observe declared feeds and original metadata
         run: |
-          if [ "$GITHUB_REF" = "refs/heads/codex/readback-local-source-photos-20261126" ]; then
+          if [ "$GITHUB_REF" = "refs/heads/codex/diagnose-local-source-photos-20261126" ]; then
+            node scripts/diagnose-local-source-photos.mjs
+          elif [ "$GITHUB_REF" = "refs/heads/codex/readback-local-source-photos-20261126" ]; then
             node scripts/verify-local-source-photos.mjs
           elif [ "$GITHUB_REF" = "refs/heads/codex/probe-local-source-photos-20261126" ]; then
             node scripts/probe-local-source-photos.mjs
@@ -58,5 +62,13 @@ jobs:
         with:
           name: dlkt-local-source-photos
           path: ${{ runner.temp }}/dlkt-local-source-photos
+          retention-days: 7
+          if-no-files-found: ignore
+      - name: Preserve bounded source-photo diagnosis
+        if: always() && github.ref == 'refs/heads/codex/diagnose-local-source-photos-20261126'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dlkt-local-source-photo-diagnosis
+          path: ${{ runner.temp }}/dlkt-local-source-photo-diagnosis
           retention-days: 7
           if-no-files-found: ignore

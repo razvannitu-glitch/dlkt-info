@@ -2,7 +2,7 @@ import {createHash} from 'node:crypto';
 import {parseDocument,DomUtils} from 'htmlparser2';
 import {readBounded,sourceRetryDelay} from '../iceo/transport.js';
 import {PALMA_ID,localSource,type City,type LocalCard,type LocalCoverage,type LocalDomain} from './contracts.js';
-import {ARCUB_AGENDA,parseArcubAgenda,parseArcubDetail} from './arcub.js';
+import {ARCUB_AGENDA,parseArcubAgenda,parseArcubDetail,arcubPhotoRevision} from './arcub.js';
 import {CMTEB_SOURCE,parseCmteb} from './cmteb.js';
 
 /** Reviewed publisher capabilities. Discovery never turns a browser value into an outbound URL. */
@@ -133,7 +133,7 @@ export class LocalPublicationService{
    const cards:LocalCard[]=[],coverage:LocalCoverage[]=[];
    const events=results[0],utilities=results[1];
    if(events?.status==='fulfilled'){
-    cards.push(...events.value.cards);coverage.push({domain:'events',state:'partial',checkedAt:events.value.checkedAt,sourceUrl:ARCUB_AGENDA,note:'ARCUB agenda and up to six linked event schedules. Confirmed date ranges retain their published precision; hours, ticket availability and other organisers are not covered.'});
+    cards.push(...events.value.cards.map(card=>{const photoRevision=arcubPhotoRevision(card,city.id);return photoRevision?{...card,photoRevision}:card;}));coverage.push({domain:'events',state:'partial',checkedAt:events.value.checkedAt,sourceUrl:ARCUB_AGENDA,note:'ARCUB agenda and up to six linked event schedules. Confirmed date ranges retain their published precision; hours, ticket availability and other organisers are not covered.'});
    }else coverage.push({domain:'events',state:'unavailable',checkedAt:null,sourceUrl:ARCUB_AGENDA,note:'ARCUB could not be checked. Missing listings do not establish that no events are taking place.'});
    if(utilities?.status==='fulfilled'){
     cards.push(...utilities.value.cards);coverage.push({domain:'utilities',state:'partial',checkedAt:utilities.value.checkedAt,sourceUrl:CMTEB_SOURCE,note:'CMTEB public heating and hot-water status, summarised by sector. Estimates are not confirmed restoration times. Your address is not known; water, electricity and other utilities are not covered.'});

@@ -214,7 +214,7 @@ async function newsFixture(){
     sourceDate:checkedAt.slice(0,10),startsAt:null,status:'operator-notice',
     documentHash:hash('DLKT controlled browser QA CMTEB fixture'),documentUrl:cmtebUrl}};
   const events=localIds.slice(2).map((id,index)=>({id,kind:'event',title:'Controlled ARCUB agenda event '+(index+1),
-   text:'Original controlled agenda listing with source access.',publisher:'ARCUB',
+   text:'Original controlled agenda listing with source access.',publisher:'ARCUB',photoRevision:hash('DLKT controlled event photo revision '+id),
    sourceUrl:'https://arcub.ro/eveniment/controlled-agenda-'+(index+1),sourceUpdatedAt:null,checkedAt,
    validFrom:checkedAt,validTo:new Date(clock+300000).toISOString(),facts:['Controlled agenda fixture; not a live event verification.'],
    boundary:'Confirm the programme and availability with the organiser.',
@@ -358,7 +358,7 @@ async function newsFixture(){
   photo(url){
    const reference=parseArticlePhotoReference(url.pathname+url.search),card=servedLocal.cards.find(value=>value.id===reference?.id);
    return reference&&reference.cityId===city.id&&card?.id===localIds[2]&&card.kind==='event'
-    &&card.context?.documentHash===reference.revision?localPhotoPixels:null;
+    &&card.photoRevision===reference.revision&&card.photoRevision!==card.context?.documentHash?localPhotoPixels:null;
   },
   async response(url){
    if(url.pathname==='/api/places'&&url.searchParams.get('hint')==='1')return {status:200,value:{city,countryCode:city.countryCode,estimated:true}};

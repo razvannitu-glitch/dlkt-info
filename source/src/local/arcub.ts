@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import {parseDocument,DomUtils} from 'htmlparser2';
 import {localSource,type LocalCard} from './contracts.js';
+import {arcubPhotoSource} from './photo-reference.js';
 
 /** Only a publisher's own agenda, not a city-wide events feed. */
 export const ARCUB_AGENDA='https://arcub.ro/agenda';
@@ -150,4 +151,12 @@ export function parseArcubDetail(document:ArcubDetailDocument,agendaCard:LocalCa
   facts:[`Published event schedule: ${periodCopy}`,`Venue as published: ${venue}`],
   boundary:'Schedule and venue from the official ARCUB event page. A published date range does not mean the venue is open now. Tickets, capacity, cancellations and availability are not verified. SourceDate is the retrieval date, not a publication date.',
   context:{...context,place:venue,when:periodCopy,why:'The event page supplies an explicit year and schedule matching its agenda entry.',action:'Check the organiser for opening hours, admission and any schedule changes.',sourceDate:new Date(checked).toISOString().slice(0,10),startsAt:new Date(start).toISOString(),...(precise?{}:{endsAt:new Date(end).toISOString()}),datePrecision:precise?'minute':'day',documentHash:digest(document.body),documentUrl:document.url}};
+}
+
+/** Stable current-event identity; the raw observed HTML hash remains separate evidence. */
+export function arcubPhotoRevision(card:LocalCard,cityId:string):string|undefined {
+ const context=card.context;
+ if(card.kind!=='event'||card.publisher!=='ARCUB'||!context||!arcubPhotoSource(card.sourceUrl,{id:card.id,cityId}))return undefined;
+ return digest(JSON.stringify(['dlkt-local-event-photo-1',cityId,card.id,card.kind,card.publisher,card.sourceUrl,card.title,
+  context.section,context.status,context.place,context.when,context.startsAt,context.endsAt??null,context.datePrecision??null,context.documentUrl]));
 }
