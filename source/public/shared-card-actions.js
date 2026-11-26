@@ -1,13 +1,14 @@
-import { cardLink, cardPath, cardImagePath } from './shared-card-link.js';
+import { cardLink, cardPath, cardImagePath, knowledgeCardLink } from './shared-card-link.js';
 /** Fixed public destinations receive only the exact public card link, never a briefing or visitor state. */
-export function shareDestinations(card) {
-    const url = cardLink(card);
+function destinationsForLink(url) {
     return [
         { label: 'Facebook', href: 'https://www.facebook.com/sharer/sharer.php?' + new URLSearchParams({ u: url }).toString() },
         { label: 'X', href: 'https://x.com/intent/tweet?' + new URLSearchParams({ url }).toString() },
         { label: 'Threads', href: 'https://www.threads.com/intent/post?' + new URLSearchParams({ text: url }).toString() },
     ];
 }
+export function shareDestinations(card) { return destinationsForLink(cardLink(card)); }
+export function knowledgeShareDestinations(card, language) { return destinationsForLink(knowledgeCardLink(card, language)); }
 let active = null;
 /** Opening prepares only this public edition. Posting and copying still require a separate user action. */
 export async function shareCard(card, elements) {

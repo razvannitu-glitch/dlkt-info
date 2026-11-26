@@ -1,5 +1,6 @@
 import { PUBLIC_TOPICS } from './topics.js';
 import { validCard } from './card-validation.js';
+import { validKnowledgeCard } from './knowledge.js';
 export const PUBLIC_ORIGIN = 'https://www.dlkt.ee';
 export const SHARE_TOPICS = PUBLIC_TOPICS;
 /** Only public document identity and metadata revision enter a link. Never a profile or text query. */
@@ -33,6 +34,51 @@ export function parseCardReference(raw) {
     catch {
         return null;
     }
+}
+const KNOWLEDGE_SHARE_ID = /^dlkt-elsewhere-[a-z0-9][a-z0-9-]{0,64}$/u;
+function validKnowledgeShareLanguage(value) {
+    return value === 'en' || value === 'ro' || value === 'it';
+}
+export function knowledgeShareEligible(card) {
+    return validKnowledgeCard(card) && KNOWLEDGE_SHARE_ID.test(card.id) && card.format === 'elsewhere' && card.distribution === 'cross-border' && card.geography !== undefined;
+}
+export function knowledgeReferencePath(reference) {
+    if (!KNOWLEDGE_SHARE_ID.test(reference.id) || !Number.isSafeInteger(reference.revision) || reference.revision < 1 || !validKnowledgeShareLanguage(reference.language))
+        throw Error('KNOWLEDGE_SHARE_REFERENCE_INVALID');
+    return '/card/' + reference.id + '?v=' + String(reference.revision) + '&lang=' + reference.language;
+}
+export function knowledgeCardLink(card, language) {
+    if (!knowledgeShareEligible(card))
+        throw Error('KNOWLEDGE_SHARE_CARD_INVALID');
+    return PUBLIC_ORIGIN + knowledgeReferencePath({ id: card.id, revision: card.revision, language });
+}
+/** Accept only the canonical direct route or its existing Vercel rewrite. */
+export function parseKnowledgeCardReference(raw) {
+    if (typeof raw !== 'string' || raw.length > 512 || /[^!-~]|[%#\\+]/u.test(raw))
+        return null;
+    const parts = raw.split('?');
+    if (parts.length !== 2)
+        return null;
+    const [path, query] = parts;
+    if (path === undefined || query === undefined)
+        return null;
+    const direct = /^\/card\/(dlkt-elsewhere-[a-z0-9][a-z0-9-]{0,64})$/u.exec(path);
+    if (!direct && path !== '/api/card')
+        return null;
+    const allowed = direct ? ['v', 'lang'] : ['id', 'v', 'lang'];
+    const pairs = query.split('&');
+    if (pairs.length !== allowed.length || pairs.some(pair => !/^(?:id|v|lang)=[a-z0-9-]+$/u.test(pair)))
+        return null;
+    const params = new URLSearchParams(query);
+    if ([...params.keys()].some(key => !allowed.includes(key)) || allowed.some(key => params.getAll(key).length !== 1))
+        return null;
+    const id = direct?.[1] ?? params.get('id'), version = params.get('v'), language = params.get('lang');
+    if (typeof id !== 'string' || !KNOWLEDGE_SHARE_ID.test(id) || version === null || !/^[1-9]\d{0,15}$/u.test(version) || !validKnowledgeShareLanguage(language))
+        return null;
+    const revision = Number(version);
+    if (!Number.isSafeInteger(revision) || String(revision) !== version)
+        return null;
+    return { id, revision, language };
 }
 export function sharedTopic(hash) {
     const value = /^#briefing-topic=([a-z-]+)$/u.exec(hash)?.[1];
