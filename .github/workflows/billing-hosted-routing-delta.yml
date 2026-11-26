@@ -1,0 +1,98 @@
+name: DLKT hosted routing schema replay
+on:
+  push:
+    branches: [billing-lab/integration-20261126]
+    paths:
+      - 'docs/hosted-integration/routing-delta/**'
+      - '.github/workflows/billing-hosted-routing-delta.yml'
+permissions:
+  contents: read
+jobs:
+  hosted-schema-replay:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: local-fixture-only
+          POSTGRES_DB: billing_test
+        options: >-
+          --health-cmd "pg_isready -U postgres -d billing_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Replay existing hosted SQL receipts on disposable PostgreSQL
+        env:
+          TEST_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          psql_test(){ docker exec -i "$TEST_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d billing_test "$@"; }
+          psql_test <<'SQL'
+          create role anon nologin;
+          create role authenticated nologin;
+          create role authenticator nologin;
+          create role service_role nologin bypassrls;
+          create schema auth;
+          create table auth.users(id uuid primary key);
+          create table auth.sessions(id uuid primary key,user_id uuid not null references auth.users(id) on delete cascade,not_after timestamptz);
+          alter table auth.sessions enable row level security;
+          create function auth.uid() returns uuid language sql as $$select null::uuid$$;
+          SQL
+          psql_test < docs/hosted-integration/20261126154808_dlkt_integration_billing_foundation.sql
+          psql_test <<'SQL'
+          insert into dlkt_info_billing.catalog_accounts(account_id,product_id,live_mode) values('acct_1Ug2Sh77EKtnzo3p','prod_VhRhJqxfqwsphh',false);
+          insert into dlkt_info_billing.catalog_prices(account_id,price_id,plan,amount_cents,currency) values
+          ('acct_1Ug2Sh77EKtnzo3p','price_1Ug2no77EKtnzo3pFonO3DoN','monthly',699,'eur'),
+          ('acct_1Ug2Sh77EKtnzo3p','price_1Ug2nq77EKtnzo3pu9VDFjZ7','annual',6900,'eur');
+          SQL
+          psql_test < docs/hosted-integration/20261126155244_dlkt_integration_private_vault_and_closure.sql
+          psql_test < docs/hosted-integration/20261126155816_dlkt_integration_runtime_capability_roles.sql
+          psql_test < docs/hosted-integration/20261126164420_dlkt_integration_readonly_connection_probe.sql
+      - name: Apply exact forward delta atomically
+        env:
+          TEST_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          # Existing admin roles created by the earlier superuser replay need
+          # the admin memberships Supabase's non-superuser creator already has.
+          docker exec -i "$TEST_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d billing_test <<'SQL'
+          grant dlkt_billing_queue_owner to postgres with admin true, inherit false, set true;
+          grant dlkt_billing_checkout_owner to postgres with admin true, inherit false, set true;
+          alter role postgres nosuperuser createrole createdb bypassrls;
+          SQL
+          docker exec -i "$TEST_CONTAINER" psql -X -1 -v ON_ERROR_STOP=1 -U postgres -d billing_test < docs/hosted-integration/routing-delta/candidate.sql
+          echo DLKT_HOSTED_DELTA_REPLAY_OK
+          # Repeat must fail safely before any DDL.
+          if docker exec -i "$TEST_CONTAINER" psql -X -1 -v ON_ERROR_STOP=1 -U postgres -d billing_test < docs/hosted-integration/routing-delta/candidate.sql > "$RUNNER_TEMP/delta-repeat.log" 2>&1; then
+            echo Unexpected repeated migration success
+            exit 1
+          fi
+          grep -q ROUTING_DELTA_PRECONDITION "$RUNNER_TEMP/delta-repeat.log"
+      - name: Execute adapted adversarial routing SQL (no synthetic entitlements)
+        env:
+          TEST_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          psql_test(){ docker exec -i "$TEST_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d billing_test; }
+          psql_test < docs/hosted-integration/routing-delta/invoice-test.sql
+          psql_test < docs/hosted-integration/routing-delta/risk-test.sql
+          psql_test < docs/hosted-integration/routing-delta/checkout-test.sql
+          psql_test < docs/hosted-integration/routing-delta/pipeline-fixture.sql
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Execute application pipeline against hosted schema replay
+        env:
+          TEST_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+          ./node_modules/.bin/tsc -p docs/billing-ledger-sandbox/tsconfig.payment.json
+          node docs/hosted-integration/routing-delta/pipeline-postgres.integration.mjs
