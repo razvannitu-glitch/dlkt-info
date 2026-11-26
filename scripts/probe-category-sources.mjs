@@ -7,6 +7,7 @@ import {readNewsArticleMetadata, readPublisherNewsCandidates} from '../source/.b
 import {NEWS_DISCOVERY_INDEXES, publisherForNewsUrl} from '../source/.build/src/iceo/news-sources.js';
 import {observeKnowledgeEvidence} from './knowledge-editorial-evidence.mjs';
 import {assessKnowledgeRevalidation} from './knowledge-editorial-revalidation.mjs';
+import {assessKnowledgeClaimEvidence} from './knowledge-claim-evidence.mjs';
 
 // Observational evidence only. Never changes a registry, publishes a card,
 // follows a redirect, bypasses a denial or uses credentials.
@@ -351,7 +352,8 @@ if(probeGroup==='knowledge-editorial'){
       const approvals=KNOWLEDGE_EDITORIAL_APPROVALS.filter(item=>item.id===card.id);
       // The baseline file is evidence only. No trusted review is manufactured.
       const revalidation=assessKnowledgeRevalidation({identity,observation,previousObservation:prior[0],feedApproval:approvals.length===1?approvals[0]:null,now:Date.now()});
-      reports.push({...observation,revalidation});
+      const claimEvidence=assessKnowledgeClaimEvidence(identity,observation);
+      reports.push({...observation,revalidation,claimEvidence});
     }catch(error){reports.push({id:source.id,state:'held',activationAllowed:false,reason:clean(error instanceof Error?error.message:'unknown',100)});}
   }
   const complete=reports.every(report=>report.state==='observed-for-review');

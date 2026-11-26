@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
 import {parseDocument,DomUtils} from 'htmlparser2';
+import {knowledgeClaimAnchors,observeClaimAnchors} from './knowledge-claim-evidence.mjs';
 
 const NSW='dlkt-elsewhere-nsw-fuelcheck',NZ='dlkt-elsewhere-nz-unit-pricing';
 const subjects=Object.freeze({
@@ -30,12 +31,12 @@ function visibleText(root){
  while(pending.length){
   const node=pending.pop();if(++nodes>50000)throw Error('KNOWLEDGE_EVIDENCE_DOM_LIMIT');
   if(node.type==='text'){parts.push(node.data);continue;}
-  if(['script','style','template','noscript','svg','nav','footer'].includes(node.name)||node.attribs?.['aria-hidden']==='true'||Object.hasOwn(node.attribs??{},'hidden'))continue;
+  if(['script','style','template','noscript','svg','nav','footer'].includes(node.name)||node.attribs?.['aria-hidden']==='true'||Object.hasOwn(node.attribs??{},'hidden')||/(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden)\b/iu.test(node.attribs?.style??''))continue;
   if(node.children)for(let i=node.children.length-1;i>=0;i--)pending.push(node.children[i]);
  }
  return normalize(parts.join(' '));
 }
-function inspectPage(response,url,title,signals){
+function inspectPage(response,url,title,signals,anchors){
  const metadata=requestMetadata(response);
  const reject=reason=>({...metadata,state:'held',reason});
  if(response?.url!==url||response.status!==200||response.ok!==true||response.partial!==false||!['text/html','application/xhtml+xml'].includes(response.contentType)||typeof response.text!=='string')return reject('page-unavailable-or-incomplete');
@@ -50,7 +51,7 @@ function inspectPage(response,url,title,signals){
   if(canonicals.length!==1||canonicals.some(n=>{try{return new URL(n.attribs.href??'',url).href!==url;}catch{return true;}}))return reject('canonical-url-mismatch');
   const text=visibleText(main),observations=Object.fromEntries(Object.entries(signals).map(([name,re])=>[name,re.test(text)]));
   const complete=Object.values(observations).every(Boolean);
-  return {...metadata,state:complete?'observed-for-review':'held',reason:complete?null:'expected-source-signals-missing',canonicalObserved:canonicals.length===1,mainSha256:sha(text),signals:observations};
+  return {...metadata,state:complete?'observed-for-review':'held',reason:complete?null:'expected-source-signals-missing',canonicalObserved:canonicals.length===1,mainSha256:sha(text),signals:observations,claimAnchors:observeClaimAnchors(main,anchors,visibleText)};
  }catch{return reject('page-parse-or-identity-failed');}
 }
 /** Evidence-only: positive signals cannot establish semantic accuracy,
@@ -74,9 +75,9 @@ export async function observeKnowledgeEvidence({id,revision,sourceUrl,policyUrl,
  if(policy?.state!=='observed'||policy.bodyEvidence?.bodyKind!=='text'||policy.groupCount<1||policy.malformedDirectives!==0)return hold('robots-unavailable-or-ambiguous',{robots});
  const sourceDecision=decideRobots(policy,sourceUrl),policyDecision=decideRobots(policy,policyUrl),access={source:sourceDecision,policy:policyDecision};
  if(sourceDecision?.allowed!==true||policyDecision?.allowed!==true)return hold('robots-not-permitted',{robots,access});
- const source=inspectPage(await get(sourceUrl,'article'),sourceUrl,spec.sourceTitle,spec.sourceSignals);
+ const source=inspectPage(await get(sourceUrl,'article'),sourceUrl,spec.sourceTitle,spec.sourceSignals,knowledgeClaimAnchors(id,'source'));
  if(source.state!=='observed-for-review')return hold(source.reason,{robots,access,source});
- const terms=inspectPage(await get(policyUrl,'article'),policyUrl,spec.policyTitle,spec.policySignals);
+ const terms=inspectPage(await get(policyUrl,'article'),policyUrl,spec.policyTitle,spec.policySignals,knowledgeClaimAnchors(id,'terms'));
  if(terms.state!=='observed-for-review')return hold(terms.reason,{robots,access,source,terms});
  const finished=clock();
  if(!Number.isSafeInteger(finished)||finished<started||finished-started>75_000)return hold('clock-invalid',{robots,access,source,terms});
