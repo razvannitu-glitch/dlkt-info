@@ -29,6 +29,18 @@ const commands:Readonly<Record<Capability,Allowed>>=Object.freeze({
  'SELECT dlkt_info_billing.route_subscription_notice($1::text,$2::text,$3::integer) AS ok':[3,1],
  'SELECT dlkt_info_billing.fail_notice($1::text,$2::text,$3::integer,$4::text) AS ok':[4,1]
  } satisfies Allowed),
+ invoice:Object.freeze({
+ 'SELECT * FROM dlkt_info_billing.read_invoice_binding($1::text,$2::text)':[2,1],
+ 'SELECT dlkt_info_billing.route_invoice_notice($1::text,$2::text,$3::integer,$4::text,$5::text,$6::uuid,$7::text,$8::text,$9::text) AS ok':[9,1]
+ } satisfies Allowed),
+ risk:Object.freeze({
+ 'SELECT * FROM dlkt_info_billing.read_invoice_binding($1::text,$2::text)':[2,1],
+ 'SELECT dlkt_info_billing.route_risk_notice($1::text,$2::text,$3::integer,$4::text,$5::text,$6::text,$7::text,$8::text,$9::uuid,$10::text,$11::text,$12::text) AS ok':[12,1]
+ } satisfies Allowed),
+ checkout_route:Object.freeze({
+ 'SELECT * FROM dlkt_info_billing.read_checkout_notice_binding($1::text,$2::text,$3::integer,$4::uuid,$5::text,$6::text)':[6,1],
+ 'SELECT dlkt_info_billing.route_checkout_notice($1::text,$2::text,$3::integer,$4::uuid,$5::uuid,$6::text,$7::text,$8::text,$9::bigint,$10::text,$11::text,$12::text,$13::text) AS ok':[13,1]
+ } satisfies Allowed),
  reconcile:Object.freeze({
  'SELECT * FROM dlkt_info_billing.claim_subscription($1::text)':[1,1],
  'SELECT dlkt_info_billing.record_subscription_observation($1::text,$2::text,$3::bigint,$4::bigint,$5::uuid,$6::text,$7::text,$8::text,$9::text) AS ok':[9,1],

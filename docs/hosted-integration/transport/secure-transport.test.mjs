@@ -83,3 +83,28 @@ test('password pilot only accepts exact integration route and bounded non-contro
  assert.throws(()=>preparePasswordProbe({projectRef:'gxzpvuyawpzevwwbrlpz',ca:publicCA,password}),/INTEGRATION_TRANSPORT_REJECTED/u);
  assert.throws(()=>preparePasswordProbe({projectRef:ref,ca,password}),/INTEGRATION_TRANSPORT_REJECTED/u);
 });
+
+test('three independent router capabilities expose only their fixed statements over the disposable TLS database',async()=>{
+ const a='acct_1Ug2Sh77EKtnzo3p',e='evt_Missing',s='sub_Missing',cu='cus_Missing',p='price_1Ug2no77EKtnzo3pFonO3DoN',i='si_Missing';
+ const bind='SELECT * FROM dlkt_info_billing.read_invoice_binding($1::text,$2::text)';
+ const inv='SELECT dlkt_info_billing.route_invoice_notice($1::text,$2::text,$3::integer,$4::text,$5::text,$6::uuid,$7::text,$8::text,$9::text) AS ok';
+ const risk='SELECT dlkt_info_billing.route_risk_notice($1::text,$2::text,$3::integer,$4::text,$5::text,$6::text,$7::text,$8::text,$9::uuid,$10::text,$11::text,$12::text) AS ok';
+ const cb='SELECT * FROM dlkt_info_billing.read_checkout_notice_binding($1::text,$2::text,$3::integer,$4::uuid,$5::text,$6::text)';
+ const cr='SELECT dlkt_info_billing.route_checkout_notice($1::text,$2::text,$3::integer,$4::uuid,$5::uuid,$6::text,$7::text,$8::text,$9::bigint,$10::text,$11::text,$12::text,$13::text) AS ok';
+ const args={
+ invoice:[inv,[a,e,'1','in_Missing',s,owner,cu,i,p]],
+ risk:[risk,[a,e,'1','du_Missing','ch_Missing','pi_Missing','in_Missing',s,owner,cu,i,p]],
+ checkout_route:[cr,[a,e,'1',owner,owner,cu,p,'cs_test_Missing','1','expired','unpaid',null,null]]
+ };
+ for(const cap of ['invoice','risk','checkout_route']){
+  const t=new SecureIntegrationTransport(config(cap));
+  try{
+   assert.equal((await t.probe()).role,'dlkt_rt_'+cap);
+   assert.deepEqual(await t.query(cap==='checkout_route'?cb:bind,cap==='checkout_route'?[a,e,'1',owner,'cs_test_Missing',cu]:[a,s]),[]);
+   assert.deepEqual(await t.query(...args[cap]),[{ok:false}]);
+   for(const other of Object.keys(args).filter(x=>x!==cap))await assert.rejects(t.query(...args[other]),/INTEGRATION_TRANSPORT_REJECTED/u);
+   await assert.rejects(t.query(ingest,[a,e,'invoice.paid','in_Missing','1795695000']),/INTEGRATION_TRANSPORT_REJECTED/u);
+   await assert.rejects(t.query('SELECT * FROM dlkt_info_billing.invoice_links',[]),/INTEGRATION_TRANSPORT_REJECTED/u);
+  }finally{await t.close();}
+ }
+});

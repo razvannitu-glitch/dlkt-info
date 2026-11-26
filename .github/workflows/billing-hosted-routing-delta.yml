@@ -4,6 +4,7 @@ on:
     branches: [billing-lab/integration-20261126]
     paths:
       - 'docs/hosted-integration/routing-delta/**'
+      - 'docs/hosted-integration/runtime-router-delta/**'
       - '.github/workflows/billing-hosted-routing-delta.yml'
 permissions:
   contents: read
@@ -78,6 +79,13 @@ jobs:
             exit 1
           fi
           grep -q ROUTING_DELTA_PRECONDITION "$RUNNER_TEMP/delta-repeat.log"
+          docker exec -i "$TEST_CONTAINER" psql -X -1 -v ON_ERROR_STOP=1 -U postgres -d billing_test < docs/hosted-integration/runtime-router-delta/candidate.sql
+          echo DLKT_RUNTIME_ROUTER_DELTA_OK
+          if docker exec -i "$TEST_CONTAINER" psql -X -1 -v ON_ERROR_STOP=1 -U postgres -d billing_test < docs/hosted-integration/runtime-router-delta/candidate.sql > "$RUNNER_TEMP/runtime-repeat.log" 2>&1; then
+            echo Unexpected repeated role migration success
+            exit 1
+          fi
+          grep -q RUNTIME_ROUTER_PRECONDITION "$RUNNER_TEMP/runtime-repeat.log"
       - name: Execute adapted adversarial routing SQL (no synthetic entitlements)
         env:
           TEST_CONTAINER: ${{ job.services.postgres.id }}

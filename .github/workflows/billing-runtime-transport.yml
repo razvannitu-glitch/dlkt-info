@@ -80,11 +80,16 @@ jobs:
           psql_test < docs/hosted-integration/20261126155244_dlkt_integration_private_vault_and_closure.sql
           psql_test < docs/hosted-integration/20261126155816_dlkt_integration_runtime_capability_roles.sql
           psql_test < docs/hosted-integration/20261126164420_dlkt_integration_readonly_connection_probe.sql
+          psql_test < docs/hosted-integration/20261126175435_dlkt_integration_routing_delta.sql
+          psql_test < docs/hosted-integration/runtime-router-delta/candidate.sql
           psql_test <<SQL
           insert into auth.users(id) values('00000000-0000-4000-8000-000000000101');
           insert into auth.sessions(id,user_id) values('10000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101');
           alter role dlkt_rt_ingress login password '$TEST_RUNTIME_PASSWORD';
           alter role dlkt_rt_vault login password '$TEST_RUNTIME_PASSWORD';
+          alter role dlkt_rt_invoice login password '$TEST_RUNTIME_PASSWORD';
+          alter role dlkt_rt_risk login password '$TEST_RUNTIME_PASSWORD';
+          alter role dlkt_rt_checkout_route login password '$TEST_RUNTIME_PASSWORD';
           SQL
       - name: Test actual TCP/TLS, role separation and restricted queries
         working-directory: docs/hosted-integration/transport

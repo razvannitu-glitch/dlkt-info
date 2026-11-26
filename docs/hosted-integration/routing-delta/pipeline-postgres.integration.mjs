@@ -12,11 +12,11 @@ const owner='00000000-0000-4000-8000-000000000018';
 const catalog={accountId:account,productId:'prod_PipelineIntegration',monthlyPriceId:'price_PipelineMonth',annualPriceId:'price_PipelineYear',liveMode:false,taxBehavior:'inclusive',taxCode:'txcd_10000000'};
 const roleFunctions={
  dlkt_rt_ingress:['ingest_notice'],
- dlkt_billing_worker:['claim_notice','route_subscription_notice','fail_notice'],
- dlkt_billing_invoice_router:['read_invoice_binding','route_invoice_notice'],
- dlkt_billing_risk_router:['read_invoice_binding','route_risk_notice'],
- dlkt_billing_checkout_router:['read_checkout_notice_binding','route_checkout_notice'],
- dlkt_billing_reconciler:['claim_subscription','record_subscription_observation','fail_subscription']
+ dlkt_rt_worker:['claim_notice','route_subscription_notice','fail_notice'],
+ dlkt_rt_invoice:['read_invoice_binding','route_invoice_notice'],
+ dlkt_rt_risk:['read_invoice_binding','route_risk_notice'],
+ dlkt_rt_checkout_route:['read_checkout_notice_binding','route_checkout_notice'],
+ dlkt_rt_reconcile:['claim_subscription','record_subscription_observation','fail_subscription']
 };
 function sqlFixture(sql,vars=[]){
  // All input is a fixed fixture command or fixture-validated parameter.
@@ -34,7 +34,7 @@ function port(role){
   return JSON.parse(out);
  }};
 }
-const ports={ingress:port('dlkt_rt_ingress'),worker:port('dlkt_billing_worker'),invoice:port('dlkt_billing_invoice_router'),risk:port('dlkt_billing_risk_router'),reconcile:port('dlkt_billing_reconciler')};
+const ports={ingress:port('dlkt_rt_ingress'),worker:port('dlkt_rt_worker'),invoice:port('dlkt_rt_invoice'),risk:port('dlkt_rt_risk'),reconcile:port('dlkt_rt_reconcile')};
 const price=annual=>({object:'price',id:annual?catalog.annualPriceId:catalog.monthlyPriceId,active:true,livemode:false,product:catalog.productId,type:'recurring',currency:'eur',unit_amount:annual?6900:699,billing_scheme:'per_unit',lookup_key:annual?'dlkt_info_premium_annual_v1':'dlkt_info_premium_monthly_v1',tax_behavior:'inclusive',transform_quantity:null,custom_unit_amount:null,recurring:{interval:annual?'year':'month',interval_count:1,usage_type:'licensed'}});
 const invoice={object:'invoice',id:'in_PipelineIntegration',livemode:false,customer,currency:'eur',status:'paid',amount_due:699,amount_paid:699,amount_remaining:0,parent:{type:'subscription_details',subscription_details:{subscription:sub}}};
 const now=Math.floor(Date.now()/1000);
@@ -77,7 +77,7 @@ const timing=JSON.parse(sqlFixture("SELECT jsonb_build_object('created',extract(
 const checkout={object:'checkout.session',id:checkoutSession,livemode:false,mode:'subscription',ui_mode:'hosted_page',customer:checkoutCustomer,client_reference_id:checkoutIntent,currency:'eur',amount_total:699,amount_subtotal:699,created:timing.created,expires_at:timing.expiry,success_url:origin+'/billing/return',cancel_url:origin+'/billing/cancel',allow_promotion_codes:false,payment_method_types:['card'],automatic_tax:{enabled:false},status:'complete',payment_status:'paid',subscription:checkoutSub};
 const checkoutSubscription={...remote['/v1/subscriptions/'+sub],id:checkoutSub,customer:checkoutCustomer,latest_invoice:null,items:{object:'list',has_more:false,data:[{object:'subscription_item',id:checkoutItem,subscription:checkoutSub,quantity:1,price:price(false),current_period_start:now-60,current_period_end:now+2592000}]}};
 Object.assign(remote,{['/v1/checkout/sessions/'+checkoutSession]:checkout,['/v1/customers/'+checkoutCustomer]:{object:'customer',id:checkoutCustomer,livemode:false,metadata:{application:'dlkt_info',environment:'sandbox'}},'/v1/checkout/sessions':{object:'list',has_more:false,data:[checkout]},['/v1/checkout/sessions/'+checkoutSession+'/line_items']:{object:'list',has_more:false,data:[{object:'item',quantity:1,currency:'eur',amount_total:699,amount_subtotal:699,price:price(false)}]},'/v1/subscriptions':{object:'list',has_more:false,data:[checkoutSubscription]},['/v1/subscriptions/'+checkoutSub]:checkoutSubscription});
-const withCheckout={...ports,checkout:{port:port('dlkt_billing_checkout_router'),reader,returnOrigin:origin}};
+const withCheckout={...ports,checkout:{port:port('dlkt_rt_checkout_route'),reader,returnOrigin:origin}};
 assert.deepEqual(await accept(signed('evt_PipelineComplete','checkout.session.completed','checkout.session',checkoutSession)),{kind:'accepted'});
 assert.deepEqual(await routeNextBillingNotice(account,withCheckout,reader),{kind:'routed'});
 assert.deepEqual(await reconcileNextBillingSubscription(account,ports.reconcile,reader),{kind:'observed'});

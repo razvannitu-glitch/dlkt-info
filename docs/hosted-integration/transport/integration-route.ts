@@ -4,7 +4,7 @@ const DIRECT_HOST='db.'+INTEGRATION_REF+'.supabase.co';
 const POOLER_HOST='aws-0-eu-central-1.pooler.supabase.com';
 const CA_FINGERPRINT='807025ad50d4ed219d2c9c7d299c004f824eb00cf7f65afef607d07b72e6cafa';
 export type ConnectionMethod='direct'|'session-pooler';
-export const RUNTIME_CAPABILITIES=['vault','checkout','recovery','ingress','worker','reconcile','customer','closure','review','cleanup'] as const;
+export const RUNTIME_CAPABILITIES=['vault','checkout','recovery','ingress','worker','reconcile','customer','closure','review','cleanup','invoice','risk','checkout_route'] as const;
 export type Capability=typeof RUNTIME_CAPABILITIES[number];
 export function reject():never{throw new Error('INTEGRATION_TRANSPORT_REJECTED');}
 export function resolveIntegrationRoute(method:unknown,project:unknown,capability:unknown,ca:unknown){
