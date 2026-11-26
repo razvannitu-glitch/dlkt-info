@@ -46,11 +46,12 @@ try {
   const response=await get(card.sourceUrl,'page'),html=response.bytes.toString('utf8'),document=parseDocument(html);
   const meta=DomUtils.getElementsByTagName('meta',document,true).filter(element=>/^(og:|article:)/u.test(element.attribs.property??element.attribs.name??'')).slice(0,24).map(attrs);
   const canonical=DomUtils.getElementsByTagName('link',document,true).filter(element=>(element.attribs.rel??'').split(/\s+/u).includes('canonical')).map(attrs);
+  const structured=DomUtils.getElementsByTagName('script',document,true).filter(element=>element.attribs.type==='application/ld+json').slice(0,4).map(element=>DomUtils.textContent(element).slice(0,5000));
   const headings=DomUtils.getElementsByTagName('h1',document,true).map(element=>DomUtils.textContent(element).trim().slice(0,500));
   const images=DomUtils.getElementsByTagName('img',document,true).filter(element=>sourceImage(element.attribs.src,card.sourceUrl)).slice(0,8).map(element=>{const parents=[];for(let p=element.parent;p&&parents.length<5;p=p.parent)if(p.type==='tag')parents.push({tag:p.name,...attrs(p)});return {...attrs(element),parents};});
   const article={id:card.id,revision:card.context.documentHash,sourceUrl:card.sourceUrl,title:card.title,publisher:'ARCUB',publishedAt:'',validUntil:Date.now()+300000,documentKind:'local-event'};
   const photo=readArticlePhoto(html,article),candidate=photo?.imageUrl??sourceImage(meta.find(element=>element.property==='og:image')?.content,card.sourceUrl)??sourceImage(images[0]?.src,card.sourceUrl);
-  const entry={id:card.id,title:card.title,url:card.sourceUrl,htmlSha256:digest(response.bytes),meta,canonical,headings,images,publisher:photoPublisher(card.sourceUrl),parser:photo};
+  const entry={id:card.id,title:card.title,url:card.sourceUrl,htmlSha256:digest(response.bytes),meta,canonical,headings,images,structured,publisher:photoPublisher(card.sourceUrl),parser:photo};
   report.pages.push(entry);
   if(!candidate)throw Error('LOCAL_PHOTO_SOURCE_IMAGE_MISSING');
   if(!robotsAllowed(policy,candidate))throw Error('LOCAL_PHOTO_ROBOTS_IMAGE');
