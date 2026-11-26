@@ -50,7 +50,7 @@ export class StripeReadClient {
       || !stripeId(monthlyPriceId,'price') || !stripeId(annualPriceId,'price') || monthlyPriceId === annualPriceId
       || typeof taxCode !== 'string' || !/^txcd_[0-9]{8}$/u.test(taxCode)
       || (taxBehavior !== 'inclusive' && taxBehavior !== 'exclusive')
-      || typeof restrictedKey !== 'string' || !/^rk_test_[A-Za-z0-9]{1,500}$/u.test(restrictedKey)) return fail();
+      || typeof restrictedKey !== 'string' || !/^rk_test_[A-Za-z0-9]{1,500}$/u.test(restrictedKey)) throw new Error('STRIPE_BILLING_READ_REJECTED');
     this.#catalog = Object.freeze({accountId,liveMode:false,productId,monthlyPriceId,annualPriceId,taxCode,taxBehavior});
     this.#key = restrictedKey;
     this.#fetch = fetchImpl;
