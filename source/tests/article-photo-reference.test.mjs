@@ -43,3 +43,26 @@ test('photo endpoint parsing accepts only the exact public route and one value p
   articlePhotoPath(localRef).replace('city=683506','city=2988507'),
  ])assert.equal(parseArticlePhotoReference(value),null,value);
 });
+
+test('browser and server share exactly the existing reviewed photo eligibility function',async()=>{
+ const {photoPublisher:publicPolicy}=await import('../.build/src/media/article-photo-reference.js');
+ const {photoPublisher:serverPolicy}=await import('../.build/src/media/article-photo-source.js');
+ assert.equal(publicPolicy,serverPolicy);
+ const supported=[
+  ['https://www.bbc.com/news/articles/fixture','bbc'],
+  ['https://www.theguardian.com/world/fixture','guardian'],
+  ['https://hotnews.ro/fixture','hotnews'],
+  ['https://www.digi24.ro/stiri/fixture','digi24'],
+  ['https://www.repubblica.it/fixture','repubblica'],
+  ['https://www.thehindu.com/news/fixture','the-hindu'],
+  ['https://www.france24.com/en/fixture','france24'],
+  ['https://www.dw.com/en/fixture','dw'],
+  ['https://globalvoices.org/2026/11/26/fixture/','global-voices'],
+  ['https://www.nasa.gov/fixture','nasa'],
+  ['https://b365.ro/restrictii-trafic-123456/','bucharest-b365'],
+  ['https://buletin.de/bucuresti/restrictii-trafic-123456/','bucharest-buletin'],
+  ['https://arcub.ro/eveniment/fixture','bucharest-arcub'],
+ ];
+ for(const [url,expected] of supported)assert.equal(publicPolicy(url),expected,url);
+ for(const url of ['https://www.ign.com/articles/fixture','https://www.reuters.com/world/fixture','https://www.bbc.com/','https://www.bbc.com/news/fixture#x','https://www.bbc.com.evil.example/news/fixture','https://www.bbc.com@evil.example/news/fixture','http://www.bbc.com/news/fixture','https://www.bbc.com:444/news/fixture','https://www.bbc.com/news/a b','https://arcub.ro/eveniment/fixture?x=1'])assert.equal(publicPolicy(url),null,url);
+});

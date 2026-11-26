@@ -1,5 +1,5 @@
 import { displayPhotoFor } from './card-photo-catalog.js';
-import { articlePhotoPath } from './article-photo-reference.js';
+import { articlePhotoPath, photoPublisher } from './article-photo-reference.js';
 import { safeLink } from './card-validation.js';
 import { newsSourceForUrl } from './local-news-policy.js';
 import { arcubPhotoSource } from './local-photo-reference.js';
@@ -39,7 +39,10 @@ export function watchCardPhotos(root) {
         };
         image.addEventListener('error', remove, { once: true });
         image.addEventListener('load', loaded, { once: true });
-        queueMicrotask(() => { if (image.complete) {
+        queueMicrotask(() => { if (image.closest('.card-photo')?.dataset.photoFailed === 'true') {
+            remove();
+            return;
+        } if (image.complete) {
             if (image.naturalWidth === 0)
                 remove();
             else
@@ -119,7 +122,6 @@ function renderArticlePhotoNode(card, reference) {
     const frame = document.createElement('div');
     frame.className = 'card-photo-frame';
     const image = document.createElement('img');
-    image.src = path;
     image.alt = tr('photoSourceLabel');
     image.lang = getLocale();
     image.width = 960;
@@ -128,6 +130,13 @@ function renderArticlePhotoNode(card, reference) {
     image.decoding = 'async';
     image.referrerPolicy = 'no-referrer';
     image.dataset.articlePhoto = reference.id;
+    // Known policy misses use the existing failure presentation without a network request.
+    if (photoPublisher(card.sourceUrl) !== null)
+        image.src = path;
+    else {
+        figure.dataset.photoFailed = 'true';
+        frame.hidden = true;
+    }
     frame.append(image);
     const badge = document.createElement('span');
     badge.className = 'card-photo-label';

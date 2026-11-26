@@ -1,5 +1,5 @@
 import {displayPhotoFor,type ReviewedPhoto,type ContextPhotoInput} from './catalog.js';
-import {articlePhotoPath,type ArticlePhotoReference} from './article-photo-reference.js';
+import {articlePhotoPath,photoPublisher,type ArticlePhotoReference} from './article-photo-reference.js';
 import {safeLink} from '../iceo/card-validation.js';
 import {newsSourceForUrl} from '../local/news-policy.js';
 import {arcubPhotoSource} from '../local/photo-reference.js';
@@ -31,7 +31,7 @@ export function watchCardPhotos(root:ParentNode):void {
   };
   image.addEventListener('error',remove,{once:true});
   image.addEventListener('load',loaded,{once:true});
-  queueMicrotask(()=>{if(image.complete){if(image.naturalWidth===0)remove();else loaded();}});
+  queueMicrotask(()=>{if(image.closest<HTMLElement>('.card-photo')?.dataset.photoFailed==='true'){remove();return;}if(image.complete){if(image.naturalWidth===0)remove();else loaded();}});
  }
 }
 
@@ -73,8 +73,12 @@ function renderArticlePhotoNode(card:ContextPhotoInput,reference:ArticlePhotoRef
  if(!source)return null;
  const figure=document.createElement('figure');figure.className='card-photo';figure.dataset.photoKind='source';figure.dataset.photoId='article:'+reference.id+':'+reference.revision;
  const frame=document.createElement('div');frame.className='card-photo-frame';
- const image=document.createElement('img');image.src=path;image.alt=tr('photoSourceLabel');image.lang=getLocale();image.width=960;image.height=540;
- image.loading='lazy';image.decoding='async';image.referrerPolicy='no-referrer';image.dataset.articlePhoto=reference.id;frame.append(image);
+ const image=document.createElement('img');image.alt=tr('photoSourceLabel');image.lang=getLocale();image.width=960;image.height=540;
+ image.loading='lazy';image.decoding='async';image.referrerPolicy='no-referrer';image.dataset.articlePhoto=reference.id;
+ // Known policy misses use the existing failure presentation without a network request.
+ if(photoPublisher(card.sourceUrl)!==null)image.src=path;
+ else{figure.dataset.photoFailed='true';frame.hidden=true;}
+ frame.append(image);
  const badge=document.createElement('span');badge.className='card-photo-label';badge.dataset.i18n='photoSourceLabel';badge.textContent=tr('photoSourceLabel');badge.hidden=true;frame.append(badge);
  const caption=document.createElement('figcaption');caption.className='card-photo-caption';caption.hidden=true;
  const credit=photoLink(tr('photoSourceLabel'),source);credit.dataset.i18n='photoSourceLabel';caption.append(credit);
