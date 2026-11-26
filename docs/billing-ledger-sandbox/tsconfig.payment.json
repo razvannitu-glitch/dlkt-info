@@ -6,7 +6,8 @@
     "noEmit": false
   },
   "include": [
-    "payment-proof.ts"
+    "payment-proof.ts",
+    "../../source/src/billing/entitlement.ts"
   ],
   "exclude": []
 }
