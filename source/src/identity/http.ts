@@ -38,12 +38,16 @@ function trustedFetchMetadata(request: IncomingMessage): boolean {
 
 function isSameOrigin(request: IncomingMessage): boolean {
   const marker = firstHeader(request.headers['x-dlkt-info-request']);
-  const host = firstHeader(request.headers['x-forwarded-host']) || firstHeader(request.headers.host);
+  const host = firstHeader(request.headers.host).toLowerCase();
   const protocol = (firstHeader(request.headers['x-forwarded-proto']) || 'https').toLowerCase();
   if (marker !== IDENTITY_REQUEST_MARKER || !HOST.test(host) || !PROTOCOL.test(protocol)) return false;
   const origin = firstHeader(request.headers.origin);
   if (!origin) return trustedFetchMetadata(request);
-  try { return new URL(origin).origin === `${protocol}://${host}`; } catch { return false; }
+  try {
+    const parsed = new URL(origin);
+    const expected = `${protocol}://${host}`;
+    return parsed.origin === expected && parsed.href === `${expected}/`;
+  } catch { return false; }
 }
 
 async function readJson(request: IncomingMessage): Promise<unknown> {
