@@ -177,6 +177,7 @@ const romanian: Readonly<Record<string, string>> = {
   "This integration does not provide your personal Facebook inbox.": "Aceasta integrare nu ofera acces la inboxul tau personal de Facebook.",
   "The current connection does not retrieve conversations, insights or identities of viewers and sharers.": "Conexiunea actuala nu preia conversatii, statistici sau identitatea persoanelor care vizualizeaza ori distribuie continutul.",
   "Open source": "Deschide sursa",
+  "Add to calendar": "Adauga in calendar",
   "Source and coverage": "Sursa si acoperire",
   "Changed since the previous source check in this session.": "Modificari fata de verificarea anterioara a sursei din aceasta sesiune.",
   "Additional publisher coverage of this existing story.": "Relatari suplimentare ale altor publicatii despre acelasi subiect.",
@@ -256,6 +257,23 @@ export function presentWalletProfileLabels(): void {
   if (city && name) walletCopy(name, city.value === '683506' ? 'Include Bucharest, Romania' : 'Previously saved city');
 }
 
+
+/** Release tooling rebuilds the shared footer. Bind its fixed, first-party link labels here. */
+function presentWalletFooter(): void {
+  const labels: Readonly<Record<string, string>> = {
+    '/about': 'About DLKT', '/sources': 'Sources & method', '/organizations': 'For organizations',
+    '/contact': 'Contact', '/company': 'Company', '/accessibility': 'Accessibility',
+    '/terms': 'Terms', '/privacy': 'Privacy', '/cookies': 'Cookies', '/disclaimer': 'Disclaimer',
+  };
+  for (const [href, source] of Object.entries(labels)) {
+    const link = document.querySelector<HTMLAnchorElement>('.site-footer .footer-nav a[href="' + href + '"]');
+    if (link && link.children.length === 0) walletCopy(link, source);
+  }
+  const top = document.querySelector<HTMLAnchorElement>('.site-footer .footer-bottom a[href="#top"]');
+  const leaf = top?.firstChild;
+  if (leaf?.nodeType === Node.TEXT_NODE) leaf.textContent = walletText('Back to top') + ' ';
+}
+
 /** A locale event updates owned leaves in place. It never reloads private state or replaces cards/controls. */
 export function applyWalletPresentation(): void {
   const locale = getLocale() === 'ro' ? 'ro' : 'en';
@@ -275,4 +293,5 @@ export function applyWalletPresentation(): void {
     walletCopy(element, binding.source, binding.ariaSuffix);
   }
   presentWalletProfileLabels();
+  presentWalletFooter();
 }

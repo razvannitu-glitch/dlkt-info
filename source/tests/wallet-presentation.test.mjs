@@ -17,7 +17,16 @@ function harness() {
     append(...children) { this.children.push(...children); }
   }
   const root = new Element('main');
+  const footerLink = new Element('a'); footerLink.textContent = 'About DLKT';
+  const topText = {nodeType: 3, textContent: 'Back to top '}, top = new Element('a');
+  top.firstChild = topText; top.append(topText, new Element('span'));
+  const arrow = top.children[1]; arrow.textContent = '↑';
   const document = {
+    querySelector(selector) {
+      if (selector === '.site-footer .footer-nav a[href="/about"]') return footerLink;
+      if (selector === '.site-footer .footer-bottom a[href="#top"]') return top;
+      return null;
+    },
     createElement: tag => new Element(tag),
     getElementById: () => null,
     querySelectorAll(selector) {
@@ -30,7 +39,7 @@ function harness() {
   const source = readFileSync('.build/src/wallet/presentation.js', 'utf8').replace(/^import [^\n]+\n/gmu, '').replace(/^export /gmu, '');
   const api = runInNewContext(source + '\n({walletText,walletCopy,walletNode,applyWalletPresentation});',
     {document, getLocale: () => locale, accountText, topicName, Node: {TEXT_NODE: 3}});
-  return {...api, root, create: tag => new Element(tag), setLocale: value => {locale = value;}};
+  return {...api, root, footerLink, top, topText, arrow, create: tag => new Element(tag), setLocale: value => {locale = value;}};
 }
 
 test('Wallet copy translates owned status semantics and declares English fallback', () => {
@@ -98,4 +107,16 @@ test('Successful-save and sign-in links survive locale changes; cleared containe
   feedback.textContent = ''; notice.textContent = '';
   ui.setLocale('ro'); ui.applyWalletPresentation();
   assert.equal(feedback.textContent, ''); assert.equal(notice.textContent, '');
+});
+
+test('Regenerated shared footer labels follow Wallet locale without replacing its arrow', () => {
+  const ui = harness();
+  ui.setLocale('ro'); ui.applyWalletPresentation();
+  assert.equal(ui.footerLink.textContent, 'Despre DLKT');
+  assert.equal(ui.topText.textContent, 'Inapoi sus ');
+  assert.equal(ui.top.children[1], ui.arrow);
+  ui.setLocale('en'); ui.applyWalletPresentation();
+  assert.equal(ui.footerLink.textContent, 'About DLKT');
+  assert.equal(ui.topText.textContent, 'Back to top ');
+  assert.equal(ui.top.children[1], ui.arrow);
 });

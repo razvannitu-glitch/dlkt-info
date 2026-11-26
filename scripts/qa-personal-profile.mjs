@@ -401,9 +401,9 @@ export async function verifyPersonalProfileFlow({call, origin, fixture, evaluate
   openIsolated, outputDir, emitVisualPreview}) {
   const expected = fixture.expected, observations = [];
   const readerPreference = await evaluate(call, 'localStorage.getItem("dlkt-reader-language-v1")');
-  const language = async value => {
-    await evaluate(call, '(function(value){const select=document.getElementById("reader-language");if(!(select instanceof HTMLSelectElement))throw Error("WALLET_LANGUAGE_PICKER_MISSING");select.value=value;select.dispatchEvent(new Event("change",{bubbles:true}));return select.value;})('+JSON.stringify(value)+')');
-    await waitFor(call, evaluate, 'document.documentElement.lang==='+JSON.stringify(value), 'WALLET_LANGUAGE_'+value);
+  const language = async (value, target = call) => {
+    await evaluate(target, '(function(value){const select=document.getElementById("reader-language");if(!(select instanceof HTMLSelectElement))throw Error("WALLET_LANGUAGE_PICKER_MISSING");select.value=value;select.dispatchEvent(new Event("change",{bubbles:true}));return select.value;})('+JSON.stringify(value)+')');
+    await waitFor(target, evaluate, 'document.documentElement.lang==='+JSON.stringify(value), 'WALLET_LANGUAGE_'+value);
   };
   const languageState = () => evaluate(call, '(function(){const form=document.getElementById("wallet-profile-form");return {fields:[...form.querySelectorAll("input")].map(n=>({id:n.id,name:n.name,value:n.value,checked:n.checked})),cards:[...document.querySelectorAll("#wallet-personal-cards article")].map(n=>({id:n.dataset.personalId,title:n.querySelector("h3")?.textContent,links:[...n.querySelectorAll("a")].map(a=>a.getAttribute("href"))})),focus:document.activeElement?.id,summary:document.getElementById("wallet-profile-summary").textContent};})()');
   const privateRequestCount = () => fixture.requests.filter(request => ['/api/wallet','/api/account-session','/api/connections'].includes(request.path)).length;
@@ -473,8 +473,12 @@ export async function verifyPersonalProfileFlow({call, origin, fixture, evaluate
     assert.equal(await evaluate(call, 'window.__dlktLocaleCard===document.querySelector("#wallet-personal-cards article[data-personal-id]")&&window.__dlktLocaleInput===document.getElementById("wallet-display-name")'), true, 'locale updates retain actual card and form nodes');
     assert.equal(await evaluate(call, 'document.getElementById("wallet-save").textContent'), 'Salveaza profilul');
     assert.equal(await evaluate(call, 'document.getElementById("wallet-saved").textContent'), 'Cardurile salvate in acest browser');
+    assert.equal(await evaluate(call, 'document.querySelector(\'.site-footer .footer-nav a[href="/about"]\').textContent'), 'Despre DLKT', 'regenerated footer follows the Wallet language too');
+    assert.match(await evaluate(call, 'document.querySelector(\'.site-footer .footer-bottom a[href="#top"]\').textContent'), /Inapoi sus/u);
     assert.match(await evaluate(call, 'document.getElementById("wallet-status").textContent'), /Profilul privat este salvat/u);
     assert.match(await evaluate(call, 'document.getElementById("wallet-personal-status").textContent'), /carduri potrivite/u);
+    assert.equal(await evaluate(call, 'document.querySelector("#wallet-personal-cards .local-card .card-content > a.source-link").textContent'), 'Deschide sursa', 'shared local card action changes language in place');
+    assert.equal(await evaluate(call, 'document.querySelector("#wallet-personal-cards .local-card > details.evidence > summary").textContent'), 'Sursa si acoperire');
     await language('ar');
     const fallback = await evaluate(call, '(function(){const root=document.querySelector("main.reader-shell");return {lang:root.lang,dir:root.dir,save:document.getElementById("wallet-save").textContent};})()');
     assert.deepEqual(fallback, {lang:'en',dir:'ltr',save:'Save profile'}, 'unsupported utility locale has honest English/LTR fallback');
@@ -568,6 +572,7 @@ export async function verifyPersonalProfileFlow({call, origin, fixture, evaluate
       await setCookie(blocked.call, origin, A);
       await blocked.call('Page.navigate', {url: origin + '/wallet'}); await loaded(blocked.call);
       await blocked.call('Page.bringToFront');
+      await language('en', blocked.call); // This isolated negative test asserts the existing English failure wording explicitly.
       await waitFor(blocked.call, evaluate, 'Boolean(document.querySelector(' +
         JSON.stringify('[data-personal-save="' + savedId + '"]') + '))', 'BLOCKED_STORAGE_CARD');
       await activate(blocked.call, evaluate, focusSelector, keyboard, '[data-personal-save="' + savedId + '"]');

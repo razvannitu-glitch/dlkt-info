@@ -191,6 +191,13 @@ export function createPersonalReader(onInvalidated: () => void): PersonalReader 
       const id = 'local:' + match.card.id;
       rows.push({id, signature: JSON.stringify([match.card, match.need, selectedCity]), create: () => {
         const card = localCardNode(match.card, selectedCity, now, {photos: false}); card.dataset.personalId = id;
+        // Bind only the shared local card's own actions; its source wording and links stay intact.
+        const sourceAction = card.querySelector<HTMLAnchorElement>('.card-content > a.source-link');
+        if (sourceAction) walletCopy(sourceAction, 'Open source');
+        const sourceDetails = card.querySelector<HTMLElement>(':scope > details.evidence > summary');
+        if (sourceDetails) walletCopy(sourceDetails, 'Source and coverage');
+        const calendarAction = card.querySelector<HTMLButtonElement>('button[data-calendar-event]');
+        if (calendarAction) walletCopy(calendarAction, 'Add to calendar');
         const reason = node('p', 'For ' + selectedCity.name + ', which you confirmed, and ' + NEED_LABELS[match.need]
           + ', which you selected. This is city context; confirm exact applicability at the source.', 'card-kind personal-reason');
         card.querySelector('.card-content')?.prepend(reason); return card;
