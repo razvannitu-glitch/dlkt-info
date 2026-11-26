@@ -55,6 +55,10 @@ function chooseView(view) {
     cancelSearch();
     present();
 }
+function openSaved() {
+    chooseView('topics');
+    document.querySelector('[data-view=saved]')?.click();
+}
 function openToday() {
     chooseView('start');
     required('entry-title').focus();
@@ -207,7 +211,7 @@ document.querySelectorAll('[data-entry-mode]').forEach(button => button.addEvent
 document.querySelectorAll('[data-entry-topic]').forEach(button => button.addEventListener('click', () => requestTopics('', button.dataset.entryTopic ?? 'all')));
 required('entry-weather').addEventListener('click', openCityBriefing);
 required('entry-nearby').addEventListener('click', () => { state = reduceEntry(state, { type: 'interact' }); required('choose-place').click(); });
-required('entry-saved').addEventListener('click', () => { chooseView('topics'); document.querySelector('[data-view=saved]')?.click(); });
+required('entry-saved').addEventListener('click', openSaved);
 required('entry-today').addEventListener('click', openToday);
 required('entry-return').addEventListener('click', openToday);
 required('entry-show-city').addEventListener('click', openCityBriefing);
@@ -268,7 +272,11 @@ document.addEventListener('dlkt:daily-selected', event => { if (!(event instance
     present();
 } });
 required('place-dialog').addEventListener('close', () => { queueMicrotask(() => { delete document.body.dataset.dailyPicking; }); });
-function openSharedTopic() {
+function openLinkedView() {
+    if (window.location.hash === '#saved') {
+        openSaved();
+        return;
+    }
     if (organizationSetupFromHash(window.location.hash)) {
         chooseView('topics');
         return;
@@ -280,7 +288,19 @@ function openSharedTopic() {
     document.dispatchEvent(new CustomEvent('dlkt:shared-topic', { detail: { topic } }));
 }
 if (document.readyState !== 'complete')
-    document.addEventListener('DOMContentLoaded', openSharedTopic, { once: true });
+    document.addEventListener('DOMContentLoaded', openLinkedView, { once: true });
 else
-    queueMicrotask(openSharedTopic);
-window.addEventListener('hashchange', openSharedTopic);
+    queueMicrotask(openLinkedView);
+window.addEventListener('hashchange', openLinkedView);
+// Native fragment focus can follow DOMContentLoaded; reconcile only that untouched Saved control.
+window.addEventListener('load', () => {
+    requestAnimationFrame(() => {
+        const savedControl = required('saved');
+        if (window.location.hash !== '#saved' || state.view !== 'topics'
+            || savedControl.getAttribute('aria-pressed') !== 'true' || document.activeElement !== savedControl)
+            return;
+        const heading = required('result-heading');
+        heading.focus();
+        heading.scrollIntoView({ block: 'start' });
+    });
+}, { once: true });
