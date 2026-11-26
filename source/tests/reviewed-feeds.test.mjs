@@ -27,9 +27,9 @@ function atom({at='2026-11-15T10:00:00+00:00',summary='Publisher statement, with
 
 test('public feed and publisher counts are distinct and match the release identity',()=>{
  const m=JSON.parse(readFileSync('RELEASE-0.9.46.json','utf8'));
- assert.equal(ICEO_SOURCES.length,51);assert.equal(new Set(ICEO_SOURCES.map(s=>s.id)).size,51);assert.equal(m.publicSourceCount,ICEO_SOURCES.length);
+ assert.equal(ICEO_SOURCES.length,52);assert.equal(new Set(ICEO_SOURCES.map(s=>s.id)).size,52);assert.equal(m.publicSourceCount,ICEO_SOURCES.length);
  assert.equal(m.publicPublisherCount,new Set(ICEO_SOURCES.map(s=>s.publisher)).size);
- assert.equal(m.publicPublisherCount,25);
+ assert.equal(m.publicPublisherCount,26);
  for(const s of [nasa,usgs,fda,gov])assert.equal(sourceRequest(s,now).href,s.endpoint);
  assert.throws(()=>sourceRequest({...nasa,endpoint:'https://127.0.0.1/'},now),/SOURCE_NOT_REGISTERED/);
 });
@@ -124,4 +124,28 @@ test('new source cache intervals avoid repeated FDA acquisition and 304 does not
  const windowed=new IceoEngine(async()=>{calls++;return calls===1?new Response(rss(nasa,{at:new Date(age).toUTCString()}),{headers:{'content-type':'application/rss+xml',etag:'"feed"'}}):new Response(null,{status:304});},()=>clock);
  assert.equal((await windowed.read(nasa)).cards.length,1);clock+=3600001;
  assert.equal((await windowed.read(nasa)).cards.length,0);assert.equal(calls,2);
+});
+
+test('CFPB original RSS is admitted only under the verified official newsroom identity',()=>{
+ const cfpb=source('cfpb-newsroom'),date=Date.parse('2026-11-26T14:00:00Z');
+ const home='https://www.consumerfinance.gov/about-us/newsroom/';
+ const url=home+'consumer-credit-terms-update/';
+ const feed=rss(cfpb,{title:'US consumer agency reports credit and mortgage changes',link:url,home,at:'Wed, 25 Nov 2026 00:00:00 -0500',summary:'Agency reports a consumer financial regulatory change.'});
+ const result=extract(feed,cfpb,date);
+ assert.equal(sourceRequest(cfpb,date).href,cfpb.endpoint);
+ assert.equal(result.rejected,0);assert.equal(result.cards.length,1);
+ assert.equal(result.cards[0].sourceUrl,url);assert.equal(result.cards[0].dateLabel,'Published');
+ assert.equal(result.cards[0].topic,'money');
+ assert.ok(validCard(result.cards[0]));
+ assert.match(result.cards[0].attribution,/CFPB/);
+ for(const bad of [
+  'https://consumerfinance.gov/about-us/newsroom/consumer-credit-terms-update/',
+  'https://www.consumerfinance.gov.attacker.invalid/about-us/newsroom/consumer-credit-terms-update/',
+  'https://www.consumerfinance.gov/admin/private',
+  url+'?redirect=https://attacker.invalid'
+ ]){
+  const invalid=extract(rss(cfpb,{link:bad,home}),cfpb,date);
+  assert.equal(invalid.cards.length,0,bad);assert.equal(invalid.rejected,1,bad);
+ }
+ assert.throws(()=>extract(rss(cfpb,{home:'https://attacker.invalid/'}),cfpb,date),/SOURCE_LINK_REJECTED/);
 });
