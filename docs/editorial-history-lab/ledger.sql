@@ -167,7 +167,7 @@ begin
     join dlkt_history_lab.observation_attestations o using (attempt_id)
     left join dlkt_history_lab.results r using (attempt_id)
     where (a.card_id,a.revision,a.digest)=(p_card,p_revision,p_digest)
-      and (o.observed_at<a.started_at or o.attested_at>checked_at
+      and (a.card_id !~ '^lab-' or o.observed_at<a.started_at or o.attested_at>checked_at
         or o.attested_at>=a.started_at+interval '5 minutes'
         or (r.attempt_id is not null and o.attested_at>r.finished_at))
   ) then return 'integrity-held'; end if;
@@ -180,7 +180,7 @@ begin
     left join dlkt_history_lab.observation_attestations o on o.attempt_id=a.attempt_id
     where (a.card_id,a.revision,a.digest)=(p_card,p_revision,p_digest)
       and r.outcome='observed'
-      and (r.evidence_digest is distinct from dlkt_history_lab.observation_digest(
+      and (a.card_id !~ '^lab-' or r.evidence_digest is distinct from dlkt_history_lab.observation_digest(
         c.card_id,c.revision,c.digest,c.source_url,c.policy_url,r.observed_at,r.fingerprints)
         or o.attempt_id is null or o.evidence_digest is distinct from r.evidence_digest
         or o.observed_at is distinct from r.observed_at)
@@ -264,6 +264,7 @@ begin
   select * into a from dlkt_history_lab.attempts k where k.attempt_id=p_attempt
     and (k.card_id,k.revision,k.digest)=(p_card,p_revision,p_digest);
   if not found then raise exception 'HISTORY_ATTEMPT_UNKNOWN'; end if;
+  if c.card_id !~ '^lab-' then raise exception using errcode='23514', message='HISTORY_SYNTHETIC_POSITIVE_ONLY'; end if;
   expected_digest:=dlkt_history_lab.observation_digest(c.card_id,c.revision,c.digest,
     c.source_url,c.policy_url,p_observed,p_fingerprints);
   if expected_digest is null or p_evidence is distinct from expected_digest then
@@ -326,6 +327,7 @@ begin
   -- even if the separate reaper has not yet acquired the candidate lock.
   if ts>=a.started_at+interval '5 minutes' then raise exception 'HISTORY_ATTEMPT_EXPIRED'; end if;
   if p_outcome='observed' then
+    if c.card_id !~ '^lab-' then raise exception using errcode='23514', message='HISTORY_SYNTHETIC_POSITIVE_ONLY'; end if;
     expected_digest:=dlkt_history_lab.observation_digest(c.card_id,c.revision,c.digest,c.source_url,c.policy_url,p_observed,p_fingerprints);
     if expected_digest is null or p_evidence is distinct from expected_digest then
       raise exception using errcode='23514', message='HISTORY_EVIDENCE_BINDING_INVALID';

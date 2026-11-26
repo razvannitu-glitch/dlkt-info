@@ -161,6 +161,14 @@ test('actual canonical observer with controlled HTML persists missing claim cove
     [candidate.policyUrl,response(candidate.policyUrl,page('Copyright','Creative Commons Attribution 4.0, except as noted. State of New South Wales. third-party material, logos.',candidate.policyUrl),'text/html')]]);
   const result=await runObservationAttempt(key,ports,async()=>{
     assert.equal((await row(key)).outcome,'open');
+    // A correctly shaped synthetic positive digest is still prohibited for
+    // this canonical lab subject at the database boundary, even with both roles.
+    await new Promise(resolve=>setTimeout(resolve,5));
+    const synthetic=positive(key);
+    await assert.rejects(ports.attestor.attest(key,synthetic),/LAB_SQL_REJECTED/);
+    await assert.rejects(ports.worker.finish(key,synthetic),/LAB_SQL_REJECTED/);
+    const open=await row(key);
+    assert.equal(open.outcome,'open');assert.equal(open.attestedAt,null);
     const receipt=await observeKnowledgeEvidence({id:identity.id,revision:identity.revision,sourceUrl:identity.sourceUrl,policyUrl:identity.policyUrl,candidateDigest:identity.digest,
       get:async(url,kind)=>{requests.push(kind);assert.ok(pages.has(url));return pages.get(url);},
       parseRobots:()=>({state:'observed',bodyEvidence:{bodyKind:'text'},groupCount:1,malformedDirectives:0}),
