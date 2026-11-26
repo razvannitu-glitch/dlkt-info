@@ -11,6 +11,8 @@ export interface KnowledgeCard {
  readonly topic:Readonly<Record<KnowledgeLanguage,string>>;
  readonly source:Readonly<{publisher:string;url:string}>;
  readonly geography?:Readonly<{countryCode:string;cityIds:readonly string[];label:Readonly<Record<KnowledgeLanguage,string>>}>;
+ /** Reviewed editorial suitability across borders, not a content licence or a local availability claim. */
+ readonly distribution?:'cross-border';
  readonly copy:Readonly<Record<KnowledgeLanguage,KnowledgeCopy>>;
  /** Editorial release is separate from the source review; omission preserves existing cards. */
  readonly publishAt?:string;
@@ -50,6 +52,7 @@ export function validKnowledgeCard(value:unknown):value is KnowledgeCard {
   !Number.isSafeInteger(value.revision)||Number(value.revision)<1||!isNewsCategoryId(value.category)||
   !object(value.source)||!text(value.source.publisher,100)||!safeKnowledgeSource(value.source.url)||
   value.geography!==undefined&&!validKnowledgeGeography(value.geography)||
+  value.distribution!==undefined&&(!Object.hasOwn(value,'distribution')||value.distribution!=='cross-border'||!Object.hasOwn(value,'format')||value.format!=='elsewhere'||!Object.hasOwn(value,'geography')||value.geography===undefined)||
   value.format!==undefined&&!['did-you-know','on-this-day','recipe','care','useful','elsewhere'].includes(String(value.format))||
   value.format==='on-this-day'&&(!/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/u.test(String(value.calendarDay))||!Number.isFinite(Date.parse('2024-'+String(value.calendarDay)+'T12:00:00.000Z'))||new Date('2024-'+String(value.calendarDay)+'T12:00:00.000Z').toISOString().slice(5,10)!==value.calendarDay)||
   value.format!=='on-this-day'&&value.calendarDay!==undefined||

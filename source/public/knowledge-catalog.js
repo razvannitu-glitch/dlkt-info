@@ -805,6 +805,16 @@ const reviewed = [
     {
         "id": "dlkt-elsewhere-helsinki-shared-workshop",
         "format": "elsewhere",
+        "distribution": "cross-border",
+        "geography": {
+            "countryCode": "FI",
+            "cityIds": [],
+            "label": {
+                "en": "Helsinki, Finland",
+                "ro": "Helsinki, Finlanda",
+                "it": "Helsinki, Finlandia"
+            }
+        },
         "category": "05000000",
         "topic": {
             "en": "Shared city workshops",
@@ -834,13 +844,23 @@ const reviewed = [
         },
         "publishAt": "2026-11-25T00:45:05.000Z",
         "kind": "knowledge",
-        "revision": 1,
+        "revision": 2,
         "reviewedAt": "2026-11-25T00:45:05.000Z",
         "reviewBy": "2026-12-25T00:45:05.000Z"
     },
     {
         "id": "dlkt-elsewhere-paris-schoolyard-oasis",
         "format": "elsewhere",
+        "distribution": "cross-border",
+        "geography": {
+            "countryCode": "FR",
+            "cityIds": [],
+            "label": {
+                "en": "Paris, France",
+                "ro": "Paris, Franta",
+                "it": "Parigi, Francia"
+            }
+        },
         "category": "06000000",
         "topic": {
             "en": "Neighbourhood spaces",
@@ -870,7 +890,7 @@ const reviewed = [
         },
         "publishAt": "2026-11-26T06:00:00.000Z",
         "kind": "knowledge",
-        "revision": 1,
+        "revision": 2,
         "reviewedAt": "2026-11-25T00:45:05.000Z",
         "reviewBy": "2026-12-25T00:45:05.000Z"
     },

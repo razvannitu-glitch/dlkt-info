@@ -73,3 +73,15 @@ test('useful and elsewhere formats have distinct translated labels and truthful 
   }
  }
 });
+
+
+test('reviewed cross-border cards retain their real geographic origin in the global slot',()=>{
+ const card=KNOWLEDGE_CARDS.find(item=>item.id==='dlkt-elsewhere-helsinki-shared-workshop');assert.ok(card);
+ for(const language of ['en','ro','it']){
+  const node=renderer(language)(card,'global'),all=descendants(node);
+  assert.equal(node.dataset.knowledgeScope,'global');
+  assert.equal(all.find(item=>item.className==='knowledge-topic').textContent,card.geography.label[language]);
+  assert.equal(all.find(item=>item.tagName==='a').href,card.source.url);
+  assert.equal(all.find(item=>item.tagName==='time').dateTime,card.reviewedAt);
+ }
+});

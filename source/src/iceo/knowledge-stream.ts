@@ -44,6 +44,8 @@ function validContext(context:KnowledgeStreamContext):boolean {
  * Geography belongs to the reviewed fact, never to its publisher.
  * A fact about another city in the selected country is only a country fallback;
  * its original geography label must still be shown by the renderer.
+ * Explicitly reviewed cross-border discoveries can enter the global tier without
+ * losing their actual origin. The format or publisher alone never grants this.
  */
 export function selectInlineKnowledge(
  cards:readonly KnowledgeCard[],context:KnowledgeStreamContext,now:number,seed:string,
@@ -53,7 +55,10 @@ export function selectInlineKnowledge(
  for(const card of validateKnowledgeCatalog(cards)){
   const geography=card.geography;
   if(geography===undefined){tiers.global.push(card);continue;}
-  if(context.countryCode===null||geography.countryCode!==context.countryCode)continue;
+  if(context.countryCode===null||geography.countryCode!==context.countryCode){
+   if(card.distribution==='cross-border')tiers.global.push(card);
+   continue;
+  }
   const scope:KnowledgeScope=context.cityId!==null&&geography.cityIds.includes(context.cityId)?'city':'country';
   tiers[scope].push(card);
  }
