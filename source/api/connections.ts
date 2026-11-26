@@ -8,6 +8,7 @@ import {isWalletProviderId, type WalletProviderId} from '../src/wallet/providers
 import {connectionOrigin, PROVIDER_IDS} from '../src/connections/config.js';
 import {verifiedSessionHash} from '../src/connections/crypto.js';
 import {ConnectionError, ConnectionService, type ProviderOperations} from '../src/connections/service.js';
+import type {ConnectionAccessReader} from '../src/connections/premium-access.js';
 import {SupabaseConnectionStore} from '../src/connections/store.js';
 import {CONNECTIONS_VERSION} from '../src/connections/types.js';
 import type {ConnectionStore} from '../src/connections/types.js';
@@ -19,6 +20,7 @@ interface Dependencies {
   readonly provisioning?: ProvisioningProjection;
   readonly now?: () => Date;
   readonly drivers?: ProviderOperations;
+  readonly accessReader?: ConnectionAccessReader;
   readonly storeFactory?: (configuration: ReadyPersistenceConfiguration, ownerId: string, accessToken: string, request: typeof fetch) => ConnectionStore;
 }
 const cookieName = (providerId: WalletProviderId): string => `__Host-dlkt_connection_${providerId.replaceAll('-', '_')}`;
@@ -92,7 +94,7 @@ export async function handleConnections(req: IncomingMessage, res: ServerRespons
     }
     const sessionHash = verifiedSessionHash(session.accessToken, session.user.id);
     const store = deps.storeFactory ? deps.storeFactory(readiness.configuration, session.user.id, session.accessToken, request) : new SupabaseConnectionStore(readiness.configuration, session.user.id, session.accessToken, request);
-    const service = new ConnectionService(session.user.id, sessionHash, store, environment, origin, {fetchImpl: request, ...(deps.now ? {now: deps.now} : {}), ...(deps.drivers ? {drivers: deps.drivers} : {})});
+    const service = new ConnectionService(session.user.id, sessionHash, store, environment, origin, {fetchImpl: request, ...(deps.now ? {now: deps.now} : {}), ...(deps.drivers ? {drivers: deps.drivers} : {}), ...(deps.accessReader ? {accessReader: deps.accessReader} : {})});
     if (callbackData) {
       await service.complete(callbackData.providerId, callbackData.state, stateCookie(req, callbackData.providerId), callbackData.code, callbackData.denied);
       finish('connected'); return;
@@ -115,7 +117,7 @@ export async function handleConnections(req: IncomingMessage, res: ServerRespons
     const code = error instanceof Error ? error.message : '';
     const status = ['CONNECTION_CONFLICT', 'CONNECTION_BUSY'].includes(code) ? 409
       : ['CONNECTION_SESSION_INVALID'].includes(code) ? 401
-        : code === 'CONNECTION_FORBIDDEN' ? 403
+        : ['CONNECTION_FORBIDDEN','CONNECTION_PREMIUM_REQUIRED'].includes(code) ? 403
           : code === 'CONTENT_TYPE_REQUIRED' ? 415
             : code === 'BODY_TOO_LARGE' ? 413
               : ['CONNECTION_INPUT_INVALID', 'BODY_EMPTY'].includes(code) || error instanceof SyntaxError ? 400
@@ -126,4 +128,8 @@ export async function handleConnections(req: IncomingMessage, res: ServerRespons
   }
 }
 
-export default handleConnections;
+// Runtime has no positive billing reader until actual reconciled evidence and
+// private persistence have been provisioned. Test dependencies are not runtime inputs.
+export default async function connections(req:IncomingMessage,res:ServerResponse):Promise<void>{
+  await handleConnections(req,res);
+}

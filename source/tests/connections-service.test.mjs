@@ -14,6 +14,9 @@ const ORIGIN = 'https://info.dlkt.ee';
 const environment = {DLKT_INFO_CONNECTIONS_TOKEN_KEY: KEY, DLKT_INFO_CONNECTIONS_ORIGIN: ORIGIN,
   DLKT_INFO_GMAIL_CLIENT_ID: 'test-client', DLKT_INFO_GMAIL_CLIENT_SECRET: 'test-secret', DLKT_INFO_GMAIL_ENABLED: '1', DLKT_INFO_GMAIL_PUBLIC_READY: '1'};
 const grant = (changes = {}) => ({accountId: 'provider-account', accountLabel: 'qa@example.test', accessToken: 'fixture-access', refreshToken: 'fixture-refresh', expiresAt: '2026-11-20T13:00:00.000Z', scopes: ['openid', 'email'], resources: [], ...changes});
+const premiumReceipt=(ownerId,sessionHash)=>({state:'premium',source:'stripe_reconciled',liveMode:true,ownerId,sessionHash,
+ accountId:'acct_fixture',subscriptionId:'sub_fixture',generation:'1',fence:'1',epoch:'0',
+ verifiedAt:Math.floor(Date.parse(NOW)/1000)-10,validUntil:Math.floor(Date.parse(NOW)/1000)+120});
 const context = row => `grant:${row.ownerId}:${row.providerId}:${row.id}`;
 
 class MemoryStore {
@@ -46,9 +49,10 @@ function fixture(overrides = {}) {
     async revokeGrant() { calls.push({kind: 'revoke'}); return 'revoked'; },
     ...overrides.drivers,
   };
+  const accessReader = Object.hasOwn(overrides,'accessReader') ? overrides.accessReader : {read:async(o,s)=>premiumReceipt(o,s)};
   const service = new ConnectionService(overrides.owner ?? OWNER, overrides.session ?? digest(`${OWNER}:${SESSION}`), store,
     overrides.environment ?? environment, Object.hasOwn(overrides, 'origin') ? overrides.origin : ORIGIN,
-    {drivers, now: () => new Date(NOW)});
+    {drivers, now: () => new Date(NOW), ...(accessReader?{accessReader}:{})});
   return {store, calls, drivers, service};
 }
 async function connected(f = fixture()) { const start = await f.service.begin('gmail'); await f.service.complete('gmail', start.state, start.state, 'fixture-code', false); return f; }
@@ -260,4 +264,54 @@ test('Microsoft personal account configuration has a queryless registered callba
   const configured = providerConfiguration({...environment, DLKT_INFO_OUTLOOK_CLIENT_ID: 'fixture-client', DLKT_INFO_OUTLOOK_CLIENT_SECRET: 'fixture-secret'}, 'outlook', ORIGIN);
   assert.equal(configured.redirectUri, `${ORIGIN}/api/connections`);
   assert.equal(new URL(configured.redirectUri).search, '');
+});
+
+test('Missing billing reader, synthetic receipt and provider-ready flags cannot grant access',async()=>{
+ for(const accessReader of [undefined,{read:async()=>({state:'sandbox_eligible'})},{read:async()=>{throw Error('billing offline')}}]){
+  const f=fixture({accessReader});
+  await assert.rejects(f.service.begin('gmail'),/CONNECTION_PREMIUM_REQUIRED/u);
+  await assert.rejects(f.service.sync('gmail'),/CONNECTION_PREMIUM_REQUIRED/u);
+  assert.equal(f.calls.length,0);assert.equal(f.store.pending.size,0);
+  assert.ok((await f.service.snapshot()).providers.every(p=>p.status==='unavailable'));
+ }
+});
+test('Entitlement revoked between OAuth start and callback prevents code exchange',async()=>{
+ let allowed=true;
+ const f=fixture({accessReader:{read:async(o,s)=>allowed?premiumReceipt(o,s):null}});
+ const begin=await f.service.begin('gmail');allowed=false;
+ await assert.rejects(f.service.complete('gmail',begin.state,begin.state,'code',false),/CONNECTION_PREMIUM_REQUIRED/u);
+ assert.equal(f.calls.filter(c=>c.kind==='exchange').length,0);assert.equal(f.store.connections.size,0);
+});
+test('Entitlement loss during exchange revokes the new grant and clears reservation',async()=>{
+ let allowed=true,revoked=0;
+ const f=fixture({accessReader:{read:async(o,s)=>allowed?premiumReceipt(o,s):null},drivers:{
+  async exchangeCode(){allowed=false;return grant();},async revokeGrant(){revoked++;return 'revoked';}
+ }});
+ const begin=await f.service.begin('gmail');
+ await assert.rejects(f.service.complete('gmail',begin.state,begin.state,'code',false),/CONNECTION_PREMIUM_REQUIRED/u);
+ assert.equal(revoked,1);assert.equal(f.store.connections.size,0);
+});
+test('Revoked Premium after refresh keeps rotated token encrypted but does not fetch provider data',async()=>{
+ let allowed=true;
+ const f=await connected(fixture({accessReader:{read:async(o,s)=>allowed?premiumReceipt(o,s):null}}));
+ f.drivers.refreshGrant=async()=>{allowed=false;return grant({refreshToken:'rotated-refresh'});};
+ await assert.rejects(f.service.sync('gmail'),/CONNECTION_PREMIUM_REQUIRED/u);
+ assert.equal(f.calls.filter(c=>c.kind==='sync').length,0);
+ const row=f.store.connections.get('gmail');assert.equal(row.operationExpiresAt,null);
+ assert.equal(parseGrant(unseal(row.sealedGrant,KEY,context(row))).refreshToken,'rotated-refresh');
+});
+test('Changed billing epoch during sync suppresses returned private data and releases lease',async()=>{
+ let epoch='0';
+ const f=await connected(fixture({accessReader:{read:async(o,s)=>({...premiumReceipt(o,s),epoch})}}));
+ f.drivers.syncProvider=async()=>{epoch='1';return {events:[],state:'available',checkedAt:NOW};};
+ await assert.rejects(f.service.sync('gmail'),/CONNECTION_PREMIUM_REQUIRED/u);
+ assert.equal(f.store.connections.get('gmail').lastSyncAt,null);assert.equal(f.store.connections.get('gmail').operationExpiresAt,null);
+});
+test('Entitlement expiry hides imported account label but preserves disconnect',async()=>{
+ const f=await connected();
+ const blocked=fixture({store:f.store,accessReader:undefined});
+ const view=(await blocked.service.snapshot()).providers.find(p=>p.providerId==='gmail');
+ assert.equal(view.status,'unavailable');assert.equal(view.connection.accountLabel,'Saved connection');assert.equal(view.connection.lastSyncAt,null);
+ assert.equal((await blocked.service.disconnect('gmail')).disconnected,true);
+ assert.equal(f.store.connections.size,0);
 });
