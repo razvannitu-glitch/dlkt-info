@@ -4,28 +4,39 @@ on:
     branches: [billing-lab/integration-20261126]
     paths:
       - '.github/workflows/billing-hosted-network-preflight.yml'
+      - 'docs/hosted-integration/transport/prod-ca-2021.crt'
 permissions:
   contents: read
 jobs:
   network:
     runs-on: ubuntu-24.04
-    timeout-minutes: 2
+    timeout-minutes: 3
     steps:
-      - name: Check IPv4 DNS and TLS route to dashboard-confirmed session pooler
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Verify uploaded CA and pooler TLS without credentials
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import json, socket, ssl, struct
-          host = 'aws-0-eu-central-1.pooler.supabase.com'
-          result = {'project':'hziavqdhsqnihxuuxzhn','host':host,'dns_ipv6':False,'dns_ipv4':False,'tcp_reachable':False,'postgres_accepts_tls':False,'system_ca_and_hostname_verified':False,'failure_code':None}
+          import hashlib, json, socket, ssl, struct
+          from pathlib import Path
+          host='aws-0-eu-central-1.pooler.supabase.com'
+          cert=Path('docs/hosted-integration/transport/prod-ca-2021.crt')
+          pem=cert.read_bytes()
+          assert hashlib.sha256(pem).hexdigest()=='700723581420dd1ac98fd7e9ac529f0ef210eadcaf87fc868a3ad7d114c2f3b7', 'UPLOADED_CA_BYTES_MISMATCH'
+          der=ssl.PEM_cert_to_DER_cert(pem.decode('ascii'))
+          assert hashlib.sha256(der).hexdigest()=='807025ad50d4ed219d2c9c7d299c004f824eb00cf7f65afef607d07b72e6cafa', 'CA_FINGERPRINT_MISMATCH'
+          ctx=ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+          ctx.minimum_version=ssl.TLSVersion.TLSv1_2
+          ctx.load_verify_locations(cafile=str(cert))
+          assert ctx.verify_mode==ssl.CERT_REQUIRED and ctx.check_hostname
+          result={'host':host,'port':5432,'ca_fingerprint_verified':True,'tcp_reachable':False,'postgres_accepts_tls':False,'ca_and_hostname_verified':False,'tls_version':None,'failure_code':None}
           try:
-              addresses=socket.getaddrinfo(host,5432,socket.AF_UNSPEC,socket.SOCK_STREAM)
-              result['dns_ipv6']=any(x[0]==socket.AF_INET6 for x in addresses)
-              result['dns_ipv4']=any(x[0]==socket.AF_INET for x in addresses)
-              for af,kind,proto,_,address in addresses[:4]:
+              for af,kind,proto,_,address in socket.getaddrinfo(host,5432,socket.AF_INET,socket.SOCK_STREAM)[:4]:
                   with socket.socket(af,kind,proto) as sock:
-                      sock.settimeout(4)
+                      sock.settimeout(5)
                       try:
                           sock.connect(address)
                           result['tcp_reachable']=True
@@ -34,15 +45,18 @@ jobs:
                           if not result['postgres_accepts_tls']:
                               result['failure_code']='POSTGRES_TLS_UNAVAILABLE'
                               continue
-                          with ssl.create_default_context().wrap_socket(sock,server_hostname=host):
-                              result['system_ca_and_hostname_verified']=True
+                          with ctx.wrap_socket(sock,server_hostname=host) as tls:
+                              result['ca_and_hostname_verified']=True
+                              result['tls_version']=tls.version()
                               result['failure_code']=None
                               break
                       except ssl.SSLCertVerificationError:
-                          result['failure_code']='PROJECT_CA_REQUIRED'
+                          result['failure_code']='CERTIFICATE_VALIDATION_FAILED'
                       except OSError:
                           result['failure_code']='TCP_OR_TLS_UNAVAILABLE'
           except socket.gaierror:
               result['failure_code']='DNS_UNAVAILABLE'
-          print('DLKT_HOSTED_NETWORK_PREFLIGHT '+json.dumps(result,sort_keys=True))
+          print('DLKT_HOSTED_CA_PREFLIGHT '+json.dumps(result,sort_keys=True))
+          if not result['ca_and_hostname_verified']:
+              raise SystemExit(1)
           PY
