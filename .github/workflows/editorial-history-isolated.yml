@@ -66,3 +66,23 @@ jobs:
           test "$(psql_test -c "SELECT count(*) FROM dlkt_history_lab.attempts WHERE card_id in ('lab-race','lab-race-distinct');")" = 2
           test "$(psql_test -c "SELECT count(*) FROM dlkt_history_lab.results WHERE attempt_id='10000000-0000-4000-8000-000000000001';")" = 1
           echo EDITORIAL_HISTORY_PARALLEL_SESSIONS_OK
+
+  historical-replay:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'editorial-lab/history-20261126'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - name: Install existing locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Build existing canonical modules
+        run: npm run build
+      - name: Replay pinned historical evidence without network or database access
+        run: node --test docs/editorial-history-lab/historical-observation.test.mjs
