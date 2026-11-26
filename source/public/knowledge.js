@@ -14,6 +14,31 @@ const origins = new Set([
     'https://support.google.com', 'https://www.ncsc.gov.uk', 'https://www.repaircafe.org',
     'https://oodihelsinki.fi', 'https://www.paris.fr', 'https://www.zooniverse.org',
 ]);
+/** Exact page/card bindings. A publisher domain is not a commercial licence.
+ * Lab candidates only: the live catalogue is deliberately unchanged.
+ * Admission requires a fresh item-level editorial and permitted-use review.
+ */
+const KNOWLEDGE_CC_BY = 'https://creativecommons.org/licenses/by/4.0/';
+const reviewedKnowledgePages = Object.freeze([
+    Object.freeze({ id: "dlkt-elsewhere-nsw-fuelcheck", url: "https://www.nsw.gov.au/legal-and-justice/consumer-rights-and-protection/advertising-product-packaging-and-pricing-laws/fuel-pricing-discounts-and-signage/check-fuel-prices", publisher: "NSW Government", country: "AU", label: Object.freeze({ "en": "New South Wales, Australia", "ro": "New South Wales, Australia", "it": "Nuovo Galles del Sud, Australia" }), rights: Object.freeze({ credit: "© State of New South Wales. For current information go to www.nsw.gov.au.", licenseUrl: KNOWLEDGE_CC_BY, policyUrl: "https://www.nsw.gov.au/nsw-government/about-website/copyright" }) }),
+    Object.freeze({ id: "dlkt-elsewhere-nz-unit-pricing", url: "https://www.comcom.govt.nz/regulated-industries/grocery/information-for-consumers/", publisher: "Commerce Commission", country: "NZ", label: Object.freeze({ "en": "New Zealand", "ro": "Noua Zeelanda", "it": "Nuova Zelanda" }), rights: Object.freeze({ credit: "Crown Copyright ©, Commerce Commission.", licenseUrl: KNOWLEDGE_CC_BY, policyUrl: "https://www.comcom.govt.nz/using-our-website/copyright/" }) }),
+]);
+function reviewedKnowledgeBinding(id, url) {
+    return reviewedKnowledgePages.find(page => page.id === id || page.url === url);
+}
+function matchesReviewedKnowledgeBinding(value, source) {
+    const page = reviewedKnowledgeBinding(value.id, source.url);
+    if (page === undefined)
+        return true;
+    const geography = value.geography;
+    if (value.id !== page.id || source.url !== page.url || source.publisher !== page.publisher ||
+        value.format !== 'elsewhere' || value.distribution !== 'cross-border' || value.category !== '04000000' ||
+        !object(geography) || geography.countryCode !== page.country || !Array.isArray(geography.cityIds) || geography.cityIds.length !== 0 ||
+        !object(geography.label))
+        return false;
+    const label = geography.label;
+    return languages.every(language => label[language] === page.label[language]);
+}
 function object(value) { return typeof value === 'object' && value !== null && !Array.isArray(value); }
 function text(value, max) { return typeof value === 'string' && value.trim().length > 0 && value.length <= max && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f<>]/u.test(value); }
 function validKnowledgeGeography(value) {
@@ -35,7 +60,7 @@ export function safeKnowledgeSource(input) {
         return false;
     try {
         const url = new URL(input);
-        return url.protocol === 'https:' && origins.has(url.origin) && !url.username && !url.password && !url.port && !url.search && !url.hash && url.pathname.length > 1 && url.href === input;
+        return url.protocol === 'https:' && (origins.has(url.origin) || reviewedKnowledgePages.some(page => page.url === input)) && !url.username && !url.password && !url.port && !url.search && !url.hash && url.pathname.length > 1 && url.href === input;
     }
     catch {
         return false;
@@ -44,7 +69,7 @@ export function safeKnowledgeSource(input) {
 export function validKnowledgeCard(value) {
     if (!object(value) || value.kind !== 'knowledge' || typeof value.id !== 'string' || !/^[a-z][a-z0-9-]{2,79}$/u.test(value.id) ||
         !Number.isSafeInteger(value.revision) || Number(value.revision) < 1 || !isNewsCategoryId(value.category) ||
-        !object(value.source) || !text(value.source.publisher, 100) || !safeKnowledgeSource(value.source.url) ||
+        !object(value.source) || !text(value.source.publisher, 100) || !safeKnowledgeSource(value.source.url) || !matchesReviewedKnowledgeBinding(value, value.source) ||
         value.geography !== undefined && !validKnowledgeGeography(value.geography) ||
         value.distribution !== undefined && (!Object.hasOwn(value, 'distribution') || value.distribution !== 'cross-border' || !Object.hasOwn(value, 'format') || value.format !== 'elsewhere' || !Object.hasOwn(value, 'geography') || value.geography === undefined) ||
         value.format !== undefined && !['did-you-know', 'on-this-day', 'recipe', 'care', 'useful', 'elsewhere'].includes(String(value.format)) ||
@@ -59,6 +84,47 @@ export function validKnowledgeCard(value) {
         return object(entry) && text(entry.title, 160) && text(entry.explanation, 600) && text(entry.connection, 240) && text(topic[language], 60);
     });
 }
+/** Attribution is derived from the exact reviewed binding, not visitor-supplied URLs. */
+export function knowledgeRightsForCard(card) {
+    const page = reviewedKnowledgeBinding(card.id, card.source.url);
+    if (page === undefined)
+        return null;
+    if (!validKnowledgeCard(card))
+        throw Error('KNOWLEDGE_RIGHTS_BINDING_INVALID');
+    return page.rights;
+}
+/** Canonical visible editorial payload. Explicit fields avoid property-order
+ * changes or unrelated metadata changing the identity of a reviewed edition.
+ */
+export function knowledgeEditorialPayload(card) {
+    if (!validKnowledgeCard(card))
+        throw Error('KNOWLEDGE_EDITORIAL_PAYLOAD_INVALID');
+    const rights = knowledgeRightsForCard(card), geography = card.geography;
+    return JSON.stringify(['dlkt-knowledge-editorial-v1', card.kind, card.id, card.revision, card.category,
+        card.format ?? null, card.calendarDay ?? null, card.distribution ?? null,
+        [card.source.publisher, card.source.url],
+        geography === undefined ? null : [geography.countryCode, [...geography.cityIds], languages.map(language => geography.label[language])],
+        languages.map(language => [language, card.topic[language], card.copy[language].title, card.copy[language].explanation, card.copy[language].connection]),
+        card.reviewedAt, card.publishAt ?? null, card.reviewBy,
+        rights === null ? null : [rights.credit, rights.licenseUrl, rights.policyUrl]]);
+}
+// Intentionally empty: source terms and deterministic test fixtures are not an
+// actual editorial approval. A decision must be committed after item-level review.
+// CI verifies SHA-256(payload) for every decision. The synchronous browser gate
+// compares the full canonical payload byte-for-byte (no custom crypto in client).
+export const KNOWLEDGE_EDITORIAL_APPROVALS = Object.freeze([]);
+export function matchesKnowledgeEditorialApproval(card, approval) {
+    return validKnowledgeCard(card) && approval.id === card.id && approval.revision === card.revision &&
+        /^[a-f0-9]{64}$/u.test(approval.digest) && approval.payload === knowledgeEditorialPayload(card);
+}
+function hasRequiredKnowledgeEditorialApproval(card) {
+    // Preserve legacy cards; the new reviewed-page source bindings require
+    // explicit exact editorial admission independently of source attribution.
+    if (reviewedKnowledgeBinding(card.id, card.source.url) === undefined)
+        return true;
+    const decisions = KNOWLEDGE_EDITORIAL_APPROVALS.filter(approval => approval.id === card.id);
+    return decisions.length === 1 && matchesKnowledgeEditorialApproval(card, decisions[0]);
+}
 export function validateKnowledgeCatalog(input) {
     if (!Array.isArray(input) || input.length > 5000)
         throw Error('KNOWLEDGE_CATALOG_INVALID');
@@ -66,6 +132,8 @@ export function validateKnowledgeCatalog(input) {
     for (const value of input) {
         if (!validKnowledgeCard(value) || ids.has(value.id))
             throw Error('KNOWLEDGE_CARD_INVALID');
+        if (!hasRequiredKnowledgeEditorialApproval(value))
+            throw Error('KNOWLEDGE_EDITORIAL_APPROVAL_REQUIRED');
         ids.add(value.id);
         cards.push(value);
     }

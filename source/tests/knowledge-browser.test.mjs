@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 import {KNOWLEDGE_CARDS} from '../.build/src/iceo/knowledge-catalog.js';
-import {knowledgeLanguage} from '../.build/src/iceo/knowledge.js';
+import {knowledgeLanguage,knowledgeRightsForCard} from '../.build/src/iceo/knowledge.js';
+import {knowledgeRightsCandidates} from './fixtures/knowledge-rights-candidates.mjs';
 import {newsCategoryLabel} from '../.build/src/iceo/news-taxonomy.js';
 
 class Node {
@@ -15,7 +16,7 @@ const compiled=readFileSync('.build/src/iceo/knowledge-browser.js','utf8');
 const shared=compiled.replace(/^import .+;\r?\n/gmu,'').replace(/^export function /gmu,'function ');
 function renderer(language){
  const document={createElement:tag=>new Node(tag),createElementNS:(_namespace,tag)=>new Node(tag),createTextNode:text=>({textContent:text})};
- const context={document,getLocale:()=>language,knowledgeLanguage,newsCategoryLabel};
+ const context={document,getLocale:()=>language,knowledgeLanguage,knowledgeRightsForCard,newsCategoryLabel};
  runInNewContext(shared+'\nthis.render=knowledgeCardNode;',context);
  return context.render;
 }
@@ -84,4 +85,28 @@ test('reviewed cross-border cards retain their real geographic origin in the glo
   assert.equal(all.find(item=>item.tagName==='a').href,card.source.url);
   assert.equal(all.find(item=>item.tagName==='time').dateTime,card.reviewedAt);
  }
+});
+
+
+test('licensed pilot fixtures render exact credits and safe links inside existing provenance in each language',()=>{
+ const disclosures={en:'Original DLKT synthesis and translations',ro:'Sinteza originala si traduceri DLKT',it:'Sintesi originale e traduzioni DLKT'};
+ for(const card of knowledgeRightsCandidates){
+  const rights=knowledgeRightsForCard(card);assert.ok(rights);
+  for(const language of ['en','ro','it']){
+   const node=renderer(language)(card,'global'),all=descendants(node);
+   const provenance=all.find(item=>item.className==='knowledge-provenance');assert.ok(provenance);
+   assert.ok(provenance.children.some(item=>item.textContent.includes(rights.credit)&&item.textContent.includes(disclosures[language])));
+   const links=all.filter(item=>item.tagName==='a');
+   assert.deepEqual(links.map(item=>item.href),[rights.licenseUrl,rights.policyUrl,card.source.url]);
+   assert.ok(links.every(item=>item.target==='_blank'&&item.rel==='noopener noreferrer'));
+   assert.equal(all.find(item=>item.className==='knowledge-topic').textContent,card.geography.label[language]);
+   assert.equal(all.find(item=>item.tagName==='time').dateTime,card.reviewedAt);
+   assert.equal(all.some(item=>item.tagName==='img'),false);
+  }
+ }
+});
+
+test('the renderer refuses mismatched rights bindings rather than silently dropping their credit',()=>{
+ const card=structuredClone(knowledgeRightsCandidates[0]);card.source.publisher='Unverified publisher';
+ assert.throws(()=>renderer('en')(card,'global'),/KNOWLEDGE_RIGHTS_BINDING_INVALID/);
 });
