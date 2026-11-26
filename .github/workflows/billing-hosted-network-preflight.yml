@@ -11,13 +11,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
-      - name: Check IPv6 DNS and TCP route to exact isolated database
+      - name: Check IPv4 DNS and TLS route to dashboard-confirmed session pooler
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import json, socket, ssl, struct
-          host = 'db.hziavqdhsqnihxuuxzhn.supabase.co'
+          host = 'aws-0-eu-central-1.pooler.supabase.com'
           result = {'project':'hziavqdhsqnihxuuxzhn','host':host,'dns_ipv6':False,'dns_ipv4':False,'tcp_reachable':False,'postgres_accepts_tls':False,'system_ca_and_hostname_verified':False,'failure_code':None}
           try:
               addresses=socket.getaddrinfo(host,5432,socket.AF_UNSPEC,socket.SOCK_STREAM)
