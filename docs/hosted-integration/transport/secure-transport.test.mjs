@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {SecureIntegrationTransport} from './.transport-build/secure-transport.js';
 import {resolveIntegrationRoute} from './.transport-build/integration-route.js';
 import {prepareTemporaryProbe,validProbeIdentity} from './.transport-build/temporary-access-probe.js';
+import {preparePasswordProbe} from './.transport-build/password-access-probe.js';
 const ref='hziavqdhsqnihxuuxzhn',owner='00000000-0000-4000-8000-000000000101',session='10000000-0000-4000-8000-000000000101';
 const ca=readFileSync(process.env.TEST_CA,'utf8'),wrongCA=readFileSync(process.env.TEST_WRONG_CA,'utf8');
 const config=capability=>({mode:'integration',projectRef:ref,connectionMethod:'direct',capability,password:process.env.TEST_RUNTIME_PASSWORD,ca});
@@ -68,4 +69,17 @@ test('temporary access probe accepts only scoped test token format and exact rea
  const good={project_ref:ref,environment:'integration',contract_version:1,login_role:'dlkt_rt_probe',effective_role:'dlkt_rt_probe',encrypted:true};
  assert.equal(validProbeIdentity(good),true);
  for(const patch of [{project_ref:'gxzpvuyawpzevwwbrlpz'},{login_role:'postgres'},{effective_role:'postgres'},{encrypted:false},{contract_version:2}])assert.equal(validProbeIdentity({...good,...patch}),false);
+});
+
+test('password pilot only accepts exact integration route and bounded non-control password',()=>{
+ const publicCA=readFileSync(new URL('./prod-ca-2021.crt',import.meta.url),'utf8');
+ const password='fixture:password+with/symbols!2026';
+ const v=preparePasswordProbe({projectRef:ref,ca:publicCA,password});
+ assert.equal(v.route.user,'dlkt_rt_probe.'+ref);
+ assert.equal(v.route.host,'aws-0-eu-central-1.pooler.supabase.com');
+ assert.equal(v.password,password);
+ for(const invalid of [undefined,'','too-short','A'.repeat(257),'A'.repeat(20)+'\n','A'.repeat(20)+'\u0000'])
+   assert.throws(()=>preparePasswordProbe({projectRef:ref,ca:publicCA,password:invalid}),/INTEGRATION_TRANSPORT_REJECTED/u);
+ assert.throws(()=>preparePasswordProbe({projectRef:'gxzpvuyawpzevwwbrlpz',ca:publicCA,password}),/INTEGRATION_TRANSPORT_REJECTED/u);
+ assert.throws(()=>preparePasswordProbe({projectRef:ref,ca,password}),/INTEGRATION_TRANSPORT_REJECTED/u);
 });

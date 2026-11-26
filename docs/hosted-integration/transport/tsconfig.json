@@ -10,7 +10,8 @@
   "include": [
     "secure-transport.ts",
     "integration-route.ts",
-    "temporary-access-probe.ts"
+    "temporary-access-probe.ts",
+    "password-access-probe.ts"
   ],
   "exclude": []
 }

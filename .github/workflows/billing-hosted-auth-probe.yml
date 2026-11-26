@@ -1,0 +1,41 @@
+name: DLKT hosted read-only authenticated probe
+on:
+  push:
+    branches: [billing-lab/integration-20261126]
+    paths:
+      - 'docs/hosted-integration/transport/hosted-probe-request.json'
+permissions:
+  contents: read
+concurrency:
+  group: dlkt-hosted-readonly-probe
+  cancel-in-progress: false
+jobs:
+  hosted-probe:
+    if: github.repository == 'razvannitu-glitch/dlkt-info' && github.ref == 'refs/heads/billing-lab/integration-20261126'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    environment:
+      name: dlkt-integration-probe
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install locked compiler dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Compile exact pinned transport
+        working-directory: docs/hosted-integration/transport
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+          ../../../node_modules/.bin/tsc -p tsconfig.json
+      - name: Authenticate once as read-only isolated probe
+        working-directory: docs/hosted-integration/transport
+        env:
+          DLKT_INTEGRATION_PROBE_PASSWORD: ${{ secrets.DLKT_INTEGRATION_PROBE_PASSWORD }}
+          DLKT_HOSTED_PASSWORD_PROBE_APPROVED: '1'
+        run: node .transport-build/password-access-probe.js
