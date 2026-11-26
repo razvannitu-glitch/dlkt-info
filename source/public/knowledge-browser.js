@@ -1,9 +1,9 @@
 import { getLocale } from './i18n-browser.js';
-import { knowledgeLanguage } from './knowledge.js';
+import { knowledgeLanguage, knowledgeRightsForCard } from './knowledge.js';
 const labels = {
-    en: { know: 'Did you know?', history: 'On this day', recipe: 'Recipe idea', care: 'Together for good', useful: 'One useful thing', elsewhere: 'Works elsewhere', context: 'The useful bit', source: 'Open source', careSource: 'See official initiative', careNotice: 'Independent information. No DLKT partnership or fundraising is implied.', checked: 'Checked', global: 'General knowledge' },
-    ro: { know: 'Stiati ca?', history: 'S-a intamplat azi', recipe: 'Idee de reteta', care: 'Impreuna pentru bine', useful: 'Un lucru util', elsewhere: 'Functioneaza in alta parte', context: 'Ce merita retinut', source: 'Deschide sursa', careSource: 'Vezi initiativa oficiala', careNotice: 'Informare independenta. Nu este anuntat un parteneriat si DLKT nu colecteaza donatii.', checked: 'Verificat', global: 'Fapt general' },
-    it: { know: 'Lo sapevi?', history: 'Accadde oggi', recipe: 'Idea ricetta', care: 'Insieme per il bene', useful: 'Una cosa utile', elsewhere: 'Funziona altrove', context: 'Da ricordare', source: 'Apri la fonte', careSource: 'Vedi iniziativa ufficiale', careNotice: 'Informazione indipendente. Nessuna partnership DLKT o raccolta fondi e implicata.', checked: 'Verificato', global: 'Conoscenza generale' },
+    en: { know: 'Did you know?', history: 'On this day', recipe: 'Recipe idea', care: 'Together for good', useful: 'One useful thing', elsewhere: 'Works elsewhere', context: 'The useful bit', source: 'Open source', careSource: 'See official initiative', careNotice: 'Independent information. No DLKT partnership or fundraising is implied.', checked: 'Checked', global: 'General knowledge', adapted: 'Original DLKT synthesis and translations', terms: 'Source terms' },
+    ro: { know: 'Stiati ca?', history: 'S-a intamplat azi', recipe: 'Idee de reteta', care: 'Impreuna pentru bine', useful: 'Un lucru util', elsewhere: 'Functioneaza in alta parte', context: 'Ce merita retinut', source: 'Deschide sursa', careSource: 'Vezi initiativa oficiala', careNotice: 'Informare independenta. Nu este anuntat un parteneriat si DLKT nu colecteaza donatii.', checked: 'Verificat', global: 'Fapt general', adapted: 'Sinteza originala si traduceri DLKT', terms: 'Termenii sursei' },
+    it: { know: 'Lo sapevi?', history: 'Accadde oggi', recipe: 'Idea ricetta', care: 'Insieme per il bene', useful: 'Una cosa utile', elsewhere: 'Funziona altrove', context: 'Da ricordare', source: 'Apri la fonte', careSource: 'Vedi iniziativa ufficiale', careNotice: 'Informazione indipendente. Nessuna partnership DLKT o raccolta fondi e implicata.', checked: 'Verificato', global: 'Conoscenza generale', adapted: 'Sintesi originale e traduzioni DLKT', terms: 'Condizioni della fonte' },
 };
 function make(tag, className, text = '') {
     const node = document.createElement(tag);
@@ -13,6 +13,7 @@ function make(tag, className, text = '') {
 }
 /** The sole knowledge surface is an inline card selected by the news stream's fixed cadence. */
 export function knowledgeCardNode(card, scope) {
+    const rights = knowledgeRightsForCard(card);
     const language = knowledgeLanguage(getLocale()), copy = labels[language], value = card.copy[language];
     const article = make('article', 'knowledge-card knowledge-card-inline');
     article.id = 'news-know-' + card.id;
@@ -39,6 +40,16 @@ export function knowledgeCardNode(card, scope) {
     reviewed.dateTime = card.reviewedAt;
     reviewed.title = card.reviewedAt;
     provenance.append(document.createTextNode(card.source.publisher + ' · ' + copy.checked + ' '), reviewed);
+    if (rights !== null) {
+        const license = make('a', '', 'CC BY 4.0'), terms = make('a', '', copy.terms);
+        license.href = rights.licenseUrl;
+        terms.href = rights.policyUrl;
+        for (const link of [license, terms]) {
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+        }
+        provenance.append(document.createTextNode(' · ' + rights.credit + ' · ' + copy.adapted + ' · '), license, document.createTextNode(' · '), terms);
+    }
     const actions = make('div', 'knowledge-actions'), source = make('a', 'knowledge-source', card.format === 'care' ? copy.careSource : copy.source);
     const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg'), path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     icon.setAttribute('viewBox', '0 0 24 24');
