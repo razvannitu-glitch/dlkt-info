@@ -72,3 +72,11 @@ test('ordinary news copy behavior remains unchanged when its source check expire
  h.button.fire('click');await flush();assert.deepEqual(h.writes,[newsUrl]);
  assert.match(h.freshness.textContent,/source check has expired/);
 });
+
+
+test('manual copy from the selected fallback is also denied at the exact deadline before the timer',async()=>{
+ for(const type of ['copy','cut','keydown','pointerdown','contextmenu']){
+  const h=harness({write:null});h.button.fire('click');await flush();assert.equal(h.input.value,url);
+  h.setNow(until);const event=h.input.fire(type);assert.equal(event.prevented,true,type);assert.equal(event.stopped,true,type);assertDisabled(h);assert.equal(h.input.disabled,true);
+ }
+});

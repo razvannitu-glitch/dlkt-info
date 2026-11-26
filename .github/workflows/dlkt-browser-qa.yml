@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - "codex/dlkt-ui-browser-smoke-*"
+      - "codex/generate-knowledge-distribution-lab-20261126"
   pull_request:
     branches:
       - main
