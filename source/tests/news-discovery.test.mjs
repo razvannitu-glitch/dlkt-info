@@ -270,3 +270,57 @@ test('one bounded discovery cycle fetches GDELT plus only its reviewed index rot
  assert.ok(calls.filter(x=>x!==NEWS_INDEX_URL).every(x=>NEWS_DISCOVERY_INDEXES.some(row=>row.url===x)));
  assert.equal(result.diagnostics.totals.verifiedNow,0);
 });
+
+test('one blocked publisher index does not label unrelated empty categories as HTTP 403 when GDELT succeeds',async()=>{
+ const fetcher=async url=>String(url)===NEWS_INDEX_URL
+   ?xmlResponse(rss([]))
+   :new Response('access forbidden',{status:403});
+ const result=await discoverNewsWithDiagnostics(fetcher,now,[],undefined,{
+   publisherIndexBatch:1,frontpageHighlights:false,maxArticleRequests:2,
+ });
+ const gdelt=result.diagnostics.indexes.find(row=>row.indexId==='gdelt-gal');
+ const rejected=result.diagnostics.indexes.find(row=>row.indexId!=='gdelt-gal');
+ assert.equal(gdelt?.state,'verified');
+ assert.equal(rejected?.state,'unavailable');
+ assert.equal(rejected?.reason,'access-denied');
+ for(const category of ['money','family','housing','technology']){
+   const health=result.sources.find(source=>source.health.id==='news-'+category)?.health;
+   assert.equal(health?.state,'partial',category);
+   assert.equal(health?.error,null,category);
+   assert.equal(health?.count,0,category);
+ }
+ assert.equal(result.sources.flatMap(source=>source.cards).length,0);
+});
+
+test('an original article denial remains on its own category, never copied to unrelated empty categories',async()=>{
+ const original=candidate('money');
+ const result=await discoverNewsWithDiagnostics(async url=>String(url)===NEWS_INDEX_URL
+   ?xmlResponse(rss([original]))
+   :new Response('access forbidden',{status:403}),now,[],undefined,{
+   publisherIndexes:false,frontpageHighlights:false,maxArticleRequests:2,
+ });
+ assert.equal(result.sources.find(source=>source.health.id==='news-money')?.health.error,'NEWS_HTTP_403');
+ assert.equal(result.sources.find(source=>source.health.id==='news-money')?.health.state,'unavailable');
+ for(const category of ['family','housing','technology']){
+   const health=result.sources.find(source=>source.health.id==='news-'+category)?.health;
+   assert.equal(health?.state,'partial',category);
+   assert.equal(health?.error,null,category);
+   assert.equal(health?.count,0,category);
+ }
+});
+
+test('an unrelated index rate limit does not impose a retry deadline on empty categories',async()=>{
+ const result=await discoverNewsWithDiagnostics(async url=>String(url)===NEWS_INDEX_URL
+   ?xmlResponse(rss([]))
+   :new Response('temporarily rate limited',{status:429,headers:{'retry-after':'120'}}),now,[],undefined,{
+   publisherIndexBatch:1,frontpageHighlights:false,maxArticleRequests:2,
+ });
+ assert.equal(result.diagnostics.indexes.find(row=>row.indexId==='gdelt-gal')?.state,'verified');
+ assert.equal(result.diagnostics.indexes.find(row=>row.indexId!=='gdelt-gal')?.reason,'rate-limited');
+ for(const category of ['money','family','housing']){
+   const health=result.sources.find(source=>source.health.id==='news-'+category)?.health;
+   assert.equal(health?.state,'partial',category);
+   assert.equal(health?.error,null,category);
+   assert.equal(health?.retryAt,null,category);
+ }
+});
