@@ -8,7 +8,8 @@
   "include": [
     "payment-proof.ts",
     "../../source/src/billing/entitlement.ts",
-    "hosted-sessions.ts"
+    "hosted-sessions.ts",
+    "checkout-lifecycle.ts"
   ],
   "exclude": []
 }

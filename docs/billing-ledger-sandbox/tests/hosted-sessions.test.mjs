@@ -96,3 +96,49 @@ test('wrong write account prevents either session even with correct read account
 test('provider failures and invalid body fail without leaking credentials',async()=>{
  for(const response of [new Response(writeKey,{status:403}),new Response('',{status:302,headers:{location:'https://evil.example'}}),new Response('{',{headers:{'content-type':'application/json'}}),new Response('{}',{headers:{'content-type':'application/json','content-length':'999999'}})]){const f=fixture();f.responses['POST /v1/checkout/sessions']=response;assert.deepEqual(await create(f),unavailable);}
 });
+
+test('expired reservation is recovered by exact authenticated GET, without POST',async()=>{
+ const f=fixture();const list='GET /v1/checkout/sessions?customer=cus_fixture&limit=100';
+ f.responses[list].data=[{...f.checkout,status:'expired',url:null}];
+ f.responses['GET /v1/checkout/sessions/cs_test_fixture']={...f.checkout,status:'expired',url:null};
+ const result=await f.client.observeCheckout(owner,f.binding,f.intent,now+4000);
+ assert.deepEqual(result,{kind:'terminal',status:'expired',paymentStatus:'unpaid',sessionId:'cs_test_fixture',expiresAt:f.intent.createdAt+3600,subscriptionId:null,itemId:null});
+ assert.equal(posts(f).length,0);
+});
+test('open recovery accepts a matching session after the creation window, not after expiry',async()=>{
+ const f=fixture();f.responses['GET /v1/checkout/sessions?customer=cus_fixture&limit=100'].data=[f.checkout];
+ f.responses['GET /v1/checkout/sessions/cs_test_fixture']=f.checkout;
+ assert.equal((await f.client.observeCheckout(owner,f.binding,f.intent,now+700)).kind,'checkout');
+ assert.deepEqual(await f.client.observeCheckout(owner,f.binding,f.intent,now+4000),unavailable);
+ assert.equal(posts(f).length,0);
+});
+test('attached session cannot be recreated on missing or foreign provider list',async()=>{
+ const f=fixture();f.intent.sessionId='cs_test_existing';assert.deepEqual(await create(f),unavailable);assert.equal(posts(f).length,0);
+ f.responses['GET /v1/checkout/sessions?customer=cus_fixture&limit=100'].data=[f.checkout];
+ assert.deepEqual(await create(f),unavailable);assert.equal(posts(f).length,0);
+});
+test('complete recovery binds exact subscription item without authorizing payment',async()=>{
+ const f=fixture();const price=f.responses['GET /v1/prices/price_month'],sub={object:'subscription',id:'sub_fixture',livemode:false,customer:'cus_fixture',status:'active',cancel_at:null,cancel_at_period_end:false,pause_collection:null,latest_invoice:null,
+ items:{object:'list',has_more:false,data:[{object:'subscription_item',id:'si_fixture',subscription:'sub_fixture',quantity:1,price,current_period_start:now-30,current_period_end:now+86400*30-30}]}};
+ const session={...f.checkout,status:'complete',payment_status:'paid',subscription:'sub_fixture',url:null};
+ f.responses['GET /v1/checkout/sessions?customer=cus_fixture&limit=100'].data=[session];
+ f.responses['GET /v1/checkout/sessions/cs_test_fixture']=session;
+ f.responses['GET /v1/subscriptions?customer=cus_fixture&status=all&limit=100'].data=[sub];
+ f.responses['GET /v1/subscriptions/sub_fixture']=sub;
+ const result=await f.client.observeCheckout(owner,f.binding,f.intent,now);
+ assert.deepEqual(result,{kind:'terminal',status:'complete',paymentStatus:'paid',sessionId:'cs_test_fixture',expiresAt:f.intent.createdAt+3600,subscriptionId:'sub_fixture',itemId:'si_fixture'});
+ assert.equal(posts(f).length,0);
+ f.responses['GET /v1/checkout/sessions/cs_test_fixture']={...session,payment_status:'unpaid'};
+ assert.deepEqual(await f.client.observeCheckout(owner,f.binding,f.intent,now),unavailable);
+ f.responses['GET /v1/checkout/sessions/cs_test_fixture']=session;
+ f.responses['GET /v1/subscriptions/sub_fixture']={...sub,customer:'cus_other'};
+ assert.deepEqual(await f.client.observeCheckout(owner,f.binding,f.intent,now),unavailable);
+});
+test('recovery refuses missing, partial, wrong or different attached session and does not create',async()=>{
+ const list='GET /v1/checkout/sessions?customer=cus_fixture&limit=100';
+ for(const mutate of [f=>{},f=>{f.responses[list].has_more=true},f=>{f.responses[list].data=[{...f.checkout,client_reference_id:requestId}]},
+ f=>{f.responses[list].data=[f.checkout];f.intent.sessionId='cs_test_other'},
+ f=>{f.responses[list].data=[f.checkout];f.responses['GET /v1/checkout/sessions/cs_test_fixture']={...f.checkout,id:'cs_test_other'}}]){
+   const f=fixture();mutate(f);assert.deepEqual(await f.client.observeCheckout(owner,f.binding,f.intent,now),unavailable);assert.equal(posts(f).length,0);
+ }
+});

@@ -30,9 +30,11 @@ function hostedUrl(v:unknown,host:string,path:string,exact=false):string{
 }
 type Binding=Readonly<{ownerId:string;accountId:string;customerId:string;liveMode:false}>;
 type Intent=Readonly<Binding&{intentId:string;priceId:string;createdAt:number;expiresAt:number}>;
-type Checkout=Readonly<{kind:'checkout';sessionId:string;url:string;expiresAt:number}>;
+export type Checkout=Readonly<{kind:'checkout';sessionId:string;url:string;expiresAt:number}>;
 type Portal=Readonly<{kind:'portal';url:string}>;
-type Failed=Readonly<{kind:'unavailable'}>;
+export type Failed=Readonly<{kind:'unavailable'}>;
+export type CheckoutTerminal=Readonly<{kind:'terminal';status:'expired';paymentStatus:'unpaid';sessionId:string;expiresAt:number;subscriptionId:null;itemId:null}>
+  | Readonly<{kind:'terminal';status:'complete';paymentStatus:'paid';sessionId:string;expiresAt:number;subscriptionId:string;itemId:string}>;
 const FAILED:Failed=Object.freeze({kind:'unavailable'});
 
 /**
@@ -72,10 +74,12 @@ export class SandboxHostedSessions {
     return Object.freeze({ownerId:owner,customerId,accountId:this.#account,liveMode:false});
   }
 
-  #intent(b:Binding,i:unknown,now:unknown):Intent{
+  #intent(b:Binding,i:unknown,now:unknown,recovery=false):Intent{
     const intentId=get(i,'intentId'),priceId=get(i,'priceId'),createdAt=get(i,'createdAt');
     if(!isUuid(intentId)||!stripeId(priceId,'price')||!unixSeconds(createdAt)||!unixSeconds(now)
-      ||createdAt>now||now-createdAt>600||!same(i,{...b,closedAt:null}))return reject();
+      ||createdAt>now||(!recovery&&now-createdAt>600)||!same(i,{...b,closedAt:null}))return reject();
+    const expiry=get(i,'expiresAt'),session=get(i,'sessionId');
+    if((expiry!==undefined&&expiry!==createdAt+3600)||(session!==undefined&&session!==null&&!id(session,'cs_test_')))return reject();
     return Object.freeze({...b,intentId,priceId,createdAt,expiresAt:createdAt+3600});
   }
 
@@ -136,21 +140,27 @@ export class SandboxHostedSessions {
     return ids;
   }
 
-  async #checkoutResult(s:unknown,i:Intent,c:PremiumCatalog):Promise<Checkout>{
+  async #checkoutIdentity(s:unknown,i:Intent,c:PremiumCatalog):Promise<string>{
     const sessionId=get(s,'id'),plan=premiumPlanForPrice(c,i.priceId);
     if(!id(sessionId,'cs_test_')||!plan)return reject();
     const amount=PREMIUM_PLANS[plan].unitAmount;
     const success=this.#returnOrigin+'/billing/return';
     const cancel=this.#returnOrigin+'/billing/cancel';
     if(!same(s,{object:'checkout.session',livemode:false,mode:'subscription',ui_mode:'hosted_page',
-      customer:i.customerId,client_reference_id:i.intentId,status:'open',payment_status:'unpaid',
+      customer:i.customerId,client_reference_id:i.intentId,
       currency:'eur',amount_total:amount,amount_subtotal:amount,expires_at:i.expiresAt,success_url:success,cancel_url:cancel,
-      allow_promotion_codes:false,subscription:null})||!exactCard(get(s,'payment_method_types'))
+      allow_promotion_codes:false})||!exactCard(get(s,'payment_method_types'))
       ||get(get(s,'automatic_tax'),'enabled')!==false)return reject();
     const lines=fullList(await this.#call('GET','/v1/checkout/sessions/'+sessionId+'/line_items',{query:new URLSearchParams({limit:'2'})}),1);
     const line=lines[0],price=get(line,'price');
     if(lines.length!==1||!same(line,{object:'item',quantity:1,currency:'eur',amount_total:amount,amount_subtotal:amount})
       ||!same(price,{id:i.priceId,product:c.productId,livemode:false,currency:'eur',unit_amount:amount}))return reject();
+    return sessionId;
+  }
+
+  async #checkoutResult(s:unknown,i:Intent,c:PremiumCatalog,now:number):Promise<Checkout>{
+    const sessionId=await this.#checkoutIdentity(s,i,c);
+    if(!same(s,{status:'open',payment_status:'unpaid',subscription:null})||i.expiresAt<=now)return reject();
     const url=hostedUrl(get(s,'url'),'checkout.stripe.com','/c/pay/'+sessionId,true);
     return Object.freeze({kind:'checkout',sessionId,url,expiresAt:i.expiresAt});
   }
@@ -158,6 +168,7 @@ export class SandboxHostedSessions {
   async createCheckout(owner:unknown,binding:unknown,intent:unknown,now:unknown):Promise<Checkout|Failed>{
     try{
       if(!this.#checkoutEnabled)return FAILED;
+      if(!unixSeconds(now))return FAILED;
       const b=this.#binding(owner,binding),i=this.#intent(b,intent,now);
       const catalog=await this.#context(b);
       if(!premiumPlanForPrice(catalog,i.priceId))return FAILED;
@@ -165,10 +176,13 @@ export class SandboxHostedSessions {
       // separate verified renewal/restart workflow, not another automatic sale.
       if((await this.#subscriptions(b,catalog)).size!==0)return FAILED;
       const sessions=fullList(await this.#call('GET','/v1/checkout/sessions',{query:new URLSearchParams({customer:b.customerId,limit:'100'})}),100);
+      const persisted=get(intent,'sessionId');
       if(sessions.length!==0){
-        if(sessions.length!==1||get(sessions[0],'client_reference_id')!==i.intentId)return FAILED;
-        return await this.#checkoutResult(sessions[0],i,catalog);
+        if(sessions.length!==1||get(sessions[0],'client_reference_id')!==i.intentId
+          ||(persisted!=null&&get(sessions[0],'id')!==persisted))return FAILED;
+        return await this.#checkoutResult(sessions[0],i,catalog,now);
       }
+      if(persisted!=null)return FAILED; // Never recreate an already attached session.
       // Stable reserved intent -> stable idempotency key and request fields.
       // Stripe permits expiry 30 min–24 h after creation. The reservation window
       // is deliberately only 10 min, so the fixed 1h expiry remains valid.
@@ -180,7 +194,44 @@ export class SandboxHostedSessions {
         success_url:this.#returnOrigin+'/billing/return',cancel_url:this.#returnOrigin+'/billing/cancel',
         expires_at:String(i.expiresAt)});
       const session=await this.#call('POST','/v1/checkout/sessions',{body,key:this.#writeKey,idempotency:'dlkt-sandbox-checkout-v1-'+i.intentId});
-      return await this.#checkoutResult(session,i,catalog);
+      return await this.#checkoutResult(session,i,catalog,now);
+    }catch{return FAILED;}
+  }
+
+  /** Read-only crash recovery. No create, cancel, or expire operation; no
+   * assumption that a missing response means Stripe did not create an object.
+   * A terminal result is not entitlement evidence. */
+  async observeCheckout(owner:unknown,binding:unknown,intent:unknown,now:unknown):Promise<Checkout|CheckoutTerminal|Failed>{
+    try{
+      if(!unixSeconds(now))return FAILED;
+      const b=this.#binding(owner,binding),i=this.#intent(b,intent,now,true),c=await this.#context(b);
+      if(!premiumPlanForPrice(c,i.priceId))return FAILED;
+      const known=get(intent,'sessionId');
+      const sessions=fullList(await this.#call('GET','/v1/checkout/sessions',{query:new URLSearchParams({customer:b.customerId,limit:'100'})}),100);
+      if(sessions.length!==1)return FAILED;
+      const candidate=get(sessions[0],'id');
+      if(!id(candidate,'cs_test_')||(known!=null&&known!==candidate)||get(sessions[0],'client_reference_id')!==i.intentId)return FAILED;
+      // Explicit GET by exact ID, not list metadata or a browser return URL.
+      const s=await this.#call('GET','/v1/checkout/sessions/'+candidate);
+      if(get(s,'id')!==candidate)return FAILED;
+      const status=get(s,'status');
+      if(status==='open'){
+        if((await this.#subscriptions(b,c)).size!==0)return FAILED;
+        return await this.#checkoutResult(s,i,c,now);
+      }
+      const sessionId=await this.#checkoutIdentity(s,i,c);
+      if(same(s,{status:'expired',payment_status:'unpaid',subscription:null})){
+        if((await this.#subscriptions(b,c)).size!==0)return FAILED;
+        return Object.freeze({kind:'terminal',status:'expired',paymentStatus:'unpaid',sessionId,expiresAt:i.expiresAt,subscriptionId:null,itemId:null});
+      }
+      const subscriptionId=get(s,'subscription');
+      if(status!=='complete'||get(s,'payment_status')!=='paid'||!stripeId(subscriptionId,'sub'))return FAILED;
+      const subscriptions=await this.#subscriptions(b,c);
+      if(subscriptions.size!==1||!subscriptions.has(subscriptionId))return FAILED;
+      const o=await this.#reader.observeSubscription(owner,{...b,subscriptionId});
+      if(o.accountId!==b.accountId||o.customerId!==b.customerId||o.subscriptionId!==subscriptionId
+        ||o.priceId!==i.priceId||o.productId!==c.productId||!id(o.itemId,'si_'))return FAILED;
+      return Object.freeze({kind:'terminal',status:'complete',paymentStatus:'paid',sessionId,expiresAt:i.expiresAt,subscriptionId,itemId:o.itemId});
     }catch{return FAILED;}
   }
 
