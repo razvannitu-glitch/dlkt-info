@@ -16,7 +16,12 @@ async function snapshot(hours=24){return asRole('service_role',async()=>(await d
 before(async()=>{
  db=new PGlite();await db.waitReady;
  await db.exec('create role anon noinherit;create role authenticated noinherit;create role service_role noinherit bypassrls;');
- await db.exec(await readFile('scripts/audience-schema.sql','utf8'));
+ const sql=await readFile('scripts/audience-schema.sql','utf8');
+ assert.equal((sql.match(/create table dlkt_audience\./g)??[]).length,4);
+ assert.equal((sql.match(/create function dlkt_audience\./g)??[]).length,4);
+ assert.equal((sql.match(/\$\$/g)??[]).length,8);
+ assert.equal((sql.match(/^commit;$/gm)??[]).length,1);
+ await db.exec(sql);
 });
 after(async()=>{if(db)await db.close();});
 test('isolated schema has no anonymous or normal authenticated access',async()=>{
