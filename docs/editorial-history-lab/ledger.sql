@@ -78,12 +78,15 @@ alter table dlkt_history_lab.results enable row level security;
 create function dlkt_history_lab.history_state(p_card text,p_revision integer,p_digest text,p_tip integer)
 returns text language plpgsql security invoker set search_path=pg_catalog as $$
 declare n bigint; max_seq integer; open_n bigint; open_seq integer; bad_clock boolean;
+        open_started timestamptz; checked_at timestamptz:=clock_timestamp();
 begin
   select count(*),coalesce(max(a.sequence_no),0),
     count(*) filter (where r.attempt_id is null),
     max(a.sequence_no) filter (where r.attempt_id is null),
-    coalesce(bool_or(r.finished_at<a.started_at or r.observed_at<a.started_at),false)
-  into n,max_seq,open_n,open_seq,bad_clock
+    max(a.started_at) filter (where r.attempt_id is null),
+    coalesce(bool_or(a.started_at>checked_at or r.finished_at>checked_at
+      or r.finished_at<a.started_at or r.observed_at<a.started_at),false)
+  into n,max_seq,open_n,open_seq,open_started,bad_clock
   from dlkt_history_lab.attempts a
   left join dlkt_history_lab.results r using (attempt_id)
   where (a.card_id,a.revision,a.digest)=(p_card,p_revision,p_digest);
@@ -98,9 +101,13 @@ begin
       and b.sequence_no=a.sequence_no+1
     left join dlkt_history_lab.results r on r.attempt_id=a.attempt_id
     where (a.card_id,a.revision,a.digest)=(p_card,p_revision,p_digest)
-      and (r.attempt_id is null or b.started_at<r.finished_at)
+      and (r.attempt_id is null or b.started_at<=r.finished_at)
   ) then return 'integrity-held'; end if;
-  if open_n=1 then return 'open'; end if;
+  if open_n=1 then
+    if checked_at>=open_started+interval '5 minutes' then return 'expired-open'; end if;
+    return 'open';
+  end if;
+  if p_tip=0 then return 'empty'; end if;
   if p_tip>=256 then return 'capacity-held'; end if;
   if exists (
     select 1 from dlkt_history_lab.attempts a join dlkt_history_lab.results r using (attempt_id)
@@ -136,7 +143,7 @@ begin
     ) then 'replay-terminal' else 'replay-open' end;
     return;
   end if;
-  if state='open' then return query select null::integer,'busy'::text; return; end if;
+  if state in ('open','expired-open') then return query select null::integer,'busy'::text; return; end if;
   if state='capacity-held' then return query select null::integer,'capacity-held'::text; return; end if;
   ts:=clock_timestamp();
   select r.finished_at into prev_end from dlkt_history_lab.attempts k
@@ -187,6 +194,9 @@ begin
      or (p_observed is not null and (not isfinite(p_observed) or p_observed<a.started_at or p_observed>ts)) then
     raise exception 'HISTORY_CLOCK_OR_SEQUENCE_INVALID';
   end if;
+  -- A delayed worker must not convert an expired open attempt to a success,
+  -- even if the separate reaper has not yet acquired the candidate lock.
+  if ts>=a.started_at+interval '5 minutes' then raise exception 'HISTORY_ATTEMPT_EXPIRED'; end if;
   insert into dlkt_history_lab.results values(p_attempt,ts,p_outcome,p_reason,p_observed,p_fingerprints,p_evidence);
   return 'recorded';
 end;

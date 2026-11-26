@@ -2,7 +2,7 @@
 -- Fixtures only; no real source identity or permission.
 insert into dlkt_history_lab.candidates(card_id,revision,digest,source_url,policy_url)
 select 'lab-'||n,1,repeat('a',64),'https://example.invalid/source/'||n,'https://example.invalid/policy/'||n
-from unnest(array['main','other','abandon','gap','capacity','clock','race','race-distinct']) as t(n);
+from unnest(array['main','other','abandon','gap','capacity','clock','race','race-distinct','future-open','clock-order']) as t(n);
 
 set role dlkt_history_worker;
 do $$
@@ -83,6 +83,9 @@ begin
     or h #>> '{attempts,0,outcome}' is distinct from 'held'
     or h #>> '{attempts,1,outcome}' is distinct from 'observed'
     or h->'activationAllowed' is distinct from 'false'::jsonb then raise exception 'history omitted terminal failure'; end if;
+  h:=dlkt_history_lab.read_history('lab-other',1,d);
+  if h->>'state' is distinct from 'empty' or h->>'tip' is distinct from '0'
+    or jsonb_array_length(h->'attempts') is distinct from 0 then raise exception 'empty history misclassified'; end if;
   h:=dlkt_history_lab.read_history('lab-abandon',1,d);
   if h->>'state' is distinct from 'open' or h #>> '{attempts,0,outcome}' is distinct from 'open'
     then raise exception 'open start omitted'; end if;
@@ -109,6 +112,35 @@ reset role;
 -- Admin-only synthetic aging to exercise timeout without waiting five minutes.
 update dlkt_history_lab.attempts set started_at=clock_timestamp()-interval '6 minutes'
 where attempt_id='00000000-0000-4000-8000-000000000003';
+-- Even before the reaper commits a result, the expired worker is fenced.
+set role dlkt_history_worker;
+do $
+declare a record; d text:=repeat('a',64);
+begin
+  begin
+    perform dlkt_history_lab.finish_attempt('lab-abandon',1,d,'00000000-0000-4000-8000-000000000003',
+      'observed',null,clock_timestamp(),to_jsonb(array_fill(repeat('b',64),array[5])),repeat('c',64));
+    raise exception 'expired worker success accepted';
+  exception when raise_exception then
+    if sqlerrm<>'HISTORY_ATTEMPT_EXPIRED' then raise; end if;
+  end;
+  select * into a from dlkt_history_lab.start_attempt('lab-abandon',1,d,'00000000-0000-4000-8000-000000000009');
+  if (a.sequence_no,a.disposition) is distinct from (null::integer,'busy'::text)
+    then raise exception 'expired unresolved start bypassed'; end if;
+end;
+$;
+reset role;
+set role dlkt_history_reader;
+do $
+declare h jsonb;
+begin
+  h:=dlkt_history_lab.read_history('lab-abandon',1,repeat('a',64));
+  if h->>'state' is distinct from 'expired-open'
+    or h #>> '{attempts,0,outcome}' is distinct from 'open'
+    then raise exception 'expired unresolved start not exposed'; end if;
+end;
+$;
+reset role;
 set role dlkt_history_reaper;
 do $$
 begin
@@ -139,6 +171,16 @@ update dlkt_history_lab.candidates set tip=1 where card_id='lab-clock';
 insert into dlkt_history_lab.attempts values('00000000-0000-4000-8000-000000000005','lab-clock',1,repeat('a',64),1,clock_timestamp());
 insert into dlkt_history_lab.results(attempt_id,finished_at,outcome,reason)
 values('00000000-0000-4000-8000-000000000005',clock_timestamp()+interval '1 hour','failed','clock-invalid');
+-- A future open attempt and tied adjacent boundaries are both integrity failures.
+update dlkt_history_lab.candidates set tip=1 where card_id='lab-future-open';
+insert into dlkt_history_lab.attempts values('00000000-0000-4000-8000-000000000010','lab-future-open',1,repeat('a',64),1,clock_timestamp()+interval '1 hour');
+update dlkt_history_lab.candidates set tip=2 where card_id='lab-clock-order';
+insert into dlkt_history_lab.attempts values
+  ('00000000-0000-4000-8000-000000000011','lab-clock-order',1,repeat('a',64),1,'2026-01-01T00:00:00Z'::timestamptz),
+  ('00000000-0000-4000-8000-000000000012','lab-clock-order',1,repeat('a',64),2,'2026-01-01T00:00:01Z'::timestamptz);
+insert into dlkt_history_lab.results(attempt_id,finished_at,outcome,reason) values
+  ('00000000-0000-4000-8000-000000000011','2026-01-01T00:00:01Z'::timestamptz,'failed','clock-invalid'),
+  ('00000000-0000-4000-8000-000000000012','2026-01-01T00:00:02Z'::timestamptz,'failed','clock-invalid');
 
 -- Bounded history: no compaction or deletion. Seed 256 synthetic terminal attempts.
 update dlkt_history_lab.candidates set tip=256 where card_id='lab-capacity';
@@ -163,7 +205,7 @@ begin
     perform dlkt_history_lab.start_attempt('lab-clock',1,d,'00000000-0000-4000-8000-000000000006');
     raise exception 'regressed clock allowed start';
   exception when raise_exception then
-    if sqlerrm<>'HISTORY_CLOCK_INVALID' then raise; end if;
+    if sqlerrm<>'HISTORY_INTEGRITY_HELD' then raise; end if;
   end;
   select * into a from dlkt_history_lab.start_attempt('lab-capacity',1,d,'00000000-0000-4000-8000-000000000006');
   if (a.sequence_no,a.disposition) is distinct from (null::integer,'capacity-held'::text) then raise exception 'capacity bypass'; end if;
@@ -176,6 +218,12 @@ declare h jsonb;
 begin
   h:=dlkt_history_lab.read_history('lab-gap',1,repeat('a',64));
   if h->>'state' is distinct from 'integrity-held' then raise exception 'missing prefix not held'; end if;
+  h:=dlkt_history_lab.read_history('lab-clock',1,repeat('a',64));
+  if h->>'state' is distinct from 'integrity-held' then raise exception 'future terminal not held'; end if;
+  h:=dlkt_history_lab.read_history('lab-future-open',1,repeat('a',64));
+  if h->>'state' is distinct from 'integrity-held' then raise exception 'future start not held'; end if;
+  h:=dlkt_history_lab.read_history('lab-clock-order',1,repeat('a',64));
+  if h->>'state' is distinct from 'integrity-held' then raise exception 'tied adjacent boundaries not held'; end if;
   h:=dlkt_history_lab.read_history('lab-capacity',1,repeat('a',64));
   if h->>'state' is distinct from 'capacity-held' or jsonb_array_length(h->'attempts') is distinct from 256 then
     raise exception 'capacity history truncated'; end if;
