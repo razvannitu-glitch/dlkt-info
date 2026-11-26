@@ -16,8 +16,14 @@ export function arcubPhotoDocument(row=ARCUB_PHOTO_ROWS[0]){
 }
 export function arcubPhotoFixture(now){
  const checkedAt=new Date(now).toISOString();
- const body='<html><body>'+ARCUB_PHOTO_ROWS.map(row=>'<div class="pgrid-item"><a href="'+escape(row.url)+'"><h3>'+escape(row.title)+'</h3><div class="meta"><span>26 noiembrie – 9 decembrie 2026</span><span>ARCUB – Sala Lahovari</span></div></a></div>').join('')+'</body></html>';
+ const body=arcubPhotoAgendaDocument();
  const parsed=parseArcubAgenda({body,checkedAt},now);
  return {cards:parsed.cards,coverage:[{domain:'events',state:'partial',checkedAt,sourceUrl:'https://arcub.ro/agenda',note:'Controlled source-photo fixture; not a live event check.'}]};
 }
 export const arcubPhotoArticle=card=>({id:card.id,revision:card.context.documentHash,sourceUrl:card.sourceUrl,title:card.title,publisher:card.publisher,publishedAt:'',documentKind:'local-event',validUntil:Date.parse(card.validTo)});
+
+export function arcubPhotoAgendaDocument(rows=ARCUB_PHOTO_ROWS){return '<html><body>'+rows.map(row=>'<div class="pgrid-item"><a href="'+escape(row.url)+'"><h3>'+escape(row.title)+'</h3><div class="meta"><span>26 noiembrie – 9 decembrie 2026</span><span>ARCUB – Sala Lahovari</span></div></a></div>').join('')+'</body></html>';}
+export function arcubPhotoDetailDocument(row=ARCUB_PHOTO_ROWS[0]){
+ const fields='<table class="feat"><tr><td class="lbl">Când</td><td class="val">26 noiembrie – 9 decembrie 2026</td></tr><tr><td class="lbl">Unde</td><td class="val">ARCUB – Sala Lahovari</td></tr></table><div class="content">Program: 26 noiembrie – 9 decembrie 2026.</div>';
+ return arcubPhotoDocument(row).replace('</h1></div></header>','</h1>'+fields+'</div></header>');
+}

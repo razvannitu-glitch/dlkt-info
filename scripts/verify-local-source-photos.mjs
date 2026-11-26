@@ -22,6 +22,7 @@ async function get(path,kind){
  try{
   const response=await fetch(url,{redirect:'manual',credentials:'omit',cache:'no-store',signal:controller.signal,
    headers:{Accept:kind==='image'?'image/jpeg,image/png,image/webp':'application/json','User-Agent':'DLKT-Info-Source-Photo-Verification/1.0 (+https://www.dlkt.ee)'}});
+  report.http.push({path:url.pathname+url.search,status:response.status,cacheControl:response.headers.get('cache-control'),type:response.headers.get('content-type')});
   assert.equal(response.status,200,'public request succeeds: '+url.pathname);
   const type=(response.headers.get('content-type')??'').split(';')[0].trim().toLowerCase();
   assert.ok((kind==='image'?['image/jpeg','image/png','image/webp']:['application/json']).includes(type));
@@ -33,7 +34,7 @@ async function get(path,kind){
   return{bytes:Buffer.concat(parts),headers:response.headers,type};
  }finally{clearTimeout(timer);}
 }
-const report={check:'dlkt-local-source-photos-production-1',expectedCommit:expected,startedAt:new Date(started).toISOString(),photos:[]};
+const report={http:[],check:'dlkt-local-source-photos-production-1',expectedCommit:expected,startedAt:new Date(started).toISOString(),photos:[]};
 try{
  const release=JSON.parse((await get('/release.json','json')).bytes.toString('utf8'));
  assert.equal(release.gitCommitSha,expected,'the official domain serves the exact promoted main commit');
@@ -43,6 +44,7 @@ try{
  for(const row of required){
   const card=snapshot.cards.find(value=>value.sourceUrl===row.url);assert.ok(card,'original source event remains present: '+row.url);
   const reference=localCardPhotoReference(card,city.id,Date.now());assert.ok(reference);
+  assert.equal(reference.revision,card.photoRevision,'production emits the stable event photo revision');assert.notEqual(reference.revision,card.context.documentHash);
   const path=articlePhotoPath(reference),response=await get(path,'image'),raster=inspectPhotoRaster(response.bytes);
   assert.ok(raster);assert.equal(raster.mime,response.type);
   const sha256=createHash('sha256').update(response.bytes).digest('hex');

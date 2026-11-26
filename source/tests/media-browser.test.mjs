@@ -181,12 +181,15 @@ test('Daily renders the same local article reference and preserves its source wh
 });
 
 test('official event photos share exact identity across recent, city and Daily and fail without losing actions',async t=>{
- dom(t);const city=findCity('683506'),time=Date.parse('2026-11-26T00:00:00.000Z'),card=arcubPhotoFixture(time).cards[0];
+ dom(t);const city=findCity('683506'),time=Date.parse('2026-11-26T00:00:00.000Z'),card={...arcubPhotoFixture(time).cards[0],photoRevision:'6'.repeat(64)};
  assert.ok(city);assert.ok(card);
  const compiled=readFileSync('.build/src/daily/browser.js','utf8'),definition=compiled.match(/^function renderItem\(item\) \{[\s\S]+?(?=^function render\()/mu)?.[0];assert.ok(definition);
  const make=(tag,text='',className='')=>{const element=document.createElement(tag);element.textContent=text;element.className=className;return element;};
  const renderItem=runInNewContext(definition+'\nrenderItem',{make,city,feedback:[],Date:{now:()=>time},date:value=>value,localReading,localCardCategory,localCardLabel,contextPhotoNode,localCardPhotoReference});
- const reference={id:card.id,revision:card.context.documentHash,cityId:city.id},before=JSON.stringify(card);
+ const reference={id:card.id,revision:card.photoRevision,cityId:city.id},before=JSON.stringify(card);
+ assert.notEqual(reference.revision,card.context.documentHash);
+ assert.equal(localCardPhotoReference({...card,photoRevision:undefined},city.id,time).revision,card.context.documentHash,'legacy snapshot compatibility');
+ assert.equal(localCardPhotoReference({...card,photoRevision:'bad'},city.id,time),undefined);
  for(const node of [localCardNode(card,city,time,{compact:true}),localCardNode(card,city,time),renderItem({id:card.id,local:card,topic:null})]){
   const figure=node.querySelector('figure'),image=figure?.querySelector('img'),title=node.querySelector('h3');assert.ok(image);
   assert.deepEqual(parseArticlePhotoReference(image.src),reference);assert.equal(title.textContent,card.title);

@@ -10,6 +10,7 @@ import {findCity} from '../src/local/cities.js';
 import {currentLocalSnapshot,type City} from '../src/local/contracts.js';
 import {localPublicationService,type LocalPublications} from '../src/local/publications.js';
 import {localCardPhotoReference} from '../src/local/photo-reference.js';
+import {arcubPhotoRevision} from '../src/local/arcub.js';
 import {localNewsService} from '../src/local/news-service.js';
 import {validLocalNewsArticle,type CityNewsSnapshot} from '../src/local/news-policy.js';
 import {parseArticlePhotoReference,type ArticlePhotoReference} from '../src/media/article-photo-reference.js';
@@ -32,14 +33,18 @@ export async function resolvePhotoArticle(reference:ArticlePhotoReference,servic
   if(reference.cityId!=='683506'||!services.official)return null;
   const city=findCity(reference.cityId);if(!city)return null;
   const listing=await services.official(city),now=services.clock();
-  const card=listing.cards.find(value=>value.id===reference.id&&value.context?.documentHash===reference.revision);
-  if(!card||card.id!=='bucharest:arcub:'+createHash('sha256').update(card.sourceUrl).digest('hex').slice(0,24)
+  const card=listing.cards.find(value=>value.id===reference.id);
+  if(!card||!card.context||card.id!=='bucharest:arcub:'+createHash('sha256').update(card.sourceUrl).digest('hex').slice(0,24)
    ||!localCardPhotoReference(card,city.id,now))return null;
+  const semantic=arcubPhotoRevision(card,city.id);
+  if(!semantic||card.photoRevision!==undefined&&card.photoRevision!==semantic
+   ||reference.revision!==semantic&&reference.revision!==card.context.documentHash)return null;
+  // Legacy clients may use only the exact current raw hash; no historical revision is accepted.
   // This projection retains the source check times; it does not stamp a new successful check.
   const snapshot={version:'dlkt-local-1',city,checkedAt:card.checkedAt,state:'partial',weatherState:'unavailable',transportState:'not-covered',
    cards:[card],coverage:listing.coverage.filter(value=>value.domain==='events')};
   if(!currentLocalSnapshot(snapshot,city,now)||photoPublisher(card.sourceUrl)!=='bucharest-arcub')return null;
-  return{id:card.id,revision:reference.revision,sourceUrl:card.sourceUrl,title:card.title,publisher:card.publisher,
+  return{id:card.id,revision:card.context.documentHash,sourceUrl:card.sourceUrl,title:card.title,publisher:card.publisher,
    publishedAt:'',documentKind:'local-event',validUntil:Date.parse(card.validTo)};
  }
  if(services.corpus){

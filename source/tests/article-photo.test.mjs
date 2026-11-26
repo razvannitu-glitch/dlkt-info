@@ -11,8 +11,12 @@ import {ArticlePhotoService,PHOTO_IMAGE_LIMIT} from '../.build/src/media/article
 import {handleArticlePhoto,resolvePhotoArticle} from '../.build/api/article-photo.js';
 import {articlePhotoPath} from '../.build/src/media/article-photo-reference.js';
 import {findCity} from '../.build/src/local/cities.js';
+import {PublicationCache,LocalPublicationService} from '../.build/src/local/publications.js';
+import {arcubPhotoRevision} from '../.build/src/local/arcub.js';
+import {localCardPhotoReference} from '../.build/src/local/photo-reference.js';
+import {currentLocalSnapshot} from '../.build/src/local/contracts.js';
 import {parseLocalNews} from '../.build/src/local/news-service.js';
-import {ARCUB_PHOTO_ROWS,ARCUB_GENERIC_IMAGE,arcubPhotoDocument,arcubPhotoFixture,arcubPhotoArticle} from './fixtures/arcub-photos.mjs';
+import {ARCUB_PHOTO_ROWS,ARCUB_GENERIC_IMAGE,arcubPhotoDocument,arcubPhotoFixture,arcubPhotoArticle,arcubPhotoAgendaDocument,arcubPhotoDetailDocument} from './fixtures/arcub-photos.mjs';
 
 const now=Date.parse('2026-11-22T16:00:00.000Z');
 const article={id:'a'.repeat(24),revision:'b'.repeat(64),sourceUrl:'https://www.theguardian.com/world/2026/nov/22/source-article',
@@ -404,4 +408,83 @@ test('official source robots policy also protects image paths and every image re
   assert.equal(await service.read(item),null);
   assert.deepEqual(calls,['https://arcub.ro/robots.txt',card.sourceUrl,...(redirected?[row.image]:[])]);
  }
+});
+
+test('independent official workers resolve the same event photo across irrelevant HTML revisions',async()=>{
+ const city=findCity('683506'),row=ARCUB_PHOTO_ROWS[0];assert.ok(city);
+ function worker(clock,nonce){
+  const calls=[];
+  const fetcher=async address=>{
+   const url=String(address);calls.push(url);
+   if(url==='https://arcub.ro/robots.txt')return new Response('User-agent: *\nAllow: /',{headers:{'content-type':'text/plain'}});
+   if(url==='https://arcub.ro/agenda')return new Response(arcubPhotoAgendaDocument([row])+'<!-- agenda '+nonce+' -->',{headers:{'content-type':'text/html'}});
+   if(url===row.url)return new Response(arcubPhotoDetailDocument(row).replace('</head>','<meta name="csrf-token" content="'+nonce+'"></head>'),{headers:{'content-type':'text/html'}});
+   return new Response('Not connected in this controlled test',{status:503,headers:{'content-type':'text/plain'}});
+  };
+  return {service:new LocalPublicationService(new PublicationCache(fetcher,()=>clock),()=>clock),calls};
+ }
+ const first=worker(now,'worker-a'),second=worker(now+1000,'worker-b');
+ const listingA=await first.service.snapshot(city),listingB=await second.service.snapshot(city);
+ const cardA=listingA.cards.find(card=>card.sourceUrl===row.url),cardB=listingB.cards.find(card=>card.sourceUrl===row.url);
+ assert.ok(cardA);assert.ok(cardB);assert.equal(cardA.context.datePrecision,'day');assert.equal(cardB.context.datePrecision,'day');
+ assert.ok(first.calls.includes(row.url));assert.ok(second.calls.includes(row.url),'both workers independently enrich the real agenda structure');
+ assert.notEqual(cardA.checkedAt,cardB.checkedAt);assert.notEqual(cardA.context.documentHash,cardB.context.documentHash);
+ assert.match(cardA.photoRevision,/^[a-f0-9]{64}$/u);assert.equal(cardA.photoRevision,cardB.photoRevision);
+ assert.notEqual(cardA.photoRevision,cardA.context.documentHash);
+ const reference=localCardPhotoReference(cardA,city.id,now+1000);assert.equal(reference.revision,cardA.photoRevision);
+ let active=listingB;const acquisitions=[],resolved=[];
+ const fetcher=async address=>{
+  const url=String(address);acquisitions.push(url);
+  if(url==='https://arcub.ro/robots.txt')return new Response('User-agent: *\nAllow: /',{headers:{'content-type':'text/plain'}});
+  if(url===row.url)return new Response(arcubPhotoDetailDocument(row),{headers:{'content-type':'text/html'}});
+  if(url===row.image)return new Response(pixels,{headers:{'content-type':'image/png'}});
+  throw Error('Unexpected source image request');
+ };
+ const photos=new ArticlePhotoService(fetcher,()=>now+1000);
+ const deps={...services,clock:()=>now+1000,official:async()=>active,photos:{read:async item=>{resolved.push(item);return photos.read(item);}}};
+ const articleB=await resolvePhotoArticle(reference,deps);
+ assert.equal(articleB.revision,cardB.context.documentHash,'internal cache remains bound to the current observed document');
+ assert.equal(await resolvePhotoArticle({...reference,revision:cardA.context.documentHash},deps),null,'a historical raw revision is not accepted');
+ assert.equal((await resolvePhotoArticle({...reference,revision:cardB.context.documentHash},deps)).revision,cardB.context.documentHash,'exact current legacy references remain compatible');
+ const server=createServer((req,res)=>{void handleArticlePhoto(req,res,deps);}).listen(0,'127.0.0.1');await once(server,'listening');
+ const base='http://127.0.0.1:'+server.address().port;
+ try{
+  const path=articlePhotoPath(reference),response=await fetch(base+path);
+  assert.equal(response.status,200);assert.equal(response.headers.get('content-type'),'image/png');
+  assert.equal(response.headers.get('x-dlkt-photo-basis'),'local-event-hero');assert.equal(response.headers.get('link'),'<'+row.url+'>; rel="canonical"');
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()),pixels);
+  assert.equal(resolved[0].revision,cardB.context.documentHash);
+  assert.deepEqual(acquisitions,['https://arcub.ro/robots.txt',row.url,row.image]);
+  const original=cardB.photoRevision;
+  const variations=[
+   {...cardB,title:cardB.title+' revised'},
+   {...cardB,sourceUrl:ARCUB_PHOTO_ROWS[1].url,id:'bucharest:arcub:'+createHash('sha256').update(ARCUB_PHOTO_ROWS[1].url).digest('hex').slice(0,24)},
+   ...[
+    {place:'Another confirmed venue'},{when:'A changed published programme'},
+    {startsAt:new Date(Date.parse(cardB.context.startsAt)+86400000).toISOString()},
+    {endsAt:new Date(Date.parse(cardB.context.endsAt)+86400000).toISOString()},
+    {datePrecision:'minute'},{documentUrl:'https://arcub.ro/agenda'},
+   ].map(patch=>({...cardB,context:{...cardB.context,...patch}})),
+  ];
+  for(const changed of variations){
+   const revision=arcubPhotoRevision(changed,city.id);assert.notEqual(revision,original,'event identity changes revoke the previous reference');
+   active={...listingB,cards:[{...changed,photoRevision:revision}]};
+   assert.equal((await fetch(base+path)).status,404);
+  }
+  for(const cards of [[],[{...cardB,photoRevision:'0'.repeat(64)}],[{...cardB,validTo:new Date(now).toISOString()}],
+   [{...cardB,checkedAt:new Date(now-300001).toISOString(),validFrom:new Date(now-300001).toISOString()}]]){
+   active={...listingB,cards};assert.equal((await fetch(base+path)).status,404);
+  }
+  active=listingB;assert.equal((await fetch(base+articlePhotoPath({...reference,revision:'0'.repeat(64)}))).status,404);
+  assert.equal((await fetch(base+path.replace('city=683506','city=2512989'))).status,400);
+  assert.equal(resolved.length,1,'rejected references do not reach image acquisition');
+  assert.equal(acquisitions.length,3);
+ }finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
+ const snapshot={version:'dlkt-local-1',city,checkedAt:cardB.checkedAt,state:'partial',weatherState:'unavailable',transportState:'not-covered',
+  cards:[cardB],coverage:listingB.coverage.filter(row=>row.domain==='events')};
+ assert.equal(currentLocalSnapshot(snapshot,city,now+1000),true);
+ for(const invalid of [null,123,'x'.repeat(64),'0'.repeat(63)])assert.equal(currentLocalSnapshot({...snapshot,cards:[{...cardB,photoRevision:invalid}]},city,now+1000),false);
+ const evidenceOnly={...cardB,checkedAt:new Date(now+2000).toISOString(),validFrom:new Date(now+2000).toISOString(),validTo:new Date(now+302000).toISOString(),
+  context:{...cardB.context,documentHash:'f'.repeat(64),sourceDate:'2026-11-23'}};
+ assert.equal(arcubPhotoRevision(evidenceOnly,city.id),original,'retrieval metadata does not redefine event identity');
 });

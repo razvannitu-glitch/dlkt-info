@@ -1,0 +1,135 @@
+{
+  "check": "local-photo-revision-diagnosis-1",
+  "expectedCommit": "fbbb42b6a4b41165d4850922a48ebd742f60f6ff",
+  "startedAt": "2026-11-26T00:41:01.839Z",
+  "requests": [
+    {
+      "url": "https://www.dlkt.ee/release.json",
+      "status": 200,
+      "cacheControl": "public, max-age=0, must-revalidate",
+      "vercelCache": "HIT",
+      "type": "application/json; charset=utf-8",
+      "bytes": 370,
+      "sha256": "f8719cdcef331dd417df681c6d1a2010a03c0fcde7e0ffe304cd32cea3838ea5"
+    },
+    {
+      "url": "https://www.dlkt.ee/api/local?city=683506",
+      "status": 200,
+      "cacheControl": "public, max-age=0",
+      "vercelCache": "MISS",
+      "type": "application/json; charset=utf-8",
+      "bytes": 49940,
+      "sha256": "af316f0f2986a16c5fe722d50c180422aa562beeb028870bdd5e1ef468a91ace"
+    },
+    {
+      "url": "https://www.dlkt.ee/api/article-photo?id=bucharest%3Aarcub%3Ad7f97ee81815f5029e87e24b&v=4cd7dfee6eff26e27bbdabcd507b6ca0fbbbb70873ff0a84f19f0c5dbbc97539&city=683506",
+      "status": 404,
+      "cacheControl": "no-store",
+      "vercelCache": "MISS",
+      "type": "application/json; charset=utf-8",
+      "bytes": 37,
+      "sha256": "86b00658e54b31f21397a663c259403b692bf2c4f4c9115a85b90847bf23a89a",
+      "body": "{\"error\":\"ARTICLE_PHOTO_UNAVAILABLE\"}"
+    },
+    {
+      "url": "https://arcub.ro/robots.txt",
+      "status": 200,
+      "cacheControl": null,
+      "vercelCache": null,
+      "type": "text/plain",
+      "bytes": 24,
+      "sha256": "e5c4b84484ee4216e9373be99380320c25dd94805f99f0a805846f087636553f"
+    },
+    {
+      "url": "https://arcub.ro/agenda",
+      "status": 200,
+      "cacheControl": "private, must-revalidate",
+      "vercelCache": null,
+      "type": "text/html; charset=UTF-8",
+      "bytes": 24890,
+      "sha256": "51d590b9a36fc845a8e4c6c59c468acc66dcff8113cece135d9e7d61682a74d1"
+    },
+    {
+      "url": "https://arcub.ro/eveniment/muzeul-copiilor-magia-craciunului-patru-experiente-interactive-pentru-intreaga-familie",
+      "status": 200,
+      "cacheControl": "private, must-revalidate",
+      "vercelCache": null,
+      "type": "text/html; charset=UTF-8",
+      "bytes": 21983,
+      "sha256": "7ce37512561827ec7d70fc71a441b75d39cfcae2ac7706d60757fca61eb9d712"
+    }
+  ],
+  "release": {
+    "format": "dlkt-info-public-build-1",
+    "product": "dlkt-info",
+    "version": "0.9.46",
+    "revision": "iceo-primary-mesh-1",
+    "manifestSha256": "aeb0c562e7eebe2214ae088b591e32132415618ff0cb41a8983c9f0369a828ba",
+    "gitCommitSha": "fbbb42b6a4b41165d4850922a48ebd742f60f6ff",
+    "indexability": "prelaunch-noindex",
+    "runtimeVerification": "not-attested-by-receipt"
+  },
+  "live": {
+    "reference": {
+      "id": "bucharest:arcub:d7f97ee81815f5029e87e24b",
+      "revision": "4cd7dfee6eff26e27bbdabcd507b6ca0fbbbb70873ff0a84f19f0c5dbbc97539",
+      "cityId": "683506"
+    },
+    "documentHash": "4cd7dfee6eff26e27bbdabcd507b6ca0fbbbb70873ff0a84f19f0c5dbbc97539",
+    "documentUrl": "https://arcub.ro/eveniment/muzeul-copiilor-magia-craciunului-patru-experiente-interactive-pentru-intreaga-familie",
+    "semantics": {
+      "id": "bucharest:arcub:d7f97ee81815f5029e87e24b",
+      "kind": "event",
+      "title": "Muzeul Copiilor | Magia Crăciunului - patru experiențe interactive pentru întreaga familie",
+      "publisher": "ARCUB",
+      "sourceUrl": "https://arcub.ro/eveniment/muzeul-copiilor-magia-craciunului-patru-experiente-interactive-pentru-intreaga-familie",
+      "section": "discover",
+      "status": "scheduled",
+      "place": "Bd. Decebal nr. 11, bloc S14, sector 3, București",
+      "when": "2026-11-14 to 2026-12-23 · dates only; check opening hours",
+      "sourceDate": "2026-11-26",
+      "startsAt": "2026-11-13T22:00:00.000Z",
+      "endsAt": "2026-12-23T22:00:00.000Z",
+      "datePrecision": "day"
+    }
+  },
+  "photoStatus": 404,
+  "fresh": {
+    "reference": {
+      "id": "bucharest:arcub:d7f97ee81815f5029e87e24b",
+      "revision": "7ce37512561827ec7d70fc71a441b75d39cfcae2ac7706d60757fca61eb9d712",
+      "cityId": "683506"
+    },
+    "documentHash": "7ce37512561827ec7d70fc71a441b75d39cfcae2ac7706d60757fca61eb9d712",
+    "documentUrl": "https://arcub.ro/eveniment/muzeul-copiilor-magia-craciunului-patru-experiente-interactive-pentru-intreaga-familie",
+    "semantics": {
+      "id": "bucharest:arcub:d7f97ee81815f5029e87e24b",
+      "kind": "event",
+      "title": "Muzeul Copiilor | Magia Crăciunului - patru experiențe interactive pentru întreaga familie",
+      "publisher": "ARCUB",
+      "sourceUrl": "https://arcub.ro/eveniment/muzeul-copiilor-magia-craciunului-patru-experiente-interactive-pentru-intreaga-familie",
+      "section": "discover",
+      "status": "scheduled",
+      "place": "Bd. Decebal nr. 11, bloc S14, sector 3, București",
+      "when": "2026-11-14 to 2026-12-23 · dates only; check opening hours",
+      "sourceDate": "2026-11-26",
+      "startsAt": "2026-11-13T22:00:00.000Z",
+      "endsAt": "2026-12-23T22:00:00.000Z",
+      "datePrecision": "day"
+    }
+  },
+  "sameSemantics": true,
+  "sameDocumentHash": false,
+  "originalReferenceResolved": false,
+  "freshReferenceResolved": true,
+  "metadata": {
+    "articleUrl": "https://arcub.ro/eveniment/muzeul-copiilor-magia-craciunului-patru-experiente-interactive-pentru-intreaga-familie",
+    "imageUrl": "https://arcub.ro/img/15a05216-5dbc-408e-9981-070a02d379aa/foto-1.jpeg?fm=webp&q=85&fit=crop&crop=1600%2C899%2C0%2C33&s=577f2b12cfc406e441c174041dec202a",
+    "basis": "local-event-hero",
+    "alt": "",
+    "credit": null,
+    "caption": null
+  },
+  "status": "DIAGNOSIS_COMPLETED",
+  "finishedAt": "2026-11-26T00:41:16.683Z"
+}
