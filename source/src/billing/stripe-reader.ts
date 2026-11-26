@@ -11,6 +11,14 @@ const subscriptionStatuses = new Set(['active','trialing','past_due','unpaid','c
 const invoiceStatuses = new Set(['draft','open','paid','uncollectible','void']);
 const cents = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 const subscriptionItemId = (value: unknown): value is string => typeof value === 'string' && /^si_[A-Za-z0-9]{1,252}$/u.test(value);
+const providerId=(v:unknown,prefix:string):v is string=>typeof v==='string'&&v.length<=255&&v.startsWith(prefix)&&/^[A-Za-z0-9]+$/u.test(v.slice(prefix.length));
+export type FinancialRiskType='charge.refunded'|'charge.dispute.created'|'radar.early_fraud_warning.created';
+export interface FinancialRiskLink {
+ readonly accountId:string; readonly liveMode:false; readonly eventType:FinancialRiskType;
+ readonly objectId:string; readonly chargeId:string; readonly paymentIntentId:string;
+ readonly invoiceId:string; readonly customerId:string; readonly subscriptionId:string;
+ readonly riskState:'review_required';
+}
 
 export interface StripeSubscriptionObservation {
   readonly accountId: string;
@@ -56,14 +64,16 @@ export class StripeReadClient {
     this.#fetch = fetchImpl;
   }
 
-  async #read(path: string): Promise<unknown> {
+  async #read(path: string, paymentIntent?: string, deadline?: AbortSignal): Promise<unknown> {
     try {
       // Paths are composed exclusively from private literals and strictly validated Stripe IDs.
-      if (!/^\/v1\/(?:account|products\/prod_[A-Za-z0-9]+|prices\/price_[A-Za-z0-9]+|subscriptions\/sub_[A-Za-z0-9]+|invoices\/in_[A-Za-z0-9]+)$/u.test(path)) return fail();
-      const url = ORIGIN + path;
+      if (!/^\/v1\/(?:account|products\/prod_[A-Za-z0-9]+|prices\/price_[A-Za-z0-9]+|subscriptions\/sub_[A-Za-z0-9]+|invoices\/in_[A-Za-z0-9]+|charges\/ch_[A-Za-z0-9]+|payment_intents\/pi_[A-Za-z0-9]+|disputes\/du_[A-Za-z0-9]+|radar\/early_fraud_warnings\/issfr_[A-Za-z0-9]+|invoice_payments)$/u.test(path)) return fail();
+      if((path==='/v1/invoice_payments'&&!providerId(paymentIntent,'pi_'))||(path!=='/v1/invoice_payments'&&paymentIntent!==undefined))return fail();
+      const query=paymentIntent===undefined?'':'?'+new URLSearchParams({'payment[type]':'payment_intent','payment[payment_intent]':paymentIntent,limit:'2'}).toString();
+      const url = ORIGIN + path + query;
       const response = await this.#fetch(url,{method:'GET',redirect:'error',cache:'no-store',
         headers:{Authorization:'Bearer '+this.#key,'Stripe-Version':STRIPE_BILLING_API_VERSION,Accept:'application/json'},
-        signal:AbortSignal.timeout(REQUEST_TIMEOUT_MS)});
+        signal:deadline?AbortSignal.any([deadline,AbortSignal.timeout(REQUEST_TIMEOUT_MS)]):AbortSignal.timeout(REQUEST_TIMEOUT_MS)});
       const length = response.headers.get('content-length');
       if (response.status !== 200 || response.redirected || (response.url !== '' && response.url !== url)
         || !/^application\/json(?:\s*;|$)/iu.test(response.headers.get('content-type') ?? '')
@@ -118,6 +128,58 @@ export class StripeReadClient {
        !stripeId(customerId,'cus')||field(parent,'type')!=='subscription_details'||
        !stripeId(subscriptionId,'sub')) return fail();
     return Object.freeze({accountId:this.#catalog.accountId,liveMode:false,invoiceId,customerId,subscriptionId});
+  }
+
+  /** A negative risk observation, never a payment or entitlement proof.
+   * Re-read exact Stripe resources; require one unambiguous paid allocation
+   * from charge -> intent -> invoice -> subscription. Historical disputes
+   * and warnings remain review-required even if no longer actionable. */
+  async observeFinancialRiskLink(eventType:unknown,objectId:unknown):Promise<FinancialRiskLink>{
+    const expected=eventType==='charge.refunded'?'ch_':eventType==='charge.dispute.created'?'du_':eventType==='radar.early_fraud_warning.created'?'issfr_':null;
+    if(!expected||!providerId(objectId,expected))return fail();
+    const signal=AbortSignal.timeout(18000);
+    const read=async(path:string,paymentIntent?:string)=>record(await this.#read(path,paymentIntent,signal));
+    const account=await read('/v1/account');
+    if(field(account,'object')!=='account'||field(account,'id')!==this.#catalog.accountId)return fail();
+    let chargeId:unknown=objectId,disputeIntent:unknown=null;
+    if(eventType!=='charge.refunded'){
+      const dispute=eventType==='charge.dispute.created';
+      const resource=await read((dispute?'/v1/disputes/':'/v1/radar/early_fraud_warnings/')+objectId);
+      if(field(resource,'id')!==objectId||field(resource,'object')!==(dispute?'dispute':'radar.early_fraud_warning')||field(resource,'livemode')!==false)return fail();
+      if(dispute){
+        const amount=field(resource,'amount');
+        if(field(resource,'currency')!=='eur'||!cents(amount)||amount<=0)return fail();
+        disputeIntent=field(resource,'payment_intent');
+        if(disputeIntent!==null&&!providerId(disputeIntent,'pi_'))return fail();
+      }else if(typeof field(resource,'actionable')!=='boolean')return fail();
+      chargeId=field(resource,'charge');
+    }
+    if(!providerId(chargeId,'ch_'))return fail();
+    const charge=await read('/v1/charges/'+chargeId);
+    const customerId=field(charge,'customer'),intentId=field(charge,'payment_intent');
+    const captured=field(charge,'amount_captured'),refunded=field(charge,'amount_refunded');
+    if(field(charge,'object')!=='charge'||field(charge,'id')!==chargeId||field(charge,'livemode')!==false||
+       field(charge,'currency')!=='eur'||field(charge,'paid')!==true||field(charge,'captured')!==true||field(charge,'status')!=='succeeded'||
+       !stripeId(customerId,'cus')||!providerId(intentId,'pi_')||!cents(captured)||captured<=0||!cents(refunded)||refunded>captured||
+       (eventType==='charge.refunded'&&refunded===0)||(disputeIntent!==null&&disputeIntent!==intentId))return fail();
+    const intent=await read('/v1/payment_intents/'+intentId);
+    if(field(intent,'object')!=='payment_intent'||field(intent,'id')!==intentId||field(intent,'livemode')!==false||
+       field(intent,'customer')!==customerId||field(intent,'currency')!=='eur'||field(intent,'latest_charge')!==chargeId||
+       field(intent,'amount_received')!==captured)return fail();
+    const allocation=await read('/v1/invoice_payments',intentId),data=field(allocation,'data');
+    if(field(allocation,'object')!=='list'||field(allocation,'has_more')!==false||!Array.isArray(data)||data.length!==1)return fail();
+    const payment=record(data[0]),details=record(field(payment,'payment')),invoiceId=field(payment,'invoice');
+    if(field(payment,'object')!=='invoice_payment'||!providerId(field(payment,'id'),'inpay_')||field(payment,'livemode')!==false||
+       field(payment,'status')!=='paid'||field(payment,'currency')!=='eur'||field(payment,'amount_paid')!==captured||
+       field(details,'type')!=='payment_intent'||field(details,'payment_intent')!==intentId||!stripeId(invoiceId,'in'))return fail();
+    const invoice=await read('/v1/invoices/'+invoiceId),parent=record(field(invoice,'parent'));
+    const subscriptionId=field(record(field(parent,'subscription_details')),'subscription');
+    if(field(invoice,'object')!=='invoice'||field(invoice,'id')!==invoiceId||field(invoice,'livemode')!==false||
+       field(invoice,'currency')!=='eur'||field(invoice,'customer')!==customerId||
+       field(parent,'type')!=='subscription_details'||!stripeId(subscriptionId,'sub')||signal.aborted)return fail();
+    if(eventType!=='charge.refunded'&&eventType!=='charge.dispute.created'&&eventType!=='radar.early_fraud_warning.created')return fail();
+    return Object.freeze({accountId:this.#catalog.accountId,liveMode:false,eventType,objectId,chargeId,paymentIntentId:intentId,
+      invoiceId,customerId,subscriptionId,riskState:'review_required'});
   }
 
   /** The owner and binding must come from an authenticated session and private server-owned store.

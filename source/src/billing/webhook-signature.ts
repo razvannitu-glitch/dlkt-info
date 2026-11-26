@@ -18,7 +18,7 @@ const eventRoutes = Object.freeze({
   'invoice.paid': ['invoice','in_'],
   'invoice.payment_failed': ['invoice','in_'],
   'charge.refunded': ['charge','ch_'],
-  'charge.dispute.created': ['dispute','dp_'],
+  'charge.dispute.created': ['dispute','du_'],
   'radar.early_fraud_warning.created': ['radar.early_fraud_warning','issfr_'],
 } as const);
 type RoutedEventType = keyof typeof eventRoutes;

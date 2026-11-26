@@ -135,7 +135,7 @@ test('routed event types must match their resource type and identifier',()=>{
 });
 test('subscription, checkout, refund, dispute and fraud events produce exact minimal reconciliation targets',()=>{
  for(const [type,obj,id] of [['customer.subscription.deleted','subscription','sub_fixture'],['checkout.session.async_payment_succeeded','checkout.session','cs_test_fixture'],
- ['charge.refunded','charge','ch_fixture'],['charge.dispute.created','dispute','dp_fixture'],['radar.early_fraud_warning.created','radar.early_fraud_warning','issfr_fixture']]){
+ ['charge.refunded','charge','ch_fixture'],['charge.dispute.created','dispute','du_fixture'],['radar.early_fraud_warning.created','radar.early_fraud_warning','issfr_fixture']]){
  const body=bytes(event(type,obj,id));assert.deepEqual(verify(body,sign(body)),{kind:'reconcile',eventId:'evt_fixture',created:now-3600,type,objectId:id});}
 });
 test('unsupported authenticated event is ignored; malformed or oversized bodies are rejected',()=>{
@@ -158,4 +158,46 @@ test('historical invoice link rejects wrong identity, one-off invoices, live mod
  const f=fixture({'/v1/account':{...account,id:'acct_other'}});
  await assert.rejects(f.reader.observeInvoiceLink('in_fixture'),/STRIPE_BILLING_READ_REJECTED/u);assert.equal(f.calls.length,1);
  const g=fixture();await assert.rejects(g.reader.observeInvoiceLink('in_/bad'),/STRIPE_BILLING_READ_REJECTED/u);assert.equal(g.calls.length,0);
+});
+
+const riskCharge={object:'charge',id:'ch_risk',livemode:false,currency:'eur',customer:b.customerId,payment_intent:'pi_risk',
+ paid:true,captured:true,status:'succeeded',amount_captured:699,amount_refunded:199};
+const riskIntent={object:'payment_intent',id:'pi_risk',livemode:false,currency:'eur',customer:b.customerId,latest_charge:'ch_risk',amount_received:699};
+const riskAllocation={object:'list',has_more:false,data:[{object:'invoice_payment',id:'inpay_risk',livemode:false,status:'paid',currency:'eur',
+ amount_paid:699,invoice:'in_historical',payment:{type:'payment_intent',payment_intent:'pi_risk'}}]};
+const riskDispute={object:'dispute',id:'du_risk',livemode:false,charge:'ch_risk',payment_intent:'pi_risk',currency:'eur',amount:699,status:'won'};
+const riskWarning={object:'radar.early_fraud_warning',id:'issfr_risk',livemode:false,charge:'ch_risk',actionable:false};
+function riskFixture(patch={}){
+ return fixture({'/v1/charges/ch_risk':riskCharge,'/v1/payment_intents/pi_risk':riskIntent,
+ '/v1/invoice_payments':riskAllocation,'/v1/invoices/in_historical':{...invoice(),id:'in_historical'},
+ '/v1/disputes/du_risk':riskDispute,'/v1/radar/early_fraud_warnings/issfr_risk':riskWarning,...patch});
+}
+test('partial refund, historical dispute and non-actionable warning route only to risk review',async()=>{
+ for(const [type,id] of [['charge.refunded','ch_risk'],['charge.dispute.created','du_risk'],['radar.early_fraud_warning.created','issfr_risk']]){
+  const f=riskFixture();const v=await f.reader.observeFinancialRiskLink(type,id);
+  assert.deepEqual(v,{accountId:cfg.accountId,liveMode:false,eventType:type,objectId:id,chargeId:'ch_risk',paymentIntentId:'pi_risk',
+   invoiceId:'in_historical',customerId:b.customerId,subscriptionId:b.subscriptionId,riskState:'review_required'});
+  const allocation=new URL(f.calls.find(x=>x.url.includes('/invoice_payments')).url);
+  assert.equal(allocation.searchParams.get('payment[type]'),'payment_intent');assert.equal(allocation.searchParams.get('payment[payment_intent]'),'pi_risk');
+  assert.equal(allocation.searchParams.get('limit'),'2');assert.ok(f.calls.every(x=>x.options.method==='GET'));
+ }
+});
+test('ambiguous allocation, mismatched charge/intent/invoice, live risk or zero refund cannot resolve',async()=>{
+ const cases=[
+ ['/v1/charges/ch_risk',{...riskCharge,amount_refunded:0}],
+ ['/v1/charges/ch_risk',{...riskCharge,livemode:true}],
+ ['/v1/payment_intents/pi_risk',{...riskIntent,latest_charge:'ch_other'}],
+ ['/v1/payment_intents/pi_risk',{...riskIntent,customer:'cus_other'}],
+ ['/v1/invoice_payments',{...riskAllocation,has_more:true}],
+ ['/v1/invoice_payments',{...riskAllocation,data:[...riskAllocation.data,...riskAllocation.data]}],
+ ['/v1/invoice_payments',{...riskAllocation,data:[{...riskAllocation.data[0],amount_paid:698}]}],
+ ['/v1/invoices/in_historical',{...invoice(),id:'in_historical',customer:'cus_other'}]
+ ];
+ for(const [path,v] of cases)await assert.rejects(riskFixture({[path]:v}).reader.observeFinancialRiskLink('charge.refunded','ch_risk'),/STRIPE_BILLING_READ_REJECTED/u);
+ await assert.rejects(riskFixture({'/v1/disputes/du_risk':{...riskDispute,payment_intent:'pi_other'}}).reader.observeFinancialRiskLink('charge.dispute.created','du_risk'),/STRIPE_BILLING_READ_REJECTED/u);
+ const x=riskFixture();await assert.rejects(x.reader.observeFinancialRiskLink('charge.dispute.created','dp_old'),/STRIPE_BILLING_READ_REJECTED/u);assert.equal(x.calls.length,0);
+});
+test('documented du_ dispute identity accepted; wrong prefix rejected in signed delivery',()=>{
+ const good=bytes(event('charge.dispute.created','dispute','du_risk'));assert.equal(verify(good,sign(good)).objectId,'du_risk');
+ const old=bytes(event('charge.dispute.created','dispute','dp_old'));assert.throws(()=>verify(old,sign(old)),/STRIPE_WEBHOOK_REJECTED/u);
 });

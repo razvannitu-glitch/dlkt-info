@@ -31,7 +31,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat docs/billing-ledger-sandbox/{setup,ledger,test,queue,queue-test,reconcile,reconcile-test,checkout,checkout-test,entitlement,entitlement-test,vault-setup,vault,vault-test,lifecycle,lifecycle-test,cleanup,cleanup-test,invoice-routing,invoice-routing-test}.sql |
+          cat docs/billing-ledger-sandbox/{setup,ledger,test,queue,queue-test,reconcile,reconcile-test,checkout,checkout-test,entitlement,entitlement-test,vault-setup,vault,vault-test,lifecycle,lifecycle-test,cleanup,cleanup-test,invoice-routing,invoice-routing-test,risk-routing,risk-routing-test}.sql |
             docker exec -i "$TEST_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d billing_test
 
       - name: Verify simultaneous intake and lease claims in independent sessions

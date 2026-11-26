@@ -13,7 +13,8 @@
     "entitlement-gate.ts",
     "private-connection-store.ts",
     "external-cleanup.ts",
-    "invoice-routing.ts"
+    "invoice-routing.ts",
+    "risk-routing.ts"
   ],
   "exclude": []
 }
