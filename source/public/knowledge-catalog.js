@@ -929,6 +929,51 @@ const reviewed = [
         "revision": 1,
         "reviewedAt": "2026-11-25T00:45:05.000Z",
         "reviewBy": "2026-12-25T00:45:05.000Z"
+    },
+    {
+        "kind": "knowledge",
+        "id": "dlkt-elsewhere-nsw-fuelcheck",
+        "revision": 1,
+        "category": "04000000",
+        "format": "elsewhere",
+        "distribution": "cross-border",
+        "topic": {
+            "en": "Fuel price comparison",
+            "ro": "Compararea prețurilor carburanților",
+            "it": "Confronto prezzi carburanti"
+        },
+        "source": {
+            "publisher": "NSW Government",
+            "url": "https://www.nsw.gov.au/legal-and-justice/consumer-rights-and-protection/advertising-product-packaging-and-pricing-laws/fuel-pricing-discounts-and-signage/check-fuel-prices"
+        },
+        "geography": {
+            "countryCode": "AU",
+            "cityIds": [],
+            "label": {
+                "en": "New South Wales, Australia",
+                "ro": "New South Wales, Australia",
+                "it": "Nuovo Galles del Sud, Australia"
+            }
+        },
+        "copy": {
+            "en": {
+                "title": "In New South Wales, drivers can compare fuel prices before choosing a station.",
+                "explanation": "The NSW Government's free FuelCheck service displays current fuel prices at different stations, helping drivers compare options before refuelling.",
+                "connection": "Look for a reliable local comparison service, compare the same fuel type, and consider distance. Use your phone only when you are not driving."
+            },
+            "ro": {
+                "title": "În New South Wales, șoferii pot compara prețurile carburanților înainte să aleagă o benzinărie.",
+                "explanation": "Serviciul gratuit FuelCheck, oferit de autoritățile din NSW, afișează prețurile actuale la diferite benzinării, pentru a facilita compararea opțiunilor înainte de alimentare.",
+                "connection": "Verifică dacă există un comparator local de încredere, compară același tip de carburant și ia în calcul distanța. Nu folosi telefonul la volan."
+            },
+            "it": {
+                "title": "Nel Nuovo Galles del Sud, gli automobilisti possono confrontare i prezzi dei carburanti prima di scegliere una stazione.",
+                "explanation": "Il servizio gratuito FuelCheck del governo del Nuovo Galles del Sud mostra i prezzi correnti dei carburanti presso diverse stazioni, aiutando a confrontare le opzioni prima del rifornimento.",
+                "connection": "Cerca un servizio locale affidabile, confronta lo stesso tipo di carburante e considera la distanza. Non usare il telefono mentre guidi."
+            }
+        },
+        "reviewedAt": "2026-11-26T20:33:43.000Z",
+        "reviewBy": "2026-12-26T20:33:43.000Z"
     }
 ];
 export const KNOWLEDGE_CARDS = Object.freeze(validateKnowledgeCatalog(reviewed));
