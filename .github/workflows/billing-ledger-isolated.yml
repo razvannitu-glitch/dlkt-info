@@ -160,6 +160,20 @@ jobs:
           test "$(cat "$tmp/one" "$tmp/two" | sort | paste -sd, -)" = 0,1
           echo EXTERNAL_CLEANUP_PARALLEL_OK
 
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - name: Execute combined application and PostgreSQL billing acceptance
+        env:
+          TEST_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+          ./node_modules/.bin/tsc -p docs/billing-ledger-sandbox/tsconfig.payment.json
+          docker exec -i "$TEST_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d billing_test < docs/billing-ledger-sandbox/pipeline-fixture.sql
+          node docs/billing-ledger-sandbox/pipeline-postgres.integration.mjs
+
   payment-proof:
     runs-on: ubuntu-24.04
     timeout-minutes: 10

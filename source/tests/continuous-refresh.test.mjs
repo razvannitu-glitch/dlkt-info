@@ -268,3 +268,45 @@ test('untrusted collector errors are redacted at the collection phase',async()=>
  assert.equal(JSON.stringify(records).includes(raw),false);
  assert.deepEqual(ledger.failures,['collector-unavailable']);
 });
+
+test('60-second durable-read budget shares a verified snapshot across runtimes without source collection',async()=>{
+  assert.equal(CONTINUOUS_REFRESH_INTERVAL_MS,120_000);
+  assert.equal(CONTINUOUS_PUBLIC_CACHE_MS,60_000);
+  const ledger=new Ledger();ledger.seed();let upstreamCalls=0;
+  const cache=new Cache(),writes=[];
+  const tracedCache={read:key=>cache.read(key),async write(key,value,ttlSeconds){writes.push({key,ttlSeconds});await cache.write(key,value,ttlSeconds);}};
+  const first=new ContinuousSnapshotService(ledger,async()=>{upstreamCalls++;return snapshot();},tracedCache,()=>ledger.now);
+  const second=new ContinuousSnapshotService(ledger,async()=>{upstreamCalls++;return snapshot();},tracedCache,()=>ledger.now);
+  for(let secondOfMinute=0;secondOfMinute<60;secondOfMinute++){
+    ledger.now=START+secondOfMinute*1000;
+    const service=secondOfMinute%2===0?first:second;
+    const row=await service.read();
+    assert.equal(row.snapshot.generatedAt,iso(START));
+    assert.equal(row.collection.revision,1);
+  }
+  assert.equal(ledger.reads,1,'sixty successive calls share one Supabase read');
+  assert.deepEqual(writes.map(x=>x.ttlSeconds),[60]);
+  assert.equal(upstreamCalls,0);
+  ledger.now=START+CONTINUOUS_PUBLIC_CACHE_MS;
+  ledger.seed(snapshot(ledger.now));ledger.envelope.revision=2;
+  const refreshed=await first.read();
+  assert.equal(refreshed.snapshot.generatedAt,iso(ledger.now));
+  assert.equal(refreshed.collection.revision,2);
+  assert.equal(ledger.reads,2,'next minute must revalidate against durable snapshot');
+  assert.deepEqual(writes.map(x=>x.ttlSeconds),[60,60]);
+  // A worker may retain its own verified copy for 60 seconds from first use.
+  ledger.now+=1001;
+  assert.equal((await second.read()).collection.revision,2);
+  assert.equal(ledger.reads,2,'separate workers reuse verified shared cache');
+  assert.equal(upstreamCalls,0,'public reads never trigger publisher fetching');
+});
+
+test('cached public data fails closed once source freshness expires',async()=>{
+  const ledger=new Ledger();ledger.seed();
+  const cache=new Cache();
+  const service=new ContinuousSnapshotService(ledger,async()=>{throw Error('source worker must remain disabled');},cache,()=>ledger.now);
+  assert.equal((await service.snapshot()).generatedAt,iso(START));
+  ledger.now=START+3_600_000;
+  await assert.rejects(service.snapshot(),/CONTINUOUS_SNAPSHOT_UNAVAILABLE/);
+  assert.equal(ledger.reads,2,'expired data is not resurrected from the runtime cache');
+});
