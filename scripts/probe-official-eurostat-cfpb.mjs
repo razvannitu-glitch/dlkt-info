@@ -113,6 +113,31 @@ async function inspect(entry) {
     const link = new URL(rssLink || atomLink || '');
     if (link.protocol === 'https:') {result.articleLinkHost = link.hostname;result.articlePathSample=link.pathname;result.articleQueryKeys=[...new Set(link.searchParams.keys())];}
   } catch { /* no article link observed in bounded prefix */ }
+  // Use the exact production adapter against complete original XML, without publishing.
+  try {
+    const {extract} = await import('../source/.build/src/iceo/extract.js');
+    const config = entry.id === 'cfpb-newsroom' ? {
+      format:'rss',title:'Newsroom | Consumer Financial Protection Bureau',
+      homeOrigin:'https://www.consumerfinance.gov',homePath:'/about-us/newsroom/',
+      articleOrigins:['https://www.consumerfinance.gov'],articlePaths:['/about-us/newsroom/'],
+      dateField:'pubDate',dateLabel:'Published',summary:'description',refreshSeconds:3600,windowDays:30,
+      boundary:'US consumer financial agency press announcement; not global financial advice.',
+    } : {
+      format:'atom',title:'Eurostat - Custom RSS Feed',homeOrigin:'https://ec.europa.eu',homePath:'/eurostat',
+      articleOrigins:['https://ec.europa.eu'],articlePaths:['/eurostat/product'],
+      dateField:'updated',dateLabel:'Updated',summary:'summary',refreshSeconds:3600,windowDays:30,
+      boundary:'EU-owned statistical news, not individualized financial guidance.',
+    };
+    const source = {id:entry.id,label:entry.id,publisher:entry.id==='cfpb-newsroom'?'CFPB':'Eurostat',
+      topic:'money',adapter:'reviewed-feed',endpoint:entry.url,homepage:config.homeOrigin+config.homePath,
+      termsUrl:'https://www.consumerfinance.gov/privacy/website-privacy-policy/',
+      attribution:'Original public source.',scope:'Verified public agency material',rightsCheckedAt:'2026-11-26',rightsReviewBy:'2026-12-26',feed:config};
+    const parsed=extract(text,source,Date.now());
+    result.adapter={accepted:parsed.cards.length,rejected:parsed.rejected,
+      firstAcceptedDate:parsed.cards[0]?.date??null,firstAcceptedPath:parsed.cards[0]?new URL(parsed.cards[0].sourceUrl).pathname:null};
+  } catch (error) {
+    result.adapter={error:error instanceof Error?error.message:'unknown'};
+  }
   if (!result.title || result.entryCountInSample === 0) result.reason='feed-structure-needs-review';
   result.sampleTruncated = bytes === MAX_BYTES;
   return result;
