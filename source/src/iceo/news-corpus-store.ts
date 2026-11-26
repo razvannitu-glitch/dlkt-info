@@ -3,7 +3,7 @@ import type {NewsDiagnostics} from './news-diagnostics.js';
 import type {NewsCorpus,NewsCorpusEpoch} from './news-corpus.js';
 import type {NewsPageItem} from './news-page-contracts.js';
 
-type NewsArticleReference={readonly id:string;readonly revision:string;readonly cityId?:string};
+export type NewsArticleReference={readonly id:string;readonly revision:string;readonly cityId?:string};
 
 /** Server-only capability. Readers never acquire sources or receive writer credentials. */
 export interface NewsCorpusStore {
