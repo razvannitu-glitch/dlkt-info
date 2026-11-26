@@ -26,7 +26,7 @@ function sqlFixture(sql,vars=[]){
 function port(role){
  return {async query(statement,params){
   const m=statement.match(/^SELECT (?:\* FROM )?dlkt_info_billing\.([a-z_]+)\(\$\d+::[a-z]+(?:,\$\d+::[a-z]+)*\)(?: AS (?:ok|outcome))?$/u);
-  if(!m||!roleFunctions[role]?.includes(m[1])||params.some(v=>typeof v!=='string'||!/^[A-Za-z0-9_\-]+$/u.test(v)))throw Error('FIXTURE_QUERY_REJECTED');
+  if(!m||!roleFunctions[role]?.includes(m[1])||params.some(v=>typeof v!=='string'||!/^[A-Za-z0-9_.\-]+$/u.test(v)))throw Error('FIXTURE_QUERY_REJECTED');
   const args=params.map((v,i)=>'--set=p'+(i+1)+'='+v);
   const q=statement.replace(/\$(\d+)/gu,(_,n)=>":'p"+n+"'");
   const out=sqlFixture('SET ROLE '+role+';\nSELECT coalesce(jsonb_agg(to_jsonb(x)),\'[]\'::jsonb)::text FROM ('+q+') x;\n',args);
