@@ -1,0 +1,12 @@
+{
+  "name": "dlkt-integration-transport",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
+  "dependencies": {
+    "postgres": "4.1.1"
+  }
+}

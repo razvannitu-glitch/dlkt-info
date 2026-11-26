@@ -1,0 +1,180 @@
+name: DLKT isolated billing ledger SQL
+on:
+  push:
+    branches:
+      - billing-lab/integration-20261126
+permissions:
+  contents: read
+jobs:
+  ledger:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: local-test-only
+          POSTGRES_DB: billing_test
+        options: >-
+          --health-cmd "pg_isready -U postgres -d billing_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Execute isolated ledger and adversarial SQL assertions
+        env:
+          TEST_CONTAINER: ${{ job.services.postgres.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat docs/billing-ledger-sandbox/{setup,ledger,test,queue,queue-test,reconcile,reconcile-test,checkout,checkout-test,entitlement,entitlement-test,vault-setup,vault,vault-test,lifecycle,lifecycle-test,cleanup,cleanup-test}.sql |
+            docker exec -i "$TEST_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d billing_test
+
+      - name: Verify simultaneous intake and lease claims in independent sessions
+        env:
+          TEST_CONTAINER: ${{ job.services.postgres.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          psql_test() { docker exec -i "$TEST_CONTAINER" psql -X -qAt -v ON_ERROR_STOP=1 -U postgres -d billing_test "$@"; }
+          ingest="SET ROLE service_role; SELECT dlkt_info_billing.ingest_notice('acct_Concurrent','evt_Race','invoice.paid','in_Race',400);"
+          psql_test -c "$ingest" > "$tmp/ingest1" &
+          p1=$!
+          psql_test -c "$ingest" > "$tmp/ingest2" &
+          p2=$!
+          wait "$p1"
+          wait "$p2"
+          test "$(cat "$tmp/ingest1" "$tmp/ingest2" | sort | paste -sd, -)" = accepted,duplicate
+          claim="SET ROLE dlkt_billing_worker; SELECT count(*) FROM dlkt_info_billing.claim_notice('acct_Concurrent');"
+          psql_test -c "$claim" > "$tmp/claim1" &
+          p1=$!
+          psql_test -c "$claim" > "$tmp/claim2" &
+          p2=$!
+          wait "$p1"
+          wait "$p2"
+          test "$(cat "$tmp/claim1" "$tmp/claim2" | sort | paste -sd, -)" = 0,1
+          test "$(psql_test -c "SELECT count(*) FROM dlkt_info_billing.event_jobs WHERE account_id='acct_Concurrent' AND state='leased' AND attempt=1;")" = 1
+          echo BILLING_QUEUE_PARALLEL_SESSIONS_OK
+
+      - name: Verify concurrent reconciliation claims
+        env:
+          TEST_CONTAINER: ${{ job.services.postgres.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          psql_test() { docker exec -i "$TEST_CONTAINER" psql -X -qAt -v ON_ERROR_STOP=1 -U postgres -d billing_test "$@"; }
+          claim="SET ROLE dlkt_billing_reconciler; SELECT count(*) FROM dlkt_info_billing.claim_subscription('acct_ReconcileRace');"
+          psql_test -c "$claim" > "$tmp/claim1" &
+          p1=$!
+          psql_test -c "$claim" > "$tmp/claim2" &
+          p2=$!
+          wait "$p1"
+          wait "$p2"
+          test "$(cat "$tmp/claim1" "$tmp/claim2" | sort | paste -sd, -)" = 0,1
+          test "$(psql_test -c "SELECT count(*) FROM dlkt_info_billing.subscription_reconcile WHERE account_id='acct_ReconcileRace' AND state='leased' AND generation=1 AND fence=1 AND attempt=1;")" = 1
+          echo BILLING_RECONCILIATION_PARALLEL_SESSIONS_OK
+
+      - name: Verify simultaneous checkout reservation
+        env:
+          TEST_CONTAINER: ${{ job.services.postgres.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          psql_test() { docker exec -i "$TEST_CONTAINER" psql -X -qAt -v ON_ERROR_STOP=1 -U postgres -d billing_test "$@"; }
+          psql_test -c "SET ROLE dlkt_billing_checkout_api; SELECT intent_id FROM dlkt_info_billing.reserve_checkout('acct_Checkout','00000000-0000-4000-8000-000000000007','monthly','20000000-0000-4000-8000-000000000007');" > "$tmp/one" &
+          p1=$!
+          psql_test -c "SET ROLE dlkt_billing_checkout_api; SELECT intent_id FROM dlkt_info_billing.reserve_checkout('acct_Checkout','00000000-0000-4000-8000-000000000007','monthly','30000000-0000-4000-8000-000000000007');" > "$tmp/two" &
+          p2=$!
+          wait "$p1"
+          wait "$p2"
+          test -s "$tmp/one"
+          cmp "$tmp/one" "$tmp/two"
+          test "$(psql_test -c "SELECT count(*) FROM dlkt_info_billing.checkout_intents WHERE account_id='acct_Checkout' AND customer_id='cus_Race';")" = 1
+          echo BILLING_CHECKOUT_PARALLEL_RESERVATIONS_OK
+
+      - name: Verify simultaneous private OAuth state consumption
+        env:
+          TEST_CONTAINER: ${{ job.services.postgres.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          psql_test() { docker exec -i "$TEST_CONTAINER" psql -X -qAt -v ON_ERROR_STOP=1 -U postgres -d billing_test "$@"; }
+          consume="SET ROLE dlkt_connection_vault_api; SELECT count(*) FROM dlkt_info_connection_vault.consume_authorization('00000000-0000-4000-8000-000000000008','20000000-0000-4000-8000-000000000008','gmail',repeat('H',43),repeat('I',43));"
+          psql_test -c "$consume" > "$tmp/one" &
+          p1=$!
+          psql_test -c "$consume" > "$tmp/two" &
+          p2=$!
+          wait "$p1"
+          wait "$p2"
+          test "$(cat "$tmp/one" "$tmp/two" | sort | paste -sd, -)" = 0,1
+          echo PRIVATE_CONNECTION_VAULT_PARALLEL_CONSUMPTION_OK
+
+      - name: Verify concurrent closure requests converge on one durable case
+        env:
+          TEST_CONTAINER: ${{ job.services.postgres.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          psql_test() { docker exec -i "$TEST_CONTAINER" psql -X -qAt -v ON_ERROR_STOP=1 -U postgres -d billing_test "$@"; }
+          psql_test -c "SET ROLE dlkt_account_lifecycle_api; SELECT request_id FROM dlkt_info_account_lifecycle.request_closure('00000000-0000-4000-8000-000000000012','10000000-0000-4000-8000-000000000012','30000000-0000-4000-8000-000000000012');" > "$tmp/one" &
+          p1=$!
+          psql_test -c "SET ROLE dlkt_account_lifecycle_api; SELECT request_id FROM dlkt_info_account_lifecycle.request_closure('00000000-0000-4000-8000-000000000012','10000000-0000-4000-8000-000000000012','60000000-0000-4000-8000-000000000012');" > "$tmp/two" &
+          p2=$!
+          wait "$p1"
+          wait "$p2"
+          test -s "$tmp/one"
+          cmp "$tmp/one" "$tmp/two"
+          test "$(psql_test -c "SELECT count(*) FROM dlkt_info_account_lifecycle.closure_tasks t JOIN dlkt_info_account_lifecycle.closure_requests c ON c.request_id=t.request_id WHERE c.owner_id='00000000-0000-4000-8000-000000000012';")" = 6
+          echo SECURE_ACCOUNT_LIFECYCLE_PARALLEL_OK
+
+      - name: Verify concurrent external cleanup claims
+        env:
+          TEST_CONTAINER: ${{ job.services.postgres.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          psql_test() { docker exec -i "$TEST_CONTAINER" psql -X -qAt -v ON_ERROR_STOP=1 -U postgres -d billing_test "$@"; }
+          claim="SET ROLE dlkt_account_cleanup_worker; SELECT count(*) FROM dlkt_info_account_lifecycle.claim_grant_cleanup('30000000-0000-4000-8000-000000000014');"
+          psql_test -c "$claim" > "$tmp/one" &
+          p1=$!
+          psql_test -c "$claim" > "$tmp/two" &
+          p2=$!
+          wait "$p1"
+          wait "$p2"
+          test "$(cat "$tmp/one" "$tmp/two" | sort | paste -sd, -)" = 0,1
+          echo EXTERNAL_CLEANUP_PARALLEL_OK
+
+  payment-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - name: Install existing locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Strict TypeScript compilation and isolated payment evidence tests
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/tsc -p docs/billing-ledger-sandbox/tsconfig.payment.json
+          node --test docs/billing-ledger-sandbox/tests/*.test.mjs

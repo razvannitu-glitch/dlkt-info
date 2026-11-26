@@ -1,0 +1,48 @@
+name: DLKT hosted network preflight
+on:
+  push:
+    branches: [billing-lab/integration-20261126]
+    paths:
+      - '.github/workflows/billing-hosted-network-preflight.yml'
+permissions:
+  contents: read
+jobs:
+  network:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Check IPv6 DNS and TCP route to exact isolated database
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, socket, ssl, struct
+          host = 'db.hziavqdhsqnihxuuxzhn.supabase.co'
+          result = {'project':'hziavqdhsqnihxuuxzhn','host':host,'dns_ipv6':False,'dns_ipv4':False,'tcp_reachable':False,'postgres_accepts_tls':False,'system_ca_and_hostname_verified':False,'failure_code':None}
+          try:
+              addresses=socket.getaddrinfo(host,5432,socket.AF_UNSPEC,socket.SOCK_STREAM)
+              result['dns_ipv6']=any(x[0]==socket.AF_INET6 for x in addresses)
+              result['dns_ipv4']=any(x[0]==socket.AF_INET for x in addresses)
+              for af,kind,proto,_,address in addresses[:4]:
+                  with socket.socket(af,kind,proto) as sock:
+                      sock.settimeout(4)
+                      try:
+                          sock.connect(address)
+                          result['tcp_reachable']=True
+                          sock.sendall(struct.pack('!II',8,80877103))
+                          result['postgres_accepts_tls']=sock.recv(1)==b'S'
+                          if not result['postgres_accepts_tls']:
+                              result['failure_code']='POSTGRES_TLS_UNAVAILABLE'
+                              continue
+                          with ssl.create_default_context().wrap_socket(sock,server_hostname=host):
+                              result['system_ca_and_hostname_verified']=True
+                              result['failure_code']=None
+                              break
+                      except ssl.SSLCertVerificationError:
+                          result['failure_code']='PROJECT_CA_REQUIRED'
+                      except OSError:
+                          result['failure_code']='TCP_OR_TLS_UNAVAILABLE'
+          except socket.gaierror:
+              result['failure_code']='DNS_UNAVAILABLE'
+          print('DLKT_HOSTED_NETWORK_PREFLIGHT '+json.dumps(result,sort_keys=True))
+          PY

@@ -218,5 +218,10 @@
       "requestMethod": "GET",
       "jitter": 1
     }
+  },
+  "git": {
+    "deploymentEnabled": {
+      "billing-lab/integration-20261126": false
+    }
   }
 }
