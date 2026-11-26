@@ -34,7 +34,8 @@ $$;
 set role service_role;
 insert into dlkt_info_billing.customer_bindings(account_id,customer_id,owner_id) values
 ('acct_A','cus_A','00000000-0000-4000-8000-000000000001'),
-('acct_A','cus_B','00000000-0000-4000-8000-000000000002');
+('acct_A','cus_B','00000000-0000-4000-8000-000000000002'),
+('acct_B','cus_C','00000000-0000-4000-8000-000000000002');
 
 do $$
 begin
@@ -82,7 +83,7 @@ begin
   exception when foreign_key_violation then null;
   end;
   begin
-    insert into dlkt_info_billing.checkout_intents(intent_id,account_id,customer_id,price_id) values ('10000000-0000-4000-8000-000000000005','acct_A','cus_A','price_B');
+    insert into dlkt_info_billing.checkout_intents(intent_id,account_id,customer_id,price_id) values ('10000000-0000-4000-8000-000000000005','acct_B','cus_C','price_A');
     raise exception 'Foreign account price accepted';
   exception when foreign_key_violation then null;
   end;
