@@ -340,10 +340,8 @@ test('official event photos reject wrong pages, titles, ambiguous heroes and arb
 });
 test('official photo resolution requires the exact current source record and original city/revision',async()=>{
  const listing=arcubPhotoFixture(now),card=listing.cards[0],reference={id:card.id,revision:card.context.documentHash,cityId:'683506'};
- let photoCalls=0;
  const officialServices={...services,global:async()=>{throw Error('unexpected global lookup');},local:async()=>{throw Error('unexpected news lookup');},
-  corpus:{lookup:async()=>{throw Error('official records never use the news corpus');}},official:async()=>listing,
-  photos:{read:async()=>{photoCalls++;return null;}}};
+  corpus:{lookup:async()=>{throw Error('official records never use the news corpus');}},official:async()=>listing};
  assert.deepEqual(await resolvePhotoArticle(reference,officialServices),arcubPhotoArticle(card));
  for(const ref of [{...reference,revision:'0'.repeat(64)},{...reference,cityId:'2512989'},{...reference,id:'bucharest:arcub:'+'0'.repeat(24)}])
   assert.equal(await resolvePhotoArticle(ref,officialServices),null);
@@ -354,7 +352,6 @@ test('official photo resolution requires the exact current source record and ori
   [{...card,checkedAt:new Date(now-300001).toISOString(),validFrom:new Date(now-300001).toISOString()}],
   [{...card,context:{...card.context,documentUrl:'https://evil.example/event'}}],
  ])assert.equal(await resolvePhotoArticle(reference,{...officialServices,official:async()=>({...listing,cards:changed})}),null);
- assert.equal(photoCalls,0,'identity failures never request image acquisition');
 });
 test('source-photo cache isolates record identity and page kind while preserving ordinary coalescing',async()=>{
  const m=mock(),service=new ArticlePhotoService(m.fetcher,()=>now);
@@ -362,4 +359,49 @@ test('source-photo cache isolates record identity and page kind while preserving
  assert.ok(await service.read({...article,id:'c'.repeat(24)}));
  assert.equal(m.calls.filter(call=>call.url===article.sourceUrl).length,2,'a second card has its own acquisition');
  assert.equal(await service.read({...article,documentKind:'local-event'}),null,'page kinds cannot reuse an article cache entry');
+});
+
+test('official HTTP photo requests acquire only a current exact source record and return its actual raster',async()=>{
+ const listing=arcubPhotoFixture(now),card=listing.cards[0],row=ARCUB_PHOTO_ROWS[0];
+ const reference={id:card.id,revision:card.context.documentHash,cityId:'683506'},path=articlePhotoPath(reference);
+ let active=listing;const acquisitions=[];
+ const fetcher=async(address)=>{
+  const url=String(address);acquisitions.push(url);
+  if(url==='https://arcub.ro/robots.txt')return new Response('User-agent: *\nAllow: /',{headers:{'content-type':'text/plain'}});
+  if(url===card.sourceUrl)return new Response(arcubPhotoDocument(row),{headers:{'content-type':'text/html'}});
+  if(url===row.image)return new Response(pixels,{headers:{'content-type':'image/png'}});
+  throw Error('Unexpected public request');
+ };
+ const officialServices={...services,official:async()=>active,photos:new ArticlePhotoService(fetcher,()=>now)};
+ const server=createServer((req,res)=>{void handleArticlePhoto(req,res,officialServices);}).listen(0,'127.0.0.1');await once(server,'listening');
+ const base='http://127.0.0.1:'+server.address().port;
+ try {
+  const response=await fetch(base+path);
+  assert.equal(response.status,200);assert.equal(response.headers.get('content-type'),'image/png');
+  assert.equal(response.headers.get('x-dlkt-photo-basis'),'local-event-hero');
+  assert.equal(response.headers.get('link'),'<'+card.sourceUrl+'>; rel="canonical"');
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()),pixels);
+  assert.deepEqual(acquisitions,['https://arcub.ro/robots.txt',card.sourceUrl,row.image]);
+  const count=acquisitions.length;
+  assert.equal((await fetch(base+articlePhotoPath({...reference,revision:'0'.repeat(64)}))).status,404);
+  assert.equal((await fetch(base+path.replace('city=683506','city=2512989'))).status,400);
+  active={...listing,cards:[]};assert.equal((await fetch(base+path)).status,404);
+  assert.equal(acquisitions.length,count,'rejected HTTP identities never acquire a publisher image');
+ } finally {server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
+});
+
+test('official source robots policy also protects image paths and every image redirect',async()=>{
+ const card=arcubPhotoFixture(now).cards[0],item=arcubPhotoArticle(card),row=ARCUB_PHOTO_ROWS[0],other=ARCUB_PHOTO_ROWS[1].image;
+ for(const redirected of [false,true]){
+  const calls=[],policy='User-agent: *\nAllow: /eveniment/\nDisallow: '+(redirected?new URL(other).pathname:'/img/')+'\n';
+  const service=new ArticlePhotoService(async address=>{
+   const url=String(address);calls.push(url);
+   if(url==='https://arcub.ro/robots.txt')return new Response(policy,{headers:{'content-type':'text/plain'}});
+   if(url===card.sourceUrl)return new Response(arcubPhotoDocument(row),{headers:{'content-type':'text/html'}});
+   if(redirected&&url===row.image)return new Response(null,{status:302,headers:{location:other}});
+   throw Error('A robots-disallowed image must never be requested');
+  },()=>now);
+  assert.equal(await service.read(item),null);
+  assert.deepEqual(calls,['https://arcub.ro/robots.txt',card.sourceUrl,...(redirected?[row.image]:[])]);
+ }
 });

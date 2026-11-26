@@ -1,0 +1,381 @@
+{
+  "task": "local-source-photos-20261126",
+  "preflight": {
+    "probe": "dlkt-local-source-photos-1",
+    "commit": "8788390f52f85f1d102c6ed6453384b40ed37a4d",
+    "startedAt": "2026-11-26T00:09:26.171Z",
+    "limits": {
+      "robots": 1,
+      "agenda": 1,
+      "page": 2,
+      "image": 2
+    },
+    "attempts": {
+      "robots": 1,
+      "agenda": 1,
+      "page": 2,
+      "image": 2
+    },
+    "pages": [
+      {
+        "id": "bucharest:arcub:39094476d41d9e9393100651",
+        "title": "Înscrieri Voluntar 2.0",
+        "url": "https://arcub.ro/eveniment/inscrieri-voluntar-2-0",
+        "htmlSha256": "72086181a42dd14d80ab882d3c5ee253d4a9edd78cdc98472e50081290ae4f92",
+        "meta": [
+          {
+            "property": "og:title",
+            "content": "Înscrieri Voluntar 2.0 | ARCUB"
+          },
+          {
+            "property": "og:description",
+            "content": ""
+          },
+          {
+            "property": "og:image",
+            "content": "https://arcub.ro/img/aa956136-95fe-4c72-acd5-0e0639d08984/1200x630.jpg?fm=jpg&q=85&fit=crop&w=900&h=470&crop=%2C%2C%2C&s=e6dea77b832e80024c97d96e337a3b96"
+          }
+        ],
+        "canonical": [],
+        "headings": [
+          "Înscrieri Voluntar 2.0"
+        ],
+        "images": [
+          {
+            "class": "bg",
+            "src": "https://arcub.ro/img/b14e172d-751b-4da4-8da0-aedafdd0918a/chatgpt-image-21-sept-2026-17-19-53.png?q=85&fit=crop&crop=1448%2C815%2C0%2C34&s=ff79e3b534135aa79047c975c0baa0fa",
+            "width": "1448",
+            "height": "815",
+            "alt": "",
+            "parents": [
+              {
+                "tag": "picture"
+              },
+              {
+                "tag": "header",
+                "class": "page-header with-bg tall"
+              },
+              {
+                "tag": "body",
+                "class": "project theme-13"
+              },
+              {
+                "tag": "html"
+              }
+            ]
+          },
+          {
+            "src": "https://arcub.ro/img/0007457b-3437-4717-9b84-2024d1134f3a/whatsapp-image-2026-09-04-at-17-57-26.jpeg?fm=webp&q=85&fit=crop&crop=1600%2C1067%2C0%2C0&w=750&s=9022f0bc1b86ca8b1c3b3e40d1da4b63",
+            "alt": "",
+            "parents": [
+              {
+                "tag": "a",
+                "href": "https://arcub.ro/noutati/voluntari-2-0-elevi"
+              },
+              {
+                "tag": "div",
+                "class": "cimg"
+              },
+              {
+                "tag": "div",
+                "class": "card   theme-13"
+              },
+              {
+                "tag": "div",
+                "class": "cards full"
+              },
+              {
+                "tag": "div",
+                "class": "container"
+              }
+            ]
+          },
+          {
+            "src": "https://arcub.ro/img/e1a1e71a-a2ad-42b3-b075-5ba0039dd54b/poza-4-of-7.jpg?fm=webp&q=85&fit=crop&crop=985%2C656%2C0%2C0&w=750&s=7314a8b0fc31cf4e101b579aead28310",
+            "alt": "",
+            "parents": [
+              {
+                "tag": "a",
+                "href": "https://arcub.ro/noutati/voluntar-2-0-organizatii-gazda"
+              },
+              {
+                "tag": "div",
+                "class": "cimg"
+              },
+              {
+                "tag": "div",
+                "class": "card   theme-13"
+              },
+              {
+                "tag": "div",
+                "class": "cards full"
+              },
+              {
+                "tag": "div",
+                "class": "container"
+              }
+            ]
+          }
+        ],
+        "structured": [],
+        "publisher": null,
+        "parser": null,
+        "image": {
+          "url": "https://arcub.ro/img/aa956136-95fe-4c72-acd5-0e0639d08984/1200x630.jpg?fm=jpg&q=85&fit=crop&w=900&h=470&crop=%2C%2C%2C&s=e6dea77b832e80024c97d96e337a3b96",
+          "status": 200,
+          "mime": "image/jpeg",
+          "width": 900,
+          "height": 470,
+          "bytes": 27731,
+          "sha256": "d8c47673a76f39b970349e960f7e935af7b0f8868ccef793dc94a41e5bdbec66"
+        }
+      },
+      {
+        "id": "bucharest:arcub:d7f97ee81815f5029e87e24b",
+        "title": "Muzeul Copiilor | Magia Crăciunului - patru experiențe interactive pentru întreaga familie",
+        "url": "https://arcub.ro/eveniment/muzeul-copiilor-magia-craciunului-patru-experiente-interactive-pentru-intreaga-familie",
+        "htmlSha256": "17f037ed0d8d1a342544756dc0767752435d5823b39c7578935a3e89bebd8646",
+        "meta": [
+          {
+            "property": "og:title",
+            "content": "Muzeul Copiilor | Magia Crăciunului - patru experiențe interactive pentru întreaga familie | ARCUB"
+          },
+          {
+            "property": "og:description",
+            "content": ""
+          },
+          {
+            "property": "og:image",
+            "content": "https://arcub.ro/img/aa956136-95fe-4c72-acd5-0e0639d08984/1200x630.jpg?fm=jpg&q=85&fit=crop&w=900&h=470&crop=%2C%2C%2C&s=e6dea77b832e80024c97d96e337a3b96"
+          }
+        ],
+        "canonical": [],
+        "headings": [
+          "Muzeul Copiilor | Magia Crăciunului - patru experiențe interactive pentru întreaga familie"
+        ],
+        "images": [
+          {
+            "class": "bg",
+            "src": "https://arcub.ro/img/15a05216-5dbc-408e-9981-070a02d379aa/foto-1.jpeg?fm=webp&q=85&fit=crop&crop=1600%2C899%2C0%2C33&s=577f2b12cfc406e441c174041dec202a",
+            "width": "1600",
+            "height": "899",
+            "alt": "",
+            "parents": [
+              {
+                "tag": "picture"
+              },
+              {
+                "tag": "header",
+                "class": "page-header with-bg tall"
+              },
+              {
+                "tag": "body",
+                "class": "project theme-d"
+              },
+              {
+                "tag": "html"
+              }
+            ]
+          }
+        ],
+        "structured": [],
+        "publisher": null,
+        "parser": null,
+        "image": {
+          "url": "https://arcub.ro/img/aa956136-95fe-4c72-acd5-0e0639d08984/1200x630.jpg?fm=jpg&q=85&fit=crop&w=900&h=470&crop=%2C%2C%2C&s=e6dea77b832e80024c97d96e337a3b96",
+          "status": 200,
+          "mime": "image/jpeg",
+          "width": 900,
+          "height": 470,
+          "bytes": 27731,
+          "sha256": "d8c47673a76f39b970349e960f7e935af7b0f8868ccef793dc94a41e5bdbec66"
+        }
+      }
+    ],
+    "robots": {
+      "status": 200,
+      "type": "text/plain",
+      "sha256": "e5c4b84484ee4216e9373be99380320c25dd94805f99f0a805846f087636553f",
+      "body": "User-agent: *\nDisallow:\n"
+    },
+    "agenda": {
+      "url": "https://arcub.ro/agenda",
+      "sha256": "7efd024843e35ed68e35afb71b746ee53a17271c6662a15c8978cbc24d767959",
+      "checkedAt": "2026-11-26T00:09:27.992Z",
+      "count": 8
+    },
+    "outcome": "observed",
+    "finishedAt": "2026-11-26T00:09:29.434Z",
+    "boundary": "Public source observations; no licence claim, no generated or substituted image, no production write."
+  },
+  "verified": {
+    "probe": "dlkt-local-source-photos-1",
+    "commit": "d009639869175d94bc2a28c111b7feea088f6f9f",
+    "startedAt": "2026-11-26T00:16:28.973Z",
+    "limits": {
+      "robots": 1,
+      "agenda": 1,
+      "page": 2,
+      "image": 2
+    },
+    "attempts": {
+      "robots": 1,
+      "agenda": 1,
+      "page": 2,
+      "image": 2
+    },
+    "pages": [
+      {
+        "id": "bucharest:arcub:d7f97ee81815f5029e87e24b",
+        "title": "Muzeul Copiilor | Magia Crăciunului - patru experiențe interactive pentru întreaga familie",
+        "url": "https://arcub.ro/eveniment/muzeul-copiilor-magia-craciunului-patru-experiente-interactive-pentru-intreaga-familie",
+        "htmlSha256": "c4781fe6a369848b93cfe260af428d39969d6827dd9f07d21b317550b3d7c69d",
+        "meta": [
+          {
+            "property": "og:title",
+            "content": "Muzeul Copiilor | Magia Crăciunului - patru experiențe interactive pentru întreaga familie | ARCUB"
+          },
+          {
+            "property": "og:description",
+            "content": ""
+          },
+          {
+            "property": "og:image",
+            "content": "https://arcub.ro/img/aa956136-95fe-4c72-acd5-0e0639d08984/1200x630.jpg?fm=jpg&q=85&fit=crop&w=900&h=470&crop=%2C%2C%2C&s=e6dea77b832e80024c97d96e337a3b96"
+          }
+        ],
+        "canonical": [],
+        "headings": [
+          "Muzeul Copiilor | Magia Crăciunului - patru experiențe interactive pentru întreaga familie"
+        ],
+        "images": [
+          {
+            "class": "bg",
+            "src": "https://arcub.ro/img/15a05216-5dbc-408e-9981-070a02d379aa/foto-1.jpeg?fm=webp&q=85&fit=crop&crop=1600%2C899%2C0%2C33&s=577f2b12cfc406e441c174041dec202a",
+            "width": "1600",
+            "height": "899",
+            "alt": "",
+            "parents": [
+              {
+                "tag": "picture"
+              },
+              {
+                "tag": "header",
+                "class": "page-header with-bg tall"
+              },
+              {
+                "tag": "body",
+                "class": "project theme-d"
+              },
+              {
+                "tag": "html"
+              }
+            ]
+          }
+        ],
+        "structured": [],
+        "publisher": "bucharest-arcub",
+        "parser": {
+          "articleUrl": "https://arcub.ro/eveniment/muzeul-copiilor-magia-craciunului-patru-experiente-interactive-pentru-intreaga-familie",
+          "imageUrl": "https://arcub.ro/img/15a05216-5dbc-408e-9981-070a02d379aa/foto-1.jpeg?fm=webp&q=85&fit=crop&crop=1600%2C899%2C0%2C33&s=577f2b12cfc406e441c174041dec202a",
+          "basis": "local-event-hero",
+          "alt": "",
+          "credit": null,
+          "caption": null
+        },
+        "image": {
+          "url": "https://arcub.ro/img/15a05216-5dbc-408e-9981-070a02d379aa/foto-1.jpeg?fm=webp&q=85&fit=crop&crop=1600%2C899%2C0%2C33&s=577f2b12cfc406e441c174041dec202a",
+          "status": 200,
+          "mime": "image/webp",
+          "width": 1600,
+          "height": 899,
+          "bytes": 157952,
+          "sha256": "4ad41de978495cbcff14224a1bc83e0608d01672c290cc328c07ada81c582b03"
+        }
+      },
+      {
+        "id": "bucharest:arcub:e3e2ee6242e0ab0139cca85a",
+        "title": "România – identitate prin tradiție",
+        "url": "https://arcub.ro/eveniment/romania-identitate-prin-traditie",
+        "htmlSha256": "64e5fe7bfc0d96add4e5b1bbc49c1a090349c91477ed7d5a5f03ccb9b64a8ba7",
+        "meta": [
+          {
+            "property": "og:title",
+            "content": "România – identitate prin tradiție | ARCUB"
+          },
+          {
+            "property": "og:description",
+            "content": ""
+          },
+          {
+            "property": "og:image",
+            "content": "https://arcub.ro/img/aa956136-95fe-4c72-acd5-0e0639d08984/1200x630.jpg?fm=jpg&q=85&fit=crop&w=900&h=470&crop=%2C%2C%2C&s=e6dea77b832e80024c97d96e337a3b96"
+          }
+        ],
+        "canonical": [],
+        "headings": [
+          "România – identitate prin tradiție"
+        ],
+        "images": [
+          {
+            "class": "bg",
+            "src": "https://arcub.ro/img/c21bc9d8-4e6d-40ca-9123-5e1dd95a1bb5/whatsapp-image-2026-11-19-at-12-23-31.jpeg?fm=webp&q=85&fit=crop&crop=1600%2C901%2C0%2C149&s=018ae6fe7984d9179acf77e045a0d83c",
+            "width": "1600",
+            "height": "901",
+            "alt": "",
+            "parents": [
+              {
+                "tag": "picture"
+              },
+              {
+                "tag": "header",
+                "class": "page-header with-bg tall"
+              },
+              {
+                "tag": "body",
+                "class": "project theme-14"
+              },
+              {
+                "tag": "html"
+              }
+            ]
+          }
+        ],
+        "structured": [],
+        "publisher": "bucharest-arcub",
+        "parser": {
+          "articleUrl": "https://arcub.ro/eveniment/romania-identitate-prin-traditie",
+          "imageUrl": "https://arcub.ro/img/c21bc9d8-4e6d-40ca-9123-5e1dd95a1bb5/whatsapp-image-2026-11-19-at-12-23-31.jpeg?fm=webp&q=85&fit=crop&crop=1600%2C901%2C0%2C149&s=018ae6fe7984d9179acf77e045a0d83c",
+          "basis": "local-event-hero",
+          "alt": "",
+          "credit": null,
+          "caption": null
+        },
+        "image": {
+          "url": "https://arcub.ro/img/c21bc9d8-4e6d-40ca-9123-5e1dd95a1bb5/whatsapp-image-2026-11-19-at-12-23-31.jpeg?fm=webp&q=85&fit=crop&crop=1600%2C901%2C0%2C149&s=018ae6fe7984d9179acf77e045a0d83c",
+          "status": 200,
+          "mime": "image/webp",
+          "width": 1600,
+          "height": 901,
+          "bytes": 337996,
+          "sha256": "0bacda89249f805771e188b61e8f045a677ca2f312d9ab6893f8c9c1c8563cc1"
+        }
+      }
+    ],
+    "robots": {
+      "status": 200,
+      "type": "text/plain",
+      "sha256": "e5c4b84484ee4216e9373be99380320c25dd94805f99f0a805846f087636553f",
+      "body": "User-agent: *\nDisallow:\n"
+    },
+    "agenda": {
+      "url": "https://arcub.ro/agenda",
+      "sha256": "38fbf12a9e72ecd0640a6ceba48a0df5ed9d01c078948b2bce1afd92d612b0b9",
+      "checkedAt": "2026-11-26T00:16:31.380Z",
+      "count": 8
+    },
+    "outcome": "observed",
+    "finishedAt": "2026-11-26T00:16:34.178Z",
+    "boundary": "Public source observations; no licence claim, no generated or substituted image, no production write."
+  }
+}

@@ -16,7 +16,7 @@ export function arcubPhotoDocument(row=ARCUB_PHOTO_ROWS[0]){
 }
 export function arcubPhotoFixture(now){
  const checkedAt=new Date(now).toISOString();
- const body='<html><body>'+ARCUB_PHOTO_ROWS.map(row=>'<div class="pgrid-item"><a href="'+escape(row.url)+'"><h3>'+escape(row.title)+'</h3><div class="meta"><span>26 nov. – 9 dec. 2026</span><span>ARCUB – Sala Lahovari</span></div></a></div>').join('')+'</body></html>';
+ const body='<html><body>'+ARCUB_PHOTO_ROWS.map(row=>'<div class="pgrid-item"><a href="'+escape(row.url)+'"><h3>'+escape(row.title)+'</h3><div class="meta"><span>26 noiembrie – 9 decembrie 2026</span><span>ARCUB – Sala Lahovari</span></div></a></div>').join('')+'</body></html>';
  const parsed=parseArcubAgenda({body,checkedAt},now);
  return {cards:parsed.cards,coverage:[{domain:'events',state:'partial',checkedAt,sourceUrl:'https://arcub.ro/agenda',note:'Controlled source-photo fixture; not a live event check.'}]};
 }

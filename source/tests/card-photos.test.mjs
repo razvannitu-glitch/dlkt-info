@@ -73,7 +73,7 @@ test('non-publication pages contain no article photo and invalid references rema
 });
 test('public photo modules exactly match compilation and make only validated same-origin image requests',()=>{
  for(const[source,target]of[['catalog','card-photo-catalog'],['reviewed-photos','reviewed-photos'],['editorial-photos','editorial-photos'],['article-photo-reference','article-photo-reference'],['browser','card-photo-browser']]){
-  const compiled=readFileSync('.build/src/media/'+source+'.js','utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'').replaceAll("'./catalog.js'","'./card-photo-catalog.js'").replaceAll('../i18n/browser.js','./i18n-browser.js').replaceAll('../iceo/','./').replaceAll("'../local/news-policy.js'","'./local-news-policy.js'");
+  const compiled=readFileSync('.build/src/media/'+source+'.js','utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'').replaceAll("'./catalog.js'","'./card-photo-catalog.js'").replaceAll('../i18n/browser.js','./i18n-browser.js').replaceAll('../iceo/','./').replaceAll("'../local/news-policy.js'","'./local-news-policy.js'").replaceAll("'../local/photo-reference.js'","'./local-photo-reference.js'");
   assert.equal(readFileSync('public/'+target+'.js','utf8'),compiled);
  }
  const browser=readFileSync('public/card-photo-browser.js','utf8'),reference=readFileSync('public/article-photo-reference.js','utf8');
