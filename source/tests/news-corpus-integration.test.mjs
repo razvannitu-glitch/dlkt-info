@@ -392,7 +392,7 @@ test('legacy snapshot-only publication errors cannot recover without the corpus 
  assert.equal(storage.calls.filter(value=>value==='snapshot-publish').length,1);assert.deepEqual(storage.failures,['publish-unavailable']);
 });
 
-test('a malformed successful acknowledgement still fails validation without recovering',async()=>{
+test('a malformed object returned directly by the ledger fails validation without recovering',async()=>{
  const storage=persistence(),publish=storage.ledger.publish.bind(storage.ledger);
  storage.ledger.publish=async(...args)=>({...await publish(...args),privateField:'fixture'});
  await assert.rejects(new ContinuousSnapshotService(storage.ledger,async()=>collection(),null,()=>now,45000,storage.corpus).refresh(),/CONTINUOUS_SNAPSHOT_UNAVAILABLE/u);
@@ -412,25 +412,32 @@ test('recovery diagnostics contain only a constant marker after complete persist
  assert.deepEqual(info,[['DLKT_ICEO_REFRESH_PUBLICATION_RECONCILED']]);assert.deepEqual(warnings,[]);
 });
 
-test('actual ledger adapter reconciles a transport loss after the controlled commit',async()=>{
- const storage=persistence(),routes=[],value=collection();
- const environment={DLKT_INFO_SUPABASE_PROJECT_REF:'abcdefghijklmnopqrst',DLKT_INFO_SUPABASE_URL:'https://abcdefghijklmnopqrst.supabase.co',
-  DLKT_INFO_SUPABASE_PUBLISHABLE_KEY:'sb_publishable_'+'x'.repeat(30),DLKT_INFO_SHARE_ARCHIVE_WRITE_KEY:'s'.repeat(43)};
- const fetcher=async(url,init)=>{
-  const path=new URL(url).pathname.split('/').at(-1),args=JSON.parse(init.body);routes.push(path);
-  const json=value=>new Response(JSON.stringify(value),{headers:{'content-type':'application/json'}});
-  if(path==='dlkt_info_claim_public_refresh')return json(await storage.ledger.claim(args.p_worker_id,args.p_trigger));
-  if(path==='dlkt_info_read_public_snapshot')return json(await storage.ledger.read());
-  if(path==='dlkt_info_publish_public_snapshot'){
-   const claim=storage.stageCalls[0].claim;assert.equal(args.p_fence,claim.fence);assert.equal(args.p_lease_token,claim.leaseToken);
-   await storage.ledger.publish(claim,args.p_snapshot,args.p_digest);throw Error('CONTROLLED_TRANSPORT_LOSS');
-  }
-  assert.fail('unexpected write or RPC '+path);
- };
- const ledger=createRefreshLedger(environment,fetcher);assert.ok(ledger);
- const receipt=await new ContinuousSnapshotService(ledger,async()=>value,null,()=>now,45000,storage.corpus).refresh();
- assert.equal(receipt.persistedReadback,true);assert.equal(receipt.snapshotDigest,publicSnapshotDigest(value.snapshot));
- assert.equal(routes.filter(path=>path==='dlkt_info_publish_public_snapshot').length,1);
- assert.equal(routes.filter(path=>path==='dlkt_info_read_public_snapshot').length,2);
- assert.deepEqual(storage.failures,[]);assert.equal(storage.stageCalls.length,1);
+test('actual ledger adapter reconciles unusable write responses only through independent committed readback',async()=>{
+ for(const responseMode of ['transport-loss','malformed-envelope','undecodable-body']){
+  const storage=persistence(),routes=[],value=collection();
+  const environment={DLKT_INFO_SUPABASE_PROJECT_REF:'abcdefghijklmnopqrst',DLKT_INFO_SUPABASE_URL:'https://abcdefghijklmnopqrst.supabase.co',
+   DLKT_INFO_SUPABASE_PUBLISHABLE_KEY:'sb_publishable_'+'x'.repeat(30),DLKT_INFO_SHARE_ARCHIVE_WRITE_KEY:'s'.repeat(43)};
+  const fetcher=async(url,init)=>{
+   const path=new URL(url).pathname.split('/').at(-1),args=JSON.parse(init.body);routes.push(path);
+   const json=value=>new Response(JSON.stringify(value),{headers:{'content-type':'application/json'}});
+   if(path==='dlkt_info_claim_public_refresh')return json(await storage.ledger.claim(args.p_worker_id,args.p_trigger));
+   if(path==='dlkt_info_read_public_snapshot')return json(await storage.ledger.read());
+   if(path==='dlkt_info_publish_public_snapshot'){
+    const claim=storage.stageCalls[0].claim;assert.equal(args.p_fence,claim.fence);assert.equal(args.p_lease_token,claim.leaseToken);
+    const committed=await storage.ledger.publish(claim,args.p_snapshot,args.p_digest);
+    if(responseMode==='malformed-envelope')return json({...committed,privateField:'CONTROLLED_UNTRUSTED_FIELD'});
+    if(responseMode==='undecodable-body')return new Response('{',{headers:{'content-type':'application/json'}});
+    throw Error('CONTROLLED_TRANSPORT_LOSS');
+   }
+   assert.fail('unexpected write or RPC '+path);
+  };
+  const ledger=createRefreshLedger(environment,fetcher);assert.ok(ledger);
+  const receipt=await new ContinuousSnapshotService(ledger,async()=>value,null,()=>now,45000,storage.corpus).refresh();
+  assert.equal(receipt.persistedReadback,true);assert.equal(receipt.snapshotDigest,publicSnapshotDigest(value.snapshot));
+  assert.equal(receipt.revision,storage.committed.revision);
+  assert.equal(JSON.stringify(receipt).includes('CONTROLLED_UNTRUSTED_FIELD'),false);
+  assert.equal(routes.filter(path=>path==='dlkt_info_publish_public_snapshot').length,1);
+  assert.equal(routes.filter(path=>path==='dlkt_info_read_public_snapshot').length,2);
+  assert.deepEqual(storage.failures,[]);assert.equal(storage.stageCalls.length,1);
+ }
 });
