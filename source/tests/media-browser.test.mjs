@@ -204,3 +204,33 @@ test('official event photos share exact identity across recent, city and Daily a
  assert.equal(localCardPhotoReference(card,city.id,time+300000),undefined);
  assert.equal(contextPhotoNode({title:card.title,sourceUrl:'https://evil.example/event'},time,reference),null);
 });
+
+test('known unsupported photo publishers make no image request and retain the exact existing error presentation',async t=>{
+ const unsupported={...originalCard,sourceUrl:'https://www.ign.com/articles/photo-policy-fixture',identity:'https://www.ign.com/articles/photo-policy-fixture',publisher:'IGN',sourceIds:['news-gaming']};
+ const {article,figure,heading,header,source,image}=composed(t,undefined,unsupported);
+ assert.equal(image.src,undefined,'no src assignment, not even an empty URL');
+ assert.equal(figure.dataset.photoFailed,'true');
+ await Promise.resolve();
+ assert.equal(figure.parentElement,article);
+ assert.equal(figure.querySelector('h3'),heading);
+ assert.equal(figure.querySelector('header'),header);
+ assert.equal(heading.textContent,unsupported.title);
+ assert.equal(source.href,unsupported.sourceUrl);
+ assert.equal(source.parentElement,article);
+ assert.equal(figure.classList.contains('photo-unavailable'),true);
+ assert.equal(figure.querySelector('.card-photo-frame').hidden,true);
+ assert.equal(figure.querySelector('.card-photo-label').hidden,true);
+ assert.equal(figure.querySelector('figcaption').hidden,true);
+ image.dispatchEvent(new Event('load'));
+ assert.equal(figure.querySelector('.card-photo-label').hidden,true);
+});
+test('unsupported standalone photo follows the existing removal path with no remote request',async t=>{
+ const make=dom(t),article=make('article'),heading=make('h3');
+ const card={...originalCard,sourceUrl:'https://www.ign.com/articles/photo-policy-standalone',identity:'https://www.ign.com/articles/photo-policy-standalone',publisher:'IGN'};
+ const figure=photoNode(card,now);
+ article.append(figure,heading);
+ assert.equal(figure.querySelector('img').src,undefined);
+ await Promise.resolve();
+ assert.equal(figure.parentElement,null);
+ assert.equal(heading.parentElement,article);
+});
