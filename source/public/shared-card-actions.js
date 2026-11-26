@@ -8,7 +8,7 @@ function destinationsForLink(url) {
     ];
 }
 export function shareDestinations(card) { return destinationsForLink(cardLink(card)); }
-export function knowledgeShareDestinations(card, language) { return destinationsForLink(knowledgeCardLink(card, language)); }
+export function knowledgeShareDestinations(card, language, digest) { return destinationsForLink(knowledgeCardLink(card, language, digest)); }
 let active = null;
 /** Opening prepares only this public edition. Posting and copying still require a separate user action. */
 export async function shareCard(card, elements) {

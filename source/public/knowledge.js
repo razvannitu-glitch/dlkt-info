@@ -93,6 +93,38 @@ export function knowledgeRightsForCard(card) {
         throw Error('KNOWLEDGE_RIGHTS_BINDING_INVALID');
     return page.rights;
 }
+/** Canonical visible editorial payload. Explicit fields avoid property-order
+ * changes or unrelated metadata changing the identity of a reviewed edition.
+ */
+export function knowledgeEditorialPayload(card) {
+    if (!validKnowledgeCard(card))
+        throw Error('KNOWLEDGE_EDITORIAL_PAYLOAD_INVALID');
+    const rights = knowledgeRightsForCard(card), geography = card.geography;
+    return JSON.stringify(['dlkt-knowledge-editorial-v1', card.kind, card.id, card.revision, card.category,
+        card.format ?? null, card.calendarDay ?? null, card.distribution ?? null,
+        [card.source.publisher, card.source.url],
+        geography === undefined ? null : [geography.countryCode, [...geography.cityIds], languages.map(language => geography.label[language])],
+        languages.map(language => [language, card.topic[language], card.copy[language].title, card.copy[language].explanation, card.copy[language].connection]),
+        card.reviewedAt, card.publishAt ?? null, card.reviewBy,
+        rights === null ? null : [rights.credit, rights.licenseUrl, rights.policyUrl]]);
+}
+// Intentionally empty: source terms and deterministic test fixtures are not an
+// actual editorial approval. A decision must be committed after item-level review.
+// CI verifies SHA-256(payload) for every decision. The synchronous browser gate
+// compares the full canonical payload byte-for-byte (no custom crypto in client).
+export const KNOWLEDGE_EDITORIAL_APPROVALS = Object.freeze([]);
+export function matchesKnowledgeEditorialApproval(card, approval) {
+    return validKnowledgeCard(card) && approval.id === card.id && approval.revision === card.revision &&
+        /^[a-f0-9]{64}$/u.test(approval.digest) && approval.payload === knowledgeEditorialPayload(card);
+}
+function hasRequiredKnowledgeEditorialApproval(card) {
+    // Preserve legacy cards; the new reviewed-page source bindings require
+    // explicit exact editorial admission independently of source attribution.
+    if (reviewedKnowledgeBinding(card.id, card.source.url) === undefined)
+        return true;
+    const decisions = KNOWLEDGE_EDITORIAL_APPROVALS.filter(approval => approval.id === card.id);
+    return decisions.length === 1 && matchesKnowledgeEditorialApproval(card, decisions[0]);
+}
 export function validateKnowledgeCatalog(input) {
     if (!Array.isArray(input) || input.length > 5000)
         throw Error('KNOWLEDGE_CATALOG_INVALID');
@@ -100,6 +132,8 @@ export function validateKnowledgeCatalog(input) {
     for (const value of input) {
         if (!validKnowledgeCard(value) || ids.has(value.id))
             throw Error('KNOWLEDGE_CARD_INVALID');
+        if (!hasRequiredKnowledgeEditorialApproval(value))
+            throw Error('KNOWLEDGE_EDITORIAL_APPROVAL_REQUIRED');
         ids.add(value.id);
         cards.push(value);
     }
