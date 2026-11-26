@@ -31,7 +31,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat docs/billing-ledger-sandbox/{setup,ledger,test,queue,queue-test,reconcile,reconcile-test,checkout,checkout-test,entitlement,entitlement-test}.sql |
+          cat docs/billing-ledger-sandbox/{setup,ledger,test,queue,queue-test,reconcile,reconcile-test,checkout,checkout-test,entitlement,entitlement-test,vault-setup,vault,vault-test}.sql |
             docker exec -i "$TEST_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d billing_test
 
       - name: Verify simultaneous intake and lease claims in independent sessions
@@ -101,6 +101,25 @@ jobs:
           cmp "$tmp/one" "$tmp/two"
           test "$(psql_test -c "SELECT count(*) FROM dlkt_info_billing.checkout_intents WHERE account_id='acct_Checkout' AND customer_id='cus_Race';")" = 1
           echo BILLING_CHECKOUT_PARALLEL_RESERVATIONS_OK
+
+      - name: Verify simultaneous private OAuth state consumption
+        env:
+          TEST_CONTAINER: ${{ job.services.postgres.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          psql_test() { docker exec -i "$TEST_CONTAINER" psql -X -qAt -v ON_ERROR_STOP=1 -U postgres -d billing_test "$@"; }
+          consume="SET ROLE dlkt_connection_vault_api; SELECT count(*) FROM dlkt_info_connection_vault.consume_authorization('00000000-0000-4000-8000-000000000008','20000000-0000-4000-8000-000000000008','gmail',repeat('H',43),repeat('I',43));"
+          psql_test -c "$consume" > "$tmp/one" &
+          p1=$!
+          psql_test -c "$consume" > "$tmp/two" &
+          p2=$!
+          wait "$p1"
+          wait "$p2"
+          test "$(cat "$tmp/one" "$tmp/two" | sort | paste -sd, -)" = 0,1
+          echo PRIVATE_CONNECTION_VAULT_PARALLEL_CONSUMPTION_OK
 
   payment-proof:
     runs-on: ubuntu-24.04
