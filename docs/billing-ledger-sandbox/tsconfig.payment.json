@@ -1,0 +1,18 @@
+{
+  "extends": "../../source/tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "../..",
+    "outDir": "./.billing-build",
+    "noEmit": false
+  },
+  "include": [
+    "payment-proof.ts",
+    "../../source/src/billing/entitlement.ts",
+    "hosted-sessions.ts",
+    "checkout-lifecycle.ts",
+    "entitlement-gate.ts",
+    "private-connection-store.ts",
+    "external-cleanup.ts"
+  ],
+  "exclude": []
+}

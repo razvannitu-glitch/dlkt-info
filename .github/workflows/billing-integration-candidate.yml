@@ -1,0 +1,42 @@
+name: DLKT integration candidate verification
+on:
+  push:
+    branches:
+      - billing-lab/integration-20261126
+permissions:
+  contents: read
+concurrency:
+  group: dlkt-billing-integration-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Validate export protocol
+        run: node scripts/export-generated-reader-assets.mjs --self-test
+      - name: Compile strict TypeScript
+        run: npm --prefix source run build
+      - name: Synchronize reader assets
+        working-directory: source
+        run: node scripts/sync-reader-assets.mjs
+      - name: Generate release manifest
+        working-directory: source
+        run: node scripts/generate-release-manifest.mjs
+      - name: Pin exact candidate
+        run: npm run source:pin
+      - name: Full release verification
+        run: npm run verify:release
+      - name: Local package build
+        run: npm run package:local
+      - name: Export verified generated files
+        run: node scripts/export-generated-reader-assets.mjs
