@@ -14,6 +14,7 @@ function disableStandalone() {
     if (input instanceof HTMLInputElement) {
         input.value = '';
         input.hidden = true;
+        input.disabled = true;
     }
     for (const link of social) {
         link.removeAttribute('href');
@@ -38,6 +39,12 @@ function canShareKnowledge() {
         return false;
     }
     return true;
+}
+function guardKnowledgeAction(event) {
+    if (!canShareKnowledge()) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+    }
 }
 function checkAge() {
     clearTimeout(timer);
@@ -96,17 +103,18 @@ if (button instanceof HTMLButtonElement && input instanceof HTMLInputElement && 
                     button.disabled = false;
             } })();
         });
+        if (standalone) {
+            // The fallback is a real manual clipboard surface, not just a display field.
+            for (const type of ['copy', 'cut', 'keydown', 'pointerdown', 'contextmenu'])
+                input.addEventListener(type, guardKnowledgeAction, { capture: true });
+        }
         if (standalone)
             for (const link of social) {
                 const destination = link.dataset.knowledgeShareUrl;
                 if (!destination)
                     continue;
-                const guard = (event) => { if (!canShareKnowledge()) {
-                    event.preventDefault();
-                    event.stopImmediatePropagation();
-                } };
                 for (const type of ['click', 'auxclick', 'pointerdown', 'keydown', 'contextmenu'])
-                    link.addEventListener(type, guard, { capture: true });
+                    link.addEventListener(type, guardKnowledgeAction, { capture: true });
                 if (canShareKnowledge()) {
                     link.href = destination;
                     link.setAttribute('aria-disabled', 'false');
