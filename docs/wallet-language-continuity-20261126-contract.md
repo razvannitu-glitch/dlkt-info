@@ -1,0 +1,33 @@
+# Wallet language continuity — 2026-11-26
+
+Owner: root. Independent reviewer: /root/dlkt_wallet_locale_review, read-only. Project: DLKT INFO, razvannitu-glitch/dlkt-info, www.dlkt.ee. Base commit: 4c47125b576fcbb86bcbb596c409e3b0174635f1, verified against the public release receipt and GitHub main before work. User has authorized continued development, verification and publication.
+
+Objective: make the Wallet's own controls, profile guidance and feedback follow the existing reader language preference without losing draft choices, exposing private state, modifying original source content or authorizing external accounts.
+
+Confirmed cause: Wallet has no reader-language selector or shared language setup and hardcodes English UI and navigator-language defaults; Account already uses the shared resolver and RO/EN utility presentation.
+
+Permitted source changes: source/public/wallet.html; new source/src/wallet/presentation.ts; source/src/wallet/browser.ts; source/src/personal/browser.ts; source/src/connections/browser.ts; source/scripts/sync-reader-assets.mjs; source/scripts/prepare-public-release.mjs; directly affected source/tests/wallet-ui.test.mjs and connections-ui.test.mjs; new source/tests/wallet-presentation.test.mjs; scripts/qa-personal-profile.mjs; this contract. Only allow additional small integration edits if a named existing mandatory check demonstrates necessity. Generated browser modules, release manifest and SOURCE-PIN.json must come exclusively from the existing verified CI export and match exact input and hashes. No authored generated JavaScript.
+
+C1 Language: reuse setupLanguage({updateUrl:false}), initializeCountryLanguage and getLocale; manual choice outranks country/browser; profile locale is separate. New null-profile defaults await the bounded public country hint and then revalidate operation and owner. Existing saved BCP47 values remain exact. Utility UI coverage is explicitly Romanian/English, with English fallback and correct language/direction for other reader locales.
+
+C2 Native state: a language event changes only owned leaf text and presentation attributes. It does not reload or save a profile, change draft inputs/checks, replace card/control identity, remove source links, change focus, or start private/provider requests.
+
+C3 Privacy: retain generation, abort, foreground, owner and revision guards; invalidate clears private form, cards and feedback. Canonical dynamic presentation state is private ephemeral memory only, never data attributes/storage, and clearing a node removes its binding. A later locale event must not resurrect cleared content or links. Existing session/owner race and mutation tests remain.
+
+C4 Provenance: original titles, publisher/context/excerpts, source URLs/IDs, provider-returned account labels, actors and activity remain exact. Translate only known DLKT-owned UI call sites. Local photos, feed ordering, article translation/provider availability, database and auth/email settings remain unchanged. No new spending or external messages.
+
+C5 Usability: reuse the existing Account header selector classes and all current styles. No CSS/brand redesign. Native language control and controls must fit 320/390/1440 widths with existing target dimensions. Test RO/EN switching with dirty form, original card identity/link, saved success link, cleared private state and unsupported utility locale fallback.
+
+C6 Release: strict source compilation, full required package/application tests, generated import closure, controlled Chromium coverage and independent raw-diff review of the final exact head. Merge only the reviewed tree; create and explicitly promote the exact merged SHA; verify production release receipt and changed public module/HTML identity. Controlled private fixture tests are not live authentication evidence.
+
+Budget: one initial implementation/generation and at most two corrective generations for observed failures; at most two final browser verification executions unless a concrete required-gate failure remains; bounded production polling/readback. Read only scoped current files. GitHub connector + CI + Vercel only; no terminal and no CUA while manual handoff is pending.
+
+Status at contract creation: planned. No implementation, tests or publication claimed. No payment, provider activation or commercial commitment is part of this change.
+
+Observed first-generation correction: run 45780084235 at authored 9907d0c930c9a693926ad9fc6dbd8271a3a9df9b passed strict compilation, all 52 packaging tests and 2595 of 2596 application tests including every new locale/privacy case. source/tests/iceo-public.test.mjs omitted wallet-presentation.js in its isolated public-build fixture, causing ENOENT. That fixture is added to the permitted file set solely to include the new required module; its assertions stay intact. Actual PersonalLocalEdition states not-configured and no-match are included in the existing bounded summary translation. No failed observation is discarded.
+
+Independent review of authored 9907d0c930c9a693926ad9fc6dbd8271a3a9df9b identified one additional harness defect: cleanup could skip fixture.deactivate if restoring the QA reader preference throws. Nested try/finally now guarantees fixture deactivation. The reviewer found no other confirmed production-flow C1-C5 defects in the inspected raw diff; C6 still requires final generated checks and publication evidence.
+
+Generation 2 (45780697883) passed all 52 packaging and 2596 application checks. Verified export payload 57a568a2fc32127122f75e1945b3417d56d3c186a21ab4c13e168242e7899fe4 produced fb30ed1dac5e3a198288939116eeece898ee0ce8. The canonical release footer removes page-specific translation attributes, so the final presentation binds only the fixed first-party footer links and the Back to top text leaf, preserving its arrow and structure. Browser run 45781262582 passed the new locale/form/card assertions and 320/390/1440 measurements before an existing isolated denied-storage test expected English although the new country hint selected Romanian. Its negative assertion stays unchanged; the fixture now explicitly selects English using the same visible language control. These two observed corrections are consolidated into generation 3 and the second final browser run.
+
+The same first browser screenshot showed an existing local-card action retaining English after an in-place switch to Romanian. The final correction binds only its known source action, disclosure summary and calendar button inside the Wallet controller, preserving shared local renderer code, original wording, hrefs and node identity. The controlled browser assertion now checks the local source action and summary in Romanian.

@@ -58,6 +58,8 @@ function harness(query = '') {
   const fetch = (path, init) => new Promise((resolve, reject) => requests.push({path, init, resolve, reject}));
   const source = readFileSync('.build/src/connections/browser.js', 'utf8').replace(/^import [^\n]+\n/gmu, '').replace(/^export /gmu, '');
   const context = {document, window, fetch, AbortController, URL, Date, Error, Intl, JSON,
+    walletCopy: (node, value, suffix) => { node.textContent = value; if (suffix !== undefined) node.setAttribute('aria-label', value + ': ' + suffix); },
+    walletNode: (tag, value, className = '') => { const node = document.createElement(tag); node.textContent = value; node.className = className; return node; },
     isRecord, isUuid, getWalletProviders, isWalletProviderId, WALLET_PROVIDER_IDS, isWalletInstant, validatePersonalEvent, CONNECTIONS_VERSION, connectionCallbackPath, onSessionExpired: () => expired.push(true)};
   const controller = runInNewContext(`${source}\ncreateConnectionsWallet(onSessionExpired);`, context);
   return {controller, document, requests, destinations, histories, expired, timers, get: id => elements.get(id),

@@ -1,3 +1,4 @@
+import { walletCopy, walletNode } from './wallet-presentation.js';
 import { PERSONAL_LOCAL_VERSION } from './personal-contracts.js';
 import { parsePersonalSession } from './personal-session.js';
 import { selectPersonalLocalEdition } from './personal-relevance.js';
@@ -119,7 +120,7 @@ export function createPersonalReader(onInvalidated) {
         rendered.clear();
         ui.panel.hidden = true;
         ui.panel.setAttribute('aria-busy', 'false');
-        ui.status.textContent = '';
+        walletCopy(ui.status, '');
         ui.coverage.replaceChildren();
         ui.cards.replaceChildren();
         ui.refresh.disabled = false;
@@ -169,7 +170,7 @@ export function createPersonalReader(onInvalidated) {
         if (category !== null)
             article.dataset.editorialCategory = category;
         const header = node('header');
-        header.append(node('span', TOPIC_LABELS[card.topic], 'card-topic'));
+        header.append(walletNode('span', TOPIC_LABELS[card.topic], 'card-topic'));
         const citation = pressReviewCitation(card.sourceUrl);
         if (citation) {
             const credit = link(citation.label, citation.homeUrl);
@@ -184,23 +185,26 @@ export function createPersonalReader(onInvalidated) {
         if (credits)
             content.append(credits);
         const original = link(citation?.originalLabel ?? 'Open original source', card.sourceUrl);
-        if (original)
+        if (original) {
+            if (!citation)
+                walletCopy(original, 'Open source');
             content.append(original);
+        }
         const details = node('details', '', 'evidence');
-        details.append(node('summary', 'Source and coverage'), node('p', 'Source checked ' + card.observedAt, 'card-boundary'), node('p', card.boundary, 'card-boundary'), node('p', card.attribution, 'card-boundary'));
+        details.append(walletNode('summary', 'Source and coverage'), walletNode('p', 'Source checked ' + card.observedAt, 'card-boundary'), node('p', card.boundary, 'card-boundary'), node('p', card.attribution, 'card-boundary'));
         for (const related of view.related) {
             const source = link(related.publisher + ' · ' + related.title, related.sourceUrl);
             if (source)
                 details.append(source);
         }
         if (item.change === 'different') {
-            content.append(node('p', 'Changed since the previous source check in this session.', 'daily-change'));
+            content.append(walletNode('p', 'Changed since the previous source check in this session.', 'daily-change'));
             for (const change of item.changes)
                 details.append(node('p', changeExplanation(change), 'card-boundary'));
         }
         else if (item.change === 'coverage')
-            content.append(node('p', 'Additional publisher coverage of this existing story.', 'daily-change'));
-        const save = node('button', 'Save card in this browser', 'text-button');
+            content.append(walletNode('p', 'Additional publisher coverage of this existing story.', 'daily-change'));
+        const save = walletNode('button', 'Save card in this browser', 'text-button');
         save.type = 'button';
         save.dataset.personalSave = card.id;
         const feedback = node('p', '', 'card-boundary');
@@ -227,14 +231,14 @@ export function createPersonalReader(onInvalidated) {
                 try {
                     await memory.save(card);
                     if (current(ticket, controller)) {
-                        const savedLink = node('a', 'Open saved cards in this browser', 'source-link');
+                        const savedLink = walletNode('a', 'Open saved cards in this browser', 'source-link');
                         savedLink.href = '/#saved';
-                        feedback.replaceChildren(node('span', 'This public source card was saved in this browser. Your private profile was not copied. '), savedLink);
+                        feedback.replaceChildren(walletNode('span', 'This public source card was saved in this browser. Your private profile was not copied. '), savedLink);
                     }
                 }
                 catch {
                     if (current(ticket, controller))
-                        feedback.textContent = 'Saving in this browser could not be confirmed.';
+                        walletCopy(feedback, 'Saving in this browser could not be confirmed.');
                 }
                 finally {
                     if (current(ticket, controller))
@@ -263,6 +267,16 @@ export function createPersonalReader(onInvalidated) {
                 rows.push({ id, signature: JSON.stringify([match.card, match.need, selectedCity]), create: () => {
                         const card = localCardNode(match.card, selectedCity, now, { photos: false });
                         card.dataset.personalId = id;
+                        // Bind only the shared local card's own actions; its source wording and links stay intact.
+                        const sourceAction = card.querySelector('.card-content > a.source-link');
+                        if (sourceAction)
+                            walletCopy(sourceAction, 'Open source');
+                        const sourceDetails = card.querySelector(':scope > details.evidence > summary');
+                        if (sourceDetails)
+                            walletCopy(sourceDetails, 'Source and coverage');
+                        const calendarAction = card.querySelector('button[data-calendar-event]');
+                        if (calendarAction)
+                            walletCopy(calendarAction, 'Add to calendar');
                         const reason = node('p', 'For ' + selectedCity.name + ', which you confirmed, and ' + NEED_LABELS[match.need]
                             + ', which you selected. This is city context; confirm exact applicability at the source.', 'card-kind personal-reason');
                         card.querySelector('.card-content')?.prepend(reason);
@@ -298,10 +312,10 @@ export function createPersonalReader(onInvalidated) {
         if (focusWasInside && focused instanceof HTMLElement && !ui.cards.contains(focused))
             ui.refresh.focus();
         ui.more.hidden = displayed >= rows.length;
-        ui.more.textContent = 'Show more matched cards (' + Math.max(0, rows.length - displayed) + ')';
+        walletCopy(ui.more, 'Show more matched cards (' + Math.max(0, rows.length - displayed) + ')');
         ui.coverage.replaceChildren();
         if (value.localNeeds.length && value.cityId === null)
-            ui.coverage.append(node('p', 'Confirm a city to match the local needs you selected.', 'privacy-note'));
+            ui.coverage.append(walletNode('p', 'Confirm a city to match the local needs you selected.', 'privacy-note'));
         for (const entry of result.coverage) {
             ui.coverage.append(node('p', NEED_LABELS[entry.need] + ' · ' + entry.state + '. ' + entry.note, 'privacy-note'));
         }
@@ -309,12 +323,12 @@ export function createPersonalReader(onInvalidated) {
             ui.coverage.append(node('p', note, 'privacy-note'));
         const localSelected = value.cityId !== null && value.localNeeds.length > 0;
         const interestState = topicSelection?.edition.topicState ?? 'not-selected';
-        ui.status.textContent = !localSelected && !value.interests.length
+        walletCopy(ui.status, !localSelected && !value.interests.length
             ? 'Choose interests or confirm a city and select local needs, then save your profile.'
             : rows.length + ' matched card' + (rows.length === 1 ? '' : 's') + ' from available checked sources. '
                 + (localSelected ? 'Local coverage: ' + result.state + '. ' : '')
                 + (value.interests.length ? 'Interest sources: ' + interestState + '. ' : '')
-                + 'Missing checks do not mean that nothing happened.';
+                + 'Missing checks do not mean that nothing happened.');
         if (expiry !== null)
             window.clearTimeout(expiry);
         expiry = null;
@@ -338,7 +352,7 @@ export function createPersonalReader(onInvalidated) {
         ui.panel.hidden = false;
         ui.panel.setAttribute('aria-busy', 'true');
         ui.refresh.disabled = true;
-        ui.status.textContent = 'Checking sources for your saved preferences.';
+        walletCopy(ui.status, 'Checking sources for your saved preferences.');
         const timeout = window.setTimeout(() => controller.abort(), 20_000);
         try {
             const [localResult, topicResult] = await Promise.allSettled([
@@ -370,7 +384,7 @@ export function createPersonalReader(onInvalidated) {
                     ui.cards.replaceChildren();
                     ui.coverage.replaceChildren();
                     ui.more.hidden = true;
-                    ui.status.textContent = 'Source checks timed out. Reload your Wallet to retry.';
+                    walletCopy(ui.status, 'Source checks timed out. Reload your Wallet to retry.');
                 }
             }
         }

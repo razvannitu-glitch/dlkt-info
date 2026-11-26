@@ -1,3 +1,6 @@
+import { getLocale, setupLanguage } from './i18n-browser.js';
+import { initializeCountryLanguage } from './i18n-country-hint.js';
+import { walletCopy, walletNode, applyWalletPresentation, presentWalletProfileLabels } from './wallet-presentation.js';
 import { parseWalletProfile, parseWalletSnapshot, walletSnapshot } from './wallet-contracts.js';
 import { createPersonalProfileFields } from './personal-profile-fields.js';
 import { createPersonalReader } from './personal-browser.js';
@@ -5,6 +8,8 @@ import { parsePersonalSession } from './personal-session.js';
 import { createConnectionsWallet } from './connections-browser.js';
 import { DAILY_TOPICS } from './daily-contracts.js';
 import { TOPIC_LABELS, TOPIC_DESCRIPTIONS } from './topics.js';
+setupLanguage({ updateUrl: false });
+const languageReady = initializeCountryLanguage();
 function el(id) {
     const element = document.getElementById(id);
     if (!element)
@@ -42,9 +47,9 @@ const interestInputs = DAILY_TOPICS.map(topic => {
     input.type = 'checkbox';
     input.name = 'interests';
     input.value = topic;
-    label.append(input, document.createTextNode(TOPIC_LABELS[topic]));
+    label.append(input, walletNode('strong', TOPIC_LABELS[topic]));
     const description = document.createElement('span');
-    description.textContent = TOPIC_DESCRIPTIONS[topic];
+    walletCopy(description, TOPIC_DESCRIPTIONS[topic]);
     label.append(description);
     el('wallet-interests').append(label);
     return { topic, input };
@@ -64,7 +69,7 @@ class WalletRequestError extends Error {
     }
 }
 function setStatus(value, warning = false) {
-    status.textContent = value;
+    walletCopy(status, value);
     status.dataset.level = warning ? 'warning' : 'normal';
 }
 function setBusy(value) {
@@ -100,7 +105,8 @@ function clearPrivate() {
     personalFirst.checked = false;
     for (const { input } of interestInputs)
         input.checked = false;
-    el('wallet-profile-summary').textContent = '';
+    walletCopy(el('wallet-profile-summary'), '');
+    presentWalletProfileLabels();
     connections.clear();
     closeConfirmation();
 }
@@ -156,18 +162,13 @@ async function request(path, marker, method, signal, body, expectedOwner) {
     }
 }
 function defaults() {
-    let preferredLocale = 'en';
     let preferredZone = 'UTC';
     try {
-        preferredLocale = new Intl.Locale(navigator.language).toString();
         preferredZone = new Intl.DateTimeFormat().resolvedOptions().timeZone;
-        return parseWalletProfile({ displayName: null, locale: preferredLocale, timezone: preferredZone,
-            briefingTime: '08:00', interests: [], personalPriority: 'balanced', cityId: null, localNeeds: [] });
     }
-    catch {
-        return parseWalletProfile({ displayName: null, locale: 'en', timezone: 'UTC',
-            briefingTime: '08:00', interests: [], personalPriority: 'balanced', cityId: null, localNeeds: [] });
-    }
+    catch { /* UTC fallback. */ }
+    return parseWalletProfile({ displayName: null, locale: getLocale(), timezone: preferredZone,
+        briefingTime: '08:00', interests: [], personalPriority: 'balanced', cityId: null, localNeeds: [] });
 }
 async function requireOwner(id, signal) {
     const session = parsePersonalSession(await request('/api/account-session', 'identity-v1', 'GET', signal));
@@ -193,6 +194,7 @@ function render(value, message, verifiedOwner) {
     }
     const profile = value.profile?.value ?? defaults();
     personalFields.render(profile);
+    presentWalletProfileLabels();
     displayName.value = profile.displayName ?? '';
     locale.value = profile.locale;
     timezone.value = profile.timezone;
@@ -202,9 +204,9 @@ function render(value, message, verifiedOwner) {
     for (const { topic, input } of interestInputs)
         input.checked = profile.interests.includes(topic);
     deleteButton.hidden = value.profile === null;
-    el('wallet-profile-summary').textContent = value.profile === null
+    walletCopy(el('wallet-profile-summary'), value.profile === null
         ? 'Your profile has not been saved yet. Review these preferences before saving.'
-        : `Your profile was saved on ${new Date(value.profile.updatedAt).toLocaleString('en', { timeZone: profile.timezone })} (${profile.timezone}).`;
+        : `Your profile was saved on ${new Date(value.profile.updatedAt).toLocaleString('en', { timeZone: profile.timezone })} (${profile.timezone}).`);
     setStatus(message ?? 'Signed in. Your profile is private. Email and social connections require separate authorization.');
     if (value.profile !== null && ownerId !== null)
         void personalReader.load(value.profile, ownerId);
@@ -239,6 +241,15 @@ async function perform(kind, message, work) {
     const operation = begin(message);
     try {
         const result = await work(operation.controller.signal);
+        // Resolve only new-draft defaults. A saved profile keeps its exact locale.
+        if (result.value.account === 'signed-in' && result.value.profile === null) {
+            await languageReady;
+            if (!isCurrent(operation))
+                return;
+            if (!result.ownerId)
+                throw new Error('WALLET_OWNER_NOT_VERIFIED');
+            await requireOwner(result.ownerId, operation.controller.signal);
+        }
         if (isCurrent(operation))
             render(result.value, result.message, result.ownerId);
     }
@@ -377,4 +388,6 @@ window.addEventListener('pageshow', event => { if (event.persisted)
 window.addEventListener('blur', () => { focused = false; invalidate('Private details are hidden. Return to reload your Wallet.'); });
 window.addEventListener('focus', () => { focused = true; if (!active)
     void refresh(); });
+document.addEventListener('dlkt:language-changed', () => applyWalletPresentation());
+applyWalletPresentation();
 void refresh();
