@@ -229,7 +229,10 @@ test('compiled inline rendering preserves 11-plus-1 cadence, append prefixes and
  assert.ok(facts(changed).every(node=>!seen.has(node.card.id)),'a new context excludes only facts with qualified exposure history');
  assert.equal(h.context.inlineKnowledgeSeen.size,seen.size,'the two inserted cards have no qualified exposure yet');assert.equal(h.context.historyWrites,0);
  const firstId=selected[0].card.id,expires=now+1000;
- const bounded=KNOWLEDGE_CARDS.filter(card=>card.publishAt===undefined||Date.parse(card.publishAt)<=now).map(card=>({...card,reviewedAt:new Date(now-1000).toISOString(),reviewBy:new Date(card.id===firstId?expires:now+10000).toISOString()}));
+ // Build the historical expiry fixture only from records already time-eligible
+ // on the fixture date. Do not retimestamp a later exact-approved editorial
+ // edition into the past; that would correctly invalidate its approval.
+ const bounded=KNOWLEDGE_CARDS.filter(card=>Date.parse(card.publishAt??card.reviewedAt)<=now).map(card=>({...card,reviewedAt:new Date(now-1000).toISOString(),reviewBy:new Date(card.id===firstId?expires:now+10000).toISOString()}));
  const expiring=harness(bounded);assert.equal(facts(expiring.render(10)).length,0);
  const slots=expiring.context.inlineKnowledgeSelection;assert.equal(slots[0].card.id,firstId);
  expiring.context.now=expires;
