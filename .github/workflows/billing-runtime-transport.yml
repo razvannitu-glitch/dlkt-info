@@ -1,0 +1,113 @@
+name: DLKT isolated TLS runtime transport
+on:
+  push:
+    branches: [billing-lab/integration-20261126]
+permissions:
+  contents: read
+jobs:
+  transport:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      TEST_CONTAINER: dlkt-transport-postgres
+      TEST_RUNTIME_PASSWORD: fixture_only_transport_password_20261126_abc123
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - name: Install existing strict compiler
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Resolve pinned driver and install locked transport dependencies
+        working-directory: docs/hosted-integration/transport
+        run: |
+          set -euo pipefail
+          if [ ! -f package-lock.json ]; then npm install --package-lock-only --ignore-scripts --no-audit --no-fund; fi
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm audit --omit=dev --audit-level=high
+          ../../../node_modules/.bin/tsc -p tsconfig.json
+      - name: Start disposable PostgreSQL and generate isolated TLS certificates
+        shell: bash
+        run: |
+          set -euo pipefail
+          host=db.hziavqdhsqnihxuuxzhn.supabase.co
+          printf '127.0.0.1 %s\n' "$host" | sudo tee -a /etc/hosts >/dev/null
+          test "$(getent ahostsv4 "$host" | head -1 | awk '{print $1}')" = 127.0.0.1
+          tmp="$RUNNER_TEMP/dlkt-tls"
+          mkdir -m 700 "$tmp"
+          openssl req -x509 -newkey rsa:2048 -nodes -keyout "$tmp/ca.key" -out "$tmp/ca.crt" -days 2 -subj /CN=DLKT-Transport-Fixture-CA -addext basicConstraints=critical,CA:TRUE -addext keyUsage=critical,keyCertSign,cRLSign >/dev/null 2>&1
+          openssl req -new -newkey rsa:2048 -nodes -keyout "$tmp/server.key" -out "$tmp/server.csr" -subj "/CN=$host" >/dev/null 2>&1
+          printf 'subjectAltName=DNS:%s\nextendedKeyUsage=serverAuth\n' "$host" > "$tmp/ext"
+          openssl x509 -req -in "$tmp/server.csr" -CA "$tmp/ca.crt" -CAkey "$tmp/ca.key" -CAcreateserial -out "$tmp/server.crt" -days 1 -extfile "$tmp/ext" >/dev/null 2>&1
+          openssl req -x509 -newkey rsa:2048 -nodes -keyout "$tmp/wrong.key" -out "$tmp/wrong.crt" -days 2 -subj /CN=Wrong-Fixture-CA -addext basicConstraints=critical,CA:TRUE >/dev/null 2>&1
+          docker run --rm -d --name "$TEST_CONTAINER" -p 127.0.0.1:5432:5432 -e POSTGRES_PASSWORD=local-fixture-only postgres:17 >/dev/null
+          for i in $(seq 1 30); do docker exec "$TEST_CONTAINER" pg_isready -U postgres && break; sleep 1; done
+          docker exec "$TEST_CONTAINER" pg_isready -U postgres
+          docker cp "$tmp/server.key" "$TEST_CONTAINER:/var/lib/postgresql/server.key"
+          docker cp "$tmp/server.crt" "$TEST_CONTAINER:/var/lib/postgresql/server.crt"
+          docker exec -u root "$TEST_CONTAINER" sh -c 'chown postgres:postgres /var/lib/postgresql/server.key /var/lib/postgresql/server.crt; chmod 600 /var/lib/postgresql/server.key'
+          for setting in "ssl = 'on'" "ssl_cert_file = '/var/lib/postgresql/server.crt'" "ssl_key_file = '/var/lib/postgresql/server.key'"; do
+            docker exec "$TEST_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -c "ALTER SYSTEM SET $setting;"
+          done
+          docker exec "$TEST_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -c 'SELECT pg_reload_conf();'
+          echo "TEST_CA=$tmp/ca.crt" >> "$GITHUB_ENV"
+          echo "TEST_WRONG_CA=$tmp/wrong.crt" >> "$GITHUB_ENV"
+      - name: Replay exact hosted schema receipts into disposable database
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql_test(){ docker exec -i "$TEST_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres; }
+          psql_test <<'SQL'
+          create role anon nologin;
+          create role authenticated nologin;
+          create role authenticator nologin;
+          create role service_role nologin bypassrls;
+          create schema auth;
+          create table auth.users(id uuid primary key);
+          create table auth.sessions(id uuid primary key,user_id uuid not null references auth.users(id) on delete cascade,not_after timestamptz);
+          alter table auth.sessions enable row level security;
+          create function auth.uid() returns uuid language sql as $$select null::uuid$$;
+          SQL
+          psql_test < docs/hosted-integration/20261126154808_dlkt_integration_billing_foundation.sql
+          psql_test <<'SQL'
+          insert into dlkt_info_billing.catalog_accounts(account_id,product_id,live_mode) values('acct_1Ug2Sh77EKtnzo3p','prod_VhRhJqxfqwsphh',false);
+          insert into dlkt_info_billing.catalog_prices(account_id,price_id,plan,amount_cents,currency) values
+          ('acct_1Ug2Sh77EKtnzo3p','price_1Ug2no77EKtnzo3pFonO3DoN','monthly',699,'eur'),
+          ('acct_1Ug2Sh77EKtnzo3p','price_1Ug2nq77EKtnzo3pu9VDFjZ7','annual',6900,'eur');
+          SQL
+          psql_test < docs/hosted-integration/20261126155244_dlkt_integration_private_vault_and_closure.sql
+          psql_test < docs/hosted-integration/20261126155816_dlkt_integration_runtime_capability_roles.sql
+          psql_test <<SQL
+          insert into auth.users(id) values('00000000-0000-4000-8000-000000000101');
+          insert into auth.sessions(id,user_id) values('10000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101');
+          alter role dlkt_rt_ingress login password '$TEST_RUNTIME_PASSWORD';
+          alter role dlkt_rt_vault login password '$TEST_RUNTIME_PASSWORD';
+          SQL
+      - name: Test actual TCP/TLS, role separation and restricted queries
+        working-directory: docs/hosted-integration/transport
+        run: node --test --test-name-pattern='^(?!valid certificate with wrong hostname)' secure-transport.test.mjs
+      - name: Reject valid certificate for a foreign hostname
+        shell: bash
+        working-directory: docs/hosted-integration/transport
+        run: |
+          set -euo pipefail
+          tmp="$RUNNER_TEMP/dlkt-tls"
+          openssl req -new -newkey rsa:2048 -nodes -keyout "$tmp/other-server.key" -out "$tmp/other-server.csr" -subj /CN=foreign.fixture.test >/dev/null 2>&1
+          printf 'subjectAltName=DNS:foreign.fixture.test\nextendedKeyUsage=serverAuth\n' > "$tmp/other-ext"
+          openssl x509 -req -in "$tmp/other-server.csr" -CA "$tmp/ca.crt" -CAkey "$tmp/ca.key" -CAcreateserial -out "$tmp/other-server.crt" -days 1 -extfile "$tmp/other-ext" >/dev/null 2>&1
+          docker cp "$tmp/other-server.key" "$TEST_CONTAINER:/var/lib/postgresql/server.key"
+          docker cp "$tmp/other-server.crt" "$TEST_CONTAINER:/var/lib/postgresql/server.crt"
+          docker exec -u root "$TEST_CONTAINER" sh -c 'chown postgres:postgres /var/lib/postgresql/server.key /var/lib/postgresql/server.crt; chmod 600 /var/lib/postgresql/server.key'
+          docker exec "$TEST_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -c 'SELECT pg_reload_conf();'
+          sleep 1
+          TEST_WRONG_HOST=1 node --test --test-name-pattern='^valid certificate with wrong hostname' secure-transport.test.mjs
+      - name: Export verified driver lockfile only
+        working-directory: docs/hosted-integration/transport
+        run: |
+          node --input-type=module -e "import fs from 'node:fs';import {createHash} from 'node:crypto';const b=fs.readFileSync('package-lock.json');if(b.length>20000)process.exit(1);console.log('DLKT_TRANSPORT_LOCK '+JSON.stringify({sha:process.env.GITHUB_SHA,bytes:b.length,sha256:createHash('sha256').update(b).digest('hex'),base64:b.toString('base64')}))"
+      - name: Remove disposable instance
+        if: always()
+        run: docker rm -f "$TEST_CONTAINER" >/dev/null 2>&1 || true

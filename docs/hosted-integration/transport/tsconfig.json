@@ -1,0 +1,14 @@
+{
+  "extends": "../../../source/tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": ".transport-build",
+    "noEmit": false,
+    "declaration": false,
+    "sourceMap": false
+  },
+  "include": [
+    "secure-transport.ts"
+  ],
+  "exclude": []
+}
