@@ -519,6 +519,8 @@ function assertReadingLayout(measured,format,fixture,{compact=true}={}){
   // Raw positions and the measured row height/gap remain in the report; no fixed offset is guessed.
   const languageRow=addedLanguageRowHeight(measured);
   const previousUsefulTop=measured.firstUsefulTop-languageRow;
+  if(format.width===320)assert.ok(measured.firstUsefulTop<=650,'mobile first useful card must start within 650px at 320px: '+measured.firstUsefulTop);
+  if(format.width===390)assert.ok(measured.firstUsefulTop<=610,'mobile first useful card must start within 610px at 390px: '+measured.firstUsefulTop);
   if(format.width===320)assert.ok(previousUsefulTop<=620,'existing content before the added language row stays within 620px at 320px: '+previousUsefulTop);
   if(format.width===390){
    assert.ok(previousUsefulTop<=550,'existing content before the added language row stays within 550px at 390px: '+previousUsefulTop);
