@@ -60,6 +60,26 @@ const exact=(value:Record<string,unknown>,keys:readonly string[]):boolean=>Objec
 const text=(value:unknown,max:number):value is string=>typeof value==='string'&&value.trim().length>0&&value.length<=max&&!/[\u0000-\u001f\u007f]/u.test(value);
 const digest=(value:unknown):string=>createHash('sha256').update(JSON.stringify(value),'utf8').digest('hex');
 
+
+/** Snapshot JSON-like own data once. Accessors and exotic prototypes are not input data. */
+function dataRecord(value:unknown):Record<string,unknown>|null {
+ try{
+  if(!object(value))return null;
+  const prototype:unknown=Object.getPrototypeOf(value);
+  if(prototype!==Object.prototype&&prototype!==null)return null;
+  const descriptors=Object.getOwnPropertyDescriptors(value),copy:Record<string,unknown>=Object.create(null) as Record<string,unknown>;
+  const keys=Reflect.ownKeys(descriptors);
+  if(keys.length>12)return null;
+  for(const key of keys){
+   if(typeof key!=='string')return null;
+   const descriptor=descriptors[key];
+   if(!descriptor||!Object.hasOwn(descriptor,'value')||!descriptor.enumerable)return null;
+   copy[key]=descriptor.value as unknown;
+  }
+  return Object.freeze(copy);
+ }catch{return null;}
+}
+
 export class NewsTranslationError extends Error {
  constructor(readonly code:'NEWS_TRANSLATION_REQUEST_INVALID'|'NEWS_TRANSLATION_SOURCE_UNAVAILABLE'){
   super(code);this.name='NewsTranslationError';
@@ -74,13 +94,13 @@ function validReference(value:unknown):value is NewsArticleReference {
  return city!==null&&new RegExp('^local-news:'+city.id+':[a-z0-9-]{1,80}:[a-f0-9]{24}$','u').test(value.id);
 }
 function requestCopy(value:unknown):TranslationRequest {
- if(!object(value)||!exact(value,['reference','epoch','targetLocale','translatorVersion'])
-  ||!validReference(value.reference)||!validNewsEpochId(value.epoch)||localeFromPreference(value.targetLocale)===null
-  ||typeof value.translatorVersion!=='string'||!VERSION.test(value.translatorVersion))throw new NewsTranslationError('NEWS_TRANSLATION_REQUEST_INVALID');
- const reference=value.reference;
+ const record=dataRecord(value),reference=record?dataRecord(record.reference):null;
+ if(!record||!exact(record,['reference','epoch','targetLocale','translatorVersion'])
+  ||!validReference(reference)||!validNewsEpochId(record.epoch)||localeFromPreference(record.targetLocale)===null
+  ||typeof record.translatorVersion!=='string'||!VERSION.test(record.translatorVersion))throw new NewsTranslationError('NEWS_TRANSLATION_REQUEST_INVALID');
  return Object.freeze({
   reference:Object.freeze({id:reference.id,revision:reference.revision,...(reference.cityId===undefined?{}:{cityId:reference.cityId})}),
-  epoch:value.epoch,targetLocale:value.targetLocale as Locale,translatorVersion:value.translatorVersion,
+  epoch:record.epoch,targetLocale:record.targetLocale as Locale,translatorVersion:record.translatorVersion,
  });
 }
 function unavailable():never {throw new NewsTranslationError('NEWS_TRANSLATION_SOURCE_UNAVAILABLE');}
@@ -126,15 +146,16 @@ export async function resolvePublicNewsTranslation(
  return resolved;
 }
 
-function candidateMatches(value:unknown,resolved:ResolvedNewsTranslation):value is NewsTranslationProjection {
- if(!object(value)||!exact(value,PROJECTION_KEYS)||value.version!==NEWS_TRANSLATION_VERSION||value.key!==resolved.key
-  ||value.sourceLanguage!==resolved.sourceLanguage||value.targetLocale!==resolved.targetLocale||value.translatorVersion!==resolved.translatorVersion
-  ||!object(value.original)||!exact(value.original,ORIGINAL_KEYS)||!object(value.translated))return false;
- const original=value.original,translated=value.translated;
- return ORIGINAL_KEYS.every(key=>original[key]===resolved.original[key])
-  &&exact(translated,resolved.fields.summary===undefined?['title']:['title','summary'])
-  &&text(translated.title,8000)&&(resolved.fields.summary===undefined||text(translated.summary,4000))
-  &&Buffer.byteLength(JSON.stringify(translated),'utf8')<=48000;
+function candidateCopy(value:unknown,resolved:ResolvedNewsTranslation):NewsTranslationFields|null {
+ const record=dataRecord(value);
+ if(!record||!exact(record,PROJECTION_KEYS)||record.version!==NEWS_TRANSLATION_VERSION||record.key!==resolved.key
+  ||record.sourceLanguage!==resolved.sourceLanguage||record.targetLocale!==resolved.targetLocale||record.translatorVersion!==resolved.translatorVersion)return null;
+ const original=dataRecord(record.original),translated=dataRecord(record.translated);
+ if(!original||!exact(original,ORIGINAL_KEYS)||!ORIGINAL_KEYS.every(key=>original[key]===resolved.original[key])||!translated
+  ||!exact(translated,resolved.fields.summary===undefined?['title']:['title','summary'])
+  ||!text(translated.title,8000)||resolved.fields.summary!==undefined&&!text(translated.summary,4000)
+  ||Buffer.byteLength(JSON.stringify(translated),'utf8')>48000)return null;
+ return Object.freeze({title:translated.title,...(typeof translated.summary==='string'?{summary:translated.summary}:{})});
 }
 
 /**
@@ -145,10 +166,10 @@ export async function acceptNewsTranslationProjection(
  resolved:ResolvedNewsTranslation,candidate:unknown,
 ):Promise<NewsTranslationProjection|null> {
  const authority=issued.get(resolved);
- if(!authority||!candidateMatches(candidate,resolved))return null;
- // Copy before awaiting: a mutable adapter/cache result must not change after validation.
- const translated:NewsTranslationFields=Object.freeze({title:candidate.translated.title,
-  ...(candidate.translated.summary===undefined?{}:{summary:candidate.translated.summary})});
+ if(!authority)return null;
+ // Validate a stable own-data snapshot; never reread mutable adapter properties after validation.
+ const translated=candidateCopy(candidate,resolved);
+ if(!translated)return null;
  let current:ResolvedNewsTranslation|null;
  try{current=await readResolution(authority);}catch{return null;}
  if(!current||current.key!==resolved.key)return null;

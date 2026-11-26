@@ -4,12 +4,23 @@ import {createHash} from 'node:crypto';
 import {resolvePublicNewsTranslation,acceptNewsTranslationProjection,NEWS_TRANSLATION_VERSION} from '../.build/src/iceo/news-translation.js';
 import {createNewsCorpusStore} from '../.build/src/iceo/news-corpus-store.js';
 import {cardContent} from '../.build/src/iceo/card-validation.js';
+import {validArchiveCard} from '../.build/src/share/archive.js';
+import {ICEO_SOURCES} from '../.build/src/iceo/registry.js';
 import {newsCategory} from '../.build/src/iceo/news-taxonomy.js';
 import {newsCard} from '../.build/src/local/service.js';
 import {NOW,article,local} from './fixtures/news-corpus.mjs';
 
 const hash=value=>createHash('sha256').update(JSON.stringify(value),'utf8').digest('hex');
 const withText=(card,fields)=>{const result={...card,...fields};result.contentHash=hash(cardContent(result));return result;};
+
+const summaryArticle=(id,fields={})=>{
+ const source=ICEO_SOURCES.find(entry=>entry.id==='nasa-news'),url='https://www.nasa.gov/news-release/controlled-translation-'+id+'/';
+ assert.ok(source);
+ const card=withText({...article(id),id:hash(url).slice(0,24),identity:url,sourceUrl:url,publisher:source.publisher,
+  sourceIds:[source.id],topic:source.topic,boundary:source.feed.boundary,attribution:source.attribution},fields);
+ assert.ok(validArchiveCard(card),'Summary fixture must satisfy the unchanged reviewed-source policy');return card;
+};
+
 const globalItem=card=>({kind:'global',key:'article:'+card.id,category:newsCategory(card),card});
 const localItem=entry=>{const card=newsCard(entry.snapshot.articles[0],entry.city);return {kind:'local',key:'local:'+card.id,category:newsCategory(card),card};};
 const reference=item=>({id:item.card.id,revision:item.kind==='global'?item.card.contentHash:item.card.news.documentHash,
@@ -22,7 +33,7 @@ const candidate=(resolved,translated={title:'Titlu tradus'})=>({
 });
 
 test('only exact committed public references resolve and output contains publisher fields without mutating originals',async()=>{
- const card=withText(article(801),{title:'A public research result',summary:'An exact publisher excerpt.'});
+ const card=summaryArticle(801,{title:'A public research result',summary:'An exact publisher excerpt.'});
  const item=globalItem(card),before=structuredClone(item),store=storeFor(item),query=request(item);
  const resolved=await resolvePublicNewsTranslation(store,query,()=>NOW);
  assert.ok(resolved);assert.deepEqual(store.calls,[{reference:reference(item),epoch:'1'}]);
@@ -82,7 +93,7 @@ test('missing originals return no input; backend errors and invalid public recor
 });
 
 test('cache identity is exact across content, target and translator changes but reusable across valid epochs',async()=>{
- const item=globalItem(withText(article(806),{summary:'A source excerpt'})),store=storeFor(item);
+ const item=globalItem(summaryArticle(806,{summary:'A source excerpt'})),store=storeFor(item);
  const first=await resolvePublicNewsTranslation(store,request(item),()=>NOW);
  const second=await resolvePublicNewsTranslation(store,request(item,{epoch:'2'}),()=>NOW);
  assert.equal(first.key,second.key);
@@ -91,7 +102,7 @@ test('cache identity is exact across content, target and translator changes but 
  const changed=globalItem(withText(item.card,{summary:'A source excerpt '}));
  const next=await resolvePublicNewsTranslation(storeFor(changed),request(changed),()=>NOW);
  assert.notEqual(first.key,next.key);assert.notEqual(first.original.fieldsHash,next.original.fieldsHash);
- const other=globalItem(withText(article(807),{title:item.card.title,summary:item.card.summary}));
+ const other=globalItem(summaryArticle(807,{title:item.card.title,summary:item.card.summary}));
  const otherResolved=await resolvePublicNewsTranslation(storeFor(other),request(other),()=>NOW);
  assert.equal(first.original.fieldsHash,otherResolved.original.fieldsHash);assert.notEqual(first.key,otherResolved.key);
  const expected=hash([NEWS_TRANSLATION_VERSION,first.original.kind,first.original.id,first.original.identity,first.original.revision,
@@ -113,7 +124,7 @@ test('projection acceptance requires an issued immutable resolution and rechecks
 });
 
 test('wrong binding, incomplete or extra translated fields and excessive text fail before further source calls',async()=>{
- const item=globalItem(withText(article(809),{summary:'Source summary.'})),store=storeFor(item);
+ const item=globalItem(summaryArticle(809,{summary:'Source summary.'})),store=storeFor(item);
  const resolved=await resolvePublicNewsTranslation(store,request(item),()=>NOW);
  const good=candidate(resolved,{title:'Titlu tradus',summary:'Descriere tradusa'});
  const invalid=[
@@ -177,7 +188,7 @@ test('markup-like translations remain bounded plain data without parsing, interp
 });
 
 test('the existing concrete corpus adapter supplies exact public versions and can revoke them before acceptance',async()=>{
- const card=withText(article(814),{summary:'Published source excerpt.'}),item=globalItem(card),calls=[];
+ const card=summaryArticle(814,{summary:'Published source excerpt.'}),item=globalItem(card),calls=[];
  const environment={DLKT_INFO_SUPABASE_PROJECT_REF:'a'.repeat(20),DLKT_INFO_SUPABASE_URL:'https://'+'a'.repeat(20)+'.supabase.co',
   DLKT_INFO_SUPABASE_PUBLISHABLE_KEY:'sb_publishable_'+'b'.repeat(30),DLKT_INFO_SHARE_ARCHIVE_WRITE_KEY:'test-only-corpus-write-key-123456789012345678901234567890'};
  const store=createNewsCorpusStore(environment,async(url,init)=>{
@@ -190,4 +201,31 @@ test('the existing concrete corpus adapter supplies exact public versions and ca
  assert.equal(calls.length,2);assert.ok(calls.every(call=>call.url.endsWith('/dlkt_info_find_news_corpus_article')));
  assert.ok(calls.every(call=>call.args.p_id===card.id&&call.args.p_revision===card.contentHash&&call.args.p_epoch===1));
  assert.equal(JSON.stringify(resolved).includes(environment.DLKT_INFO_SHARE_ARCHIVE_WRITE_KEY),false);
+});
+
+test('request accessors and throwing proxies cannot change validated source authority or locale',async()=>{
+ const item=globalItem(article(815)),store=storeFor(item),good=request(item);let reads=0;
+ const changing={...good,get targetLocale(){reads++;return reads===1?'ro':'not-supported';}};
+ await assert.rejects(resolvePublicNewsTranslation(store,changing,()=>NOW),/NEWS_TRANSLATION_REQUEST_INVALID/);
+ const nested={...good,reference:{...good.reference,get id(){reads++;return item.card.id;}}};
+ await assert.rejects(resolvePublicNewsTranslation(store,nested,()=>NOW),/NEWS_TRANSLATION_REQUEST_INVALID/);
+ const proxy=new Proxy(good,{ownKeys(){throw Error('private proxy detail');}});
+ await assert.rejects(resolvePublicNewsTranslation(store,proxy,()=>NOW),error=>error.message==='NEWS_TRANSLATION_REQUEST_INVALID');
+ assert.equal(reads,0);assert.equal(store.calls.length,0);
+});
+test('provider accessors cannot substitute unvalidated title types or invent descriptions during copying',async()=>{
+ const item=globalItem(article(816)),store=storeFor(item),resolved=await resolvePublicNewsTranslation(store,request(item),()=>NOW);
+ const good=candidate(resolved);let reads=0;
+ const changing={...good,get translated(){reads++;return reads<=2?{title:'Valid'}:{title:123,summary:'invented'};}};
+ assert.equal(await acceptNewsTranslationProjection(resolved,changing),null);
+ const nested={...good,translated:{get title(){reads++;return 'Valid';}}};
+ assert.equal(await acceptNewsTranslationProjection(resolved,nested),null);
+ const proxy=new Proxy(good,{getOwnPropertyDescriptor(){throw Error('private proxy detail');}});
+ assert.equal(await acceptNewsTranslationProjection(resolved,proxy),null);
+ assert.equal(reads,0);assert.equal(store.calls.length,1);
+});
+test('a news-index original with an invented publisher summary remains ineligible',async()=>{
+ const original=article(817),forged=withText(original,{summary:'Invented publisher excerpt'}),item=globalItem(forged);
+ assert.equal(validArchiveCard(forged),false);
+ await assert.rejects(resolvePublicNewsTranslation(storeFor(item),request(item),()=>NOW),/NEWS_TRANSLATION_SOURCE_UNAVAILABLE/);
 });
