@@ -151,7 +151,7 @@ export function createPersonalReader(onInvalidated: () => void): PersonalReader 
     save.dataset.personalSave = card.id; const feedback = node('p', '', 'card-boundary'); feedback.setAttribute('role', 'status');
     save.addEventListener('click', () => {
       if (save.disabled || !owner || !current(ticket, controller)) return;
-      const userId = owner; save.disabled = true;
+      const userId = owner; save.disabled = true; feedback.replaceChildren();
       void (async () => {
         try {
           await confirmProfile(profile, userId, controller);
@@ -162,7 +162,10 @@ export function createPersonalReader(onInvalidated: () => void): PersonalReader 
         if (!current(ticket, controller)) return;
         try {
           await memory.save(card);
-          if (current(ticket, controller)) feedback.textContent = 'This public source card was saved in this browser. Your private profile was not copied.';
+          if (current(ticket, controller)) {
+            const savedLink = node('a', 'Open saved cards in this browser', 'source-link'); savedLink.href = '/#saved';
+            feedback.replaceChildren(node('span', 'This public source card was saved in this browser. Your private profile was not copied. '), savedLink);
+          }
         } catch {
           if (current(ticket, controller)) feedback.textContent = 'Saving in this browser could not be confirmed.';
         } finally { if (current(ticket, controller)) save.disabled = false; }

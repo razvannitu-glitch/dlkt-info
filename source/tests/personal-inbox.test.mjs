@@ -246,3 +246,16 @@ test('Private homepage code has no persistence, body rendering, provider writes 
   assert.doesNotMatch(source, /localStorage|sessionStorage|indexedDB|document\.cookie|innerHTML|outerHTML|insertAdjacentHTML|navigator\.share|\/api\/share|\/api\/edition|setInterval|event\.excerpt/u);
   assert.doesNotMatch(source, /action:\s*['"](?:connect|disconnect|send|publish)['"]/u);
 });
+
+
+test('A saved profile without connected providers points to personal selection without promising matching cards', () => {
+  const value = {account: 'signed-in', profileSaved: true, connected: 0, available: 0, reconnect: 0,
+    events: [], state: 'idle', failedProviders: 0, checkedAt: null};
+  const saved = personalInboxStatus(value);
+  assert.match(saved, /review your preferences and personal selection/u);
+  assert.match(saved, /Email and social connections are currently unavailable/u);
+  assert.doesNotMatch(saved, /ready|matched cards|new updates|complete coverage/iu);
+  const empty = personalInboxStatus({...value, profileSaved: false});
+  assert.match(empty, /Create your private profile/u);
+  assert.doesNotMatch(empty, /profile is saved|ready|matched cards/iu);
+});
