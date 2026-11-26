@@ -8,7 +8,9 @@
     "sourceMap": false
   },
   "include": [
-    "secure-transport.ts"
+    "secure-transport.ts",
+    "integration-route.ts",
+    "temporary-access-probe.ts"
   ],
   "exclude": []
 }

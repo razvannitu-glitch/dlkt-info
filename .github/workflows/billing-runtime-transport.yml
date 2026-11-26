@@ -79,6 +79,7 @@ jobs:
           SQL
           psql_test < docs/hosted-integration/20261126155244_dlkt_integration_private_vault_and_closure.sql
           psql_test < docs/hosted-integration/20261126155816_dlkt_integration_runtime_capability_roles.sql
+          psql_test < docs/hosted-integration/20261126164420_dlkt_integration_readonly_connection_probe.sql
           psql_test <<SQL
           insert into auth.users(id) values('00000000-0000-4000-8000-000000000101');
           insert into auth.sessions(id,user_id) values('10000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101');

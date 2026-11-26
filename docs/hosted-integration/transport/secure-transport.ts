@@ -1,10 +1,8 @@
 // Server-only integration transport. The production project is NOT configurable here.
 import postgres from 'postgres';
-import {X509Certificate} from 'node:crypto';
 import {checkServerIdentity} from 'node:tls';
-const REF='hziavqdhsqnihxuuxzhn', HOST='db.'+REF+'.supabase.co';
-const ROLES=['vault','checkout','recovery','ingress','worker','reconcile','customer','closure','review','cleanup'] as const;
-export type Capability=typeof ROLES[number];
+import {INTEGRATION_REF as REF,RUNTIME_CAPABILITIES as ROLES,resolveIntegrationRoute,type Capability} from './integration-route.js';
+export type {Capability} from './integration-route.js';
 const identitySQL='SELECT * FROM dlkt_info_runtime.identity()';
 type Allowed=Readonly<Record<string,readonly [number,number]>>;
 const commands:Readonly<Record<Capability,Allowed>>=Object.freeze({
@@ -62,13 +60,11 @@ function fail():never{throw new Error('INTEGRATION_TRANSPORT_REJECTED');}
 const record=(v:unknown):v is Record<string,unknown>=>typeof v==='object'&&v!==null&&!Array.isArray(v);
 const get=(v:unknown,k:string):unknown=>record(v)&&Object.hasOwn(v,k)?v[k]:undefined;
 function config(raw:unknown){
- const mode=get(raw,'mode'),projectRef=get(raw,'projectRef'),capability=get(raw,'capability'),password=get(raw,'password'),ca=get(raw,'ca');
+ const mode=get(raw,'mode'),projectRef=get(raw,'projectRef'),capability=get(raw,'capability'),password=get(raw,'password');
  if(mode!=='integration'||projectRef!==REF||typeof capability!=='string'||!(ROLES as readonly string[]).includes(capability)
- ||typeof password!=='string'||!(/^[A-Za-z0-9_-]{32,256}$/u.test(password))
- ||typeof ca!=='string'||ca.length<200||ca.length>32768||!/^-----BEGIN CERTIFICATE-----[\s\S]+-----END CERTIFICATE-----\s*$/u.test(ca)
- ||process.env.NODE_TLS_REJECT_UNAUTHORIZED==='0')return fail();
- try{const cert=new X509Certificate(ca);if(!cert.ca||Date.parse(cert.validFrom)>Date.now()||Date.parse(cert.validTo)<=Date.now())return fail();}catch{return fail();}
- return {capability:capability as Capability,role:'dlkt_rt_'+capability,password,ca};
+ ||typeof password!=='string'||!(/^[A-Za-z0-9_-]{32,256}$/u.test(password)))return fail();
+ const route=resolveIntegrationRoute(get(raw,'connectionMethod'),projectRef,capability,get(raw,'ca'));
+ return {capability:capability as Capability,role:route.role,password,route};
 }
 function safeError(e:unknown):Error{
  const code=get(e,'code');
@@ -89,8 +85,8 @@ export class SecureIntegrationTransport{
  #closed=false;
  constructor(input:unknown){
   const c=config(input);this.#role=c.role;this.#capability=c.capability;
-  this.#db=postgres({host:HOST,port:5432,database:'postgres',user:c.role,password:c.password,
-   ssl:{ca:c.ca,rejectUnauthorized:true,servername:HOST,checkServerIdentity:(hostname:string,cert:Parameters<typeof checkServerIdentity>[1])=>checkServerIdentity(HOST,cert)},
+  this.#db=postgres({host:c.route.host,port:c.route.port,database:'postgres',user:c.route.user,password:c.password,
+   ssl:{ca:c.route.ca,minVersion:'TLSv1.2',rejectUnauthorized:true,servername:c.route.host,checkServerIdentity:(_hostname:string,cert:Parameters<typeof checkServerIdentity>[1])=>checkServerIdentity(c.route.host,cert)},
    max:1,max_pipeline:1,prepare:false,fetch_types:false,connect_timeout:5,idle_timeout:10,max_lifetime:60,
    queue_timeout:5,query_timeout:5,cancel_timeout:1,debug:false,onnotice:()=>{},connection:{application_name:'dlkt-integration-'+c.capability}});
  }
