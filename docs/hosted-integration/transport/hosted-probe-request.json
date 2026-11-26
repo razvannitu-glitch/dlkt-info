@@ -1,0 +1,8 @@
+{
+  "purpose": "one-shot hosted read-only authentication",
+  "projectRef": "hziavqdhsqnihxuuxzhn",
+  "role": "dlkt_rt_probe",
+  "validatedSource": "dfa2363ff3529c332280e45664300763e5657e13",
+  "operatorConfirmedEnvironmentSecret": true,
+  "credentialExpiresAt": "2026-11-26 18:56:34.76145+00"
+}
