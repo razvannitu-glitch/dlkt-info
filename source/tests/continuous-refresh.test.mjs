@@ -294,6 +294,8 @@ test('60-second durable-read budget shares a verified snapshot across runtimes w
   assert.equal(refreshed.collection.revision,2);
   assert.equal(ledger.reads,2,'next minute must revalidate against durable snapshot');
   assert.deepEqual(writes.map(x=>x.ttlSeconds),[60,60]);
+  // A worker may retain its own verified copy for 60 seconds from first use.
+  ledger.now+=1001;
   assert.equal((await second.read()).collection.revision,2);
   assert.equal(ledger.reads,2,'separate workers reuse verified shared cache');
   assert.equal(upstreamCalls,0,'public reads never trigger publisher fetching');
