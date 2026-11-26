@@ -11,7 +11,8 @@
     "hosted-sessions.ts",
     "checkout-lifecycle.ts",
     "entitlement-gate.ts",
-    "private-connection-store.ts"
+    "private-connection-store.ts",
+    "external-cleanup.ts"
   ],
   "exclude": []
 }
