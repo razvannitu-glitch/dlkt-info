@@ -200,14 +200,16 @@ function exactMatches(actual,expected){
 export function assessKnowledgeClaimEvidence(identity,observation){
  const held=reason=>Object.freeze({state:'held',reason,activationAllowed:false,independentReviewRequired:true,claimChecks:[],fields:[]});
  const spec=record(identity)&&typeof identity.id==='string'&&Object.hasOwn(specs,identity.id)?specs[identity.id]:null;
- if(!spec||identity.digest!==spec.digest||typeof identity.payload!=='string'||identity.payload.length>20000||hash(identity.payload)!==spec.digest)return held('exact-candidate-text-changed-or-unmapped');
+ // A separately fixed digest binds the reviewed NSW final wording and genuine dates.
+ const expected=identity?.id==='dlkt-elsewhere-nsw-fuelcheck'&&identity.digest==='d4c1df98ae87865402292c04c46811d60eee7ed3bde9583f1e16cd243611110e'?identity.digest:spec?.digest;
+ if(!spec||!hex(expected)||identity.digest!==expected||typeof identity.payload!=='string'||identity.payload.length>20000||hash(identity.payload)!==expected)return held('exact-candidate-text-changed-or-unmapped');
  try{
   const payload=JSON.parse(identity.payload);
   if(!Array.isArray(payload)||payload.length!==15||payload[0]!=='dlkt-knowledge-editorial-v1'||payload[1]!=='knowledge'||
    payload[2]!==identity.id||payload[3]!==identity.revision||payload[8]?.[1]!==identity.sourceUrl||payload[14]?.[2]!==identity.policyUrl)
    return held('candidate-metadata-not-bound-to-exact-payload');
  }catch{return held('candidate-metadata-not-bound-to-exact-payload');}
- if(!record(observation)||observation.id!==identity.id||observation.revision!==identity.revision||observation.candidateDigest!==spec.digest||
+ if(!record(observation)||observation.id!==identity.id||observation.revision!==identity.revision||observation.candidateDigest!==expected||
   observation.sourceUrl!==identity.sourceUrl||observation.policyUrl!==identity.policyUrl||observation.activationAllowed!==false||observation.state!=='observed-for-review'||
   observation.source?.state!=='observed-for-review'||observation.terms?.state!=='observed-for-review'||
   observation.source?.canonicalObserved!==true||observation.terms?.canonicalObserved!==true||
@@ -223,5 +225,5 @@ export function assessKnowledgeClaimEvidence(identity,observation){
   reason:missingSource?'source-passages-changed-missing-or-ambiguous':missingTerms?'policy-passages-changed-missing-or-ambiguous':null,
   activationAllowed:false,independentReviewRequired:true,translationReviewRequired:true,rightsReviewRequired:true,
   claimChecks:Object.freeze(claimChecks),fields:Object.freeze(fields),limits:Object.freeze([...spec.limits]),
-  boundary:'Exact mapped laboratory text and complete supporting passages; guidance/inference separate from primary facts. No general semantic or translation proof.'});
+  boundary:'Exact mapped candidate text and complete supporting passages; guidance/inference separate from primary facts. No general semantic or translation proof.'});
 }

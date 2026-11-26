@@ -1,0 +1,348 @@
+{
+  "kind": "dlkt-editorial-admission-candidate-not-authorized",
+  "card": {
+    "kind": "knowledge",
+    "id": "dlkt-elsewhere-nsw-fuelcheck",
+    "revision": 1,
+    "category": "04000000",
+    "format": "elsewhere",
+    "distribution": "cross-border",
+    "topic": {
+      "en": "Fuel price comparison",
+      "ro": "Compararea prețurilor carburanților",
+      "it": "Confronto prezzi carburanti"
+    },
+    "source": {
+      "publisher": "NSW Government",
+      "url": "https://www.nsw.gov.au/legal-and-justice/consumer-rights-and-protection/advertising-product-packaging-and-pricing-laws/fuel-pricing-discounts-and-signage/check-fuel-prices"
+    },
+    "geography": {
+      "countryCode": "AU",
+      "cityIds": [],
+      "label": {
+        "en": "New South Wales, Australia",
+        "ro": "New South Wales, Australia",
+        "it": "Nuovo Galles del Sud, Australia"
+      }
+    },
+    "copy": {
+      "en": {
+        "title": "In New South Wales, drivers can compare fuel prices before choosing a station.",
+        "explanation": "The NSW Government's free FuelCheck service displays current fuel prices at different stations, helping drivers compare options before refuelling.",
+        "connection": "Look for a reliable local comparison service, compare the same fuel type, and consider distance. Use your phone only when you are not driving."
+      },
+      "ro": {
+        "title": "În New South Wales, șoferii pot compara prețurile carburanților înainte să aleagă o benzinărie.",
+        "explanation": "Serviciul gratuit FuelCheck, oferit de autoritățile din NSW, afișează prețurile actuale la diferite benzinării, pentru a facilita compararea opțiunilor înainte de alimentare.",
+        "connection": "Verifică dacă există un comparator local de încredere, compară același tip de carburant și ia în calcul distanța. Nu folosi telefonul la volan."
+      },
+      "it": {
+        "title": "Nel Nuovo Galles del Sud, gli automobilisti possono confrontare i prezzi dei carburanti prima di scegliere una stazione.",
+        "explanation": "Il servizio gratuito FuelCheck del governo del Nuovo Galles del Sud mostra i prezzi correnti dei carburanti presso diverse stazioni, aiutando a confrontare le opzioni prima del rifornimento.",
+        "connection": "Cerca un servizio locale affidabile, confronta lo stesso tipo di carburante e considera la distanza. Non usare il telefono mentre guidi."
+      }
+    },
+    "reviewedAt": "2026-11-26T20:33:43.000Z",
+    "reviewBy": "2026-12-26T20:33:43.000Z"
+  },
+  "candidateDigest": "d4c1df98ae87865402292c04c46811d60eee7ed3bde9583f1e16cd243611110e",
+  "rights": {
+    "credit": "© State of New South Wales. For current information go to www.nsw.gov.au.",
+    "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+    "policyUrl": "https://www.nsw.gov.au/nsw-government/about-website/copyright"
+  },
+  "review": {
+    "reportedBy": "Owner-supplied independent editorial re-review",
+    "reviewedAt": "2026-11-26T20:33:43.000Z",
+    "reviewedTechnicalHead": "52ba5fa3af5359eb2a456a6f5bbab1f9e154d43b",
+    "wordingReviewDossier": "https://github.com/razvannitu-glitch/dlkt-info/pull/89#issuecomment-7202810301",
+    "technicalReviewReceipt": "https://github.com/razvannitu-glitch/dlkt-info/pull/89#issuecomment-7202860002",
+    "feedSuitability": "eligible",
+    "standaloneSuitability": "eligible",
+    "conditions": [
+      "Text-only original synthesis and DLKT translations",
+      "Required NSW credit, original source, CC BY 4.0 and source terms",
+      "No logos, imagery, third-party material, official endorsement or guaranteed savings",
+      "Actual admission decisions remain separate; no laboratory fixture or approval reuse"
+    ],
+    "releasePolicy": "Eligible on eventual verified deployment; no invented publication timestamp or synthetic future schedule."
+  },
+  "priorObservation": {
+    "workflowRun": 45891421555,
+    "workflowJob": 140154794291,
+    "commit": "52ba5fa3af5359eb2a456a6f5bbab1f9e154d43b",
+    "receipt": {
+      "id": "dlkt-elsewhere-nsw-fuelcheck",
+      "revision": 1,
+      "sourceUrl": "https://www.nsw.gov.au/legal-and-justice/consumer-rights-and-protection/advertising-product-packaging-and-pricing-laws/fuel-pricing-discounts-and-signage/check-fuel-prices",
+      "policyUrl": "https://www.nsw.gov.au/nsw-government/about-website/copyright",
+      "candidateDigest": "772d754d42ceb10260b4c02c1b4c97fcb1949ddbf61d6b0cd17fb2b88fa1c88b",
+      "activationAllowed": false,
+      "semanticReviewRequired": true,
+      "rightsReviewRequired": true,
+      "translationReviewRequired": true,
+      "state": "observed-for-review",
+      "reason": null,
+      "robots": {
+        "url": "https://www.nsw.gov.au/robots.txt",
+        "status": 200,
+        "contentType": "text/plain",
+        "complete": true,
+        "bodySha256": "5548b32a233fdb5eee9fd81cb309d2d6618f1585baaf92272fc2ed8567898c68"
+      },
+      "access": {
+        "source": {
+          "allowed": true,
+          "reason": "no-matching-disallow"
+        },
+        "policy": {
+          "allowed": true,
+          "reason": "no-matching-disallow"
+        }
+      },
+      "source": {
+        "url": "https://www.nsw.gov.au/legal-and-justice/consumer-rights-and-protection/advertising-product-packaging-and-pricing-laws/fuel-pricing-discounts-and-signage/check-fuel-prices",
+        "status": 200,
+        "contentType": "text/html",
+        "complete": true,
+        "bodySha256": "3ec5151cf994cee39fe2433adaed19cf2d48637795082af55a4f341f6abfb5dc",
+        "state": "observed-for-review",
+        "reason": null,
+        "canonicalObserved": true,
+        "mainSha256": "6e0f9e89df158b5826e804bec1779f62e4157145ba44e3e671081838670a8f28",
+        "signals": {
+          "service": true,
+          "free": true,
+          "pricing": true,
+          "realTime": true,
+          "driving": true
+        },
+        "claimAnchors": {
+          "free-government-service": {
+            "digest": "f4046ba7d7b681b90324bc26af380146791659d1e5bcfd89e3bfc08ab02bca63",
+            "matches": 1
+          },
+          "current-price-information": {
+            "digest": "adbc3d0c7e2baf8ea13d3c43f6eea3d087d2c8e9ea07bbeb12d8b66aba0570c7",
+            "matches": 1
+          },
+          "nearby-fuel-comparison": {
+            "digest": "2d2945108ccb901a5102ae52b035f0bf5021797b639d386b1138964b26b0852f",
+            "matches": 1
+          },
+          "fuel-type-comparison": {
+            "digest": "fb0b7a7e4d2e8a8e8f89c3293b8edeefaf8ac71a8a18240a1b6e0e4da68fbabd",
+            "matches": 1
+          },
+          "driving-safety": {
+            "digest": "cc819877503dd6ae4403a02c89bc325afe9c1248024339ce26830aeeadcd031e",
+            "matches": 1
+          }
+        }
+      },
+      "terms": {
+        "url": "https://www.nsw.gov.au/nsw-government/about-website/copyright",
+        "status": 200,
+        "contentType": "text/html",
+        "complete": true,
+        "bodySha256": "2b1ae6d268f8b9ed0b49c5f885093417d0992da5f87298a901413659b54a5e2e",
+        "state": "observed-for-review",
+        "reason": null,
+        "canonicalObserved": true,
+        "mainSha256": "b6ea1cbbb9801efc493f87f157a195dec1b099eac023fa00d5a07df76a44af09",
+        "signals": {
+          "licence": true,
+          "credit": true,
+          "exceptions": true,
+          "thirdParty": true,
+          "marks": true
+        },
+        "claimAnchors": {
+          "general-licence-and-exception": {
+            "digest": "45c597f81e35cc31c19e9e19307804d726864a9cda304faf7da7dd7a56961d72",
+            "matches": 1
+          },
+          "third-party-exclusion": {
+            "digest": "ccb47e67924d4f0474af81b952b68be3c30e763e6e1d588b68d655af680a61d3",
+            "matches": 1
+          },
+          "special-conditions-exclusion": {
+            "digest": "29dcaa7f103798bb7b474d2b8a7827cd5b4bb382769d8305824a1dc20114876d",
+            "matches": 1
+          }
+        }
+      },
+      "observedAt": "2026-11-26T20:30:06.115Z",
+      "candidateIdentity": "exact-laboratory-card-digest-not-admission",
+      "revalidation": {
+        "mode": "comparison-only",
+        "activationAllowed": false,
+        "comparison": {
+          "state": "unchanged",
+          "changed": []
+        },
+        "feed": {
+          "state": "review-required",
+          "reason": "trusted-observation-history-required",
+          "validUntil": null
+        },
+        "standalone": {
+          "state": "review-required",
+          "reason": "feed-authorization-not-reusable",
+          "validUntil": null
+        },
+        "evidenceDigest": "32be52f81f07150ad0d0c4b63d1ad9e271e2b51c8a31e1164e286ee02cb058dd"
+      },
+      "claimEvidence": {
+        "state": "evidence-ready-for-independent-review",
+        "reason": null,
+        "activationAllowed": false,
+        "independentReviewRequired": true,
+        "translationReviewRequired": true,
+        "rightsReviewRequired": true,
+        "claimChecks": [
+          {
+            "id": "free-official-service",
+            "kind": "primary-source-fact",
+            "meaning": "FuelCheck is provided free of charge by the NSW Government.",
+            "anchors": [
+              "free-government-service"
+            ],
+            "state": "supporting-passages-matched"
+          },
+          {
+            "id": "current-comparable-prices",
+            "kind": "primary-source-fact",
+            "meaning": "The service supplies current fuel prices and helps compare nearby options by fuel type.",
+            "anchors": [
+              "current-price-information",
+              "nearby-fuel-comparison",
+              "fuel-type-comparison"
+            ],
+            "state": "supporting-passages-matched"
+          },
+          {
+            "id": "safe-use",
+            "kind": "primary-source-fact",
+            "meaning": "Do not use a phone while driving.",
+            "anchors": [
+              "driving-safety"
+            ],
+            "state": "supporting-passages-matched"
+          },
+          {
+            "id": "conditional-local-use",
+            "kind": "editorial-guidance",
+            "meaning": "Look for a trustworthy comparable service locally and consider travel distance; no assertion of availability outside NSW or guaranteed savings.",
+            "anchors": [
+              "fuel-type-comparison"
+            ],
+            "state": "supporting-passages-matched"
+          }
+        ],
+        "fields": [
+          {
+            "language": "en",
+            "field": "topic",
+            "claims": [
+              "current-comparable-prices"
+            ]
+          },
+          {
+            "language": "en",
+            "field": "title",
+            "claims": [
+              "free-official-service",
+              "current-comparable-prices"
+            ]
+          },
+          {
+            "language": "en",
+            "field": "explanation",
+            "claims": [
+              "free-official-service",
+              "current-comparable-prices"
+            ]
+          },
+          {
+            "language": "en",
+            "field": "connection",
+            "claims": [
+              "conditional-local-use",
+              "safe-use"
+            ]
+          },
+          {
+            "language": "ro",
+            "field": "topic",
+            "claims": [
+              "current-comparable-prices"
+            ]
+          },
+          {
+            "language": "ro",
+            "field": "title",
+            "claims": [
+              "free-official-service",
+              "current-comparable-prices"
+            ]
+          },
+          {
+            "language": "ro",
+            "field": "explanation",
+            "claims": [
+              "free-official-service",
+              "current-comparable-prices"
+            ]
+          },
+          {
+            "language": "ro",
+            "field": "connection",
+            "claims": [
+              "conditional-local-use",
+              "safe-use"
+            ]
+          },
+          {
+            "language": "it",
+            "field": "topic",
+            "claims": [
+              "current-comparable-prices"
+            ]
+          },
+          {
+            "language": "it",
+            "field": "title",
+            "claims": [
+              "free-official-service",
+              "current-comparable-prices"
+            ]
+          },
+          {
+            "language": "it",
+            "field": "explanation",
+            "claims": [
+              "free-official-service",
+              "current-comparable-prices"
+            ]
+          },
+          {
+            "language": "it",
+            "field": "connection",
+            "claims": [
+              "conditional-local-use",
+              "safe-use"
+            ]
+          }
+        ],
+        "limits": [
+          "NSW scope only; no assertion that FuelCheck is available in the reader's country.",
+          "No guaranteed savings, current individual station price, stock or cheapest route.",
+          "Text-only original synthesis; preserve source credit and safety condition."
+        ],
+        "boundary": "Exact mapped laboratory text and complete supporting passages; guidance/inference separate from primary facts. No general semantic or translation proof."
+      }
+    }
+  },
+  "activationAllowed": false
+}
