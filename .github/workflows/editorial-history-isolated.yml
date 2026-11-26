@@ -1,0 +1,68 @@
+name: DLKT isolated editorial observation history
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+    paths:
+      - 'docs/editorial-history-lab/**'
+      - '.github/workflows/editorial-history-isolated.yml'
+permissions:
+  contents: read
+jobs:
+  history:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'editorial-lab/history-20261126'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: local-test-only
+          POSTGRES_DB: editorial_history_test
+        options: >-
+          --health-cmd "pg_isready -U postgres -d editorial_history_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Run disposable ledger and adversarial assertions
+        env:
+          TEST_CONTAINER: ${{ job.services.postgres.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat docs/editorial-history-lab/ledger.sql docs/editorial-history-lab/test.sql |
+            docker exec -i "$TEST_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d editorial_history_test
+      - name: Test simultaneous starts and terminal writes in independent sessions
+        env:
+          TEST_CONTAINER: ${{ job.services.postgres.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          psql_test() { docker exec -i "$TEST_CONTAINER" psql -X -qAt -v ON_ERROR_STOP=1 -U postgres -d editorial_history_test "$@"; }
+          same="SET ROLE dlkt_history_worker; SELECT disposition FROM dlkt_history_lab.start_attempt('lab-race',1,repeat('a',64),'10000000-0000-4000-8000-000000000001');"
+          psql_test -c "$same" > "$tmp/one" & p1=$!
+          psql_test -c "$same" > "$tmp/two" & p2=$!
+          wait "$p1"; wait "$p2"
+          test "$(cat "$tmp/one" "$tmp/two" | sort | paste -sd, -)" = created,replay-open
+          first="SET ROLE dlkt_history_worker; SELECT disposition FROM dlkt_history_lab.start_attempt('lab-race-distinct',1,repeat('a',64),'20000000-0000-4000-8000-000000000001');"
+          second="SET ROLE dlkt_history_worker; SELECT disposition FROM dlkt_history_lab.start_attempt('lab-race-distinct',1,repeat('a',64),'20000000-0000-4000-8000-000000000002');"
+          psql_test -c "$first" > "$tmp/one" & p1=$!
+          psql_test -c "$second" > "$tmp/two" & p2=$!
+          wait "$p1"; wait "$p2"
+          test "$(cat "$tmp/one" "$tmp/two" | sort | paste -sd, -)" = busy,created
+          finish="SET ROLE dlkt_history_worker; SELECT dlkt_history_lab.finish_attempt('lab-race',1,repeat('a',64),'10000000-0000-4000-8000-000000000001','held','source-denied',null,null,null);"
+          psql_test -c "$finish" > "$tmp/one" & p1=$!
+          psql_test -c "$finish" > "$tmp/two" & p2=$!
+          wait "$p1"; wait "$p2"
+          test "$(cat "$tmp/one" "$tmp/two" | sort | paste -sd, -)" = recorded,replay
+          test "$(psql_test -c "SELECT count(*) FROM dlkt_history_lab.attempts WHERE card_id in ('lab-race','lab-race-distinct');")" = 2
+          test "$(psql_test -c "SELECT count(*) FROM dlkt_history_lab.results WHERE attempt_id='10000000-0000-4000-8000-000000000001';")" = 1
+          echo EDITORIAL_HISTORY_PARALLEL_SESSIONS_OK
