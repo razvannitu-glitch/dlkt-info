@@ -606,3 +606,16 @@ html:is([data-reader-theme=prism],[data-reader-theme=night]) #entry-options>summ
  #today-glance .glance-heading{grid-template-columns:minmax(0,1fr);grid-template-areas:'date' 'city' 'actions' 'utilities';row-gap:6px}
  #today-glance .glance-actions{justify-self:stretch;justify-content:flex-start}
 }
+
+/* Mobile card-first density: category remains labelled for assistive technology.
+   Source-language choices stay fully visible, with 44px touch targets unchanged. */
+@media(max-width:600px){
+ #discovery #home-news-category-label{
+  position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0,0,0,0);white-space:nowrap;border:0
+ }
+ #discovery #home-news-toolbar{padding-block:6px;margin-block-end:12px}
+ #discovery #home-news-language{padding:8px 12px;gap:3px}
+ #discovery #home-news-language-label{font-size:12px;line-height:1.35}
+ #discovery #home-news-language .news-language-actions{margin-block-start:0}
+}
