@@ -15,11 +15,11 @@ jobs:
       postgres:
         image: postgres:17
         env:
-          POSTGRES_USER: postgres
+          POSTGRES_USER: fixture_bootstrap
           POSTGRES_PASSWORD: local-fixture-only
           POSTGRES_DB: billing_test
         options: >-
-          --health-cmd "pg_isready -U postgres -d billing_test"
+          --health-cmd "pg_isready -U fixture_bootstrap -d billing_test"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -32,6 +32,10 @@ jobs:
           TEST_CONTAINER: ${{ job.services.postgres.id }}
         run: |
           set -euo pipefail
+          docker exec -i "$TEST_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U fixture_bootstrap -d billing_test <<'SQL'
+          create role postgres login superuser createrole createdb bypassrls;
+          alter database billing_test owner to postgres;
+          SQL
           psql_test(){ docker exec -i "$TEST_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d billing_test "$@"; }
           psql_test <<'SQL'
           create role anon nologin;
@@ -61,7 +65,7 @@ jobs:
           set -euo pipefail
           # Existing admin roles created by the earlier superuser replay need
           # the admin memberships Supabase's non-superuser creator already has.
-          docker exec -i "$TEST_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d billing_test <<'SQL'
+          docker exec -i "$TEST_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U fixture_bootstrap -d billing_test <<'SQL'
           grant dlkt_billing_queue_owner to postgres with admin true, inherit false, set true;
           grant dlkt_billing_checkout_owner to postgres with admin true, inherit false, set true;
           alter role postgres nosuperuser createrole createdb bypassrls;
