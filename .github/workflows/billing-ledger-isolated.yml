@@ -1,0 +1,35 @@
+name: DLKT isolated billing ledger SQL
+on:
+  push:
+    branches:
+      - billing-lab/ledger-20261126
+permissions:
+  contents: read
+jobs:
+  ledger:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: local-test-only
+          POSTGRES_DB: billing_test
+        options: >-
+          --health-cmd "pg_isready -U postgres -d billing_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Execute isolated ledger and adversarial SQL assertions
+        env:
+          TEST_CONTAINER: ${{ job.services.postgres.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat docs/billing-ledger-sandbox/setup.sql docs/billing-ledger-sandbox/ledger.sql docs/billing-ledger-sandbox/test.sql |
+            docker exec -i "$TEST_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d billing_test
