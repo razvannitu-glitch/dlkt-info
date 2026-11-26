@@ -63,8 +63,8 @@ if (manifest.product !== 'dlkt-info'
   || manifest.expectedSchemaFingerprint !== 'fc6df8a25190ef8c4b4f906873a3015b7aa805e21ce1a44f9117b8eefeed3b91'
   || manifest.revision !== 'iceo-primary-mesh-1'
   || manifest.iceoVersion !== 'iceo-primary-mesh-1'
-  || manifest.publicSourceCount !== 51
-  || manifest.publicPublisherCount !== 25
+  || manifest.publicSourceCount !== 52
+  || manifest.publicPublisherCount !== 26
   || manifest.reviewedNewsPublisherFamilies !== 77
   || manifest.publicEditorialCategoryCount !== 20
   || manifest.publicDailyTarget !== 30 || manifest.publicDailyMaximum !== 40
