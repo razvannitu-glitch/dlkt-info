@@ -45,6 +45,35 @@ returns boolean language sql immutable security invoker set search_path=pg_catal
   else false end;
 $$;
 
+-- Match the existing dlkt-knowledge-observation-v1 JSON.stringify contract
+-- for the laboratory's restricted ASCII identity, URLs, and hex fingerprints.
+-- This digest binds the projection; it is not a signature or source authentication.
+create function dlkt_history_lab.observation_digest(
+  p_card text,p_revision integer,p_digest text,p_source text,p_policy text,
+  p_observed timestamptz,p_fingerprints jsonb
+) returns text language plpgsql stable strict security invoker set search_path=pg_catalog as $$
+declare stamp text; hashes text; payload text;
+begin
+  if p_card !~ '^lab-[a-z0-9][a-z0-9-]{0,62}$' or p_revision<=0
+     or p_digest !~ '^[0-9a-f]{64}$'
+     or p_source !~ '^https://example[.]invalid/source/[a-z0-9-]{1,63}$'
+     or p_policy !~ '^https://example[.]invalid/policy/[a-z0-9-]{1,63}$'
+     or not isfinite(p_observed)
+     or p_observed<'1970-01-01T00:00:00Z'::timestamptz
+     or p_observed>='10000-01-01T00:00:00Z'::timestamptz
+     or p_observed<>date_trunc('milliseconds',p_observed)
+     or not dlkt_history_lab.valid_fingerprints(p_fingerprints) then
+    return null;
+  end if;
+  stamp:=to_char(p_observed at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
+  select string_agg(to_json(e.v #>> '{}')::text,',' order by e.ord)
+    into hashes from jsonb_array_elements(p_fingerprints) with ordinality as e(v,ord);
+  payload:=format('["dlkt-knowledge-observation-v1",%s,%s,%s,%s,%s,%s,[%s]]',
+    to_json(p_card),p_revision,to_json(p_digest),to_json(p_source),to_json(p_policy),to_json(stamp),hashes);
+  return encode(sha256(convert_to(payload,'UTF8')),'hex');
+end;
+$$;
+
 create table dlkt_history_lab.results (
   attempt_id uuid primary key references dlkt_history_lab.attempts,
   finished_at timestamptz not null check (isfinite(finished_at)),
@@ -102,6 +131,17 @@ begin
     left join dlkt_history_lab.results r on r.attempt_id=a.attempt_id
     where (a.card_id,a.revision,a.digest)=(p_card,p_revision,p_digest)
       and (r.attempt_id is null or b.started_at<=r.finished_at)
+  ) then return 'integrity-held'; end if;
+  -- Recompute every stored positive binding, including historical attempts.
+  -- Never treat a digest supplied by the worker as authoritative by itself.
+  if exists (
+    select 1 from dlkt_history_lab.attempts a
+    join dlkt_history_lab.results r using (attempt_id)
+    join dlkt_history_lab.candidates c on (a.card_id,a.revision,a.digest)=(c.card_id,c.revision,c.digest)
+    where (a.card_id,a.revision,a.digest)=(p_card,p_revision,p_digest)
+      and r.outcome='observed'
+      and r.evidence_digest is distinct from dlkt_history_lab.observation_digest(
+        c.card_id,c.revision,c.digest,c.source_url,c.policy_url,r.observed_at,r.fingerprints)
   ) then return 'integrity-held'; end if;
   if open_n=1 then
     if checked_at>=open_started+interval '5 minutes' then return 'expired-open'; end if;
@@ -167,7 +207,7 @@ create function dlkt_history_lab.finish_attempt(
 ) returns text language plpgsql security definer set search_path=pg_catalog as $$
 declare c dlkt_history_lab.candidates%rowtype;
         a dlkt_history_lab.attempts%rowtype;
-        r dlkt_history_lab.results%rowtype; ts timestamptz;
+        r dlkt_history_lab.results%rowtype; ts timestamptz; expected_digest text;
 begin
   select * into c from dlkt_history_lab.candidates k
   where (k.card_id,k.revision,k.digest)=(p_card,p_revision,p_digest) for update;
@@ -197,6 +237,12 @@ begin
   -- A delayed worker must not convert an expired open attempt to a success,
   -- even if the separate reaper has not yet acquired the candidate lock.
   if ts>=a.started_at+interval '5 minutes' then raise exception 'HISTORY_ATTEMPT_EXPIRED'; end if;
+  if p_outcome='observed' then
+    expected_digest:=dlkt_history_lab.observation_digest(c.card_id,c.revision,c.digest,c.source_url,c.policy_url,p_observed,p_fingerprints);
+    if expected_digest is null or p_evidence is distinct from expected_digest then
+      raise exception using errcode='23514', message='HISTORY_EVIDENCE_BINDING_INVALID';
+    end if;
+  end if;
   insert into dlkt_history_lab.results values(p_attempt,ts,p_outcome,p_reason,p_observed,p_fingerprints,p_evidence);
   return 'recorded';
 end;
