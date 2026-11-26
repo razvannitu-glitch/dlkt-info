@@ -2,7 +2,7 @@ import {displayPhotoFor} from '../media/catalog.js';
 import {articlePhotoPath} from '../media/article-photo-reference.js';
 import {shareDestinations,knowledgeShareDestinations} from './actions.js';
 import {knowledgeRightsForCard,type KnowledgeLanguage} from '../iceo/knowledge.js';
-import type {SharedKnowledgeView} from './knowledge-resolution.js';
+import {knowledgeContentDigest,type SharedKnowledgeView} from './knowledge-resolution.js';
 import {previewAlt} from './preview.js';
 import {publisherExcerpt,publicShareDescription} from './content.js';
 import {cardGuide} from '../iceo/card-guide.js';
@@ -57,12 +57,14 @@ const knowledgeShareCopy={
  it:{caption:'Una scoperta condivisa con te',origin:'Funziona altrove',use:'Da ricordare',checked:'Fonte verificata editorialmente',until:'Scadenza della verifica',source:'Apri la fonte originale',share:'Condividi questa scoperta',copy:'Copia il link della scheda',copyLabel:'Link pubblico della scheda DLKT',copied:'Link della scheda DLKT copiato.',fallback:'Copia il link pubblico selezionato. Non contiene dati personali di lettura.',expired:'La verifica editoriale è scaduta. Consulta la fonte originale prima di usare questa informazione.',boundary:'Questa è una sintesi editoriale DLKT, non una nuova verifica in tempo reale o una conferma della disponibilità locale. Il link esatto è disponibile solo durante il periodo di verifica corrente.',adapted:'Sintesi originale e traduzioni DLKT',terms:'Condizioni della fonte',unavailable:'Questa scoperta non è disponibile',unavailableText:'La revisione editoriale richiesta non è attualmente disponibile per la condivisione. Potrebbe essere scaduta o sostituita. Nessun altro contenuto è stato sostituito.',explore:'Esplora DLKT'},
 } as const;
 export function renderSharedKnowledgeCard(view:SharedKnowledgeView):string {
- const {card,language,validUntil}=view,url=knowledgeCardLink(card,language),copy=card.copy[language],labels=knowledgeShareCopy[language],rights=knowledgeRightsForCard(card);
+ const {card,language,validUntil,digest}=view;
+ if(digest!==knowledgeContentDigest(card))throw Error('KNOWLEDGE_SHARE_DIGEST_INVALID');
+ const url=knowledgeCardLink(card,language,digest),copy=card.copy[language],labels=knowledgeShareCopy[language],rights=knowledgeRightsForCard(card);
  const formatter=new Intl.DateTimeFormat(language,{dateStyle:'medium',timeStyle:'short',timeZone:'UTC'});
  const review=formatter.format(new Date(card.reviewedAt))+' UTC',expiry=formatter.format(new Date(validUntil))+' UTC';
  const credit=rights===null?'':'<p class="card-credits">'+e(rights.credit)+' · '+e(labels.adapted)+' · <a href="'+e(rights.licenseUrl)+'" target="_blank" rel="noopener noreferrer">CC BY 4.0</a> · <a href="'+e(rights.policyUrl)+'" target="_blank" rel="noopener noreferrer">'+e(labels.terms)+'</a></p>';
  const description=rights===null?copy.explanation:copy.explanation+' · '+rights.credit+' · CC BY 4.0: '+rights.licenseUrl+' · '+labels.adapted;
- const social=knowledgeShareDestinations(card,language).map(item=>'<a class="secondary" href="'+e(item.href)+'" target="_blank" rel="noopener noreferrer">'+e(item.label)+'</a>').join('');
+ const social=knowledgeShareDestinations(card,language,digest).map(item=>'<a class="secondary" data-knowledge-share-url="'+e(item.href)+'" aria-disabled="true" tabindex="-1" target="_blank" rel="noopener noreferrer">'+e(item.label)+'</a>').join('');
  const body='<p class="intro-caption">'+e(labels.caption)+'</p>'+
   '<article class="info-card" data-shared-knowledge-id="'+e(card.id)+'"><header><span class="card-topic">'+e(labels.origin)+' · '+e(card.geography?.label[language]??'')+'</span></header>'+
   '<div class="card-content"><h1>'+e(copy.title)+'</h1><p class="card-meta">'+e(card.source.publisher)+'</p><p class="card-context">'+e(copy.explanation)+'</p>'+

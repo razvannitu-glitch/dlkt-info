@@ -12,7 +12,7 @@ function destinationsForLink(url:string):readonly ShareDestination[]{
  ];
 }
 export function shareDestinations(card:EvidenceCard):readonly ShareDestination[]{return destinationsForLink(cardLink(card));}
-export function knowledgeShareDestinations(card:KnowledgeCard,language:KnowledgeLanguage):readonly ShareDestination[]{return destinationsForLink(knowledgeCardLink(card,language));}
+export function knowledgeShareDestinations(card:KnowledgeCard,language:KnowledgeLanguage,digest:string):readonly ShareDestination[]{return destinationsForLink(knowledgeCardLink(card,language,digest));}
 let active:HTMLDialogElement|null=null;
 /** Opening prepares only this public edition. Posting and copying still require a separate user action. */
 export async function shareCard(card:EvidenceCard,elements:ShareElements):Promise<void>{
