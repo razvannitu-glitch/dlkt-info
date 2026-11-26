@@ -14,7 +14,7 @@ const sources = [
     expectedHost: 'ec.europa.eu',
   },
 ];
-const MAX_BYTES = 65536;
+const MAX_BYTES = 1572864;
 const maxContent = (content) => String(content || '').slice(0, 120).replace(/[\r\n\t]/gu, ' ');
 
 async function inspect(entry) {
@@ -30,6 +30,9 @@ async function inspect(entry) {
     publishedDatePresent: false,
     articleLinkHost: null,
     articlePathSample: null,
+    articleQueryKeys: [],
+    atomEntryLinkRel: null,
+    atomEntryLinkType: null,
     feedHome: null,
     atomNamespace: null,
     dateSample: null,
@@ -98,14 +101,20 @@ async function inspect(entry) {
   result.dateSample = text.match(/<(?:pubDate|published|updated)(?:\s[^>]*)?>([^<]{1,100})<\/\w+>/iu)?.[1] || null;
   result.descriptionPresent = /<(?:description|summary)(?:\s|>)/iu.test(text);
   result.entryCountInSample = (text.match(/<(?:entry|item)(?:\s|>)/giu) || []).length;
+  if(result.root === 'atom') {
+    const entryTag = text.match(/<entry(?:\s[^>]*)?>[\s\S]{0,3000}?(<link\b[^>]*>)/iu)?.[1] || '';
+    result.atomEntryLinkRel = entryTag.match(/rel=["']([^"']+)["']/iu)?.[1] || null;
+    result.atomEntryLinkType = entryTag.match(/type=["']([^"']+)["']/iu)?.[1] || null;
+  }
   result.publishedDatePresent = /<(?:pubDate|published|updated)(?:\s|>)/iu.test(text);
   const rssLink = text.match(/<item\b[\s\S]{0,3000}?<link>(https:\/\/[^<]{1,250})<\/link>/iu)?.[1];
   const atomLink = text.match(/<entry\b[\s\S]{0,3000}?<link[^>]*href=["'](https:\/\/[^"']{1,250})["']/iu)?.[1];
   try {
     const link = new URL(rssLink || atomLink || '');
-    if (link.protocol === 'https:') {result.articleLinkHost = link.hostname;result.articlePathSample=link.pathname;}
+    if (link.protocol === 'https:') {result.articleLinkHost = link.hostname;result.articlePathSample=link.pathname;result.articleQueryKeys=[...new Set(link.searchParams.keys())];}
   } catch { /* no article link observed in bounded prefix */ }
   if (!result.title || result.entryCountInSample === 0) result.reason='feed-structure-needs-review';
+  result.sampleTruncated = bytes === MAX_BYTES;
   return result;
 }
 for (const source of sources) {
