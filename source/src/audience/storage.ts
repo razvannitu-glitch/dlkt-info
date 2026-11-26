@@ -76,7 +76,7 @@ export function audienceStorageConfig(env:Environment):AudienceStorageConfig|nul
  if(!projectRef||!REF.test(projectRef)||projectRef===env.DLKT_INFO_SUPABASE_PROJECT_REF||!secretKey||!SECRET.test(secretKey)||secretKey===env.DLKT_INFO_SUPABASE_SECRET_KEY)return null;
  return {projectRef,secretKey};
 }
-type Rpc='snapshot'|'record_activity'|'forget_browser';
+type Rpc='snapshot'|'record_activity'|'forget_browser'|'operational_ready'|'admit_request';
 export class SupabaseAudienceStore implements AudienceStore{
  private readonly origin:string;
  constructor(private readonly config:AudienceStorageConfig,private readonly request:typeof fetch=fetch,private readonly clock:()=>Date=()=>new Date()){
@@ -94,6 +94,8 @@ export class SupabaseAudienceStore implements AudienceStore{
    return await boundedJson(res,128_000);
   }catch{throw Error('AUDIENCE_STORAGE_UNAVAILABLE');}
  }
+ async operationalReady():Promise<boolean>{return (await this.rpc('operational_ready',{}))===true;}
+ async admit(action:'enable'|'event'):Promise<boolean>{return (await this.rpc('admit_request',{p_action:action}))===true;}
  async snapshot(hours:AudienceHours):Promise<AudienceSnapshot>{
   if(hours!==null&&![24,168,720,2160].includes(hours))throw Error('AUDIENCE_INVALID_RANGE');
   return parseAudienceSnapshot(await this.rpc('snapshot',{p_hours:hours}),hours,this.clock());

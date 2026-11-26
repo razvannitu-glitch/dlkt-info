@@ -16,6 +16,7 @@ export interface AudienceGatewayDependencies {
  readonly permit:(request:IncomingMessage,action:Action)=>Promise<boolean>;
  /** Explicitly verified by the deployment integration; defaults to false. */
  readonly trustedMetadata?:boolean;
+ readonly available?:()=>Promise<boolean>;
 }
 function readCookie(header:string|undefined):string|null{
  if(!header||header.length>16_384)return null;
@@ -25,7 +26,7 @@ function readCookie(header:string|undefined):string|null{
 }
 function cookie(token:string,maxAge:number):string{return COOKIE+'='+token+'; Path=/; Max-Age='+String(maxAge)+'; Secure; HttpOnly; SameSite=Lax';}
 function validSecret(secret:string):boolean{return /^[A-Za-z0-9_-]{43}$/u.test(secret)&&Buffer.from(secret,'base64url').toString('base64url')===secret;}
-/** Deliberately unmounted. Consent UI, retention, verified ingress and shared abuse control are release prerequisites. */
+/** The public entry point supplies reviewed operational gates. */
 export async function handleAudienceGateway(req:IncomingMessage,res:ServerResponse,deps:AudienceGatewayDependencies):Promise<void>{
  const env=deps.environment;
  const enabled=env.DLKT_INFO_AUDIENCE_COLLECT_ENABLED==='1'&&env.DLKT_INFO_AUDIENCE_RETENTION_READY==='1'&&env.DLKT_INFO_AUDIENCE_CONSENT_READY==='1';
@@ -42,7 +43,11 @@ export async function handleAudienceGateway(req:IncomingMessage,res:ServerRespon
  const action=v.action;
  if(action!=='status'&&action!=='enable'&&action!=='withdraw'&&action!=='event'){respond(res,400,{error:'INVALID_INPUT'});return;}
  if(Object.keys(v).sort().join(',')!==(action==='event'?'action,event':'action')){respond(res,400,{error:'INVALID_INPUT'});return;}
- if(action==='status'){respond(res,200,{available:enabled&&!privacySignal,hasToken:browser!==null});return;}
+ if(action==='status'){
+  let available=enabled&&!privacySignal;
+  if(available&&deps.available){try{available=await deps.available();}catch{available=false;}}
+  respond(res,200,{available,hasToken:browser!==null});return;
+ }
  if(action!=='withdraw'&&(!enabled||privacySignal)){respond(res,403,{error:'MEASUREMENT_DISABLED'});return;}
  if(action==='event'&&browser===null){respond(res,401,{error:'OPT_IN_REQUIRED'});return;}
  const event=action==='event'?parseAudienceEvent(v.event):null;
