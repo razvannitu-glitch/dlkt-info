@@ -7,6 +7,7 @@ import type {ConnectionStore, ConnectionsSnapshot, ProviderConfiguration, Provid
 import {PROVIDER_IDS, providerConfiguration, providerEnabled, tokenKey} from './config.js';
 import {digest, equalToken, opaqueToken, parseGrant, seal, unseal} from './crypto.js';
 import * as providers from './providers.js';
+import {currentConnectionAccess,sameConnectionAccess,type ConnectionAccessReader,type ConnectionAccessStamp} from './premium-access.js';
 
 export interface ProviderOperations {
   authorizationUrl(config: ProviderConfiguration, state: string, challenge: string): string;
@@ -16,7 +17,7 @@ export interface ProviderOperations {
   syncProvider(config: ProviderConfiguration, grant: ProviderGrant, context: {ownerId: string; connectionId: string}, deps?: ProviderDependencies): Promise<ProviderSync>;
 }
 export class ConnectionError extends Error {
-  constructor(readonly code: 'CONNECTION_UNAVAILABLE' | 'CONNECTION_NOT_FOUND' | 'CONNECTION_RECONNECT_REQUIRED' | 'CONNECTION_BUSY' | 'CONNECTION_STATE_INVALID' | 'CONNECTION_STATE_EXPIRED' | 'CONNECTION_CANCELLED' | 'CONNECTION_CONFLICT') { super(code); this.name = 'ConnectionError'; }
+  constructor(readonly code: 'CONNECTION_UNAVAILABLE' | 'CONNECTION_NOT_FOUND' | 'CONNECTION_RECONNECT_REQUIRED' | 'CONNECTION_BUSY' | 'CONNECTION_STATE_INVALID' | 'CONNECTION_STATE_EXPIRED' | 'CONNECTION_CANCELLED' | 'CONNECTION_CONFLICT' | 'CONNECTION_PREMIUM_REQUIRED') { super(code); this.name = 'ConnectionError'; }
 }
 const context = (owner: string, provider: WalletProviderId, id: string): string => `grant:${owner}:${provider}:${id}`;
 
@@ -24,10 +25,17 @@ export class ConnectionService {
   private readonly drivers: ProviderOperations;
   private readonly now: () => Date;
   private readonly providerDeps: ProviderDependencies;
-  constructor(private readonly ownerId: string, private readonly sessionHash: string, private readonly store: ConnectionStore, private readonly environment: Environment, private readonly origin: string | null, deps: ProviderDependencies & {drivers?: ProviderOperations} = {}) {
+  private readonly accessReader: ConnectionAccessReader | undefined;
+  constructor(private readonly ownerId: string, private readonly sessionHash: string, private readonly store: ConnectionStore, private readonly environment: Environment, private readonly origin: string | null, deps: ProviderDependencies & {drivers?: ProviderOperations;accessReader?: ConnectionAccessReader} = {}) {
     if (!isUuid(ownerId) || !/^[A-Za-z0-9_-]{43}$/u.test(sessionHash)) throw new Error('CONNECTION_SESSION_INVALID');
+    this.accessReader = deps.accessReader;
     this.drivers = deps.drivers ?? providers; this.now = deps.now ?? (() => new Date());
     this.providerDeps = {now: this.now, ...(deps.fetchImpl ? {fetchImpl: deps.fetchImpl} : {})};
+  }
+  private async requirePremium(previous?:ConnectionAccessStamp):Promise<ConnectionAccessStamp>{
+    const current=await currentConnectionAccess(this.accessReader,this.ownerId,this.sessionHash,this.now);
+    if(!current||(previous&&!sameConnectionAccess(previous,current)))throw new ConnectionError('CONNECTION_PREMIUM_REQUIRED');
+    return current;
   }
   private configuration(providerId: WalletProviderId, requireEnabled = true): ProviderConfiguration {
     const config = this.origin ? providerConfiguration(this.environment, providerId, this.origin) : null;
@@ -52,24 +60,27 @@ export class ConnectionService {
   async snapshot(): Promise<ConnectionsSnapshot> {
     const rows = await this.store.list();
     if (rows.length > 4 || new Set(rows.map(row => row.providerId)).size !== rows.length) throw new Error('CONNECTION_DATA_INVALID');
+    const entitled=await currentConnectionAccess(this.accessReader,this.ownerId,this.sessionHash,this.now)!==null;
     const views = PROVIDER_IDS.map(providerId => {
       const row = rows.find(item => item.providerId === providerId) ?? null;
       if (row) this.assertOwned(row, providerId);
-      let available = true; try { this.configuration(providerId); } catch { available = false; }
-      const connection = row ? Object.freeze({id: row.id, accountLabel: row.accountLabel, connectedAt: row.connectedAt, lastSyncAt: row.lastSyncAt, status: row.status}) : null;
+      let available = entitled; try { this.configuration(providerId); } catch { available = false; }
+      const connection = row ? Object.freeze({id: row.id, accountLabel: entitled ? row.accountLabel : 'Saved connection', connectedAt: row.connectedAt, lastSyncAt: entitled ? row.lastSyncAt : null, status: row.status}) : null;
       return Object.freeze({providerId, status: available ? row?.status ?? 'available' : 'unavailable', connection});
     });
     return Object.freeze({version: CONNECTIONS_VERSION, providers: Object.freeze(views)});
   }
 
   async begin(providerId: WalletProviderId): Promise<{authorizationUrl: string; state: string}> {
-    const config = this.configuration(providerId), existing = await this.store.read(providerId);
+    const config = this.configuration(providerId), access=await this.requirePremium(), existing = await this.store.read(providerId);
     if (existing) { this.assertOwned(existing, providerId); if (this.busy(existing)) throw new ConnectionError('CONNECTION_BUSY'); }
     const state = opaqueToken(), verifier = opaqueToken(), stateHash = digest(state);
     const payload = {verifier, connectionId: existing?.id ?? randomUUID(), expectedRevision: existing?.revision ?? null};
     const sealedVerifier = seal(payload, this.key(), `oauth:${this.ownerId}:${providerId}:${stateHash}`);
+    await this.requirePremium(access);
     const authorizationUrl = this.drivers.authorizationUrl(config, state, digest(verifier));
     await this.store.createAuthorization({stateHash, ownerId: this.ownerId, sessionHash: this.sessionHash, providerId, sealedVerifier, expiresAt: new Date(this.now().getTime() + 600_000).toISOString()});
+    await this.requirePremium(access);
     return Object.freeze({authorizationUrl, state});
   }
 
@@ -82,6 +93,7 @@ export class ConnectionService {
     if (!Number.isFinite(expires) || expires <= now || expires > now + 600_000) throw new ConnectionError('CONNECTION_STATE_EXPIRED');
     if (denied) throw new ConnectionError('CONNECTION_CANCELLED');
     if (!code || code.length > 4096 || /[\u0000-\u0020\u007f]/u.test(code)) throw new ConnectionError('CONNECTION_STATE_INVALID');
+    const access=await this.requirePremium();
     const payload = unseal(pending.sealedVerifier, this.key(), `oauth:${this.ownerId}:${providerId}:${stateHash}`);
     if (!isRecord(payload) || Object.keys(payload).sort().join(',') !== 'connectionId,expectedRevision,verifier' || typeof payload.verifier !== 'string' || !/^[A-Za-z0-9_-]{43}$/u.test(payload.verifier) || !isUuid(payload.connectionId) || (payload.expectedRevision !== null && !isUuid(payload.expectedRevision))) throw new Error('CONNECTION_DATA_INVALID');
     const current = await this.store.read(providerId);
@@ -91,31 +103,48 @@ export class ConnectionService {
     // disconnect cannot obtain or revoke a competing grant during exchange.
     const reservation: StoredConnection = current ? await this.claim(current) : Object.freeze({id: payload.connectionId, ownerId: this.ownerId, providerId, accountLabel: 'Authorization in progress', status: 'reconnect-required', sealedGrant: seal({pending: true}, this.key(), context(this.ownerId, providerId, payload.connectionId)), connectedAt: this.now().toISOString(), lastSyncAt: null, revision: randomUUID(), operationExpiresAt: new Date(this.now().getTime() + 120_000).toISOString()});
     if (!current) await this.store.save(reservation, null);
+    let exchanged:ProviderGrant|null=null;
+    let saved=false;
     try {
+      await this.requirePremium(access);
       const grant = parseGrant(await this.drivers.exchangeCode(config, code, payload.verifier, this.providerDeps));
+      exchanged=grant;
+      await this.requirePremium(access);
       const value: StoredConnection = Object.freeze({...reservation, accountLabel: grant.accountLabel, status: 'connected', sealedGrant: seal(grant, this.key(), context(this.ownerId, providerId, payload.connectionId)), connectedAt: current?.connectedAt ?? this.now().toISOString(), lastSyncAt: null, revision: randomUUID(), operationExpiresAt: null});
       await this.store.save(value, reservation.revision);
+      saved=true;
+      await this.requirePremium(access);
     } catch (error) {
-      try { if (current) await this.release(reservation, false); else await this.store.remove(providerId, reservation.revision); } catch { /* Only this reservation may be removed; a newer revision always wins. */ }
+      // A saved encrypted grant remains disconnectable, but no successful
+      // callback is returned after access loss. If exchange happened before
+      // persistence, attempt provider cleanup; a reconnect may need renewal.
+      if(!saved){
+        if(exchanged){try{await this.drivers.revokeGrant(config,exchanged,this.providerDeps);}catch{/* Provider-side revocation is not guaranteed. */}}
+        try { if (current) await this.release(reservation, exchanged!==null); else await this.store.remove(providerId, reservation.revision); } catch { /* Only this reservation may be removed; a newer revision always wins. */ }
+      }
       throw error;
     }
   }
 
   async sync(providerId: WalletProviderId): Promise<ProviderSync> {
-    const config = this.configuration(providerId), existing = await this.store.read(providerId);
+    const config = this.configuration(providerId), access=await this.requirePremium(), existing = await this.store.read(providerId);
     if (!existing) throw new ConnectionError('CONNECTION_NOT_FOUND');
     this.assertOwned(existing, providerId);
     if (existing.status !== 'connected') throw new ConnectionError('CONNECTION_RECONNECT_REQUIRED');
     let leased = await this.claim(existing);
     try {
+      await this.requirePremium(access);
       const grant = this.grant(leased), refreshed = parseGrant(await this.drivers.refreshGrant(config, grant, this.providerDeps));
       if (refreshed.accountId !== grant.accountId) throw new Error('CONNECTION_DATA_INVALID');
       // Persist rotated refresh tokens before any activity request can fail.
       const renewed = Object.freeze({...leased, revision: randomUUID(), sealedGrant: seal(refreshed, this.key(), context(this.ownerId, providerId, leased.id)), accountLabel: refreshed.accountLabel});
       await this.store.save(renewed, leased.revision); leased = renewed;
+      await this.requirePremium(access);
       const result = await this.drivers.syncProvider(config, refreshed, {ownerId: this.ownerId, connectionId: leased.id}, this.providerDeps);
+      await this.requirePremium(access);
       const done = Object.freeze({...leased, revision: randomUUID(), lastSyncAt: result.checkedAt, operationExpiresAt: null});
       await this.store.save(done, leased.revision);
+      await this.requirePremium(access);
       return result;
     } catch (error) {
       const reconnect = error instanceof providers.ProviderError && ['authorization', 'scope-denied', 'reauthorization-required'].includes(error.code);

@@ -7,6 +7,9 @@ const OWNER = '11111111-1111-4111-8111-111111111111';
 const SESSION = '22222222-2222-4222-8222-222222222222';
 const ORIGIN = 'https://info.dlkt.ee';
 const NOW = '2026-11-20T12:00:00.000Z';
+const premiumReceipt=(ownerId,sessionHash)=>({state:'premium',source:'stripe_reconciled',liveMode:true,ownerId,sessionHash,
+ accountId:'acct_fixture',subscriptionId:'sub_fixture',generation:'1',fence:'1',epoch:'0',
+ verifiedAt:Math.floor(Date.parse(NOW)/1000)-10,validUntil:Math.floor(Date.parse(NOW)/1000)+120});
 const token = (claims = {}) => [Buffer.from(JSON.stringify({alg: 'HS256', typ: 'JWT'})).toString('base64url'), Buffer.from(JSON.stringify({sub: OWNER, role: 'authenticated', session_id: SESSION, ...claims})).toString('base64url'), 'fixtureSignatureNotReal0000'].join('.');
 const TOKEN = token();
 const environment = {NODE_ENV: 'production', DLKT_INFO_ACCOUNT_BRIDGE_ENABLED: '1', DLKT_INFO_AUTH_EMAIL_READY: '1', DLKT_INFO_AUTH_ENABLED: '1', DLKT_INFO_DATA_FOUNDATION_READY: '1',
@@ -46,7 +49,7 @@ function fixture(changes = {}) {
     async exchangeCode() {driverCalls.push('exchange'); return {accountId: 'fixture-account', accountLabel: 'connected@example.test', accessToken: 'provider-access-fixture', refreshToken: 'provider-refresh-fixture', expiresAt: '2026-11-20T13:00:00.000Z', scopes: ['openid', 'email'], resources: []};},
     async refreshGrant(config, grant) {return grant;}, async syncProvider() {return {events: [], state: 'available', checkedAt: NOW};}, async revokeGrant() {return 'revoked';},
   };
-  const deps = {environment, provisioning, now: () => new Date(NOW), drivers,
+  const deps = {environment, provisioning, now: () => new Date(NOW), drivers, accessReader:{read:async(o,s)=>premiumReceipt(o,s)},
     storeFactory(configuration, owner, access) {assert.equal(owner, OWNER); assert.equal(JSON.parse(Buffer.from(access.split('.')[1], 'base64url')).role, 'authenticated'); return store;},
     fetch: async url => {calls.push(String(url)); assert.ok(String(url).endsWith('/auth/v1/user')); return json({id: OWNER, email: 'owner@example.test'});}, ...changes};
   return {rows, pending, calls, driverCalls, store, drivers, deps};
@@ -233,4 +236,24 @@ test('Queryless Microsoft consent denial and signed-out callback fail without pr
   const second = await startOutlook(f); const req = outlookCallback(second); req.headers.cookie = '';
   assert.equal((await run(req, f.deps)).headers.Location, '/wallet?connection=expired');
   assert.equal(f.driverCalls.length, 0);
+});
+
+test('Authenticated endpoint defaults to denied when no real billing reader is provisioned',async()=>{
+ const f=fixture({accessReader:undefined});
+ const snapshot=await run(request(),f.deps);
+ assert.equal(snapshot.statusCode,200);assert.ok(snapshot.body.providers.every(p=>p.status==='unavailable'));
+ for(const action of ['connect','sync']){
+  const res=await run(request('POST',{action,providerId:'gmail'}),f.deps);
+  assert.equal(res.statusCode,403);assert.equal(res.body.error,'CONNECTION_PREMIUM_REQUIRED');
+ }
+ assert.equal(f.pending.size,0);assert.equal(f.driverCalls.length,0);
+ const res=await run(request('POST',{action:'disconnect',providerId:'gmail'}),f.deps);
+ assert.equal(res.statusCode,200);assert.equal(res.body.disconnected,true);
+});
+test('Synthetic and foreign-session receipts cannot grant Premium despite public provider readiness',async()=>{
+ for(const make of [(o,s)=>({...premiumReceipt(o,s),state:'sandbox_eligible'}),(o,s)=>({...premiumReceipt(o,s),liveMode:false}),(o,s)=>({...premiumReceipt(o,s),sessionHash:'A'.repeat(43)}),(o,s)=>({...premiumReceipt(o,s),ownerId:SESSION}),(o,s)=>({...premiumReceipt(o,s),validUntil:Math.floor(Date.parse(NOW)/1000)})]){
+  const f=fixture({accessReader:{read:async(o,s)=>make(o,s)}});
+  const res=await run(request('POST',{action:'connect',providerId:'gmail'}),f.deps);
+  assert.equal(res.statusCode,403);assert.equal(f.pending.size,0);
+ }
 });
