@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {adminIds,parseRange,rangeStart,parseTotals,parseRows,parseContentRange,readAnalytics} from '../.build/src/admin/analytics.js';
-import {renderDashboard,escapeHtml} from '../.build/src/admin/render.js';
+import {renderDashboard,escapeHtml,repeatBrowserDetail} from '../.build/src/admin/render.js';
+import {readFileSync} from 'node:fs';
 import {handleAdmin} from '../.build/api/admin.js';
 const id='11111111-1111-4111-8111-111111111111';
 test('admin allowlist fails closed and uses exact UUIDs',()=>{
@@ -168,4 +169,22 @@ test('invalid and duplicate attributions, unexpected keys and invalid ranges sti
  const res=makeResponse();let calls=0;
  await handleAdmin(makeRequest({'sec-fetch-site':'cross-site'},'/admin?utm_source=chatgpt.com'),res,{environment:adminEnvironment,provisioning:provision,fetch:async()=>{calls++;throw Error('unexpected network');}});
  denied(res,403);assert.equal(calls,0);
+});
+
+test('repeat browser share uses measured browsers, never profiles or total traffic',()=>{
+ const snapshot={visitors:100,repeatBrowsers:24};
+ assert.match(repeatBrowserDetail(snapshot),/24% of measured browsers/);
+ assert.doesNotMatch(repeatBrowserDetail(snapshot),/small sample/);
+ assert.match(repeatBrowserDetail({visitors:3,repeatBrowsers:1}),/33\.3% of measured browsers · small sample \(under 20\)/);
+ assert.match(repeatBrowserDetail({visitors:5,repeatBrowsers:0}),/0% of measured browsers/);
+ assert.match(repeatBrowserDetail({visitors:0,repeatBrowsers:0}),/no measured browsers yet/);
+ assert.doesNotMatch(repeatBrowserDetail({visitors:0,repeatBrowsers:0}),/%|NaN|Infinity/);
+ assert.match(repeatBrowserDetail(undefined),/share unavailable/);
+ assert.doesNotMatch(repeatBrowserDetail(undefined),/0%/);
+});
+test('reader offers a plain voluntary choice link without adding tracking or a modal',()=>{
+ const html=readFileSync(new URL('../public/iceo.html',import.meta.url),'utf8');
+ assert.equal((html.match(/id="audience-measurement-link"/g)??[]).length,1);
+ assert.match(html,/<a class="text-button" id="audience-measurement-link" href="\/cookies#cookies">Optional audience measurement<\/a>/);
+ assert.match(html,/<a class="footer-link" href="\/cookies#cookies">Cookies &amp; measurement choices<\/a>/);
 });

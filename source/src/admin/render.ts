@@ -35,10 +35,18 @@ function audienceSeries(s:AudienceSnapshot):string{
  const max=Math.max(1,...s.series.map(r=>r.pageviews));
  return '<section class="panel"><h2>Traffic over time</h2><div class="table-wrap"><table><thead><tr><th scope="col">UTC '+s.bucket+'</th><th scope="col">Views</th><th scope="col">Session starts</th></tr></thead><tbody>'+s.series.map(r=>'<tr><th scope="row">'+escapeHtml(s.bucket==='hour'?r.timestamp.slice(0,16).replace('T',' '):r.timestamp.slice(0,10))+'<meter aria-label="Relative pageviews" min="0" max="'+max+'" value="'+r.pageviews+'"></meter></th><td>'+fmt(r.pageviews)+'</td><td>'+fmt(r.sessionStarts)+'</td></tr>').join('')+'</tbody></table></div></section>';
 }
+/** Descriptive share of measured browsers, not a cohort retention or causal estimate. */
+export function repeatBrowserDetail(snapshot:AudienceSnapshot|undefined):string{
+ const definition='Two or more sessions overlapping the period';
+ if(!snapshot)return definition+' · share unavailable';
+ if(snapshot.visitors===0)return definition+' · no measured browsers yet';
+ const share=new Intl.NumberFormat('en-US',{style:'percent',maximumFractionDigits:1}).format(snapshot.repeatBrowsers/snapshot.visitors);
+ return definition+' · '+share+' of measured browsers'+(snapshot.visitors<20?' · small sample (under 20)':'');
+}
 function firstPartyDashboard(a:Analytics,filters:string):string{
  const ready=a.firstParty.status==='ready'?a.firstParty:null,s=ready?.snapshot;
  const top='<div class="top"><div><p class="eyebrow">PRIVATE ADMINISTRATION</p><h1>Overview<span>.</span></h1><p class="sub">'+(s?'First-party audience · opt-in browsers':'First-party audience unavailable')+'</p></div><div><nav aria-label="Time range">'+filters+'</nav><a class="refresh" href="/admin?range='+a.range+'">Refresh</a></div></div>';
- const metrics='<div class="grid metrics">'+card('Consenting browsers',s?.visitors,'Unique measured browsers · selected period')+card('Pageviews',s?.pageviews,'Measured page entries')+card('Session starts',s?.sessionStarts,'Selected period · 30-minute inactivity timeout')+card('Active in last 5 min',s?.active5m,'Recent measured browsers · not concurrent people')+card('Repeat browsers',s?.repeatBrowsers,'Two or more sessions overlapping the period')+card('Reader profiles',a.profiles,'All-time · separate from audience')+card('New profiles',a.newProfiles,'Created in selected period')+'</div>';
+ const metrics='<div class="grid metrics">'+card('Consenting browsers',s?.visitors,'Unique measured browsers · selected period')+card('Pageviews',s?.pageviews,'Measured page entries')+card('Session starts',s?.sessionStarts,'Selected period · 30-minute inactivity timeout')+card('Active in last 5 min',s?.active5m,'Recent measured browsers · not concurrent people')+card('Repeat browsers',s?.repeatBrowsers,repeatBrowserDetail(s))+card('Reader profiles',a.profiles,'All-time · separate from audience')+card('New profiles',a.newProfiles,'Created in selected period')+'</div>';
  const panels=s?'<div class="grid panels">'+audienceSeries(s)+audienceTable('Countries',s.countries)+audienceTable('Cities',s.cities)+audienceTable('Traffic sources',s.sources)+'</div>':'<section class="panel"><p class="empty">No verified first-party snapshot is available. Counts are not zero.</p></section>';
  return shell(top+metrics+panels+'<footer>Updated '+escapeHtml(s?.asOf??a.asOf)+' · UTC. '+(ready?'Measured coverage starts '+escapeHtml(ready.coverageSince)+'. Retention: 90 days. Geography is approximate; groups under three browsers are hidden. ':'')+'Audience data is consent-based, not a census of people. Country and city totals may overlap. Editorial interactions and revenue are not measured here.</footer>','Control');
 }
