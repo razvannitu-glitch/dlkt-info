@@ -163,8 +163,9 @@ export async function verifyKnowledgeCopy(cdp,item){
   if(!seeded)return false;
   const focused=await evaluate(cdp,"(()=>{const b=document.getElementById('shared-copy');if(!b||b.hidden||b.disabled)return false;b.scrollIntoView({block:'center',inline:'nearest'});b.focus();const r=b.getBoundingClientRect();return document.activeElement===b&&r.width>0&&r.height>0;})()");
   if(!focused)return false;
-  await cdp('Input.dispatchKeyEvent',{type:'rawKeyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,nativeVirtualKeyCode:13});
-  await cdp('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,nativeVirtualKeyCode:13});
+  // Match the native Enter activation already exercised by offline browser QA.
+  await cdp('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,text:'\r',unmodifiedText:'\r'});
+  await cdp('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
   for(let i=0;i<30;i++){
     const result=await evaluate(cdp,"(async()=>{const b=document.getElementById('shared-copy'),f=document.getElementById('shared-fallback'),m=document.getElementById('shared-message');return {copied:await navigator.clipboard.readText(),message:m?.innerText??null,enabled:Boolean(b&&!b.hidden&&!b.disabled),fallbackHidden:Boolean(f&&f.hidden)};})()",true);
     if(result?.copied===canonical&&result.message===message&&result.enabled&&result.fallbackHidden)return true;

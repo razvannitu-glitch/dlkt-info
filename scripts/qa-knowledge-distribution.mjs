@@ -96,8 +96,9 @@ export async function verifyKnowledgeDistribution({fixture,origin,openIsolated,e
     assert.ok(item);
     const liveShape=await evaluate(call,'('+inspectKnowledgeDocument.toString()+')()');
     assert.deepEqual(assessKnowledgeBrowser(item,liveShape,origin+path(link),width),[]);
-    assert.equal(await verifyKnowledgeCopy(call,item),true,'live copy probe with controlled clipboard');
-    assert.deepEqual((await state()).writes,['DLKT-QA-NOT-COPIED',link]);
+    const copyVerified=await verifyKnowledgeCopy(call,item),copyState=await state();
+    assert.equal(copyVerified,true,'live copy probe with controlled clipboard; writes='+copyState.writes.length+'; enabled='+!copyState.buttonDisabled+'; fallbackHidden='+copyState.fallbackHidden);
+    assert.deepEqual(copyState.writes,['DLKT-QA-NOT-COPIED',link]);
    }else{
     await focusSelector(call,'#shared-copy');await keyboard(call,'Enter');
     await wait('globalThis.__qaWrites.length===1');assert.deepEqual((await state()).writes,[link]);
@@ -105,6 +106,22 @@ export async function verifyKnowledgeDistribution({fixture,origin,openIsolated,e
    layouts.push({width,language,id:card.id,licensedRendererOnly:licensedLayout,runtimeAdmission,documentWidth:view.scrollWidth,screenshot:await save('dlkt-knowledge-share-'+width+'-'+language+'-'+(runtimeAdmission?'admission':licensedLayout?'licensed':'ordinary')+'.png')});
   }
   checks.push('live-credit-and-copy-probe-controlled-clipboard');
+  // Exercise the false-success cases from the independent review in real
+  // Chromium against the loopback fixture only, not a deployed page.
+  const admittedCard=fixture.admitted,admittedAt=Date.parse(admittedCard.reviewedAt)+1000;
+  const admittedLink=await open(admittedCard,'en',{width:390,runtimeAdmission:true,at:admittedAt,until:Date.parse(admittedCard.reviewBy)});
+  await evaluate(call,'(globalThis.__qaNow='+String(admittedAt)+',true)');
+  const admittedCase=knowledgeCases(admittedAt).find(item=>item.key==='canonical-en');
+  assert.ok(admittedCase);
+  const inspect=()=>evaluate(call,'('+inspectKnowledgeDocument.toString()+')()');
+  assert.deepEqual(assessKnowledgeBrowser(admittedCase,await inspect(),origin+path(admittedLink),390),[]);
+  await evaluate(call,"(document.querySelector('.card-credits').hidden=true,true)");
+  assert.ok(assessKnowledgeBrowser(admittedCase,await inspect(),origin+path(admittedLink),390).includes('visible-exact-credit'));
+  await evaluate(call,"(()=>{document.querySelector('.card-credits').hidden=false;const b=document.getElementById('shared-copy');b.replaceWith(b.cloneNode(true));return true;})()");
+  assert.deepEqual(assessKnowledgeBrowser(admittedCase,await inspect(),origin+path(admittedLink),390),[]);
+  assert.equal(await verifyKnowledgeCopy(call,admittedCase),false,'visible but inert button cannot prove recovery');
+  assert.deepEqual((await state()).writes,['DLKT-QA-NOT-COPIED']);
+  checks.push('hidden-credit-and-inert-copy-rejected');
   const card=fixture.cards[0],link=await open(card,'en');
   await expire("(document.getElementById('shared-copy').click(),true)");
   disabled(await state());assert.deepEqual((await state()).writes,[]);checks.push('exact-deadline-copy-denied-before-timer');
