@@ -3,10 +3,11 @@
  * UN-state denominator is independent of the place picker. No new acquisition,
  * rights decisions, ranking, telemetry, runtime API, cron or production writes.
  */
-import {resolve} from 'node:path';
+import {join,resolve} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
-import {readFile} from 'node:fs/promises';
-import {verifySource} from '../lib/source-integrity.mjs';
+import {existsSync,mkdtempSync,readFileSync,rmSync,symlinkSync} from 'node:fs';
+import {execFileSync} from 'node:child_process';
+import {copyVerifiedSource,verifySource} from '../lib/source-integrity.mjs';
 import {assessLiveIceo,collectLiveIceo} from './verify-iceo-live.mjs';
 
 // 193 United Nations member states + Holy See (VA) + State of Palestine (PS).
@@ -145,20 +146,40 @@ export function auditSnapshot(sample,now,model){
   taxonomyCounts:byTaxonomy,uncategorizedTaxonomy,editorialCounts:byEditorial,uncategorizedEditorial};
 }
 
+/** Compile a fresh, private copy of the exact pinned source, following the
+ * existing bootstrap's verified-source staging pattern. Never read or replace
+ * source/.build; it might belong to another commit or concurrent audit.
+ * Installed dependencies must come from the existing locked setup.
+ * The callback executes while the isolated build exists; no network is used
+ * by this helper. The local pin is not a remote server identity attestation.
+ */
+export async function withVerifiedAuditModel(run){
+ if(typeof run!=='function')throw Error('GLOBAL_COVERAGE_MODEL_CALLBACK');
+ const root=fileURLToPath(new URL('../',import.meta.url));
+ const source=join(root,'source'),pin=JSON.parse(readFileSync(join(root,'SOURCE-PIN.json'),'utf8'));
+ if(!existsSync(join(root,'node_modules','.bin','tsc')))throw Error('GLOBAL_COVERAGE_DEPENDENCIES_REQUIRED');
+ const stage=mkdtempSync(join(root,'.dlkt-build-audit-'));
+ try{
+  copyVerifiedSource(source,stage,pin);
+  symlinkSync(join(root,'node_modules'),join(stage,'node_modules'),'dir');
+  try{
+   execFileSync('npm',['run','build'],{cwd:stage,stdio:'pipe',timeout:120_000,maxBuffer:1_048_576});
+  }catch{throw Error('GLOBAL_COVERAGE_MODEL_BUILD_FAILED');}
+  verifySource(stage,pin);
+  const compiled=readFileSync(join(stage,'.build/src/iceo/news-sources.js'),'utf8').replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu,'');
+  if(compiled!==readFileSync(join(stage,'public/news-sources.js'),'utf8'))throw Error('GLOBAL_COVERAGE_MODEL_PROJECTION_MISMATCH');
+  const load=path=>import(pathToFileURL(join(stage,'.build/src',path)).href);
+  const [places,cityData,i18n,news,registry,local,taxonomy,editorial,contracts,atlas]=await Promise.all([
+   load('local/cities.js'),load('local/city-data.js'),load('i18n/catalog.js'),load('iceo/news-sources.js'),
+   load('iceo/registry.js'),load('local/news-policy.js'),load('iceo/news-taxonomy.js'),load('iceo/editorial-categories.js'),
+   load('iceo/news-page-contracts.js'),load('iceo/world-source-atlas.js'),
+  ]);
+  return await run(Object.freeze({classificationSourceSha256:pin.sourceSha256,places,cityData,i18n,news,registry,local,taxonomy,editorial,contracts,atlas}));
+ }finally{rmSync(stage,{recursive:true,force:true});}
+}
+
 async function main(){
- // Record the verified source-file pin, not a claim that the live server
- // uses this model or that a legacy observation can be reclassified.
- const pin=JSON.parse(await readFile(new URL('../SOURCE-PIN.json',import.meta.url),'utf8'));
- verifySource(fileURLToPath(new URL('../source/',import.meta.url)),pin);
- // The existing source modules remain authoritative. Import only after the
- // canonical TypeScript build; packaging fixture tests need no generated JS.
- const [places,cityData,i18n,news,registry,local,taxonomy,editorial,contracts,atlas]=await Promise.all([
-  import('../source/.build/src/local/cities.js'),import('../source/.build/src/local/city-data.js'),
-  import('../source/.build/src/i18n/catalog.js'),import('../source/.build/src/iceo/news-sources.js'),
-  import('../source/.build/src/iceo/registry.js'),import('../source/.build/src/local/news-policy.js'),
-  import('../source/.build/src/iceo/news-taxonomy.js'),import('../source/.build/src/iceo/editorial-categories.js'),
-  import('../source/.build/src/iceo/news-page-contracts.js'),import('../source/.build/src/iceo/world-source-atlas.js'),
- ]);
+ return withVerifiedAuditModel(async ({classificationSourceSha256,places,cityData,i18n,news,registry,local,taxonomy,editorial,contracts,atlas})=>{
  const placeCodes=places.listCountries().map(x=>x.code);
  assertOperationalCatalogue(placeCodes);
  const configuredCodes=configuredCountryCodes({indexes:news.NEWS_DISCOVERY_INDEXES,
@@ -166,7 +187,7 @@ async function main(){
   sources:registry.ICEO_SOURCES,resolvePublicationContext:news.sourcePublicationContext});
  const configured=stateCoverage(configuredCodes,placeCodes);
  const directory=atlas.worldSourceAtlas();
- const baseline={classificationSourceSha256:pin.sourceSha256,stateReference:WORLD_STATE_CODES.length,operationalEntityReference:WORLD_OPERATIONAL_CODES.length,placeOptions:placeCodes.length,
+ const baseline={classificationSourceSha256,stateReference:WORLD_STATE_CODES.length,operationalEntityReference:WORLD_OPERATIONAL_CODES.length,placeOptions:placeCodes.length,
   cityOptions:JSON.parse(cityData.cityJson).rows.length,interfaceLocales:i18n.LOCALES.length,
   editorialCategories:editorial.PUBLIC_EDITORIAL_CATEGORIES.length,taxonomyCategories:taxonomy.NEWS_CATEGORIES.length,
   configuredDefinitions:registry.ICEO_SOURCES.length,allowlistedPublishers:news.NEWS_PUBLISHERS.length,
@@ -188,6 +209,7 @@ async function main(){
  const operational=observed.status==='GLOBAL_COVERAGE_OBSERVED'?operationalGapPlan(configuredCodes,observed.publisherCountryCounts):null;
  console.log('DLKT_GLOBAL_COVERAGE '+JSON.stringify({baseline,observed,operational}));
  if(observed.status!=='GLOBAL_COVERAGE_OBSERVED')process.exitCode=1;
+ });
 }
 const invoked=process.argv[1]&&pathToFileURL(resolve(process.argv[1])).href===import.meta.url;
 if(invoked)try{await main();}catch(error){

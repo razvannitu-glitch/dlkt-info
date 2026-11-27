@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readdirSync,readFileSync} from 'node:fs';
 import * as canonicalNews from '../source/public/news-sources.js';
-import {WORLD_STATE_CODES,WORLD_OPERATIONAL_CODES,assertOperationalCatalogue,operationalGapPlan,stateCoverage,configuredCountryCodes,auditSnapshot} from '../scripts/audit-global-coverage.mjs';
+import {WORLD_STATE_CODES,WORLD_OPERATIONAL_CODES,assertOperationalCatalogue,operationalGapPlan,stateCoverage,configuredCountryCodes,auditSnapshot,withVerifiedAuditModel} from '../scripts/audit-global-coverage.mjs';
 
 test('global denominator is exactly 193 UN member states plus VA and PS, not the place directory',()=>{
  assert.equal(WORLD_STATE_CODES.length,195);
@@ -180,4 +181,25 @@ test('integrated shared Good Housekeeping sitemap cannot inflate national direct
   reviewedScopes:[],sources:[],resolvePublicationContext:canonicalNews.sourcePublicationContext});
  assert.deepEqual(codes,[]);
  assert.equal(canonicalNews.NEWS_PUBLISHERS.length,77);assert.equal(canonicalNews.NEWS_DISCOVERY_INDEXES.length,31);
+});
+
+test('audit builds the actual pinned classifier in an isolated stage and removes it afterward', {timeout:180_000}, async()=>{
+ const root=new URL('../',import.meta.url);
+ const stages=()=>readdirSync(root).filter(name=>name.startsWith('.dlkt-build-audit-')).sort();
+ const before=stages(),pin=JSON.parse(readFileSync(new URL('../SOURCE-PIN.json',import.meta.url),'utf8'));
+ const result=await withVerifiedAuditModel(async model=>{
+  assert.equal(model.classificationSourceSha256,pin.sourceSha256);
+  assertOperationalCatalogue(model.places.listCountries().map(place=>place.code));
+  assert.equal(model.news.NEWS_PUBLISHERS.length,77);
+  assert.equal(model.news.NEWS_DISCOVERY_INDEXES.length,31);
+  assert.equal(model.registry.ICEO_SOURCES.length,51);
+  const url='https://globalvoices.org/2026/11/27/controlled-global-language-fixture/';
+  assert.equal(model.news.sourceLanguage(url),'en');
+  assert.equal(model.news.sourceEditionCountryCode(url),null);
+  assert.equal(model.news.sourceLanguage(url),canonicalNews.sourceLanguage(url));
+  assert.equal(stages().length,before.length+1);
+  return 'verified-isolated-model';
+ });
+ assert.equal(result,'verified-isolated-model');
+ assert.deepEqual(stages(),before);
 });
