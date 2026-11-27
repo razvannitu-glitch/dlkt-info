@@ -3,6 +3,7 @@ import {spawn} from 'node:child_process';
 import {existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {KNOWLEDGE_ORIGIN,KNOWLEDGE_IDENTITY,knowledgeCases} from './verify-live-knowledge.mjs';
 
 const ORIGIN = 'https://www.dlkt.ee';
 const HOST = '127.0.0.1';
@@ -113,6 +114,38 @@ async function waitForEdition(call){
   }
   return last;
 }
+async function probeKnowledgeBrowser(cdp){
+  const started=Date.now(),items=knowledgeCases(started).filter(item=>item.key.startsWith('canonical-'));
+  const results=[];
+  for(const item of items){
+    const url=KNOWLEDGE_ORIGIN+item.path,view=item.language==='it'?VIEWPORTS[3]:item.language==='ro'?VIEWPORTS[1]:VIEWPORTS[0];
+    const failures=[];let state=null;
+    try{
+      await cdp('Emulation.setDeviceMetricsOverride',{width:view.width,height:view.height,deviceScaleFactor:1,mobile:view.mobile,scale:1});
+      await cdp('Page.navigate',{url});
+      const deadline=Date.now()+MAX_WAIT_MS;
+      const expression="(()=>{const a=document.querySelector('[data-shared-knowledge-id]'),f=document.getElementById('shared-freshness');return {ready:document.readyState,url:location.href,lang:document.documentElement.lang,id:a?.getAttribute('data-shared-knowledge-id')??null,expiry:f?.dataset.validUntil??null,links:[...document.querySelectorAll('article a[href]')].map(e=>e.getAttribute('href')),credit:Boolean(document.querySelector('article .card-credits')),main:document.querySelectorAll('main').length,width:document.documentElement.scrollWidth,copy:Boolean(document.getElementById('shared-copy')),status:performance.getEntriesByType('navigation')[0]?.responseStatus??null};})()";
+      while(Date.now()<deadline){
+        try{state=await evaluate(cdp,expression);}catch{state=null;}
+        if(state?.ready==='complete'&&state.url===url)break;
+        await pause(250);
+      }
+    }catch{failures.push('navigation');}
+    if(state?.ready!=='complete'||state.url!==url)failures.push('document');
+    if(state?.lang!==item.language)failures.push('language');
+    if(state?.status!==null&&state?.status!==undefined&&state.status!==item.status)failures.push('http-status');
+    if(state?.main!==1)failures.push('main');
+    if(typeof state?.width!=='number'||state.width>view.width+2)failures.push('horizontal-overflow');
+    if(item.status===200){
+      if(state?.id!==KNOWLEDGE_IDENTITY.id||state.expiry!==String(KNOWLEDGE_IDENTITY.expiresAt))failures.push('exact-card');
+      if(!state?.credit||!state?.copy||![KNOWLEDGE_IDENTITY.source,KNOWLEDGE_IDENTITY.terms,KNOWLEDGE_IDENTITY.license].every(link=>state?.links?.includes(link)))failures.push('rights-and-actions');
+    }else if(state?.id!==null||state?.copy)failures.push('unexpected-admission');
+    results.push({language:item.language,viewport:view.width,expected:item.status,observed:state?.status??null,failures});
+  }
+  const completed=Date.now(),sameWindow=knowledgeCases(completed)[0].status===knowledgeCases(started)[0].status;
+  return {status:sameWindow&&results.every(item=>item.failures.length===0)?'LIVE_KNOWLEDGE_BROWSER_PASS':'LIVE_KNOWLEDGE_BROWSER_BLOCKED',sameWindow,results};
+}
+
 async function main(){
   assert.equal(typeof WebSocket,'function','Node 22 WebSocket required');
   const bin=process.env.DLKT_CHROME_BIN??'/usr/bin/google-chrome';
@@ -189,13 +222,14 @@ async function main(){
         screenshot:name,failures,
       });
     }
-    const status=results.every(item=>item.failures.length===0)&&mutatingFirstPartyRequests===0
+    const knowledgeDistribution=await probeKnowledgeBrowser(cdp);
+    const status=results.every(item=>item.failures.length===0)&&mutatingFirstPartyRequests===0&&knowledgeDistribution.status==='LIVE_KNOWLEDGE_BROWSER_PASS'
       ?'LIVE_READER_PASS':'LIVE_READER_BLOCKED';
     const report={
       version:'dlkt-info-live-browser-smoke-1',status,origin:ORIGIN,
-      anonymous:true,mutatingFirstPartyRequests,viewports:results,
+      anonymous:true,mutatingFirstPartyRequests,viewports:results,knowledgeDistribution,
       limitations:[
-        'Anonymous public homepage only; no OTP, wallet, payments, geo targeting or third-party article accuracy checked.',
+        'Anonymous public homepage and exact NSW standalone links; no OTP, wallet, payments, geo targeting or third-party article accuracy checked.',
         'Screenshots and browser DOM checks do not replace human visual review.',
       ],
     };
