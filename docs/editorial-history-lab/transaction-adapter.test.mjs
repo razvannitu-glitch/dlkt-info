@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
+import {readFileSync} from 'node:fs';
 import {createHash,randomUUID} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 import {observeKnowledgeEvidence} from '../../scripts/knowledge-editorial-evidence.mjs';
 import {assessKnowledgeClaimEvidence} from '../../scripts/knowledge-claim-evidence.mjs';
-import {compareKnowledgeObservations} from '../../scripts/knowledge-editorial-revalidation.mjs';
+import {compareKnowledgeObservations,assessKnowledgeRevalidation} from '../../scripts/knowledge-editorial-revalidation.mjs';
 import {knowledgeRightsCandidates} from '../../source/tests/fixtures/knowledge-rights-candidates.mjs';
 import {validKnowledgeCard,knowledgeRightsForCard,knowledgeEditorialPayload} from '../../source/.build/src/iceo/knowledge.js';
 import {knowledgeContentDigest} from '../../source/.build/src/share/knowledge-resolution.js';
@@ -264,4 +265,132 @@ test('missing review records fail closed and the canonical lab identity remains 
     policyUrl:'https://www.nsw.gov.au/nsw-government/about-website/copyright'}};
   assert.throws(()=>review(canonical,randomUUID(),'feed','lab-held',null,null),/LAB_SQL_REJECTED/);
   assert.equal(snapshot(canonical).scopes.feed.state,'synthetic-only');
+});
+
+
+// The persisted projection lives only in lab-planner-* / example.invalid.
+// The complete controlled receipts are retained separately in this test
+// harness. No real review or production approval object is imported.
+const {simulateStoredRevalidation}=await import(pathToFileURL(build+'/planner-simulation.mjs').href);
+const scenario=JSON.parse(readFileSync(process.env.DLKT_HISTORY_PLANNER_FIXTURE,'utf8'));
+assert.equal(scenario.kind,'synthetic-planner-fixture-not-authority');
+const plannerIdentity=scenario.identity;
+function setupScenario(name){
+  const candidate=scenario.candidates[name],receipts=[];
+  const attempt=()=>({candidate,attemptId:randomUUID()});
+  const evaluate=(patch={})=>simulateStoredRevalidation({candidate,identity:plannerIdentity,receipts,
+    read:c=>Promise.resolve(query('reader',snapshotSql(c))),planner:assessKnowledgeRevalidation,...patch});
+  const record=async (version='A')=>{
+    const key=attempt();
+    const result=await runObservationAttempt(key,ports,async()=>{
+      if(version==='held')return held('source-denied');
+      assert.ok(['A','B'].includes(version));
+      await new Promise(resolve=>setTimeout(resolve,5));
+      const i=plannerIdentity;
+      const hash=s=>createHash('sha256').update(s,'utf8').digest('hex');
+      const page=(title,body,url)=>'<html><head><link rel="canonical" href="'+url+'"></head><body><main><h1>'+title+'</h1><p>'+body+'</p></main></body></html>';
+      const response=(url,text,contentType)=>({url,status:200,ok:true,partial:false,contentType,text,sha256:hash(text)});
+      const robots=new URL(i.sourceUrl).origin+'/robots.txt';
+      const pages=new Map([[robots,response(robots,'User-agent: *\nDisallow: /admin','text/plain')],
+        [i.sourceUrl,response(i.sourceUrl,page('Check fuel prices','FuelCheck is free, with real-time fuel prices. Never use your phone while driving. Controlled simulation '+version+'.',i.sourceUrl),'text/html')],
+        [i.policyUrl,response(i.policyUrl,page('Copyright','Creative Commons Attribution 4.0, except as noted. State of New South Wales. third-party material, logos.',i.policyUrl),'text/html')]]);
+      const observation=await observeKnowledgeEvidence({id:i.id,revision:i.revision,candidateDigest:i.digest,
+        sourceUrl:i.sourceUrl,policyUrl:i.policyUrl,
+        get:async(url)=>{assert.ok(pages.has(url));return pages.get(url);},
+        parseRobots:()=>({state:'observed',bodyEvidence:{bodyKind:'text'},groupCount:1,malformedDirectives:0}),
+        decideRobots:()=>({allowed:true}),clock:Date.now});
+      assert.equal(observation.state,'observed-for-review');
+      // Deliberately not a genuine claim/translation review. Positive planner
+      // outcomes below are hypothetical simulations of existing authority.
+      assert.equal(assessKnowledgeClaimEvidence(i,observation).state,'held');
+      const fingerprints=[observation.robots.bodySha256,observation.source.bodySha256,observation.source.mainSha256,
+        observation.terms.bodySha256,observation.terms.mainSha256];
+      const observedAt=observation.observedAt;
+      receipts.push({kind:'controlled-synthetic-planner-receipt',attemptId:key.attemptId,observation});
+      return {kind:'lab-controlled-observation',activationAllowed:false,outcome:'observed',reason:null,
+        candidate,observedAt,fingerprints,evidenceDigest:observationDigest(candidate,observedAt,fingerprints)};
+    });
+    assert.equal(result.state,'recorded');assert.equal(result.outcome,version==='held'?'held':'observed');
+    return key;
+  };
+  const permit=async(key,scope,expires=new Date(Date.now()+120000).toISOString())=>{
+    const entry=await row(key);
+    assert.equal(review(key,randomUUID(),scope,'lab-permitted',entry.evidenceDigest,expires),'recorded');
+  };
+  return {candidate,receipts,record,permit,evaluate};
+}
+const neverAuthority=r=>{
+  assert.equal(r.kind,'synthetic-planner-simulation-not-authority');
+  assert.equal(r.activationAllowed,false);assert.equal(r.approvalReusable,false);
+};
+test('existing planner consumes persisted complete controlled history with separate synthetic review scopes',async()=>{
+  const s=setupScenario('scope'),first=await s.record();
+  await s.permit(first,'feed');
+  await s.record();
+  const feedOnly=await s.evaluate();neverAuthority(feedOnly);
+  assert.equal(feedOnly.feed.state,'would-reuse-in-lab');assert.equal(feedOnly.standalone.state,'review-required');
+  const current=await s.record();
+  await s.permit(current,'feed');
+  await s.permit(current,'standalone',new Date(Date.now()+90000).toISOString());
+  const last=await s.record();
+  const both=await s.evaluate();neverAuthority(both);
+  assert.equal(both.feed.state,'would-reuse-in-lab');assert.equal(both.standalone.state,'would-reuse-in-lab');
+  assert.ok(Date.parse(both.standalone.validUntil)<=Date.parse(both.feed.validUntil));
+  // Revoke the feed on its current tip via a separate synthetic verdict.
+  const entry=await row(last);
+  assert.equal(review(last,randomUUID(),'feed','lab-held',entry.evidenceDigest,null),'recorded');
+  await s.record();
+  const revoked=await s.evaluate();neverAuthority(revoked);
+  assert.equal(revoked.feed.state,'held');assert.notEqual(revoked.standalone.state,'would-reuse-in-lab');
+});
+test('persisted A to B to A to A drift cannot silently restore prior decisions',async()=>{
+  const s=setupScenario('drift'),first=await s.record();
+  await s.permit(first,'feed');await s.permit(first,'standalone');
+  await s.record('B');await s.record('A');const restored=await s.record('A');
+  const changed=await s.evaluate();neverAuthority(changed);
+  assert.equal(changed.feed.state,'review-required');assert.equal(changed.feed.reason,'unresolved-observed-change');
+  assert.notEqual(changed.standalone.state,'would-reuse-in-lab');
+  await s.permit(restored,'feed');await s.record('A');
+  const reviewed=await s.evaluate();neverAuthority(reviewed);
+  assert.equal(reviewed.feed.state,'would-reuse-in-lab');
+  assert.equal(reviewed.standalone.state,'review-required');
+});
+test('failed or denied history is not repaired by a later positive observation',async()=>{
+  const s=setupScenario('held'),first=await s.record();
+  await s.permit(first,'feed');await s.record('held');await s.record();
+  const blocked=await s.evaluate();neverAuthority(blocked);
+  assert.equal(blocked.feed.state,'held');assert.equal(blocked.standalone.state,'held');
+  assert.equal(blocked.feed.reason,'history-or-receipt-binding-incomplete');
+});
+test('persisted review expiry is enforced by the existing planner without renewal',async()=>{
+  const s=setupScenario('expiry'),first=await s.record(),expiry=Date.now()+3500;
+  await s.permit(first,'feed',new Date(expiry).toISOString());
+  await s.record();
+  await new Promise(resolve=>setTimeout(resolve,Math.max(0,expiry-Date.now()+150)));
+  const expired=await s.evaluate();neverAuthority(expired);
+  assert.equal(expired.feed.state,'held');assert.equal(expired.feed.reason,'existing-review-expired');
+});
+test('simulation rejects missing or altered receipts, stale snapshot, foreign identity and forged scope',async()=>{
+  const s=setupScenario('boundary'),first=await s.record();
+  await s.permit(first,'feed');await s.record();
+  const good=await s.evaluate();assert.equal(good.feed.state,'would-reuse-in-lab');
+  const stored=snapshot(first);
+  const mutate=(fn)=>{const copy=structuredClone(stored);fn(copy);return async()=>copy;};
+  const changed=structuredClone(s.receipts);changed[0].observation.source.bodySha256='0'.repeat(64);
+  const invalidFlags=structuredClone(s.receipts);invalidFlags[0].observation.rightsReviewRequired=false;
+  for(const patch of [
+    {receipts:s.receipts.slice(1)},
+    {receipts:[s.receipts[0],s.receipts[0]]},
+    {receipts:changed},{receipts:invalidFlags},
+    {candidate:{...s.candidate,id:'dlkt-elsewhere-nsw-fuelcheck'}},
+    {identity:{...plannerIdentity,digest:'d4c1df98ae87865402292c04c46811d60eee7ed3bde9583f1e16cd243611110e'}},
+    {read:mutate(x=>{x.checkedAt=new Date(Date.now()-60000).toISOString();})},
+    {read:mutate(x=>{x.scopes.feed.latest.evidenceDigest='0'.repeat(64);})},
+    {read:mutate(x=>{x.scopes.feed.latest.scope='standalone';})},
+    {read:mutate(x=>{x.history.attempts.pop();})},
+    {read:mutate(x=>{x.approvalReusable=true;})},
+  ]){
+    const denied=await s.evaluate(patch);neverAuthority(denied);
+    assert.equal(denied.feed.state,'held');assert.equal(denied.standalone.state,'held');
+  }
 });

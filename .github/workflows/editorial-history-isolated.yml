@@ -119,7 +119,7 @@ jobs:
         run: |
           set -euo pipefail
           npm run build
-          ./node_modules/.bin/tsc --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --target ES2022 --module NodeNext --moduleResolution NodeNext --types node --outDir "$RUNNER_TEMP/editorial-history-adapter" docs/editorial-history-lab/transaction-adapter.mts
+          ./node_modules/.bin/tsc --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --target ES2022 --module NodeNext --moduleResolution NodeNext --types node --outDir "$RUNNER_TEMP/editorial-history-adapter" docs/editorial-history-lab/transaction-adapter.mts docs/editorial-history-lab/planner-simulation.mts
       - name: Initialize disposable database and independent login identities
         env:
           TEST_CONTAINER: ${{ job.services.postgres.id }}
@@ -127,8 +127,11 @@ jobs:
           set -euo pipefail
           cat docs/editorial-history-lab/ledger.sql docs/editorial-history-lab/scope-review.sql docs/editorial-history-lab/adapter-fixtures.sql |
             docker exec -i "$TEST_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d editorial_history_adapter_test
+          node docs/editorial-history-lab/seed-planner-fixtures.mjs "$RUNNER_TEMP/editorial-history-adapter/planner-fixture.json" |
+            docker exec -i "$TEST_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d editorial_history_adapter_test
       - name: Exercise authenticated committed operations and controlled observation
         env:
           TEST_CONTAINER: ${{ job.services.postgres.id }}
           DLKT_HISTORY_ADAPTER_BUILD: ${{ runner.temp }}/editorial-history-adapter
+          DLKT_HISTORY_PLANNER_FIXTURE: ${{ runner.temp }}/editorial-history-adapter/planner-fixture.json
         run: node --test docs/editorial-history-lab/transaction-adapter.test.mjs
