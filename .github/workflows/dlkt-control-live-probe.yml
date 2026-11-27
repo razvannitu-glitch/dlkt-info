@@ -50,5 +50,19 @@ jobs:
             if (expected===400) assert.ok(body.includes('href="/admin">Open Control with the default time range'),path);
             checks.push(check);
           }
+
+          const edge='https://gxzpvuyawpzevwwbrlpz.supabase.co/functions/v1/dlkt-control-profile-count?range=7d';
+          for (const [label,headers] of [
+            ['missing-authorization',{}],
+            ['malformed-token',{'Authorization':'Bearer invalid'}],
+            ['forged-jwt',{'Authorization':'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.invalid'}]
+          ]){
+            const r=await fetch(edge,{method:'GET',headers,credentials:'omit',cache:'no-store',redirect:'manual',signal:AbortSignal.timeout(15000)});
+            const body=await r.text();
+            assert.ok(r.status===401||r.status===403,label+' returned '+r.status);
+            assert.ok(!body.includes('"profiles"')&&!body.includes('"newProfiles"')&&!body.includes('sb_secret_'),label+' aggregate disclosure');
+            console.log(JSON.stringify({profileEdge:label,status:r.status,noAggregates:true}));
+          }
+          console.log('DLKT_PROFILE_EDGE_HOSTED_DENIAL_PASS');
           console.log('DLKT_ADMIN_LIVE_ANONYMOUS_PASS '+JSON.stringify({requests:checks.length,scope:'public HTTPS; no authenticated browser or analytics data tested'}));
           JS
