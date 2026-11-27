@@ -142,3 +142,30 @@ test('upstream failure and invalid payload do not manufacture a zero count',asyn
  assert.equal(data.totals,null);assert.equal(data.recent,null);assert.equal(data.daily,null);
  assert.match(renderDashboard(data),/Audience source unavailable/);
 });
+
+test('exact ChatGPT link attribution does not alter range or bypass identity checks',async()=>{
+ for(const url of ['/admin?utm_source=chatgpt.com','/admin?range=24h&utm_source=chatgpt.com','/admin?utm_source=chatgpt.com&range=all']){
+  const res=makeResponse();let calls=0;
+  await handleAdmin(makeRequest({cookie:''},url),res,{environment:adminEnvironment,provisioning:provision,fetch:async()=>{calls++;throw Error('unexpected network');}});
+  denied(res,401);assert.equal(calls,0);
+ }
+ const res=makeResponse();const calls=[];
+ await handleAdmin(makeRequest({},'/admin?range=all&utm_source=chatgpt.com'),res,{environment:adminEnvironment,provisioning:provision,fetch:async(url,init)=>{
+  const u=new URL(url);calls.push(u.pathname);assert.equal(u.searchParams.has('utm_source'),false);
+  if(u.pathname==='/auth/v1/user')return json({id,email:'admin@example.test'});
+  assert.equal(u.pathname,'/rest/v1/dlkt_info_profiles');assert.equal(init.method,'HEAD');assert.equal(u.searchParams.has('created_at'),false);
+  return new Response(null,{status:206,headers:{'content-range':'0-0/3'}});
+ }});
+ assert.equal(res.statusCode,200);assert.deepEqual(calls,['/auth/v1/user','/rest/v1/dlkt_info_profiles']);
+ assert.match(res.body,/aria-current="page">All time/);assert.doesNotMatch(res.body,/utm_source/);
+});
+test('invalid and duplicate attributions, unexpected keys and invalid ranges still fail closed with a clean recovery link',async()=>{
+ for(const query of ['utm_source=evil.example','utm_source=chatgpt.com&utm_source=chatgpt.com','utm_source=chatgpt.com&user=other','utm_source=chatgpt.com&range=7d&range=all','utm_source=chatgpt.com&range=invalid','_vercel_share=untrusted','utm_source=']){
+  const res=makeResponse();let calls=0;
+  await handleAdmin(makeRequest({},'/admin?'+query),res,{environment:adminEnvironment,provisioning:provision,fetch:async()=>{calls++;throw Error('unexpected network');}});
+  denied(res,400);assert.equal(calls,0);assert.match(res.body,/href="\/admin">Open Control with the default time range/);assert.doesNotMatch(res.body,/evil\.example|untrusted/);
+ }
+ const res=makeResponse();let calls=0;
+ await handleAdmin(makeRequest({'sec-fetch-site':'cross-site'},'/admin?utm_source=chatgpt.com'),res,{environment:adminEnvironment,provisioning:provision,fetch:async()=>{calls++;throw Error('unexpected network');}});
+ denied(res,403);assert.equal(calls,0);
+});
