@@ -13,7 +13,7 @@ import {knowledgeContentDigest} from '../../source/.build/src/share/knowledge-re
 
 const build=process.env.DLKT_HISTORY_ADAPTER_BUILD,container=process.env.TEST_CONTAINER;
 if(!build||!container||!/^[a-f0-9]{12,64}$/u.test(container))throw Error('ISOLATED_TEST_ENV_REQUIRED');
-const {runObservationAttempt,observationDigest}=await import(pathToFileURL(build+'/transaction-adapter.mjs').href);
+const {runObservationAttempt,observationDigest,recoverObservationAttempt}=await import(pathToFileURL(build+'/transaction-adapter.mjs').href);
 const db='editorial_history_adapter_test';
 const users=Object.freeze({
   worker:['dlkt_history_ci_worker','lab-worker-local-only'],
@@ -21,6 +21,7 @@ const users=Object.freeze({
   reader:['dlkt_history_ci_reader','lab-reader-local-only'],
   reviewer:['dlkt_history_ci_reviewer','lab-reviewer-local-only'],
   archiver:['dlkt_history_ci_archiver','lab-archiver-local-only'],
+  reaper:['dlkt_history_ci_reaper','lab-reaper-local-only'],
 });
 // One psql invocation = one authenticated connection and a completed
 // autocommit SQL statement. No SET ROLE or privileged connection in tests.
@@ -464,4 +465,127 @@ test('rehashing modified archive bytes or changing retained terminal data does n
     assert.equal(r.state,'integrity-held');assert.equal(r.checkpoint,null);
     assert.throws(()=>seal(k,id),/LAB_SQL_REJECTED/);
   }
+});
+
+
+const abandonSql=k=>'SELECT to_json(dlkt_history_lab.abandon_attempt('+args(k)+'))';
+const recoveryPorts={reader:ports.reader,reaper:{async abandon(k){return query('reaper',abandonSql(k));}}};
+async function recoveryKey(name){
+  const k=makeKey('recovery-'+name),h=await ports.reader.read(k.candidate);
+  assert.ok(h.attempts.length>0);
+  return {...k,attemptId:h.attempts.at(-1).attemptId};
+}
+function recoveryBoundary(r){
+  assert.equal(r.activationAllowed,false);assert.equal(r.approvalReusable,false);
+}
+test('recovery principal is authenticated separately and early abandonment remains impossible',async()=>{
+  // Start a fresh attempt now rather than relying on fixture initialization age.
+  const k=makeKey('before-commit');assert.equal((await ports.worker.start(k)).disposition,'created');
+  for(const role of ['worker','reader','attestor','reviewer','archiver'])
+    assert.throws(()=>query(role,abandonSql(k)),/LAB_SQL_REJECTED/);
+  assert.throws(()=>query('reaper','SELECT row_to_json(t) FROM dlkt_history_lab.start_attempt('+args(k)+') t'),/LAB_SQL_REJECTED/);
+  assert.throws(()=>query('reaper',snapshotSql(k.candidate)),/LAB_SQL_REJECTED/);
+  assert.throws(()=>query('reaper',reviewSql(k,randomUUID(),'feed','lab-held',null,null)),/LAB_SQL_REJECTED/);
+  assert.throws(()=>query('reaper','SELECT to_json(count(*)) FROM dlkt_history_lab.attempts'),/LAB_SQL_REJECTED/);
+  assert.throws(()=>query('reaper',abandonSql(k)),/LAB_SQL_REJECTED/);
+  let calls=0;
+  const r=await recoverObservationAttempt(k,{...recoveryPorts,reaper:{async abandon(){calls++;return 'recorded';}}});
+  recoveryBoundary(r);assert.equal(r.reason,'attempt-not-expired');assert.equal(calls,0);
+  assert.equal((await row(k)).outcome,'open');
+});
+test('recover a stranded attempt, retain its terminal failure and allow only an explicit new start',async()=>{
+  const k=await recoveryKey('plain'),before=await row(k);
+  assert.equal(before.outcome,'open');
+  const r=await recoverObservationAttempt(k,recoveryPorts);recoveryBoundary(r);
+  assert.equal(r.state,'recovered');assert.equal(r.reason,'exact-abandonment-readback');
+  assert.equal(r.historyState,'terminal-hold-present');
+  const closed=await row(k);
+  assert.equal(closed.outcome,'abandoned');assert.equal(closed.reason,'start-timeout');
+  assert.equal(closed.startedAt,before.startedAt);assert.equal(closed.evidenceDigest,null);
+  assert.equal((await recoverObservationAttempt(k,recoveryPorts)).reason,'already-abandoned');
+  await assert.rejects(ports.worker.finish(k,{outcome:'failed',reason:'transport-failed',observedAt:null,fingerprints:null,evidenceDigest:null}),/LAB_SQL_REJECTED/);
+  let probes=0;
+  const replay=await runObservationAttempt(k,ports,async()=>{probes++;return held('source-denied');});
+  assert.equal(replay.reason,'replay-terminal');assert.equal(probes,0);
+  const next={...k,attemptId:randomUUID()};
+  assert.equal((await runObservationAttempt(next,ports,observer)).outcome,'observed');
+  const history=await ports.reader.read(k.candidate);
+  assert.equal(history.tip,2);assert.equal(history.state,'terminal-hold-present');
+  assert.deepEqual(history.attempts[0],closed);
+  assert.equal(snapshot(k).approvalReusable,false);
+});
+test('lost attestation acknowledgement remains a failure after timeout, not an observed result',async()=>{
+  const k=await recoveryKey('attested'),before=await row(k);
+  assert.equal(before.outcome,'open');assert.ok(before.attestedAt);
+  const r=await recoverObservationAttempt(k,recoveryPorts);recoveryBoundary(r);
+  assert.equal(r.state,'recovered');
+  const closed=await row(k);
+  assert.equal(closed.outcome,'abandoned');assert.equal(closed.reason,'start-timeout');
+  assert.equal(closed.attestedAt,before.attestedAt);assert.equal(closed.evidenceDigest,null);
+  assert.equal(closed.observedAt,null);assert.equal(closed.fingerprints,null);
+  assert.throws(()=>review(k,randomUUID(),'feed','lab-permitted',null,new Date(Date.now()+60000).toISOString()),/LAB_SQL_REJECTED/);
+});
+test('uncertain abandonment is confirmed only from exact readback, before-commit failure stays unresolved',async()=>{
+  const lost=await recoveryKey('lost');
+  const r=await recoverObservationAttempt(lost,{...recoveryPorts,reaper:{async abandon(k){
+    await recoveryPorts.reaper.abandon(k);throw Error('ack lost');
+  }}});
+  recoveryBoundary(r);assert.equal(r.reason,'confirmed-after-uncertain-abandonment');
+  assert.equal((await row(lost)).outcome,'abandoned');
+  const before=await recoveryKey('before');
+  const u=await recoverObservationAttempt(before,{...recoveryPorts,reaper:{async abandon(){throw Error('before commit');}}});
+  recoveryBoundary(u);assert.equal(u.state,'unresolved');assert.equal(u.reason,'abandonment-readback-unconfirmed');
+  assert.equal((await row(before)).outcome,'open');
+  assert.equal((await recoverObservationAttempt(before,recoveryPorts)).state,'recovered');
+});
+test('malformed or mismatched history cannot trigger or falsely confirm recovery',async()=>{
+  const k=await recoveryKey('bad-read'),history=await ports.reader.read(k.candidate);
+  let writes=0;
+  for(const change of [
+    h=>{h.cardId='lab-other';},h=>{h.tip=2;},h=>{h.attempts[0].sequence=2;},
+    h=>{h.attempts[0].outcome='observed';},h=>{h.activationAllowed=true;},
+    h=>{h.state='complete-observation-prefix';},h=>{h.attempts[0].evidenceDigest='a'.repeat(64);},
+  ]){
+    const altered=structuredClone(history);change(altered);
+    const r=await recoverObservationAttempt(k,{reader:{read:async()=>altered},reaper:{async abandon(){writes++;return 'recorded';}}});
+    recoveryBoundary(r);assert.equal(r.state,'unresolved');
+  }
+  assert.equal(writes,0);assert.equal((await row(k)).outcome,'open');
+  let reads=0;
+  const r=await recoverObservationAttempt(k,{...recoveryPorts,reader:{async read(c){
+    const real=await ports.reader.read(c);
+    if(++reads===1)return real;
+    return {...real,attempts:real.attempts.map(a=>({...a,startedAt:'2026-01-02T00:00:00.000Z'}))};
+  }}});
+  recoveryBoundary(r);assert.equal(r.state,'unresolved');assert.equal((await row(k)).outcome,'abandoned');
+  assert.equal((await recoverObservationAttempt(k,recoveryPorts)).reason,'already-abandoned');
+});
+test('stale recovery target never abandons a replacement attempt',async()=>{
+  const k=await recoveryKey('race'),before=await ports.reader.read(k.candidate);
+  assert.equal((await recoverObservationAttempt(k,recoveryPorts)).state,'recovered');
+  const next={...k,attemptId:randomUUID()};
+  assert.equal((await ports.worker.start(next)).disposition,'created');
+  let reads=0;
+  const r=await recoverObservationAttempt(k,{...recoveryPorts,reader:{async read(c){
+    if(++reads===1)return before;
+    return ports.reader.read(c);
+  }}});
+  recoveryBoundary(r);assert.equal(r.state,'recovered');assert.equal(r.historyState,'open');
+  assert.equal((await row(next)).outcome,'open');
+  assert.equal((await row(k)).outcome,'abandoned');
+});
+test('abandoning the final capacity slot preserves capacity and permits sealing, never rollover',async()=>{
+  const k=await recoveryKey('cap');
+  const pre=await ports.reader.read(k.candidate);
+  assert.equal(pre.tip,256);assert.equal(pre.state,'expired-open');
+  const id=randomUUID();assert.throws(()=>seal(k,id),/LAB_SQL_REJECTED/);
+  const r=await recoverObservationAttempt(k,recoveryPorts);recoveryBoundary(r);
+  assert.equal(r.state,'recovered');assert.equal(r.historyState,'capacity-held');
+  const history=await ports.reader.read(k.candidate);
+  assert.equal(history.attempts.length,256);assert.equal(history.attempts.at(-1).outcome,'abandoned');
+  assert.deepEqual(history.attempts.slice(0,255),pre.attempts.slice(0,255));
+  assert.equal((await ports.worker.start({...k,attemptId:randomUUID()})).disposition,'capacity-held');
+  assert.equal(seal(k,id),'sealed');
+  const saved=checkpoint(k);archiveBoundary(saved);assert.equal(saved.state,'sealed-verified');
+  assert.equal(JSON.parse(saved.checkpoint.payload).attempts.at(-1).result.outcome,'abandoned');
 });

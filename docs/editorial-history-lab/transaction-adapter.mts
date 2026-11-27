@@ -91,39 +91,84 @@ function report(state:AttemptResult['state'],reason:string,outcome:Terminal['out
 function isSequence(v:unknown):v is number{
   return typeof v==='number'&&Number.isInteger(v)&&v>=1&&v<=256;
 }
-function confirmReadback(value:unknown,key:Key,sequence:number,terminal:Terminal):string|null{
-  const c=key.candidate;
+type StoredOutcome=Terminal['outcome']|'open'|'abandoned';
+type HistoryState='empty'|'complete-observation-prefix'|'terminal-hold-present'|'capacity-held'|'open'|'expired-open';
+interface HistoryRow {
+  readonly attemptId:string;readonly sequence:number;readonly startedAt:string;readonly finishedAt:string|null;
+  readonly attestedAt:string|null;readonly outcome:StoredOutcome;readonly reason:string|null;
+  readonly observedAt:string|null;readonly fingerprints:Hashes|null;readonly evidenceDigest:string|null;
+}
+interface CheckedHistory {readonly state:HistoryState;readonly tip:number;readonly attempts:readonly HistoryRow[]}
+function validOutcome(value:unknown):value is StoredOutcome{
+  return value==='observed'||value==='held'||value==='failed'||value==='open'||value==='abandoned';
+}
+function validHistoryState(value:unknown):value is HistoryState{
+  return value==='empty'||value==='complete-observation-prefix'||value==='terminal-hold-present'||
+    value==='capacity-held'||value==='open'||value==='expired-open';
+}
+function checkedHistory(value:unknown,c:Candidate):CheckedHistory|null{
   if(!object(value)||value.activationAllowed!==false||value.cardId!==c.id||value.revision!==c.revision||
     value.digest!==c.digest||value.sourceUrl!==c.sourceUrl||value.policyUrl!==c.policyUrl||
-    !isSequence(value.tip)||value.tip<sequence||!Array.isArray(value.attempts)||
-    value.attempts.length!==value.tip||typeof value.state!=='string'||
-    !['complete-observation-prefix','terminal-hold-present','capacity-held','open','expired-open'].includes(value.state))
-    return null;
-  let previousEnd:number|null=null,matched=false;
-  const seen=new Set<string>();
-  for(let i=0;i<value.attempts.length;i++){
-    const a:unknown=value.attempts[i];
-    if(!object(a)||a.sequence!==i+1||!uuid(a.attemptId)||seen.has(a.attemptId))return null;
+    (value.tip!==0&&!isSequence(value.tip))||!Array.isArray(value.attempts)||
+    value.attempts.length!==value.tip||!validHistoryState(value.state))return null;
+  const rows:HistoryRow[]=[];const seen=new Set<string>();
+  let previousEnd:number|null=null,hasHold=false,hasOpen=false;
+  for(let n=0;n<value.attempts.length;n++){
+    const a:unknown=value.attempts[n];
+    if(!object(a)||a.sequence!==n+1||!uuid(a.attemptId)||seen.has(a.attemptId)||
+      !validOutcome(a.outcome)||typeof a.startedAt!=='string')return null;
     seen.add(a.attemptId);
-    const started=epoch(a.startedAt),finished=epoch(a.finishedAt);
+    const started=epoch(a.startedAt);
+    const finishedAt=a.finishedAt,attestedAt=a.attestedAt;
+    if((finishedAt!==null&&typeof finishedAt!=='string')||(attestedAt!==null&&typeof attestedAt!=='string'))return null;
+    const finished=epoch(finishedAt),attested=epoch(attestedAt);
     if(started===null||(previousEnd!==null&&started<previousEnd)||
-      !['observed','held','failed','abandoned','open'].includes(String(a.outcome)))return null;
+      (attestedAt!==null&&(attested===null||attested<started||attested-started>=300000||
+        (finished!==null&&attested>finished))))return null;
     if(a.outcome==='open'){
-      if(i!==value.attempts.length-1||a.finishedAt!==null||!['open','expired-open'].includes(value.state))return null;
+      if(n!==value.attempts.length-1||finishedAt!==null||a.reason!==null)return null;
+      hasOpen=true;
     }else if(finished===null||finished<started)return null;
+    let observedAt:string|null=null,fingerprints:Hashes|null=null,evidenceDigest:string|null=null;
+    if(a.outcome==='observed'){
+      const observed=epoch(a.observedAt);
+      if(!c.id.startsWith('lab-')||typeof a.observedAt!=='string'||observed===null||attested===null||
+        finished===null||observed<started||observed>attested||a.reason!==null||
+        !isHashes(a.fingerprints)||!hex(a.evidenceDigest)||
+        observationDigest(c,new Date(observed).toISOString(),a.fingerprints)!==a.evidenceDigest)return null;
+      observedAt=a.observedAt;
+      fingerprints=Object.freeze([a.fingerprints[0],a.fingerprints[1],a.fingerprints[2],a.fingerprints[3],a.fingerprints[4]]);
+      evidenceDigest=a.evidenceDigest;
+    }else{
+      if(a.observedAt!==null||a.fingerprints!==null||a.evidenceDigest!==null)return null;
+      if(a.outcome==='held'&&!['source-denied','policy-changed','incomplete-evidence'].includes(String(a.reason)))return null;
+      if(a.outcome==='failed'&&!['transport-failed','invalid-receipt','clock-invalid'].includes(String(a.reason)))return null;
+      if(a.outcome==='abandoned'&&(a.reason!=='start-timeout'||finished===null||finished-started<300000))return null;
+      if(a.outcome!=='open')hasHold=true;
+    }
+    if(a.reason!==null&&typeof a.reason!=='string')return null;
     previousEnd=finished;
-    if(a.attemptId!==key.attemptId)continue;
-    if(a.sequence!==sequence||a.outcome!==terminal.outcome||a.reason!==terminal.reason||finished===null)return null;
-    if(terminal.outcome==='observed'){
-      const observed=epoch(a.observedAt),attested=epoch(a.attestedAt);
-      if(observed===null||observed!==epoch(terminal.observedAt)||attested===null||
-        observed<started||attested<observed||attested>finished||
-        !isHashes(a.fingerprints)||!a.fingerprints.every((v,j)=>v===terminal.fingerprints[j])||
-        a.evidenceDigest!==terminal.evidenceDigest)return null;
-    }else if(a.observedAt!==null||a.fingerprints!==null||a.evidenceDigest!==null)return null;
-    matched=true;
+    rows.push(Object.freeze({attemptId:a.attemptId,sequence:n+1,startedAt:a.startedAt,finishedAt,attestedAt,
+      outcome:a.outcome,reason:a.reason,observedAt,fingerprints,evidenceDigest}));
   }
-  return matched?value.state:null;
+  if(hasOpen){
+    if(value.state!=='open'&&value.state!=='expired-open')return null;
+  }else{
+    const expected=value.tip===0?'empty':value.tip===256?'capacity-held':hasHold?'terminal-hold-present':'complete-observation-prefix';
+    if(value.state!==expected)return null;
+  }
+  return Object.freeze({state:value.state,tip:value.tip,attempts:Object.freeze(rows)});
+}
+function confirmReadback(value:unknown,key:Key,sequence:number,terminal:Terminal):string|null{
+  const history=checkedHistory(value,key.candidate);
+  if(history===null)return null;
+  const row=history.attempts[sequence-1];
+  if(!row||row.attemptId!==key.attemptId||row.outcome!==terminal.outcome||row.reason!==terminal.reason)return null;
+  if(terminal.outcome==='observed'){
+    if(epoch(row.observedAt)!==epoch(terminal.observedAt)||row.fingerprints===null||
+      !row.fingerprints.every((v,j)=>v===terminal.fingerprints[j])||row.evidenceDigest!==terminal.evidenceDigest)return null;
+  }
+  return history.state;
 }
 /**
  * A committed created acknowledgement is the sole permission to call observe.
@@ -175,4 +220,60 @@ async function persist(key:Key,sequence:number,terminal:Terminal,ports:Ports):Pr
     if(state!==null)return report('recorded',acknowledged?'exact-readback':'confirmed-after-uncertain-finish',terminal.outcome,state);
   }catch{/* Never return a successful outcome without confirmed persistence. */}
   return report('unresolved','terminal-readback-unconfirmed');
+}
+
+
+// Recovery is deliberately separate from observation and editorial review.
+// The reaper never receives a probe callback or a worker/reviewer port.
+export interface RecoveryPorts {
+  readonly reader:Ports['reader'];
+  readonly reaper:{abandon(key:Key):Promise<unknown>};
+}
+export interface RecoveryResult {
+  readonly state:'recovered'|'not-actionable'|'unresolved';
+  readonly reason:string;readonly historyState:HistoryState|null;
+  readonly activationAllowed:false;readonly approvalReusable:false;
+}
+function recovery(state:RecoveryResult['state'],reason:string,historyState:HistoryState|null=null):RecoveryResult{
+  return Object.freeze({state,reason,historyState,activationAllowed:false,approvalReusable:false});
+}
+/**
+ * Reconcile one exact durable attempt. Only the authoritative database's
+ * expired-open state permits a reaper call, and SQL rechecks its deadline
+ * under the candidate lock. Never retry observation or abandon a replacement.
+ * A committed or uncertain abandonment is confirmed from the same immutable
+ * row and attestation metadata, even if a newer attempt has since started.
+ * Recovery confirms failure persistence only, never permission to publish.
+ */
+export async function recoverObservationAttempt(input:Key,ports:RecoveryPorts):Promise<RecoveryResult>{
+  let key:Key;
+  try{
+    const c=input.candidate;
+    const candidate:Candidate=Object.freeze({id:c.id,revision:c.revision,digest:c.digest,sourceUrl:c.sourceUrl,policyUrl:c.policyUrl});
+    if(!validCandidate(candidate)||!uuid(input.attemptId))return recovery('not-actionable','invalid-laboratory-identity');
+    key=Object.freeze({candidate,attemptId:input.attemptId});
+  }catch{return recovery('not-actionable','invalid-laboratory-identity');}
+  let before:CheckedHistory|null;
+  try{before=checkedHistory(await ports.reader.read(key.candidate),key.candidate);}
+  catch{return recovery('unresolved','history-read-unconfirmed');}
+  if(before===null)return recovery('unresolved','history-read-invalid');
+  const target=before.attempts.find(a=>a.attemptId===key.attemptId);
+  if(!target)return recovery('not-actionable','attempt-not-found',before.state);
+  if(target.outcome==='abandoned')return recovery('recovered','already-abandoned',before.state);
+  if(target.outcome!=='open')return recovery('not-actionable','already-terminal',before.state);
+  if(before.state!=='expired-open'||target.sequence!==before.tip)
+    return recovery('not-actionable','attempt-not-expired',before.state);
+  let acknowledged=false;
+  try{
+    const reply=await ports.reaper.abandon(key);
+    acknowledged=reply==='recorded'||reply==='already-terminal';
+  }catch{/* An uncertain response is not proof of rollback. */}
+  try{
+    const after=checkedHistory(await ports.reader.read(key.candidate),key.candidate);
+    const same=after?.attempts[target.sequence-1];
+    if(after!==null&&same&&same.attemptId===target.attemptId&&same.startedAt===target.startedAt&&
+      same.attestedAt===target.attestedAt&&same.outcome==='abandoned')
+      return recovery('recovered',acknowledged?'exact-abandonment-readback':'confirmed-after-uncertain-abandonment',after.state);
+  }catch{/* Never confirm a missing or ambiguous abandonment. */}
+  return recovery('unresolved','abandonment-readback-unconfirmed');
 }
