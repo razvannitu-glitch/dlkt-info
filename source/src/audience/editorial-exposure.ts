@@ -47,7 +47,7 @@ export class QualifiedExposureLab {
    }
    if(!candidate.qualified)continue;
    const prior=this.#pending.get(candidate.key);
-   const since=prior?.category===candidate.category?prior.since:time;
+   const since=prior!==undefined&&prior.category===candidate.category?prior.since:time;
    if(time-since>=EDITORIAL_EXPOSURE_MS){
     if(this.#completed.size>=EDITORIAL_DOCUMENT_LIMIT){this.hold();return;}
     this.#completed.set(candidate.key,candidate.category);
