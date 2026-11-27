@@ -387,6 +387,7 @@ test('simulation rejects missing or altered receipts, stale snapshot, foreign id
     {read:mutate(x=>{x.checkedAt=new Date(Date.now()-60000).toISOString();})},
     {read:mutate(x=>{x.scopes.feed.latest.evidenceDigest='0'.repeat(64);})},
     {read:mutate(x=>{x.scopes.feed.latest.scope='standalone';})},
+    {read:mutate(x=>{x.scopes.feed.state='expired';})},
     {read:mutate(x=>{x.history.attempts.pop();})},
     {read:mutate(x=>{x.approvalReusable=true;})},
   ]){

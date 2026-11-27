@@ -119,8 +119,8 @@ function checkedRows(h:Dict,c:Candidate,i:SimulationIdentity,packets:readonly Si
       !r||r.id!==i.id||r.revision!==i.revision||r.candidateDigest!==i.digest||
       r.sourceUrl!==i.sourceUrl||r.policyUrl!==i.policyUrl||r.observedAt!==new Date(observed).toISOString()||
       r.activationAllowed!==false)return null;
-    const f=receiptHashes(r),stamp=new Date(observed).toISOString();
-    if(!f||!f.every((x,j)=>x===a.fingerprints[j])||observationDigest(c,stamp,f)!==a.evidenceDigest)return null;
+    const f=receiptHashes(r),stamp=new Date(observed).toISOString(),storedFingerprints=a.fingerprints;
+    if(!f||!f.every((x,j)=>x===storedFingerprints[j])||observationDigest(c,stamp,f)!==a.evidenceDigest)return null;
     const plannerDigest=sha(JSON.stringify(['dlkt-knowledge-observation-v1',i.id,i.revision,i.digest,i.sourceUrl,i.policyUrl,stamp,f]));
     // Reuse the canonical planner's own receipt validator. The per-row
     // comparison is historical to the synthetic observation, not a live check.
@@ -133,7 +133,7 @@ function checkedRows(h:Dict,c:Candidate,i:SimulationIdentity,packets:readonly Si
   }
   return rows;
 }
-function checkedReview(scopes:Dict,scope:Scope,rows:readonly CheckedRow[],i:SimulationIdentity,now:number):ReviewBinding|null|false {
+function checkedReview(scopes:Dict,scope:Scope,rows:readonly CheckedRow[],i:SimulationIdentity,now:number,snapshotClock:number):ReviewBinding|null|false {
   const s=scopes[scope];
   if(!object(s)||!integer(s.count,0,256))return false;
   if(s.count===0)return s.latest===null&&s.state==='no-review'?null:false;
@@ -149,7 +149,7 @@ function checkedReview(scopes:Dict,scope:Scope,rows:readonly CheckedRow[],i:Simu
     if(r.expiresAt!==null||s.state!=='held')return false;
   }else if(expires===null||expires<=reviewed||reviewed-row.observed>=DAY||
     expires>row.observed+DAY||expires>Date.parse(i.reviewBy)||reviewed<Date.parse(i.reviewedAt)||
-    !['recorded-not-authority','new-observation-review-required','expired'].includes(String(s.state)))return false;
+    s.state!==(snapshotClock>=expires?'expired':r.sequence===rows.length?'recorded-not-authority':'new-observation-review-required'))return false;
   return {reviewId:r.reviewId,verdict:r.verdict,reviewed,expires,row};
 }
 function simulatedReview(i:SimulationIdentity,scope:Scope,r:ReviewBinding|null):Dict|null{
@@ -187,7 +187,7 @@ export async function simulateStoredRevalidation(input:SimulationInput):Promise<
     const rows=checkedRows(s.history,c,i,input.receipts,now,input.planner);
     if(rows===null)return deny('history-or-receipt-binding-incomplete');
     if(rows.length<2)return result(advice('review-required','new-observation-required'),advice('review-required','new-observation-required'));
-    const feed=checkedReview(s.scopes,'feed',rows,i,now),standalone=checkedReview(s.scopes,'standalone',rows,i,now);
+    const feed=checkedReview(s.scopes,'feed',rows,i,now,clock),standalone=checkedReview(s.scopes,'standalone',rows,i,now,clock);
     if(feed===false||standalone===false||(feed&&standalone&&feed.reviewId===standalone.reviewId))return deny('scope-review-binding-invalid');
     const last=rows.at(-1)!,prior=rows.slice(0,-1).map(r=>r.receipt);
     const feedReview=simulatedReview(i,'feed',feed),standaloneReview=simulatedReview(i,'standalone',standalone);
