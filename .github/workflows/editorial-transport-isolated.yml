@@ -1,0 +1,47 @@
+name: DLKT isolated editorial exposure transactions
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+    paths:
+      - 'docs/editorial-transport-lab/**'
+      - '.github/workflows/editorial-transport-isolated.yml'
+permissions:
+  contents: read
+jobs:
+  transactions:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feat/dlkt-editorial-intelligence-aggregate-foundation'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: local-test-only
+          POSTGRES_DB: editorial_transport_test
+          POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+        options: >-
+          --health-cmd "pg_isready -U postgres -d editorial_transport_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - name: Install disposable schema and fixture-only role boundaries
+        env:
+          TEST_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          docker exec -i "$TEST_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d editorial_transport_test < docs/editorial-transport-lab/schema.sql
+      - name: Exercise authenticated independent connections, rollback, replay and revocation
+        env:
+          TEST_CONTAINER: ${{ job.services.postgres.id }}
+        run: node --test docs/editorial-transport-lab/transactions.test.mjs
