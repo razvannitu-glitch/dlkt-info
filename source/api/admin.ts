@@ -5,7 +5,7 @@ import {resolveIdentitySession} from '../src/identity/session.js';
 import {readIdentityCookies} from '../src/identity/cookies.js';
 import type {ProvisioningProjection} from '../src/provisioning/index.js';
 import {adminIds,parseRange,readAnalytics} from '../src/admin/analytics.js';
-import {renderDashboard,renderUnavailable} from '../src/admin/render.js';
+import {renderDashboard,renderInvalidRange,renderUnavailable} from '../src/admin/render.js';
 
 function send(res:ServerResponse,status:number,body:string):void{
  res.statusCode=status;
@@ -32,10 +32,14 @@ export async function handleAdmin(req:IncomingMessage,res:ServerResponse,deps:{e
  let range;
  try{
   const u=new URL(req.url??'/admin','https://www.dlkt.ee');
+  // Chat links may append this exact attribution. It is not an analytics input.
+  // Never forward it to a provider, relax the range allowlist, or trust arbitrary parameters.
+  const attribution=u.searchParams.getAll('utm_source');
+  if(attribution.length===1&&attribution[0]==='chatgpt.com')u.searchParams.delete('utm_source');
   if([...u.searchParams.keys()].some(k=>k!=='range')||u.searchParams.getAll('range').length>1)throw Error('QUERY');
   range=parseRange(u.searchParams.get('range'));
  }catch{range=null;}
- if(range===null){send(res,400,renderUnavailable('Invalid time range'));return;}
+ if(range===null){send(res,400,renderInvalidRange());return;}
  try{
   const cookies=readIdentityCookies(req.headers.cookie);
   if(!cookies.accessToken&&!cookies.refreshToken){send(res,401,renderUnavailable('Sign in required',true));return;}
