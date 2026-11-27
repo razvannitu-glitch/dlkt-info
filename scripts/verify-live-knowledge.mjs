@@ -1,4 +1,5 @@
 import {readFileSync} from 'node:fs';
+import {parseDocument,DomUtils} from 'htmlparser2';
 import {resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 
@@ -25,6 +26,53 @@ const headers=['content-type','cache-control','set-cookie','x-content-type-optio
 const object=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 const safeClock=now=>Number.isSafeInteger(now)&&now>=0;
 const active=now=>now>=reviewedAt&&now<expiresAt;
+const phase=now=>now<reviewedAt?'pre-review':active(now)?'active':'expired';
+const commitHash=value=>typeof value==='string'&&/^[a-f0-9]{40}$/u.test(value);
+const deploymentOrigin=/^https:\/\/dlkt-info-[a-z0-9]+-dlkt-group-ou\.vercel\.app$/u;
+export function knowledgeProbeOptions({mode='monitor',origin=KNOWLEDGE_ORIGIN,expectedCommit='',expectedManifest=''}={}){
+  if(mode==='monitor'&&origin===KNOWLEDGE_ORIGIN&&expectedCommit===''&&expectedManifest==='')return Object.freeze({mode,origin,expectedCommit,expectedManifest});
+  if(mode==='recovery'&&typeof origin==='string'&&(origin===KNOWLEDGE_ORIGIN||deploymentOrigin.test(origin))&&commitHash(expectedCommit)&&hash(expectedManifest))
+    return Object.freeze({mode,origin,expectedCommit,expectedManifest});
+  throw Error('DLKT_LIVE_KNOWLEDGE_PROBE_OPTIONS');
+}
+export function readKnowledgeProbeOptions(env=process.env){
+  return knowledgeProbeOptions({mode:env.DLKT_KNOWLEDGE_PROBE_MODE||'monitor',origin:env.DLKT_KNOWLEDGE_PROBE_ORIGIN||KNOWLEDGE_ORIGIN,
+    expectedCommit:env.DLKT_KNOWLEDGE_EXPECTED_COMMIT||'',expectedManifest:env.DLKT_KNOWLEDGE_EXPECTED_MANIFEST||''});
+}
+// Explicit test oracle for the reviewed NSW attribution and translated controls.
+const labels=Object.freeze({
+  en:Object.freeze({adapted:'Original DLKT synthesis and translations',terms:'Source terms',copied:'DLKT card link copied.'}),
+  ro:Object.freeze({adapted:'Sinteza originala si traduceri DLKT',terms:'Termenii sursei',copied:'Linkul cardului DLKT a fost copiat.'}),
+  it:Object.freeze({adapted:'Sintesi originale e traduzioni DLKT',terms:'Condizioni della fonte',copied:'Link della scheda DLKT copiato.'}),
+});
+function labelFor(language){
+  if(!Object.hasOwn(labels,language))throw Error('DLKT_LIVE_KNOWLEDGE_LANGUAGE');
+  return labels[language];
+}
+export const KNOWLEDGE_CREDIT='© State of New South Wales. For current information go to www.nsw.gov.au.';
+export function knowledgeCreditText(language){
+  const label=labelFor(language);
+  return KNOWLEDGE_CREDIT+' · '+label.adapted+' · CC BY 4.0 · '+label.terms;
+}
+export function knowledgeCopyMessage(language){return labelFor(language).copied;}
+export function knowledgeCanonicalUrl(language){labelFor(language);return KNOWLEDGE_ORIGIN+'/card/'+id+'?v='+revision+'&lang='+language+'&h='+digest;}
+export const normalizeKnowledgeText=value=>typeof value==='string'?value.replace(/\s+/gu,' ').trim():'';
+export function knowledgeCreditLinks(language){
+  return [{href:KNOWLEDGE_IDENTITY.license,text:'CC BY 4.0'},{href:terms,text:labelFor(language).terms}];
+}
+export function knowledgeRunBoundary(before,after,started,completed,options={}){
+  const config=knowledgeProbeOptions(options);
+  const stable=Boolean(before&&after&&commitHash(before.commit)&&hash(before.manifest)&&before.commit===after.commit&&before.manifest===after.manifest);
+  const activeAtStart=active(started);
+  const stableClock=safeClock(started)&&safeClock(completed)&&completed>=started&&phase(started)===phase(completed);
+  const failures=[...(!stable?['release-receipt-changed-or-unavailable']:[]),...(!stableClock?['review-window-changed-or-clock-invalid']:[])];
+  if(config.mode==='recovery'){
+    if(!activeAtStart||!active(completed))failures.push('recovery-requires-active-admission');
+    if(!stable||before.commit!==config.expectedCommit)failures.push('expected-release-commit');
+    if(!stable||before.manifest!==config.expectedManifest)failures.push('expected-release-manifest');
+  }
+  return {stable,activeAtStart,failures};
+}
 export function knowledgeCases(now){
   if(!safeClock(now))throw Error('DLKT_LIVE_KNOWLEDGE_CLOCK');
   const canonical='/card/'+id,api='/api/card?id='+id;
@@ -41,13 +89,21 @@ export function knowledgeCases(now){
     {key:'duplicate-id',path:api+'&'+query('en',digest)+'&id='+id,language:'en',status:400},
   ].map(item=>Object.freeze(item)));
 }
-const escapeAmp=value=>value.replace(/&/gu,'&amp;');
+const findAll=(nodes,predicate)=>DomUtils.findAll(predicate,nodes);
+const attr=(node,key)=>node?.attribs?.[key];
+const classHas=(node,value)=>(attr(node,'class')??'').split(/\s+/u).includes(value);
+const textOf=node=>normalizeKnowledgeText(node?DomUtils.textContent(node):'');
+const declaredVisible=node=>{
+  for(let n=node;n;n=n.parent){
+    if(n.attribs&&(Object.hasOwn(n.attribs,'hidden')||attr(n,'aria-hidden')==='true'||/(?:display\s*:\s*none|visibility\s*:\s*hidden|opacity\s*:\s*0(?:\s*[;}]|\s*$))/iu.test(attr(n,'style')??'')))return false;
+  }
+  return Boolean(node);
+};
 export function assessKnowledgeResponse(item,reading){
   const failures=[];
   const check=(name,ok)=>{if(!ok)failures.push(name);};
   if(!object(reading)||!object(reading.headers)||typeof reading.body!=='string')return ['unreachable'];
   const header=name=>reading.headers[name]??'';
-  const body=reading.body;
   check('status',reading.status===item.status);
   check('no-redirect',reading.redirected===false);
   check('html',/^text\/html(?:;|$)/iu.test(header('content-type')));
@@ -55,19 +111,30 @@ export function assessKnowledgeResponse(item,reading){
   check('no-cookie',header('set-cookie')==='');
   check('nosniff',header('x-content-type-options').toLowerCase()==='nosniff');
   check('noindex',/\bnoindex\b/iu.test(header('x-robots-tag'))&&/\bnofollow\b/iu.test(header('x-robots-tag')));
-  check('language',body.includes('<html lang="'+item.language+'">'));
-  const marker='data-shared-knowledge-id="'+id+'"';
+  let doc;try{doc=parseDocument(reading.body);}catch{return [...failures,'invalid-html'];}
+  const nodes=doc.children;
+  const pages=findAll(nodes,n=>n.name==='html');
+  check('language',pages.length===1&&attr(pages[0],'lang')===item.language);
+  const articles=findAll(nodes,n=>attr(n,'data-shared-knowledge-id')!==undefined);
+  const buttons=findAll(nodes,n=>attr(n,'id')==='shared-copy');
   if(item.status===200){
-    check('identity',body.includes(marker));
-    check('expiry',body.includes('data-valid-until="'+expiresAt+'"'));
-    const canonical=KNOWLEDGE_ORIGIN+'/card/'+id+'?v='+revision+'&lang='+item.language+'&h='+digest;
-    check('canonical',body.includes('rel="canonical" href="'+escapeAmp(canonical)+'"'));
-    check('source',body.includes('href="'+source+'"'));
-    check('terms',body.includes('href="'+terms+'"'));
-    check('license',body.includes('href="'+KNOWLEDGE_IDENTITY.license+'"'));
-    check('credit',body.includes('class="card-credits"'));
+    const article=articles[0],inside=article?.children??[];
+    const canonical=knowledgeCanonicalUrl(item.language);
+    const links=findAll(nodes,n=>n.name==='link'&&attr(n,'rel')==='canonical');
+    const fresh=findAll(inside,n=>attr(n,'id')==='shared-freshness');
+    const credits=findAll(inside,n=>classHas(n,'card-credits'));
+    const credit=credits[0],creditAnchors=findAll(credit?.children??[],n=>n.name==='a');
+    const creditExpected=knowledgeCreditLinks(item.language);
+    check('identity',articles.length===1&&article.name==='article'&&attr(article,'data-shared-knowledge-id')===id);
+    check('expiry',fresh.length===1&&attr(fresh[0],'data-valid-until')===String(expiresAt));
+    check('canonical',links.length===1&&attr(links[0],'href')===canonical);
+    check('source',findAll(inside,n=>n.name==='a'&&classHas(n,'source-link')&&attr(n,'href')===source&&declaredVisible(n)).length===1);
+    check('credit',credits.length===1&&credit.name==='p'&&declaredVisible(credit)&&textOf(credit)===knowledgeCreditText(item.language));
+    check('license',creditAnchors.length===2&&attr(creditAnchors[0],'href')===creditExpected[0].href&&textOf(creditAnchors[0])===creditExpected[0].text&&declaredVisible(creditAnchors[0]));
+    check('terms',creditAnchors.length===2&&attr(creditAnchors[1],'href')===creditExpected[1].href&&textOf(creditAnchors[1])===creditExpected[1].text&&declaredVisible(creditAnchors[1]));
+    check('copy-reference',buttons.length===1&&buttons[0].name==='button'&&findAll(inside,n=>n===buttons[0]).length===1&&attr(buttons[0],'data-card-url')===canonical);
   }else{
-    check('no-substitute',!body.includes('data-shared-knowledge-id=')&&!body.includes('id="shared-copy"'));
+    check('no-substitute',articles.length===0&&buttons.length===0);
   }
   return failures;
 }
@@ -81,8 +148,8 @@ function receipt(reading){
       &&hash(data.manifestSha256)?{commit:data.gitCommitSha,manifest:data.manifestSha256}:null;
   }catch{return null;}
 }
-async function read(path,fetcher,accept){
-  const response=await fetcher(KNOWLEDGE_ORIGIN+path,{
+async function read(path,fetcher,accept,origin){
+  const response=await fetcher(origin+path,{
     method:'GET',redirect:'manual',cache:'no-store',credentials:'omit',
     headers:{Accept:accept},signal:AbortSignal.timeout(TIMEOUT_MS),
   });
@@ -103,28 +170,32 @@ async function read(path,fetcher,accept){
   }finally{reader.releaseLock();}
   return {status:response.status,redirected:response.redirected,headers:resultHeaders,body:Buffer.concat(parts).toString('utf8')};
 }
-export async function collectLiveKnowledge(fetcher=fetch,clock=()=>Date.now()){
-  const started=clock(),cases=knowledgeCases(started);
-  const bounded=async(path,accept)=>{try{return await read(path,fetcher,accept);}catch{return null;}};
-  const before=receipt(await bounded('/release.json','application/json'));
+export async function readKnowledgeReceipt(fetcher=fetch,options={}){
+  const config=knowledgeProbeOptions(options);
+  try{return receipt(await read('/release.json',fetcher,'application/json',config.origin));}catch{return null;}
+}
+export async function collectLiveKnowledge(fetcher=fetch,clock=()=>Date.now(),options={}){
+  const config=knowledgeProbeOptions(options),started=clock(),cases=knowledgeCases(started);
+  const bounded=async(path,accept)=>{try{return await read(path,fetcher,accept,config.origin);}catch{return null;}};
+  const before=await readKnowledgeReceipt(fetcher,config);
   const results=[];
   for(const item of cases){
     const sample=await bounded(item.path,'text/html');
     results.push({key:item.key,expected:item.status,status:sample?.status??null,failures:assessKnowledgeResponse(item,sample)});
   }
-  const after=receipt(await bounded('/release.json','application/json')),completed=clock();
-  const stable=before!==null&&after!==null&&before.commit===after.commit&&before.manifest===after.manifest;
-  const stableClock=safeClock(completed)&&completed>=started&&active(started)===active(completed);
-  const failures=[...(!stable?['release-receipt-changed-or-unavailable']:[]),...(!stableClock?['review-window-changed-or-clock-invalid']:[]),
-    ...results.flatMap(item=>item.failures.map(failure=>item.key+':'+failure))];
-  return {status:failures.length?'LIVE_KNOWLEDGE_HTTP_BLOCKED':'LIVE_KNOWLEDGE_HTTP_PASS',scope:'direct anonymous GET to fixed public origin; no credentials, no redirects, no mutations',
-    checkedAt:new Date(started).toISOString(),commit:stable?before.commit:null,manifest:stable?before.manifest:null,
-    activeAtStart:active(started),requests:cases.length+2,results,failures};
+  const after=await readKnowledgeReceipt(fetcher,config),completed=clock();
+  const boundary=knowledgeRunBoundary(before,after,started,completed,config);
+  const failures=[...boundary.failures,...results.flatMap(item=>item.failures.map(failure=>item.key+':'+failure))];
+  const recoveryVerified=config.mode==='recovery'&&failures.length===0;
+  const status=failures.length?'LIVE_KNOWLEDGE_HTTP_BLOCKED':recoveryVerified?'LIVE_KNOWLEDGE_RECOVERY_PASS':boundary.activeAtStart?'LIVE_KNOWLEDGE_MONITOR_PASS':'LIVE_KNOWLEDGE_DENIAL_PASS';
+  return {status,mode:config.mode,origin:config.origin,recoveryVerified,scope:'direct anonymous GET; explicit approved origin; no credentials, no redirects, no mutations',
+    checkedAt:new Date(started).toISOString(),commit:boundary.stable?before.commit:null,manifest:boundary.stable?before.manifest:null,
+    activeAtStart:boundary.activeAtStart,requests:cases.length+2,results,failures};
 }
 const invoked=process.argv[1]&&pathToFileURL(resolve(process.argv[1])).href===import.meta.url;
 if(invoked){
   try{
-    const report=await collectLiveKnowledge();
+    const report=await collectLiveKnowledge(fetch,()=>Date.now(),readKnowledgeProbeOptions());
     console.log('DLKT_LIVE_KNOWLEDGE_HTTP '+JSON.stringify(report));
     if(report.failures.length)process.exitCode=1;
   }catch{

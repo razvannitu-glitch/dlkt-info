@@ -7,6 +7,30 @@ on:
   schedule:
     - cron: "13 5 * * *"
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Monitor current public state or verify exact release recovery
+        type: choice
+        options: [monitor, recovery]
+        default: monitor
+      origin:
+        description: Exact public or isolated DLKT Vercel deployment HTTPS origin
+        type: string
+        default: https://www.dlkt.ee
+      expected_commit:
+        description: Required exact 40-character release SHA in recovery mode
+        type: string
+        required: false
+      expected_manifest:
+        description: Required exact 64-character release manifest SHA256 in recovery mode
+        type: string
+        required: false
+
+env:
+  DLKT_KNOWLEDGE_PROBE_MODE: ${{ inputs.mode || 'monitor' }}
+  DLKT_KNOWLEDGE_PROBE_ORIGIN: ${{ inputs.origin || 'https://www.dlkt.ee' }}
+  DLKT_KNOWLEDGE_EXPECTED_COMMIT: ${{ inputs.expected_commit || '' }}
+  DLKT_KNOWLEDGE_EXPECTED_MANIFEST: ${{ inputs.expected_manifest || '' }}
 
 permissions:
   contents: read
@@ -30,6 +54,8 @@ jobs:
         with:
           node-version: "22"
           package-manager-cache: false
+      - name: Install locked dependencies for semantic HTML verification
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Verify the HTTP probe against offline fixtures
         run: node --test tests/live-knowledge-distribution.test.mjs
       - name: Verify exact NSW routes on the public domain
@@ -49,6 +75,8 @@ jobs:
         with:
           node-version: "22"
           package-manager-cache: false
+      - name: Install locked dependencies for shared probe contracts
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Resolve installed Chrome executable
         shell: bash
         run: |
@@ -61,8 +89,10 @@ jobs:
       - name: Inspect public homepage on four viewports
         run: node scripts/qa-live-reader.mjs
       - name: Verify credential-free account probe against offline fixtures
+        if: env.DLKT_KNOWLEDGE_PROBE_MODE == 'monitor'
         run: node --test tests/anonymous-account-live.test.mjs
       - name: Verify production anonymous account and session HTTP boundary
+        if: env.DLKT_KNOWLEDGE_PROBE_MODE == 'monitor'
         run: node scripts/verify-anonymous-account.mjs
       - name: Preserve screenshots and measured browser report
         if: always()

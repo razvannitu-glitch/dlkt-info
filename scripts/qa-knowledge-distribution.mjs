@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import {writeFileSync} from 'node:fs';
 import {join} from 'node:path';
+import {inspectKnowledgeDocument,assessKnowledgeBrowser,verifyKnowledgeCopy} from './qa-live-reader.mjs';
+import {knowledgeCases} from './verify-live-knowledge.mjs';
 
 /** Loopback-only test adapter around the actual compiled HTTP handler.
  * Synthetic decisions exercise behavior; never populate runtime admissions.
@@ -75,7 +77,7 @@ export async function verifyKnowledgeDistribution({fixture,origin,openIsolated,e
  try{
   await call('Page.bringToFront');await call('Network.enable');
   await call('Network.setBlockedURLs',{urls:['https://*']});
-  await call('Page.addScriptToEvaluateOnNewDocument',{source:"globalThis.__qaNow="+fixture.now+";globalThis.__qaWrites=[];globalThis.__qaClipboardMode='write';Date.now=()=>globalThis.__qaNow;Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async value=>{if(globalThis.__qaClipboardMode==='reject')throw Error('controlled clipboard denial');globalThis.__qaWrites.push(value);}}});"});
+  await call('Page.addScriptToEvaluateOnNewDocument',{source:"globalThis.__qaNow="+fixture.now+";globalThis.__qaWrites=[];globalThis.__qaClipboardMode='write';Date.now=()=>globalThis.__qaNow;Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async value=>{if(globalThis.__qaClipboardMode==='reject')throw Error('controlled clipboard denial');globalThis.__qaWrites.push(value);},readText:async()=>globalThis.__qaWrites.at(-1)??''}});"});
   for(const [card,language,width,licensedLayout,runtimeAdmission=false] of [
    [fixture.cards[0],'en',320,false],[fixture.cards[1],'ro',390,false],[fixture.cards[0],'it',1440,false],[fixture.licensed,'en',320,true],[fixture.licensed,'it',768,true],
    [fixture.admitted,'en',320,false,true],[fixture.admitted,'ro',390,false,true],[fixture.admitted,'it',1440,false,true],
@@ -89,10 +91,20 @@ export async function verifyKnowledgeDistribution({fixture,origin,openIsolated,e
    if(licensedLayout||runtimeAdmission)assert.ok(view.credits.includes('https://creativecommons.org/licenses/by/4.0/'),'licensed renderer shows credit and licence');
    if(runtimeAdmission){assert.ok(view.credits.includes('https://www.nsw.gov.au/nsw-government/about-website/copyright'));assert.ok(view.body.includes('© State of New South Wales. For current information go to www.nsw.gov.au.'));}
    for(const a of (await state()).links){assert.equal(a.disabled,'false');assert.equal(a.tabIndex,0);const target=new URL(a.href);assert.ok([...target.searchParams.values()].includes(link));}
-   await focusSelector(call,'#shared-copy');await keyboard(call,'Enter');
-   await wait('globalThis.__qaWrites.length===1');assert.deepEqual((await state()).writes,[link]);
+   if(runtimeAdmission){
+    const item=knowledgeCases(Date.parse(card.reviewedAt)+1000).find(item=>item.key==='canonical-'+language);
+    assert.ok(item);
+    const liveShape=await evaluate(call,'('+inspectKnowledgeDocument.toString()+')()');
+    assert.deepEqual(assessKnowledgeBrowser(item,liveShape,origin+path(link),width),[]);
+    assert.equal(await verifyKnowledgeCopy(call,item),true,'live copy probe with controlled clipboard');
+    assert.deepEqual((await state()).writes,['DLKT-QA-NOT-COPIED',link]);
+   }else{
+    await focusSelector(call,'#shared-copy');await keyboard(call,'Enter');
+    await wait('globalThis.__qaWrites.length===1');assert.deepEqual((await state()).writes,[link]);
+   }
    layouts.push({width,language,id:card.id,licensedRendererOnly:licensedLayout,runtimeAdmission,documentWidth:view.scrollWidth,screenshot:await save('dlkt-knowledge-share-'+width+'-'+language+'-'+(runtimeAdmission?'admission':licensedLayout?'licensed':'ordinary')+'.png')});
   }
+  checks.push('live-credit-and-copy-probe-controlled-clipboard');
   const card=fixture.cards[0],link=await open(card,'en');
   await expire("(document.getElementById('shared-copy').click(),true)");
   disabled(await state());assert.deepEqual((await state()).writes,[]);checks.push('exact-deadline-copy-denied-before-timer');

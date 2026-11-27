@@ -1,14 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {KNOWLEDGE_IDENTITY as I,KNOWLEDGE_ORIGIN,knowledgeCases,assessKnowledgeResponse,collectLiveKnowledge} from '../scripts/verify-live-knowledge.mjs';
+import {KNOWLEDGE_IDENTITY as I,KNOWLEDGE_ORIGIN,knowledgeCases,assessKnowledgeResponse,collectLiveKnowledge,knowledgeProbeOptions,knowledgeCanonicalUrl,knowledgeCreditText,knowledgeCreditLinks} from '../scripts/verify-live-knowledge.mjs';
+import {assessKnowledgeBrowser} from '../scripts/qa-live-reader.mjs';
 const at=I.reviewedAt+1000,commit='a'.repeat(40),manifest='b'.repeat(64);
 const common={'content-type':'text/html; charset=utf-8','cache-control':'no-store','set-cookie':'','x-content-type-options':'nosniff','x-robots-tag':'noindex, nofollow'};
-const receipt=(c=commit)=>new Response(JSON.stringify({format:'dlkt-info-public-build-1',product:'dlkt-info',gitCommitSha:c,manifestSha256:manifest}),{headers:{'content-type':'application/json'}});
+const receipt=(c=commit,m=manifest)=>new Response(JSON.stringify({format:'dlkt-info-public-build-1',product:'dlkt-info',gitCommitSha:c,manifestSha256:m}),{headers:{'content-type':'application/json'}});
 function body(item){
   const begin='<html lang="'+item.language+'">';
   if(item.status!==200)return begin+'<h1>Unavailable</h1></html>';
   const canonical=KNOWLEDGE_ORIGIN+'/card/'+I.id+'?v='+I.revision+'&amp;lang='+item.language+'&amp;h='+I.digest;
-  return begin+'<link rel="canonical" href="'+canonical+'"><article data-shared-knowledge-id="'+I.id+'"><p data-valid-until="'+I.expiresAt+'"></p><p class="card-credits"><a href="'+I.license+'"></a><a href="'+I.terms+'"></a></p><a href="'+I.source+'"></a></article></html>';
+  const creditLinks=knowledgeCreditLinks(item.language),credit=knowledgeCreditText(item.language);
+  const prefix=credit.slice(0,credit.indexOf('CC BY 4.0'));
+  return begin+'<head><link rel="canonical" href="'+canonical+'"></head><body><main><article data-shared-knowledge-id="'+I.id+'"><p id="shared-freshness" data-valid-until="'+I.expiresAt+'"></p><p class="card-credits">'+prefix+'<a href="'+creditLinks[0].href+'">'+creditLinks[0].text+'</a> · <a href="'+creditLinks[1].href+'">'+creditLinks[1].text+'</a></p><a class="source-link" href="'+I.source+'">Source</a><button id="shared-copy" data-card-url="'+canonical+'" hidden>Copy</button></article></main></body></html>';
 }
 function reading(item){return {status:item.status,redirected:false,headers:{...common},body:body(item)};}
 test('exact canonical/API links, lab digest denial and duplicate parameter rejection',()=>{
@@ -50,7 +53,7 @@ test('bounded direct collector uses only fixed GETs, with stable public release 
     const item=cases.get(url);assert.ok(item);
     return new Response(body(item),{status:item.status,headers:common});
   },()=>at);
-  assert.equal(result.status,'LIVE_KNOWLEDGE_HTTP_PASS');assert.equal(result.commit,commit);
+  assert.equal(result.status,'LIVE_KNOWLEDGE_MONITOR_PASS');assert.equal(result.commit,commit);assert.equal(result.recoveryVerified,false);
   assert.equal(result.requests,12);assert.equal(calls.length,12);
   for(const {url,options} of calls){
     assert.ok(url.startsWith(KNOWLEDGE_ORIGIN+'/'));
@@ -79,4 +82,60 @@ test('clock crossing the strict review boundary cannot produce a pass',async()=>
     const item=cases.get(url);return new Response(body(item),{status:item.status,headers:common});
   },()=>ticks++?I.expiresAt:start);
   assert.ok(report.failures.includes('review-window-changed-or-clock-invalid'));
+});
+
+const recovery={mode:'recovery',origin:KNOWLEDGE_ORIGIN,expectedCommit:commit,expectedManifest:manifest};
+function fetchFixture(now,{c=commit,m=manifest,origin=KNOWLEDGE_ORIGIN}={}){
+  const cases=new Map(knowledgeCases(now).map(item=>[origin+item.path,item]));
+  return async(url,options)=>{
+    assert.equal(options.credentials,'omit');assert.equal(options.redirect,'manual');
+    if(url===origin+'/release.json')return receipt(c,m);
+    const item=cases.get(url);assert.ok(item,url);
+    return new Response(body(item),{status:item.status,headers:common});
+  };
+}
+test('only an active explicitly matched release can pass recovery',async()=>{
+  const report=await collectLiveKnowledge(fetchFixture(at),()=>at,recovery);
+  assert.equal(report.status,'LIVE_KNOWLEDGE_RECOVERY_PASS');assert.equal(report.recoveryVerified,true);
+  for(const [fixture,expected] of [[{c:'c'.repeat(40)},'expected-release-commit'],[{m:'d'.repeat(64)},'expected-release-manifest']]){
+    const r=await collectLiveKnowledge(fetchFixture(at,fixture),()=>at,recovery);
+    assert.equal(r.recoveryVerified,false);assert.ok(r.failures.includes(expected));
+  }
+  const denial=await collectLiveKnowledge(fetchFixture(I.expiresAt),()=>I.expiresAt);
+  assert.equal(denial.status,'LIVE_KNOWLEDGE_DENIAL_PASS');assert.equal(denial.recoveryVerified,false);
+  const expired=await collectLiveKnowledge(fetchFixture(I.expiresAt),()=>I.expiresAt,recovery);
+  assert.ok(expired.failures.includes('recovery-requires-active-admission'));assert.equal(expired.recoveryVerified,false);
+  const premature=await collectLiveKnowledge(fetchFixture(I.reviewedAt-1),()=>I.reviewedAt-1,recovery);
+  assert.ok(premature.failures.includes('recovery-requires-active-admission'));assert.equal(premature.recoveryVerified,false);
+});
+test('isolated origin is explicit, project-scoped and cannot be confused with the public canonical link',async()=>{
+  const origin='https://dlkt-info-fixture123-dlkt-group-ou.vercel.app',options={...recovery,origin};
+  const report=await collectLiveKnowledge(fetchFixture(at,{origin}),()=>at,options);
+  assert.equal(report.origin,origin);assert.equal(report.recoveryVerified,true);
+  for(const value of ['https://evil.vercel.app','https://dlkt-info-test-dlkt-group-ou.vercel.app.evil.test','https://dlkt-info-test-dlkt-group-ou.vercel.app/path','http://dlkt-info-test-dlkt-group-ou.vercel.app','https://user@www.dlkt.ee']){
+    assert.throws(()=>knowledgeProbeOptions({...recovery,origin:value}),/PROBE_OPTIONS/u);
+  }
+  assert.throws(()=>knowledgeProbeOptions({mode:'recovery',expectedCommit:commit}),/PROBE_OPTIONS/u);
+  assert.throws(()=>knowledgeProbeOptions({mode:'monitor',expectedCommit:commit}),/PROBE_OPTIONS/u);
+});
+test('empty, misplaced, hidden and counterfeit attribution cannot pass HTTP',()=>{
+  const item=knowledgeCases(at)[0],r=reading(item);
+  for(const altered of [
+    r.body.replace(/<p class="card-credits">[\s\S]*?<\/p>/u,'<p class="card-credits"></p>')+'<a href="'+I.license+'">CC BY 4.0</a><a href="'+I.terms+'">Source terms</a>',
+    r.body.replace('class="card-credits"','class="card-credits" hidden'),
+    r.body.replace('© State of New South Wales.','Different author.'),
+    r.body.replace('class="card-credits"','class="card-credits" aria-hidden="true"'),
+  ])assert.ok(assessKnowledgeResponse(item,{...r,body:altered}).includes('credit'));
+  const broken=r.body.replace('id="shared-copy"','id="not-copy"');
+  assert.ok(assessKnowledgeResponse(item,{...r,body:broken}).includes('copy-reference'));
+});
+test('browser assessment requires visible exact credit, links, enabled exact copy and actual HTTP status',()=>{
+  const item=knowledgeCases(at)[0],url=knowledgeCanonicalUrl(item.language),width=320;
+  const state={ready:'complete',url,lang:item.language,status:200,main:1,width,articleCount:1,id:I.id,expiry:String(I.expiresAt),canonical:url,
+    source:[I.source],creditCount:1,creditVisible:true,creditText:knowledgeCreditText(item.language),creditLinks:knowledgeCreditLinks(item.language).map(link=>({...link,visible:true})),
+    copyCount:1,copyVisible:true,copyEnabled:true,copyUrl:url};
+  assert.deepEqual(assessKnowledgeBrowser(item,state,url,width),[]);
+  for(const [change,code] of [[{creditVisible:false},'visible-exact-credit'],[{creditText:''},'visible-exact-credit'],[{creditLinks:[]},'visible-exact-credit'],[{copyVisible:false},'copy-control'],[{copyEnabled:false},'copy-control'],[{copyUrl:'https://example.invalid'},'copy-control'],[{status:null},'http-status']]){
+    assert.ok(assessKnowledgeBrowser(item,{...state,...change},url,width).includes(code),code);
+  }
 });
