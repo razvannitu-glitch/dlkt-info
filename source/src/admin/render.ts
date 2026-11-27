@@ -11,6 +11,9 @@ function shell(content:string,title:string):string{
 export function renderUnavailable(message:string,signIn=false):string{
  return shell('<section class="notice"><h1>'+escapeHtml(message)+'</h1>'+(signIn?'<p><a href="/account">Sign in to your account</a></p>':'')+'</section>','Control');
 }
+export function renderInvalidRange():string{
+ return shell('<section class="notice"><h1>Invalid time range</h1><p><a href="/admin">Open Control with the default time range</a></p></section>','Control');
+}
 function card(label:string,value:number|null|undefined,detail:string):string{
  return '<article class="card"><h2>'+escapeHtml(label)+'</h2><strong class="metric">'+fmt(value)+'</strong><p>'+escapeHtml(detail)+'</p></article>';
 }
