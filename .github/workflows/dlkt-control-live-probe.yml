@@ -24,7 +24,7 @@ jobs:
             try{
               const response=await fetch('https://www.dlkt.ee/release.json',{cache:'no-store',signal:AbortSignal.timeout(5000)});
               const receipt=await response.json();
-              if(response.ok&&receipt.gitCommitSha==='59a2e8903718983f426ff983edae0d9929a9a1ef'){verified=true;break;}
+              if(response.ok&&receipt.gitCommitSha==='a37d754e7ee8d04793b9032ff1cfe049148ae0f4'){verified=true;break;}
             }catch{}
             await new Promise(resolve=>setTimeout(resolve,3000));
           }
@@ -64,5 +64,24 @@ jobs:
             console.log(JSON.stringify({profileEdge:label,status:r.status,noAggregates:true}));
           }
           console.log('DLKT_PROFILE_EDGE_HOSTED_DENIAL_PASS');
+          // Bounded live WAF verification against the intentionally disabled collector.
+          // No credentials, events, consent tokens, or real analytics records.
+          const endpoint='https://www.dlkt.ee/api/audience';
+          const statuses=[];
+          for(let offset=0;offset<36;offset+=6){
+            const batch=await Promise.all(Array.from({length:6},async()=>{
+              const r=await fetch(endpoint,{method:'GET',credentials:'omit',cache:'no-store',redirect:'manual',signal:AbortSignal.timeout(10000)});
+              const body=await r.text();
+              assert.ok(r.status===404||r.status===429,'unexpected collector status '+r.status);
+              assert.ok(!r.headers.has('set-cookie'),'collector issued a cookie while disabled');
+              if(r.status===404)assert.ok(body.includes('NOT_FOUND'),'collector not disabled');
+              return r.status;
+            }));
+            statuses.push(...batch);
+            if(statuses.includes(429))break;
+          }
+          assert.ok(statuses.includes(404)&&statuses.includes(429),'WAF ceiling not observed');
+          console.log('DLKT_AUDIENCE_WAF_BOUNDARY_PASS '+JSON.stringify({requests:statuses.length,disabled:statuses.filter(x=>x===404).length,limited:statuses.filter(x=>x===429).length}));
+
           console.log('DLKT_ADMIN_LIVE_ANONYMOUS_PASS '+JSON.stringify({requests:checks.length,scope:'public HTTPS; no authenticated browser or analytics data tested'}));
           JS
