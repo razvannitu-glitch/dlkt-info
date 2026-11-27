@@ -188,5 +188,5 @@ test('reader offers a plain voluntary choice link without adding tracking or a m
  const dialog=html.match(/<dialog id="personalise"[\s\S]*?<\/dialog>/)?.[0]??'';
  assert.match(dialog,/<a class="text-button" id="audience-measurement-link" href="\/cookies#cookies">Optional audience measurement<\/a>/);
  assert.doesNotMatch(html.match(/<div class="news-context-line">[\s\S]*?<\/details><\/div>/)?.[0]??'',/audience-measurement-link/);
- assert.match(html,/<a class="footer-link" href="\/cookies">Cookies &amp; measurement choices<\/a>/);
+ assert.match(html,/<a class="footer-link" href="\/cookies">Cookies<\/a>/);
 });
