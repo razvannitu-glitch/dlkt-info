@@ -11,6 +11,7 @@ import {personalProfileFixture,verifyPersonalProfileFlow,verifyAccountPreference
 import {syntheticEmailFixture,verifyAuthenticationEmailPreview} from './qa-auth-email.mjs';
 import {knowledgeDistributionFixture,verifyKnowledgeDistribution} from './qa-knowledge-distribution.mjs';
 import {audienceChoiceFixture,verifyAudienceChoice} from './qa-audience-choice.mjs';
+import {editorialIntentFixture,verifyEditorialIntent} from './qa-editorial-intent.mjs';
 
 const root=resolve(fileURLToPath(new URL('..',import.meta.url)));
 const publicDir=join(root,'.dlkt-local-build','public-launch');
@@ -60,6 +61,7 @@ function localServer(fixture,personal,knowledge,audience){
   if(personal.handle(req,res,url))return;
   if(knowledge.handle(req,res,url))return;
   if(audience.handle(req,res,url))return;
+  if(editorialIntentFixture(req,res,url))return;
   if(!['GET','HEAD'].includes(req.method)){res.writeHead(405).end();return;}
   const email=syntheticEmailFixture(url);
   if(email){res.setHeader('Content-Security-Policy',"default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");res.setHeader('Content-Type','text/html; charset=utf-8');res.writeHead(email.status).end(req.method==='HEAD'?undefined:email.html);return;}
@@ -1645,6 +1647,7 @@ async function run(){
   await cdp('Page.enable');await cdp('Runtime.enable');
   const knowledgeDistribution=await verifyKnowledgeDistribution({fixture:knowledge,origin:'http://'+HOST+':'+binding.port,openIsolated:()=>openIsolatedChrome(port),evaluate,loaded,focusSelector,keyboard,pause,outputDir});
   const audienceChoice=await verifyAudienceChoice({fixture:audience,origin:'http://'+HOST+':'+binding.port,openIsolated:()=>openIsolatedChrome(port),evaluate,loaded,pause});
+  const editorialIntent=await verifyEditorialIntent({fixture,origin:'http://'+HOST+':'+binding.port,openIsolated:()=>openIsolatedChrome(port),evaluate,loaded,pause,keyboard,selectControlledEdition});
   await cdp('Page.bringToFront');
   const observations=[];
   for(const f of formats){
@@ -1716,7 +1719,7 @@ async function run(){
   const localePreference=await verifyLocalePreference({openIsolated:()=>openIsolatedChrome(port),
    origin:'http://'+HOST+':'+binding.port,fixture,personal});
   const result={version:'dlkt-info-offline-browser-smoke-3',status:'OFFLINE_BROWSER_PASS',
-   scope:'local-built-reader-with-controlled-news-local-and-private-profile-transport',viewports:observations,knowledgeDistribution,audienceChoice,continuousLocal,account,personalProfile,savedNavigation,accountPreferences,authenticationEmail,localePreference,fixture:{storyCount:fixture.storyCount,articleTotal:fixture.articleTotal,groupOriginals:fixture.urls.length,sourceOnlyOriginals:fixture.sourceOnly.length,localCards:fixture.localIds.length,localContract:'currentLocalSnapshot'},
+   scope:'local-built-reader-with-controlled-news-local-and-private-profile-transport',viewports:observations,knowledgeDistribution,audienceChoice,editorialIntent,continuousLocal,account,personalProfile,savedNavigation,accountPreferences,authenticationEmail,localePreference,fixture:{storyCount:fixture.storyCount,articleTotal:fixture.articleTotal,groupOriginals:fixture.urls.length,sourceOnlyOriginals:fixture.sourceOnly.length,localCards:fixture.localIds.length,localContract:'currentLocalSnapshot'},
    limitations:['News pages use the actual service over controlled corpus fixtures. The additional private phase uses synthetic account identities; no external publisher request, hosted authentication, payment or production runtime availability is tested.',
     'The three grouped publisher headlines and four reviewed-source originals reproduce observed metadata; source-check and publication dates are controlled fixtures.',
     'Local weather and CMTEB records are synthetic controlled fixtures validated by the actual city/source contracts, not live operator or forecast checks.',
