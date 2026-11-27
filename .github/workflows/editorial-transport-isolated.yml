@@ -65,3 +65,11 @@ jobs:
         env:
           TEST_CONTAINER: ${{ job.services.postgres.id }}
         run: node --test docs/editorial-transport-lab/daily-window.test.mjs
+      - name: Strictly check isolated daily readback and Control preview
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/tsc --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --target ES2022 --module NodeNext --moduleResolution NodeNext --types node --allowImportingTsExtensions --noEmit docs/editorial-transport-lab/daily-readback.mts docs/editorial-transport-lab/control-preview.mts
+      - name: Verify sealed readback and existing Control shell using synthetic data only
+        env:
+          TEST_CONTAINER: ${{ job.services.postgres.id }}
+        run: node --experimental-strip-types --test docs/editorial-transport-lab/control-preview.test.mjs
