@@ -48,7 +48,7 @@ export async function handleAdmin(req:IncomingMessage,res:ServerResponse,deps:{e
   const session=await resolveIdentitySession(req,res,ready.configuration,request);
   if(!session){send(res,401,renderUnavailable('Sign in required',true));return;}
   if(!ids.has(session.user.id.toLowerCase())){send(res,403,renderUnavailable('Access denied'));return;}
-  const data=await readAnalytics(ready.configuration,env,range,request);
+  const data=await readAnalytics(ready.configuration,env,range,request,new Date(),session.accessToken);
   send(res,200,renderDashboard(data));
  }catch{send(res,503,renderUnavailable('Control unavailable'));}
 }
