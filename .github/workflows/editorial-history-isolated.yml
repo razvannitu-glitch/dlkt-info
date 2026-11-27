@@ -125,7 +125,7 @@ jobs:
           TEST_CONTAINER: ${{ job.services.postgres.id }}
         run: |
           set -euo pipefail
-          cat docs/editorial-history-lab/ledger.sql docs/editorial-history-lab/adapter-fixtures.sql |
+          cat docs/editorial-history-lab/ledger.sql docs/editorial-history-lab/scope-review.sql docs/editorial-history-lab/adapter-fixtures.sql |
             docker exec -i "$TEST_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d editorial_history_adapter_test
       - name: Exercise authenticated committed operations and controlled observation
         env:

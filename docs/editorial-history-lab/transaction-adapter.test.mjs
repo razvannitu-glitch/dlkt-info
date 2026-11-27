@@ -18,6 +18,7 @@ const users=Object.freeze({
   worker:['dlkt_history_ci_worker','lab-worker-local-only'],
   attestor:['dlkt_history_ci_attestor','lab-attestor-local-only'],
   reader:['dlkt_history_ci_reader','lab-reader-local-only'],
+  reviewer:['dlkt_history_ci_reviewer','lab-reviewer-local-only'],
 });
 // One psql invocation = one authenticated connection and a completed
 // autocommit SQL statement. No SET ROLE or privileged connection in tests.
@@ -183,4 +184,84 @@ test('actual canonical observer with controlled HTML persists missing claim cove
   assert.equal(result.state,'recorded');assert.equal(result.outcome,'held');
   assert.equal((await row(key)).reason,'incomplete-evidence');
   assert.equal((await row(key)).attestedAt,null);
+});
+
+const reviewSql=(k,id,scope,verdict,evidence,expires)=>'SELECT to_json(dlkt_history_lab.record_lab_review('+args(k)+','+q(id)+'::uuid,'+q(scope)+','+q(verdict)+','+q(evidence)+','+q(expires)+'::timestamptz))';
+const snapshotSql=c=>'SELECT dlkt_history_lab.read_lab_review_snapshot('+[q(c.id),String(c.revision),q(c.digest)].join(',')+')';
+const snapshot=k=>query('reader',snapshotSql(k.candidate));
+const review=(k,id,scope,verdict,evidence,expires)=>query('reviewer',reviewSql(k,id,scope,verdict,evidence,expires));
+
+test('synthetic reviewer is a separate authenticated principal and cannot cross role boundaries',async()=>{
+  const k=makeKey('review-scopes'),id=randomUUID(),statement=reviewSql(k,id,'feed','lab-held',null,null);
+  for(const role of ['worker','attestor','reader'])assert.throws(()=>query(role,statement),/LAB_SQL_REJECTED/);
+  assert.throws(()=>query('reviewer','SELECT row_to_json(t) FROM dlkt_history_lab.start_attempt('+args(k)+') t'),/LAB_SQL_REJECTED/);
+  assert.throws(()=>query('reviewer','SELECT to_json(dlkt_history_lab.attest_observation('+args(k)+',null,null,null))'),/LAB_SQL_REJECTED/);
+  assert.throws(()=>query('reviewer',snapshotSql(k.candidate)),/LAB_SQL_REJECTED/);
+  assert.throws(()=>query('reviewer','SELECT to_json(count(*)) FROM dlkt_history_lab.scope_reviews'),/LAB_SQL_REJECTED/);
+  assert.equal(snapshot(k).scopes.feed.state,'no-review');
+});
+test('review scopes are immutable, separately recorded, exact and never authority',async()=>{
+  const k=makeKey('review-scopes');
+  assert.equal((await runObservationAttempt(k,ports,observer)).outcome,'observed');
+  const entry=await row(k),expiry=new Date(Date.now()+60_000).toISOString(),feedId=randomUUID(),standaloneId=randomUUID();
+  assert.throws(()=>review(k,feedId,'feed','lab-permitted','0'.repeat(64),expiry),/LAB_SQL_REJECTED/);
+  assert.throws(()=>review(k,feedId,'feed','lab-permitted',entry.evidenceDigest,new Date(Date.now()+25*3600000).toISOString()),/LAB_SQL_REJECTED/);
+  assert.equal(review(k,feedId,'feed','lab-permitted',entry.evidenceDigest,expiry),'recorded');
+  const first=snapshot(k);
+  assert.equal(first.activationAllowed,false);assert.equal(first.approvalReusable,false);
+  assert.equal(first.scopes.feed.state,'recorded-not-authority');assert.equal(first.scopes.standalone.state,'no-review');
+  assert.equal(first.scopes.feed.latest.reviewerPrincipal,users.reviewer[0]);
+  assert.equal(review(k,feedId,'feed','lab-permitted',entry.evidenceDigest,expiry),'replay');
+  assert.deepEqual(snapshot(k).scopes.feed,first.scopes.feed);
+  assert.throws(()=>review(k,feedId,'standalone','lab-permitted',entry.evidenceDigest,expiry),/LAB_SQL_REJECTED/);
+  assert.throws(()=>review(k,randomUUID(),'feed','lab-permitted',entry.evidenceDigest,expiry),/LAB_SQL_REJECTED/);
+  assert.equal(review(k,standaloneId,'standalone','lab-permitted',entry.evidenceDigest,expiry),'recorded');
+  const both=snapshot(k);assert.equal(both.scopes.feed.count,1);assert.equal(both.scopes.standalone.count,1);
+  assert.equal(both.scopes.standalone.latest.reviewId,standaloneId);assert.equal(both.approvalReusable,false);
+  // A held verdict immediately supersedes only its own scope, even on the
+  // same observation. No same-baseline re-permission or expiry extension.
+  const heldId=randomUUID();assert.equal(review(k,heldId,'feed','lab-held',entry.evidenceDigest,null),'recorded');
+  const revoked=snapshot(k);assert.equal(revoked.scopes.feed.state,'held');assert.equal(revoked.scopes.feed.count,2);
+  assert.equal(revoked.scopes.standalone.latest.reviewId,standaloneId);
+  assert.equal(revoked.approvalReusable,false);
+  assert.throws(()=>review(k,randomUUID(),'feed','lab-permitted',entry.evidenceDigest,expiry),/LAB_SQL_REJECTED/);
+  const next={...k,attemptId:randomUUID()};
+  assert.equal((await runObservationAttempt(next,ports,observer)).outcome,'observed');
+  const later=snapshot(next);assert.equal(later.scopes.standalone.state,'new-observation-review-required');
+  assert.throws(()=>review(k,randomUUID(),'feed','lab-permitted',entry.evidenceDigest,expiry),/LAB_SQL_REJECTED/);
+  const nextEntry=await row(next);
+  assert.equal(review(next,randomUUID(),'feed','lab-permitted',nextEntry.evidenceDigest,expiry),'recorded');
+  assert.equal(snapshot(next).scopes.feed.count,3);
+  assert.equal(snapshot(next).approvalReusable,false);
+});
+test('held or open evidence cannot acquire a synthetic permitted review',async()=>{
+  const k=makeKey('review-held');
+  const created=await ports.worker.start(k);assert.equal(created.disposition,'created');
+  assert.throws(()=>review(k,randomUUID(),'feed','lab-permitted',null,new Date(Date.now()+60000).toISOString()),/LAB_SQL_REJECTED/);
+  assert.equal(await ports.worker.finish(k,{outcome:'held',reason:'source-denied',observedAt:null,fingerprints:null,evidenceDigest:null}),'recorded');
+  assert.throws(()=>review(k,randomUUID(),'feed','lab-permitted',null,new Date(Date.now()+60000).toISOString()),/LAB_SQL_REJECTED/);
+  assert.equal(review(k,randomUUID(),'feed','lab-held',null,null),'recorded');
+  assert.equal(snapshot(k).scopes.feed.state,'held');assert.equal(snapshot(k).approvalReusable,false);
+});
+test('review window expires without renewal or activation',async()=>{
+  const k=makeKey('review-expiry');
+  assert.equal((await runObservationAttempt(k,ports,observer)).outcome,'observed');
+  const entry=await row(k),id=randomUUID(),expiry=new Date(Date.now()+2000).toISOString();
+  assert.equal(review(k,id,'feed','lab-permitted',entry.evidenceDigest,expiry),'recorded');
+  await new Promise(resolve=>setTimeout(resolve,2200));
+  const expired=snapshot(k);assert.equal(expired.scopes.feed.state,'expired');assert.equal(expired.approvalReusable,false);
+  assert.equal(review(k,id,'feed','lab-permitted',entry.evidenceDigest,expiry),'replay');
+  assert.deepEqual(snapshot(k).scopes.feed,expired.scopes.feed);
+  assert.throws(()=>review(k,randomUUID(),'feed','lab-permitted',entry.evidenceDigest,new Date(Date.now()+60000).toISOString()),/LAB_SQL_REJECTED/);
+});
+test('missing review records fail closed and the canonical lab identity remains held-only',()=>{
+  const corrupt=makeKey('review-corrupt');
+  const s=snapshot(corrupt);assert.equal(s.state,'integrity-held');assert.equal(s.scopes.feed.latest,null);assert.equal(s.approvalReusable,false);
+  assert.throws(()=>review(corrupt,randomUUID(),'feed','lab-held',null,null),/LAB_SQL_REJECTED/);
+  const canonical={attemptId:randomUUID(),candidate:{id:'dlkt-elsewhere-nsw-fuelcheck',revision:1,
+    digest:'772d754d42ceb10260b4c02c1b4c97fcb1949ddbf61d6b0cd17fb2b88fa1c88b',
+    sourceUrl:'https://www.nsw.gov.au/legal-and-justice/consumer-rights-and-protection/advertising-product-packaging-and-pricing-laws/fuel-pricing-discounts-and-signage/check-fuel-prices',
+    policyUrl:'https://www.nsw.gov.au/nsw-government/about-website/copyright'}};
+  assert.throws(()=>review(canonical,randomUUID(),'feed','lab-held',null,null),/LAB_SQL_REJECTED/);
+  assert.equal(snapshot(canonical).scopes.feed.state,'synthetic-only');
 });

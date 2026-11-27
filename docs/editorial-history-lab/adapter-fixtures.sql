@@ -7,9 +7,11 @@ create role dlkt_history_ci_reader login inherit nosuperuser nocreatedb nocreate
 grant dlkt_history_worker to dlkt_history_ci_worker;
 grant dlkt_history_attestor to dlkt_history_ci_attestor;
 grant dlkt_history_reader to dlkt_history_ci_reader;
+create role dlkt_history_ci_reviewer login inherit nosuperuser nocreatedb nocreaterole noreplication nobypassrls password 'lab-reviewer-local-only';
+grant dlkt_history_reviewer to dlkt_history_ci_reviewer;
 insert into dlkt_history_lab.candidates(card_id,revision,digest,source_url,policy_url)
 select 'lab-adapter-'||n,1,repeat('a',64),'https://example.invalid/source/adapter-'||n,'https://example.invalid/policy/adapter-'||n
-from unnest(array['positive','denied','failure','bad-receipt','start-lost','attest-lost','finish-lost','read-lost','busy','acl','before-commit','finish-before']) as t(n);
+from unnest(array['positive','denied','failure','bad-receipt','start-lost','attest-lost','finish-lost','read-lost','busy','acl','before-commit','finish-before','review-scopes','review-held','review-expiry','review-corrupt']) as t(n);
 insert into dlkt_history_lab.candidates(card_id,revision,digest,source_url,policy_url)
 values('dlkt-elsewhere-nsw-fuelcheck',1,'772d754d42ceb10260b4c02c1b4c97fcb1949ddbf61d6b0cd17fb2b88fa1c88b','https://www.nsw.gov.au/legal-and-justice/consumer-rights-and-protection/advertising-product-packaging-and-pricing-laws/fuel-pricing-discounts-and-signage/check-fuel-prices','https://www.nsw.gov.au/nsw-government/about-website/copyright');
 -- The final reviewed candidate must remain excluded from this laboratory.
@@ -22,4 +24,6 @@ begin
   exception when check_violation then null; end;
 end;
 $$;
+-- Privileged test-only corruption injection: a head with missing review records.
+insert into dlkt_history_lab.scope_review_heads values('lab-adapter-review-corrupt',1,repeat('a',64),'feed',1);
 commit;
