@@ -1,0 +1,17 @@
+# Global Coverage Expansion Intelligence 01 — evidence-first operator queue
+
+Stacked on the exact CI-green root-only coverage audit #106 head 0dc0151991a9c116723245366a5489e8573d54c1. No changes to the runtime source tree, pin, collector, rights, public UI, payment, database, network acquisition or schedules.
+
+## Measured historical baseline
+
+The two existing audit observations use the source model declared in the audit dossier (commit 2005ad5cf04f6ea0f04080eeb66a99f6d895b55d); their legacy report format does not independently bind the model commit. Evidence: revision 4077 embedded in the coverage baseline dossier and revision 4083 preserved in the raw operational report. Both observations are healthy at their recorded times, not current live measurements. They are close in time and may overlap in articles: compare counts per revision, never sum them as unique articles. The source inventory remains 51 definitions, 77 publisher identities and 31 direct discovery indexes.
+
+Exact comparison: 302 and 305 eligible unique publications within the respective snapshots; the same 13 countries observed, 11 configured direct, 9 intersection, 4 observed without direct (AU, IE, QA, SG), 2 configured but not observed (JP, NL), 229 neither within these specific measures. The 244 operational entities and 195-state denominator are separate. Missing observations are not proof of no news or no demand. Editorial family is 0/0, money 0/1, housing 1/1, digital-life 2/3. Unclassified editorial is 130/140 and unresolved country provenance 102/95. The independent language metric is 102/95 unknown in these old snapshots; #108 may change that independently. Do not mix the later candidate model with the historical results.
+
+## Operator mechanism
+
+The new offline planner accepts two to twelve explicit audit documents and an operator-declared common model commit. It rejects malformed, duplicate, held or configuration-incomparable reports and checks count conservation separately for country, editorial, taxonomy, language and geographic provenance. It emits per-revision digests, independent geographical review lanes, observed language counts, and editorial scarcity ordered by maximum then minimum observed count. The latest detailed unresolved provenance groups are review targets, not a requirement to assign every source a national country. It does not infer geography, editorial demand, language, licensing or actual source health beyond the audited observation. No arbitrary priority score or automatic activation.
+
+Prioritize diagnosing existing configured JP/NL sources and evaluating direct opportunities for AU/IE/QA/SG. Then repeat measurements with a single exact verified model and inspect family, money and housing editorial coverage separately from classifier gaps. Candidate discovery must use existing World Source Atlas/admission mechanisms, exact primary endpoint evidence, source-specific terms/robots and original identity review, language/edition provenance, bounded collection and independent validation. No source activated by this work. PR #107 and #108 remain independently gated; repeat the measured plan after those decisions using a common verified model.
+
+Five regression groups are authored, including two actual saved historical audit records and malformed/count/territory/language-only cases. Exact-head packaging and full CI remain required. Independent review before integration; no authorization to merge or publish.
