@@ -1,4 +1,6 @@
-import {NEWS_TAXONOMY_VERSION,type NewsCategoryId} from '../iceo/news-taxonomy.js';
+import {NEWS_TAXONOMY_VERSION} from '../iceo/news-taxonomy.js';
+import {EDITORIAL_PILOT_CATEGORIES,isEditorialPilotCategory,type EditorialPilotCategory as PilotCategory} from './editorial-pilot.js';
+export {EDITORIAL_PILOT_CATEGORIES} from './editorial-pilot.js';
 
 /**
  * Offline aggregate contract only. This module has no producer, storage, route,
@@ -7,16 +9,10 @@ import {NEWS_TAXONOMY_VERSION,type NewsCategoryId} from '../iceo/news-taxonomy.j
  */
 export const EDITORIAL_AGGREGATE_VERSION='dlkt-editorial-aggregate-1' as const;
 export const EDITORIAL_AGGREGATE_SCOPE='public-home-opt-in' as const;
-// Proposed laboratory subset, NOT an approved production privacy allowlist.
-export const EDITORIAL_PILOT_CATEGORIES=Object.freeze([
- '05000000','06000000','13000000','15000000','17000000',
-] as const satisfies readonly NewsCategoryId[]);
-type PilotCategory=typeof EDITORIAL_PILOT_CATEGORIES[number];
 // Conservative analytical display heuristic, not a privacy or significance threshold.
 export const MIN_QUALIFIED_IMPRESSIONS=100;
 const MAX_DAILY_IMPRESSIONS=1_000_000;
 const DAY_MS=86_400_000;
-const categoryIds:ReadonlySet<string>=new Set(EDITORIAL_PILOT_CATEGORIES);
 
 type CategoryResult=
  | {readonly category: PilotCategory; readonly status:'no-impressions'|'small-sample'}
@@ -30,9 +26,6 @@ function record(value:unknown):Record<string,unknown>|null{
 }
 function exactKeys(value:Record<string,unknown>,keys:string):boolean{
  return Object.keys(value).sort().join(',')===keys;
-}
-function category(value:unknown):value is PilotCategory{
- return typeof value==='string'&&categoryIds.has(value);
 }
 function count(value:unknown):value is number{
  return typeof value==='number'&&Number.isSafeInteger(value)&&value>=0&&value<=MAX_DAILY_IMPRESSIONS;
@@ -65,7 +58,7 @@ export function describeEditorialAggregate(input:unknown,now:Date):EditorialAggr
  for(const raw of data.rows){
   const row=record(raw);
   if(!row||!exactKeys(row,'attributableOpens,category,qualifiedImpressions')
-  ||!category(row.category)||parsed.has(row.category)
+  ||!isEditorialPilotCategory(row.category)||parsed.has(row.category)
   ||!count(row.qualifiedImpressions)||!count(row.attributableOpens)||row.attributableOpens>row.qualifiedImpressions)return unavailable('invalid-input');
   const id=row.category,impressions=row.qualifiedImpressions,opens=row.attributableOpens;
   const result:CategoryResult=impressions===0?{category:id,status:'no-impressions'}
