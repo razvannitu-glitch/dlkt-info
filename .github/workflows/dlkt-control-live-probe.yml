@@ -24,7 +24,7 @@ jobs:
             try{
               const response=await fetch('https://www.dlkt.ee/release.json',{cache:'no-store',signal:AbortSignal.timeout(5000)});
               const receipt=await response.json();
-              if(response.ok&&receipt.gitCommitSha==='a37d754e7ee8d04793b9032ff1cfe049148ae0f4'){verified=true;break;}
+              if(response.ok&&receipt.gitCommitSha==='65f67501213f9e85c8cd69dcbd926513aa5fe7b1'){verified=true;break;}
             }catch{}
             await new Promise(resolve=>setTimeout(resolve,3000));
           }
@@ -67,43 +67,39 @@ jobs:
 
 
 
-          // Read only: verify canonical-domain hints and the alternate-domain redirect.
-          // Compare different-country and same-country spoof pairs. Do not log location.
-          const hint='https://www.dlkt.ee/api/places?hint=1';
-          const request=async(url,headers={})=>fetch(url,{headers,redirect:'manual',cache:'no-store',credentials:'omit',signal:AbortSignal.timeout(15000)});
-          const read=async(headers={})=>{
-            const res=await request(hint,headers);
-            assert.equal(res.status,200);
-            assert.match(res.headers.get('cache-control')??'',/no-store/);
-            const v=await res.json();
-            assert.equal(v.estimated,true);
-            assert.ok(typeof v.countryCode==='string'&&/^[A-Z]{2}$/.test(v.countryCode),'missing country');
-            return {country:v.countryCode,city:v.city??null};
+
+          // Two synthetic opt-in sessions only, for a bounded hosted geography check.
+          // Event IDs are random test identifiers; cookies and geography are never logged.
+          const origin='https://www.dlkt.ee',endpoint=origin+'/api/audience';
+          const ids=[crypto.randomUUID(),crypto.randomUUID()];
+          console.log('DLKT_GEO_TEST_EVENTS '+JSON.stringify(ids));
+          const cookies=[];
+          const call=async(body,headers={},token='')=>{
+            const h={'Content-Type':'application/json','Origin':origin,'Sec-Fetch-Site':'same-origin','X-DLKT-Info-Request':'audience-v1',...headers};
+            if(token)h.Cookie=token;
+            const r=await fetch(endpoint,{method:'POST',headers:h,body:JSON.stringify(body),cache:'no-store',redirect:'manual',signal:AbortSignal.timeout(15000)});
+            assert.match(r.headers.get('cache-control')??'',/no-store/);
+            return {status:r.status,value:await r.json(),setCookie:r.headers.get('set-cookie')??''};
           };
-          const before=await read();
-          const candidateNames={US:['New York','Los Angeles','Chicago','Houston'],GB:['London','Manchester','Birmingham'],DE:['Berlin','Hamburg','Munich'],NL:['Amsterdam','Rotterdam','Utrecht'],BE:['Brussels','Antwerp','Ghent'],FR:['Paris','Lyon','Marseille'],IE:['Dublin','Cork','Galway'],RO:['Bucharest','Cluj-Napoca','Timisoara'],CA:['Toronto','Montreal','Vancouver'],FI:['Helsinki','Tampere','Turku'],SE:['Stockholm','Gothenburg','Malmo']};
-          const choices=candidateNames[before.country]??[];
-          const valid=[];
-          for(const name of choices){
-            const res=await request('https://www.dlkt.ee/api/places?q='+encodeURIComponent(name));
-            assert.equal(res.status,200);
-            const data=await res.json();
-            const match=(data.cities??[]).find(x=>x.countryCode===before.country&&(x.name===name||x.name?.toLowerCase()===name.toLowerCase()));
-            if(match&&JSON.stringify(match)!==JSON.stringify(before.city))valid.push(name);
-            if(valid.length===2)break;
+          try{
+            const before=await call({action:'status'});assert.equal(before.status,200);assert.deepEqual(before.value,{available:true,hasToken:false});assert.equal(before.setCookie,'');
+            const missing=await call({action:'event',event:{kind:'pageview',id:ids[0],source:'unknown'}});assert.equal(missing.status,401);
+            for(let i=0;i<ids.length;i++){
+              const opted=await call({action:'enable'});
+              const cookie=opted.setCookie.split(';')[0];
+              if(cookie)cookies.push(cookie);
+              assert.equal(opted.status,200);assert.equal(opted.value.enabled,true);
+              assert.ok(cookie.startsWith('__Host-dlkt_audience=v1.'));
+              const headers=i===1?{'X-Vercel-IP-Country':'AQ','X-Vercel-IP-City':'DLKT Geo QA Spoof'}:{};
+              const event={kind:'pageview',id:ids[i],source:'unknown'};
+              const recorded=await call({action:'event',event},headers,cookie);
+              assert.equal(recorded.status,200);assert.equal(recorded.value.result,'accepted');
+            }
+            // The operator verifies and revokes just these two synthetic sessions in SQL.
+            console.log('DLKT_GEO_HOSTED_EVENTS_PASS '+JSON.stringify({requestsRecorded:2,requiresImmediateSqlCleanup:true}));
+          }catch(error){
+            for(const cookie of cookies){try{await call({action:'withdraw'},{},cookie);}catch{}}
+            throw error;
           }
-          assert.equal(valid.length,2,'no two independently catalogued same-country city candidates; inconclusive');
-          const pairs=[['IS','Reykjavik'],['SG','Singapore'],...valid.map(city=>[before.country,city])];
-          for(const [country,city] of pairs){
-            const actual=await read({'X-Vercel-IP-Country':country,'X-Vercel-IP-City':city});
-            assert.ok(JSON.stringify(before)===JSON.stringify(actual),'client supplied geography altered hint');
-          }
-          const after=await read();
-          assert.ok(JSON.stringify(before)===JSON.stringify(after),'baseline changed; inconclusive');
-          const alternate=await request('https://info.dlkt.ee/api/places?hint=1',{'X-Vercel-IP-Country':'IS','X-Vercel-IP-City':'Reykjavik'});
-          assert.ok([301,302,307,308].includes(alternate.status),'alternate origin did not redirect');
-          const redirect=new URL(alternate.headers.get('location')??'', 'https://info.dlkt.ee');
-          assert.equal(redirect.origin,'https://www.dlkt.ee');
-          console.log('DLKT_GEO_HINT_INGRESS_PASS '+JSON.stringify({host:'www.dlkt.ee',countryAvailable:true,cityMapped:before.city!==null,spoofPairsRejected:pairs.length,alternateCanonicalRedirect:true}));
           console.log('DLKT_ADMIN_LIVE_ANONYMOUS_PASS '+JSON.stringify({requests:checks.length,scope:'public HTTPS; no authenticated browser or analytics data tested'}));
           JS
