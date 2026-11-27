@@ -56,6 +56,9 @@
     },
     "api/admin.ts": {
       "maxDuration": 45
+    },
+    "api/audience.ts": {
+      "maxDuration": 30
     }
   },
   "buildCommand": "node bootstrap.mjs",

@@ -9,7 +9,7 @@ import {NEWS_PUBLISHERS} from '../.build/src/iceo/news-sources.js';
 function elements(html){const nodes=[];function walk(n){if(n.type==='tag')nodes.push(n);for(const c of n.children??[])walk(c);}walk(parseDocument(html));return nodes;}
 test('all legal documents ship the exact shared renderer with a unique reading structure',()=>{
  assert.equal(LEGAL_DOCUMENTS.length,9);assert.equal(new Set(LEGAL_DOCUMENTS.map(d=>d.slug)).size,9);
- for(const doc of LEGAL_DOCUMENTS){const html=readFileSync(`public/${doc.slug}.html`,'utf8');assert.equal(html,renderLegalDocument(doc));const nodes=elements(html);assert.equal(nodes.filter(n=>n.name==='h1').length,1,doc.slug);const ids=nodes.map(n=>n.attribs.id).filter(Boolean);assert.equal(new Set(ids).size,ids.length,doc.slug);assert.ok(html.includes(footerHtml()));assert.ok(html.includes('Updated '+'22 November 2026'),doc.slug);}
+ for(const doc of LEGAL_DOCUMENTS){const html=readFileSync(`public/${doc.slug}.html`,'utf8');assert.equal(html,renderLegalDocument(doc));const nodes=elements(html);assert.equal(nodes.filter(n=>n.name==='h1').length,1,doc.slug);const ids=nodes.map(n=>n.attribs.id).filter(Boolean);assert.equal(new Set(ids).size,ids.length,doc.slug);assert.ok(html.includes(footerHtml()));assert.ok(html.includes('Updated '+(doc.updated??'22 November 2026')),doc.slug);}
 });
 test('footer and document links resolve to shipped pages and actual section anchors',()=>{
  const pages=new Map(LEGAL_DOCUMENTS.map(d=>['/'+d.slug,renderLegalDocument(d)]));pages.set('/',readFileSync('public/iceo.html','utf8'));pages.set('/organizations',readFileSync('public/organizations.html','utf8'));pages.set('/wallet',readFileSync('public/wallet.html','utf8'));pages.set('/account',readFileSync('public/account.html','utf8'));
@@ -120,7 +120,18 @@ test('country, account, subscription and analytics notices describe the enabled 
  assert.match(section('sources','country-coverage'),/One connected national publisher does not constitute complete coverage/u);
  assert.match(section('privacy','wallet'),/My profile and Info Wallet use the same optional private preference record/u);
  assert.match(section('privacy','wallet'),/preserves the fields it does not edit/u);
- assert.match(section('privacy','audience-measurement'),/does not activate a visitor-analytics collector/u);
+ const audience=section('privacy','audience-measurement'),choice=section('cookies','cookies');
+ assert.match(audience,/may be available.*off unless you expressly choose Allow audience measurement/u);
+ assert.match(audience,/Declining does not restrict reading or account services/u);
+ assert.match(audience,/90-day rolling retention policy and scheduled deletion/u);
+ assert.match(audience,/raw IP addresses.*article titles, full URLs, search terms, account identities or a device fingerprint/u);
+ assert.match(audience,/Do not allow \/ withdraw.*server deletion was confirmed/u);
+ assert.match(audience,/revocation marker is retained for up to 90 days/u);
+ assert.match(choice,/__Host-dlkt_audience.*maximum lifetime of 90 days/u);
+ assert.match(choice,/preference stores your choice, not an identifier/u);
+ assert.match(choice,/id="audience-choice-allow" class="secondary" type="button" hidden/u);
+ assert.match(choice,/id="audience-choice-deny" class="secondary" type="button" hidden/u);
+ assert.match(choice,/id="audience-choice-status" role="status"/u);
  assert.match(section('terms','operator'),/does not start a subscription or a trial/u);
  assert.match(section('terms','operator'),/before an explicit purchase/u);
  assert.doesNotMatch(section('accessibility','features'),/starts moving automatically/u);

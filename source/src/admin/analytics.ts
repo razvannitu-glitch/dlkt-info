@@ -2,20 +2,13 @@ import type {Environment} from '../account/http.js';
 import {boundedJson} from '../account/http.js';
 import {isUuid} from '../data/guards.js';
 import type {ReadyPersistenceConfiguration} from '../persistence/contracts.js';
+import {audienceStorageConfig,SupabaseAudienceStore,type AudienceSnapshot,type AudienceHours} from '../audience/storage.js';
 
-export const RANGES = ['24h','7d','30d','90d','all'] as const;
-export type Range = typeof RANGES[number];
-const DAY = 86_400_000;
-const LIMITS: Record<Exclude<Range,'all'>,number> = {'24h':DAY,'7d':7*DAY,'30d':30*DAY,'90d':90*DAY};
+import {PROFILE_COUNT_FUNCTION,parseProfileCounts,rangeStart,parseContentRange,type ProfileCounts,type Range} from './profile-count-edge.js';
+export {RANGES,parseRange,rangeStart,parseContentRange,type Range} from './profile-count-edge.js';
 export function adminIds(env:Environment):ReadonlySet<string>{
  const ids=(env.DLKT_INFO_ADMIN_USER_IDS??'').split(',').map(s=>s.trim().toLowerCase());
  return env.DLKT_INFO_ADMIN_ENABLED==='1'&&ids.length<=20&&ids.every(isUuid)?new Set(ids):new Set();
-}
-export function parseRange(value:string|null):Range|null{
- return value===null?'7d':RANGES.includes(value as Range)?value as Range:null;
-}
-export function rangeStart(range:Range,now:Date):string|null{
- return range==='all'?null:new Date(now.getTime()-LIMITS[range]).toISOString();
 }
 function record(v:unknown):Record<string,unknown>|null{
  return v!==null&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,unknown>:null;
@@ -45,10 +38,6 @@ export function parseRows(value:unknown,dimension:Dimension):Row[]|null{
  }
  return rows.sort((a,b)=>dimension==='day'?Date.parse(a.label)-Date.parse(b.label):b.pageviews-a.pageviews);
 }
-export function parseContentRange(value:string|null):number|null{
- const match=/^(?:\d+-\d+|\*)\/(\d+)$/u.exec(value??'');
- return match?count(Number(match[1])):null;
-}
 async function profileCount(config:ReadyPersistenceConfiguration,env:Environment,request:typeof fetch,since:string|null):Promise<number|null>{
  const key=env.DLKT_INFO_SUPABASE_SECRET_KEY;
  if(!key||!/^sb_secret_[A-Za-z0-9_-]{20,240}$/u.test(key))return null;
@@ -59,6 +48,20 @@ async function profileCount(config:ReadyPersistenceConfiguration,env:Environment
   const response=await request(u,{method:'HEAD',headers:{apikey:key,Prefer:'count=exact',Range:'0-0'},redirect:'error',cache:'no-store',signal:AbortSignal.timeout(8000)});
   return response.ok?parseContentRange(response.headers.get('content-range')):null;
  }catch{return null;}
+}
+async function profileCounts(config:ReadyPersistenceConfiguration,env:Environment,request:typeof fetch,range:Range,since:string|null,accessToken?:string):Promise<ProfileCounts>{
+ if(env.DLKT_INFO_ADMIN_PROFILE_EDGE_ENABLED==='1'){
+  if(!accessToken)return {profiles:null,newProfiles:null};
+  try{
+   const url=new URL('/functions/v1/'+PROFILE_COUNT_FUNCTION,config.url);
+   url.searchParams.set('range',range);
+   const res=await request(url,{headers:{apikey:config.publishableKey,Authorization:'Bearer '+accessToken,Accept:'application/json'},cache:'no-store',redirect:'error',signal:AbortSignal.timeout(20_000)});
+   if(!res.ok){await res.body?.cancel();return {profiles:null,newProfiles:null};}
+   return parseProfileCounts(await boundedJson(res,4096),range)??{profiles:null,newProfiles:null};
+  }catch{return {profiles:null,newProfiles:null};}
+ }
+ const [profiles,selected]=await Promise.all([profileCount(config,env,request,null),since?profileCount(config,env,request,since):Promise.resolve(null)]);
+ return {profiles,newProfiles:since?selected:profiles};
 }
 const PROJECT='prj_3JKAWw8EvzWKNPqFNFxk4iDL2l7P';
 const TEAM='team_ohj6PflzAec8005UK4uiAqFw';
@@ -80,25 +83,38 @@ async function audienceQuery(env:Environment,request:typeof fetch,since:string,u
   return await boundedJson(res,128_000);
  }catch{return null;}
 }
+export type FirstPartyAudience={status:'disabled'|'unavailable'}|{status:'ready';snapshot:AudienceSnapshot;coverageSince:string};
+const AUDIENCE_HOURS:Record<Range,AudienceHours>={'24h':24,'7d':168,'30d':720,'90d':2160,all:null};
+async function readFirstParty(env:Environment,range:Range,request:typeof fetch,now:Date):Promise<FirstPartyAudience>{
+ if(env.DLKT_INFO_AUDIENCE_READ_ENABLED!=='1')return {status:'disabled'};
+ const storage=audienceStorageConfig(env),activated=env.DLKT_INFO_AUDIENCE_ACTIVATED_AT;
+ if(!storage||env.DLKT_INFO_AUDIENCE_RETENTION_READY!=='1'||!activated||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/u.test(activated)||!Number.isFinite(Date.parse(activated))||Date.parse(activated)>now.getTime())return {status:'unavailable'};
+ try{
+  const snapshot=await new SupabaseAudienceStore(storage,request,()=>now).snapshot(AUDIENCE_HOURS[range]);
+  return {status:'ready',snapshot,coverageSince:new Date(Math.max(Date.parse(activated),Date.parse(snapshot.since))).toISOString()};
+ }catch{return {status:'unavailable'};}
+}
 export interface Analytics{
  range:Range;asOf:string;profiles:number|null;newProfiles:number|null;
+ firstParty:FirstPartyAudience;
  audienceSince:string|null;audienceEnabled:boolean;totals:Totals|null;recent:Totals|null;
  daily:Row[]|null;countries:Row[]|null;referrers:Row[]|null;pages:Row[]|null;devices:Row[]|null;
 }
-export async function readAnalytics(config:ReadyPersistenceConfiguration,env:Environment,range:Range,request:typeof fetch=fetch,now:Date=new Date()):Promise<Analytics>{
+export async function readAnalytics(config:ReadyPersistenceConfiguration,env:Environment,range:Range,request:typeof fetch=fetch,now:Date=new Date(),accessToken?:string):Promise<Analytics>{
  const since=rangeStart(range,now),asOf=now.toISOString();
- const activation=audienceStart(env,now);
+ const firstPartyPromise=readFirstParty(env,range,request,now);
+ const activation=env.DLKT_INFO_AUDIENCE_READ_ENABLED==='1'?null:audienceStart(env,now);
  const audienceEnabled=env.DLKT_INFO_ANALYTICS_READ_ENABLED==='1'&&Boolean(env.DLKT_INFO_ANALYTICS_VERCEL_TOKEN)&&activation!==null;
  const audienceSince=audienceEnabled&&activation?(since&&since>activation?since:activation):null;
  const totals=(start:string|null)=>start?audienceQuery(env,request,start,asOf).then(parseTotals):Promise.resolve(null);
  const rows=(dimension:Dimension)=>audienceSince?audienceQuery(env,request,audienceSince,asOf,dimension).then(v=>parseRows(v,dimension)):Promise.resolve(null);
  const last30=new Date(now.getTime()-30*60_000).toISOString();
- const [profiles,newProfiles,traffic,recent,daily,countries,referrers,pages,devices]=await Promise.all([
-  profileCount(config,env,request,null),
-  since?profileCount(config,env,request,since):Promise.resolve(null),
+ const [firstParty,profile,traffic,recent,daily,countries,referrers,pages,devices]=await Promise.all([
+  firstPartyPromise,
+  profileCounts(config,env,request,range,since,accessToken),
   totals(audienceSince),
   totals(audienceEnabled&&activation?(activation>last30?activation:last30):null),
   rows('day'),rows('country'),rows('referrerHostname'),rows('requestPath'),rows('deviceType')
  ]);
- return {range,asOf,profiles,newProfiles:since?newProfiles:profiles,audienceSince,audienceEnabled,totals:traffic,recent,daily,countries,referrers,pages,devices};
+ return {range,asOf,...profile,firstParty,audienceSince,audienceEnabled,totals:traffic,recent,daily,countries,referrers,pages,devices};
 }
