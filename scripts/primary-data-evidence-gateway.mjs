@@ -108,7 +108,8 @@ function unambiguousJson(body){
 /** Provisional datastore envelope adapter. The provider documents the query
  * parameters, but no original response is available in this repository.
  * Unexpected response structure must be held, never treated as success. */
-function decodeDatastore(body,town){
+export function inspectHdbDatastoreEntity(body,town){
+ check(TOWNS.includes(town)&&Buffer.isBuffer(body)&&body.length>0&&body.length<=MAX_BODY,'BODY_INTEGRITY');
  const value=unambiguousJson(body);
  check(record(value)&&Object.hasOwn(value,'success')&&value.success===true&&record(value.result),'RESPONSE_ENVELOPE');
  const result=value.result;
@@ -148,7 +149,7 @@ function verifyCapture(capture,town,context,collector){
  const sig=Buffer.from(signature,'base64');
  check(sig.length===64&&sig.toString('base64')===signature,'SIGNATURE_ENCODING');
  check(verify(null,bytes,collector.key,sig),'SIGNATURE_INVALID');
- const rows=decodeDatastore(body,town);
+ const rows=inspectHdbDatastoreEntity(body,town);
  return {town,rows,capturedAt,receipt:{capturedAt:receipt.capturedAt,requestUrl:url,bodyBytes:body.length,
   bodySha256:receipt.bodySha256,signedReceiptSha256:hash(Buffer.concat([bytes,sig])),rowCount:rows.length}};
 }
