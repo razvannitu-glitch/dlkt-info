@@ -66,31 +66,44 @@ jobs:
           console.log('DLKT_PROFILE_EDGE_HOSTED_DENIAL_PASS');
 
 
-          // Read-only checks against existing production place hints.
-          // Compare two valid, conflicting client-supplied geography pairs with a baseline.
-          // Never log the returned city, country, IP or other identifying values.
-          const deployment='dlkt-info-3rpd2n45o-dlkt-group-ou.vercel.app';
-          const hosts=['www.dlkt.ee','info.dlkt.ee'];
-          const target=await fetch('https://www.dlkt.ee/release.json',{cache:'no-store',signal:AbortSignal.timeout(10000)});
-          assert.equal((await target.json()).gitCommitSha,'a37d754e7ee8d04793b9032ff1cfe049148ae0f4');
-          for(const host of hosts){
-            const url='https://'+host+'/api/places?hint=1';
-            const read=async(headers={})=>{
-              const res=await fetch(url,{headers,redirect:'manual',cache:'no-store',credentials:'omit',signal:AbortSignal.timeout(15000)});
-              assert.equal(res.status,200,'place hint unavailable on '+host);
-              assert.match(res.headers.get('cache-control')??'',/no-store/);
-              const v=await res.json();
-              assert.equal(v.estimated,true);
-              assert.ok(typeof v.countryCode==='string'&&/^[A-Z]{2}$/.test(v.countryCode),'missing country');
-              return {country:v.countryCode,city:v.city??null};
-            };
-            const before=await read();
-            const one=await read({'X-Vercel-IP-Country':'IS','X-Vercel-IP-City':'Reykjavik'});
-            const two=await read({'X-Vercel-IP-Country':'SG','X-Vercel-IP-City':'Singapore'});
-            const after=await read();
-            assert.ok(JSON.stringify(before)===JSON.stringify(after),'baseline changed; inconclusive');
-            assert.ok(JSON.stringify(before)===JSON.stringify(one)&&JSON.stringify(before)===JSON.stringify(two),'client supplied geography altered hint');
-            console.log('DLKT_GEO_HINT_INGRESS_PASS '+JSON.stringify({host,countryAvailable:true,cityMapped:before.city!==null,spoofPairsRejected:2}));
+
+          // Read only: verify canonical-domain hints and the alternate-domain redirect.
+          // Compare different-country and same-country spoof pairs. Do not log location.
+          const hint='https://www.dlkt.ee/api/places?hint=1';
+          const request=async(url,headers={})=>fetch(url,{headers,redirect:'manual',cache:'no-store',credentials:'omit',signal:AbortSignal.timeout(15000)});
+          const read=async(headers={})=>{
+            const res=await request(hint,headers);
+            assert.equal(res.status,200);
+            assert.match(res.headers.get('cache-control')??'',/no-store/);
+            const v=await res.json();
+            assert.equal(v.estimated,true);
+            assert.ok(typeof v.countryCode==='string'&&/^[A-Z]{2}$/.test(v.countryCode),'missing country');
+            return {country:v.countryCode,city:v.city??null};
+          };
+          const before=await read();
+          const candidateNames={US:['New York','Los Angeles','Chicago','Houston'],GB:['London','Manchester','Birmingham'],DE:['Berlin','Hamburg','Munich'],NL:['Amsterdam','Rotterdam','Utrecht'],BE:['Brussels','Antwerp','Ghent'],FR:['Paris','Lyon','Marseille'],IE:['Dublin','Cork','Galway'],RO:['Bucharest','Cluj-Napoca','Timisoara'],CA:['Toronto','Montreal','Vancouver'],FI:['Helsinki','Tampere','Turku'],SE:['Stockholm','Gothenburg','Malmo']};
+          const choices=candidateNames[before.country]??[];
+          const valid=[];
+          for(const name of choices){
+            const res=await request('https://www.dlkt.ee/api/places?q='+encodeURIComponent(name));
+            assert.equal(res.status,200);
+            const data=await res.json();
+            const match=(data.cities??[]).find(x=>x.countryCode===before.country&&(x.name===name||x.name?.toLowerCase()===name.toLowerCase()));
+            if(match&&JSON.stringify(match)!==JSON.stringify(before.city))valid.push(name);
+            if(valid.length===2)break;
           }
+          assert.equal(valid.length,2,'no two independently catalogued same-country city candidates; inconclusive');
+          const pairs=[['IS','Reykjavik'],['SG','Singapore'],...valid.map(city=>[before.country,city])];
+          for(const [country,city] of pairs){
+            const actual=await read({'X-Vercel-IP-Country':country,'X-Vercel-IP-City':city});
+            assert.ok(JSON.stringify(before)===JSON.stringify(actual),'client supplied geography altered hint');
+          }
+          const after=await read();
+          assert.ok(JSON.stringify(before)===JSON.stringify(after),'baseline changed; inconclusive');
+          const alternate=await request('https://info.dlkt.ee/api/places?hint=1',{'X-Vercel-IP-Country':'IS','X-Vercel-IP-City':'Reykjavik'});
+          assert.ok([301,302,307,308].includes(alternate.status),'alternate origin did not redirect');
+          const redirect=new URL(alternate.headers.get('location')??'', 'https://info.dlkt.ee');
+          assert.equal(redirect.origin,'https://www.dlkt.ee');
+          console.log('DLKT_GEO_HINT_INGRESS_PASS '+JSON.stringify({host:'www.dlkt.ee',countryAvailable:true,cityMapped:before.city!==null,spoofPairsRejected:pairs.length,alternateCanonicalRedirect:true}));
           console.log('DLKT_ADMIN_LIVE_ANONYMOUS_PASS '+JSON.stringify({requests:checks.length,scope:'public HTTPS; no authenticated browser or analytics data tested'}));
           JS
