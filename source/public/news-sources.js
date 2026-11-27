@@ -235,7 +235,32 @@ export function sourcePublicationContext(value) {
     const { scope, language } = matches[0];
     return Object.freeze({ language, publisherCountryCode: scope.countryCode, publisherCountryName: scope.countryName, coverage: scope.coverage, basis: 'reviewed-publisher' });
 }
-export function sourceLanguage(value) { return sourcePublicationContext(value)?.language ?? null; }
+const editorialLanguageScope = (publisherId, origin, articlePath, language) => {
+    const publisher = NEWS_PUBLISHERS.find(value => value.id === publisherId);
+    if (!publisher?.origins.includes(origin) || publicationScopes.has(publisherId) || articlePath.global || articlePath.sticky)
+        throw Error('NEWS_EDITORIAL_LANGUAGE_SCOPE_INVALID');
+    return Object.freeze({ publisherId, origin, articlePath: Object.freeze(articlePath), language });
+};
+const editorialLanguageScopes = Object.freeze([
+    editorialLanguageScope('global-voices', 'https://globalvoices.org', /^\/\d{4}\/(?:0[1-9]|1[0-2])\/(?:0[1-9]|[12]\d|3[01])\/[a-z0-9]+(?:-[a-z0-9]+)*\/$/u, 'en'),
+]);
+function independentEditorialLanguage(value) {
+    const raw = typeof value === 'string' ? value : value.sourceUrl;
+    const publisher = publisherForNewsUrl(raw);
+    if (!publisher)
+        return null;
+    const url = new URL(raw);
+    if (raw !== url.href || url.search || url.hash || /%(?:2e|2f|5c)/iu.test(url.pathname) || url.pathname.includes('//'))
+        return null;
+    const matches = editorialLanguageScopes.filter(scope => scope.publisherId === publisher.id && scope.origin === url.origin && scope.articlePath.test(url.pathname));
+    return matches.length === 1 ? matches[0]?.language ?? null : null;
+}
+/** The reading language is independent of geographic edition provenance.
+ * Existing reviewed national/feed contracts retain their original semantics. */
+export function sourceLanguage(value) {
+    const context = sourcePublicationContext(value);
+    return context === null ? independentEditorialLanguage(value) : context.language;
+}
 /** Reviewed edition provenance only. This never establishes an article's event location or city coverage. */
 export function sourceEditionCountryCode(value) {
     const context = sourcePublicationContext(value);

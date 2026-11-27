@@ -23,7 +23,7 @@ test('verified local cards precede city and global news in one scroll',()=>{
 test('backend groups and balances the complete edition before projecting category pages',()=>{
  const grouping=backend.indexOf('groups=groupNewsStories('),balancing=backend.indexOf('balanceNewsEdition(selection.items,');
  assert.ok(grouping>0&&balancing>grouping,'source groups are complete before their representatives are balanced');
- assert.match(backend,/iptc17-local-national-world-publisher-rounds-20261127-r8/);
+ assert.match(backend,/iptc17-local-national-world-publisher-rounds-20261127-r9/);
  assert.doesNotMatch(backend,/sort\(\(a,b\)=>scopePriority\(a\)-scopePriority\(b\)\)/,'geography is composed with publisher diversity before pagination, not patched onto individual pages');
  assert.match(backend,/this\.orders\.set\(key,result\)/,'the complete order remains immutable between pages');
 });

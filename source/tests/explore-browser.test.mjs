@@ -126,22 +126,23 @@ test('changing language cancels an in-flight search and late city results cannot
  assert.match(h.ids.get('world-place-title').textContent,/[\u0600-\u06ff]/u);assert.deepEqual(h.writes,[]);
 });
 
-test('locale changes select native articles and switching back restores the exact original source record',async t=>{
+test('locale changes select reviewed national and international editorial languages and preserve exact original records',async t=>{
  const now=new Date().toISOString();
  const english=Object.freeze({id:'c'.repeat(24),identity:'english-source-fixture',title:'Tokyo opens a new public museum',kind:'publication',topic:'culture',publisher:'BBC',sourceUrl:'https://www.bbc.com/news/articles/controller-language-fixture',sourceIds:Object.freeze(['news-culture']),date:now,dateLabel:'Published',observedAt:now,contentHash:'d'.repeat(64),boundary:'Controlled fixture.',deadline:null,version:null,attribution:'BBC',sourceState:'verified'});
  const japanese=Object.freeze({...english,id:'e'.repeat(24),identity:'japanese-source-fixture',title:'東京で新しい美術館が開館',sourceUrl:'https://www.bbc.com/japanese/articles/controller-language-fixture',contentHash:'f'.repeat(64)});
- const unknown=Object.freeze({...english,id:'1'.repeat(24),identity:'unknown-language-fixture',title:'An original publication with unreviewed language',publisher:'Global Voices',sourceUrl:'https://globalvoices.org/2026/11/21/controller-language-fixture/',sourceIds:Object.freeze(['gv-world']),contentHash:'2'.repeat(64),attribution:'Global Voices'});
- const records=Object.freeze([english,japanese,unknown]),before=JSON.stringify(records);
+ const international=Object.freeze({...english,id:'1'.repeat(24),identity:'international-language-fixture',title:'An English international publication without national edition provenance',publisher:'Global Voices',sourceUrl:'https://globalvoices.org/2026/11/21/controller-language-fixture/',sourceIds:Object.freeze(['gv-world']),contentHash:'2'.repeat(64),attribution:'Global Voices'});
+ const unknown=Object.freeze({...english,id:'3'.repeat(24),identity:'unknown-language-fixture',title:'An original publication with unreviewed language',publisher:'Reuters',sourceUrl:'https://www.reuters.com/world/controller-language-fixture/',sourceIds:Object.freeze(['news-culture']),contentHash:'4'.repeat(64),attribution:'Reuters'});
+ const records=Object.freeze([english,japanese,international,unknown]),before=JSON.stringify(records);
  const h=harness(t,'https://www.dlkt.ee/?explore=1&lang=en',{snapshot:{cards:records,generatedAt:now,state:'ready'}});await tick();
- assert.equal(h.renderings.at(-1).length,1);const firstEnglish=h.renderings.at(-1)[0];assert.equal(firstEnglish.id,english.id);assert.ok(firstEnglish.text.includes(english.title));
+ assert.equal(h.renderings.at(-1).length,2);const firstEnglish=h.renderings.at(-1).find(item=>item.id===english.id),firstInternational=h.renderings.at(-1).find(item=>item.id===international.id);assert.ok(firstEnglish);assert.ok(firstInternational);assert.ok(firstEnglish.text.includes(english.title));assert.ok(firstInternational.text.includes(international.title));assert.equal(firstInternational.scope,'world');
  h.win.location.searchParams.set('lang','ja');h.doc.dispatchEvent(new CustomEvent('dlkt:language-changed',{detail:{locale:'ja'}}));
  assert.equal(h.renderings.at(-1).length,1);const shownJapanese=h.renderings.at(-1)[0];
  assert.equal(shownJapanese.id,japanese.id);assert.notEqual(shownJapanese.signature,firstEnglish.signature);assert.ok(shownJapanese.text.includes(japanese.title));assert.ok(!shownJapanese.text.includes(english.title));
  h.win.location.searchParams.set('lang','en');h.doc.dispatchEvent(new CustomEvent('dlkt:language-changed',{detail:{locale:'en'}}));
- assert.equal(h.renderings.at(-1).length,1);const returnedEnglish=h.renderings.at(-1)[0];
+ assert.equal(h.renderings.at(-1).length,2);const returnedEnglish=h.renderings.at(-1).find(item=>item.id===english.id),returnedInternational=h.renderings.at(-1).find(item=>item.id===international.id);assert.ok(returnedEnglish);assert.ok(returnedInternational);assert.equal(returnedInternational.signature,firstInternational.signature);
  assert.equal(returnedEnglish.id,english.id);assert.equal(returnedEnglish.signature,firstEnglish.signature);
- assert.ok(h.renderedCards.includes(english));assert.ok(h.renderedCards.includes(japanese));assert.ok(!h.renderedCards.includes(unknown));
- assert.ok(h.renderedCards.every(record=>record===english||record===japanese));assert.equal(JSON.stringify(records),before);assert.deepEqual(h.writes,[]);
+ assert.ok(h.renderedCards.includes(english));assert.ok(h.renderedCards.includes(japanese));assert.ok(h.renderedCards.includes(international));assert.ok(!h.renderedCards.includes(unknown));
+ assert.ok(h.renderedCards.every(record=>record===english||record===japanese||record===international));assert.equal(JSON.stringify(records),before);assert.deepEqual(h.writes,[]);
  h.pop('https://www.dlkt.ee/?explore=1&country=FR&lang=ro');await tick();assert.equal(h.ids.get('world-place-title').textContent,'Franța');
  assert.equal(h.renderings.at(-1).length,0,'an uncovered edition does not silently keep English or Japanese headlines');
  assert.equal(JSON.stringify(records),before);

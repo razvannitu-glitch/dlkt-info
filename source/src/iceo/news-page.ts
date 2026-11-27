@@ -21,7 +21,7 @@ export interface NewsPageReader {read(query:NewsPageRequest):Promise<NewsPage>;r
 export class NewsPageError extends Error {constructor(readonly code:NewsPageErrorCode){super(code);this.name='NewsPageError';}}
 const NEWS_CURSOR_VERSION='news-cursor-6' as const;
 // Grouping changes invalidate page/source offsets even when the stored corpus is unchanged.
-const NEWS_COUNTRY_ORDER_VERSION='iptc17-local-national-world-publisher-rounds-20261127-r8' as const;
+const NEWS_COUNTRY_ORDER_VERSION='iptc17-local-national-world-publisher-rounds-20261127-r9' as const;
 const object=(value:unknown):value is Record<string,unknown>=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 const exact=(value:Record<string,unknown>,keys:readonly string[]):boolean=>Object.keys(value).length===keys.length&&keys.every(key=>Object.hasOwn(value,key));
 const TOKEN=/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/u;
