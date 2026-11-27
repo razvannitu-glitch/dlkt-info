@@ -78,12 +78,32 @@ export function stateCoverage(codes,placeCodes){
 /** Direct index registrations and reviewed-feed registrations with explicit
  * publisher country provenance. Not proof of a functioning source, a native
  * language, the event location, or complete national coverage. */
-export function configuredCountryCodes({indexes,publicationScopes,reviewedScopes,sources}){
+export function configuredCountryCodes({indexes,publicationScopes,reviewedScopes,sources,resolvePublicationContext}){
  if(![indexes,publicationScopes,reviewedScopes,sources].every(boundedArray))throw Error('GLOBAL_COVERAGE_REGISTRY_INVALID');
- const indexed=new Set(indexes.map(x=>x.publisherId));
+ const byPublisher=new Map();
+ for(const scope of publicationScopes){
+  const scopes=byPublisher.get(scope.publisherId)??[];
+  scopes.push(scope);byPublisher.set(scope.publisherId,scopes);
+ }
+ const configured=[];
+ for(const index of indexes){
+  const scopes=byPublisher.get(index.publisherId)??[];
+  if(scopes.length===1&&scopes[0].origins===undefined){
+   configured.push(scopes[0].countryCode);continue;
+  }
+  // Scoped and multi-edition publishers require the existing canonical
+  // resolver to bind the actual index URL to a single reviewed edition.
+  // Never multiply a shared sitemap across the publisher's editions.
+  if(scopes.length===0||typeof resolvePublicationContext!=='function'||typeof index.url!=='string')continue;
+  const context=resolvePublicationContext(index.url);
+  if(!context||context.basis!=='reviewed-publisher'||!code(context.publisherCountryCode)||typeof context.language!=='string'||!context.language)continue;
+  let origin;try{origin=new URL(index.url).origin;}catch{continue;}
+  const matches=scopes.filter(scope=>Array.isArray(scope.origins)&&scope.origins.includes(origin)&&
+   scope.countryCode===context.publisherCountryCode&&Array.isArray(scope.editions)&&scope.editions.some(edition=>edition.language===context.language));
+  if(matches.length===1)configured.push(matches[0].countryCode);
+ }
  const feeds=new Set(sources.filter(x=>x.adapter==='reviewed-feed').map(x=>x.id));
- return sorted([...publicationScopes.filter(x=>indexed.has(x.publisherId)).map(x=>x.countryCode),
-  ...reviewedScopes.filter(x=>feeds.has(x.sourceId)).map(x=>x.countryCode)]);
+ return sorted([...configured,...reviewedScopes.filter(x=>feeds.has(x.sourceId)).map(x=>x.countryCode)]);
 }
 
 export function auditSnapshot(sample,now,model){
@@ -135,7 +155,7 @@ async function main(){
  assertOperationalCatalogue(placeCodes);
  const configuredCodes=configuredCountryCodes({indexes:news.NEWS_DISCOVERY_INDEXES,
   publicationScopes:news.NEWS_PUBLICATION_SCOPES,reviewedScopes:news.REVIEWED_FEED_PUBLICATION_SCOPES,
-  sources:registry.ICEO_SOURCES});
+  sources:registry.ICEO_SOURCES,resolvePublicationContext:news.sourcePublicationContext});
  const configured=stateCoverage(configuredCodes,placeCodes);
  const directory=atlas.worldSourceAtlas();
  const baseline={stateReference:WORLD_STATE_CODES.length,operationalEntityReference:WORLD_OPERATIONAL_CODES.length,placeOptions:placeCodes.length,

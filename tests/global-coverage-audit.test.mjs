@@ -127,3 +127,21 @@ test('unresolved provenance is grouped for review, not fabricated or automatical
  assert.ok(r.unresolvedPublisherProvenance.some(x=>x.target==='unresolved'));
  assert.deepEqual(r.publisherCountryCounts,{RO:1});
 });
+
+test('shared indexes cannot imply direct national configuration across scoped publisher editions',()=>{
+ const scope=(country,origins)=>({publisherId:'shared',countryCode:country,origins,editions:[{path:'/edition/',language:'en'}]});
+ const origin='https://publisher.example',shared={publisherId:'shared',url:origin+'/news-sitemap.xml'};
+ const us=scope('US',[origin]),gb=scope('GB',[origin]);
+ const input={indexes:[shared,{publisherId:'legacy'}],publicationScopes:[us,gb,{publisherId:'legacy',countryCode:'RO'}],reviewedScopes:[],sources:[]};
+ const context=country=>({publisherCountryCode:country,language:'en',basis:'reviewed-publisher'});
+ assert.deepEqual(configuredCountryCodes(input),['RO'],'no resolver means no scoped-index attribution');
+ assert.deepEqual(configuredCountryCodes({...input,resolvePublicationContext:()=>null}),['RO'],'shared sitemap remains unresolved');
+ const direct={publisherId:'shared',url:origin+'/edition/explicit'};
+ const exact={...input,indexes:[...input.indexes,direct],resolvePublicationContext:url=>url===direct.url?context('GB'):null};
+ assert.deepEqual(configuredCountryCodes(exact),['GB','RO'],'one exact edition, not every country in the publisher group');
+ assert.deepEqual(configuredCountryCodes({...exact,publicationScopes:[...input.publicationScopes,gb]}),['RO'],'ambiguous duplicate scopes remain unresolved');
+ assert.deepEqual(configuredCountryCodes({...exact,resolvePublicationContext:()=>({...context('GB'),language:null})}),['RO']);
+ assert.deepEqual(configuredCountryCodes({...exact,resolvePublicationContext:()=>({...context('GB'),basis:'unknown'})}),['RO']);
+ assert.deepEqual(configuredCountryCodes({...exact,indexes:[{publisherId:'shared',url:'https://foreign.example/edition/explicit'}],resolvePublicationContext:()=>context('GB')}),[]);
+ assert.deepEqual(configuredCountryCodes({...exact,publicationScopes:[us,gb,{publisherId:'legacy',countryCode:'RO'},{publisherId:'legacy',countryCode:'IT'}]}),['GB'],'ambiguous legacy scopes cannot borrow a single index');
+});
