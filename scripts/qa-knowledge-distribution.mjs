@@ -37,6 +37,11 @@ export async function knowledgeDistributionFixture(){
   configure({enabled=true,allow=true,at=now,until=now+60000,licensedLayout=false}={}){active=enabled;approved=allow;clock=at;deadline=until;layoutOnly=licensedLayout;},
   handle(req,res,url){
    if(!active||!(url.pathname.startsWith('/card/dlkt-elsewhere-')||(url.pathname==='/api/card'&&url.searchParams.get('id')?.startsWith('dlkt-elsewhere-'))))return false;
+   // Model the retained public pathname plus the single captured id added
+   // by the configured rewrite. The live checks, not this fixture, attest
+   // the real production transport behavior.
+   const direct=/^\/card\/(dlkt-elsewhere-[a-z0-9][a-z0-9-]{0,64})$/u.exec(url.pathname);
+   if(direct&&typeof req.url==='string')req.url+=(url.search?'&':'?')+'id='+direct[1];
    void handleCard(req,res,failIO,failIO,()=>clock,null,resolve).catch(()=>{if(!res.headersSent)res.writeHead(500);res.end();});
    return true;
   },

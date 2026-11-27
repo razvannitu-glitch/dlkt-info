@@ -41,6 +41,8 @@ test('distinct exact references round-trip through direct and rewritten routes',
    assert.equal(url.origin,'https://www.dlkt.ee');assert.equal(url.hash,'');
    assert.deepEqual([...url.searchParams.keys()],['v','lang','h']);assert.ok(!url.href.includes('secret'));
    assert.deepEqual(parseKnowledgeCardReference(url.pathname+url.search),ref);
+   assert.deepEqual(parseKnowledgeCardReference(url.pathname+url.search+'&id='+card.id),ref);
+   assert.deepEqual(parseKnowledgeCardReference(url.pathname+'?id='+card.id+'&'+url.search.slice(1)),ref);
    assert.deepEqual(parseKnowledgeCardReference('/api/card?lang='+language+'&id='+card.id+'&v='+card.revision+'&h='+ref.digest),ref);
    assert.equal(parseCardReference(url.pathname+url.search),null);
    assert.equal(parseCardImageReference('/api/card-image?id='+card.id+'&v='+card.revision),null);
@@ -54,7 +56,7 @@ test('distinct exact references round-trip through direct and rewritten routes',
 
 test('malformed references are rejected without source requests or private data',async()=>{
  for(const url of [
-  'https://www.dlkt.ee'+path,'//evil.example'+path,path+'#private',path+'&q=private',path+'&lang=ro',path+'&id='+reference.id,
+  'https://www.dlkt.ee'+path,'//evil.example'+path,path+'#private',path+'&q=private',path+'&lang=ro',path+'&id=dlkt-elsewhere-unlisted',path+'&id='+reference.id+'&id='+reference.id,
   path.replace('lang=en','lang=de'),path.replace('v=2','v=02'),path.replace('v=2','v=0'),path.replace('v=2','v=9007199254740992'),
   path.replace('v=2','v=2.0'),path.replace('&h='+reference.digest,''),path.replace(reference.digest,'f'),path+'&h='+reference.digest,path.replace('lang=en','lang=%65n'),path.replace('/card/','/card/../card/'),path+'&',
   '/api/card?lang=en&v=2','/api/card?id='+reference.id+'&id='+reference.id+'&v=2&lang=en','/card/'+reference.id,
@@ -123,6 +125,8 @@ test('HTTP HEAD and invalid methods retain existing public route boundaries',asy
  const post=await invoke({method:'POST'});assert.equal(post.status,405);assert.equal(post.headers.allow,'GET, HEAD');
  const rewritten=await invoke({url:'/api/card?id='+reference.id+'&v='+reference.revision+'&lang=en&h='+reference.digest});assert.equal(rewritten.status,200);
  assert.equal(rewritten.body,(await invoke()).body);
+ const retainedPath=await invoke({url:path+'&id='+reference.id});assert.equal(retainedPath.status,200);assert.equal(retainedPath.body,rewritten.body);
+ const retainedHead=await invoke({url:path+'&id='+reference.id,method:'HEAD'});assert.equal(retainedHead.status,200);assert.equal(retainedHead.body,'');
 });
 
 test('licensed lab renderer preserves exact attribution while fixtures stay outside the actual public resolver',async()=>{
@@ -209,6 +213,11 @@ test('actual standalone admission resolves only the exact NSW release candidate,
   assert.equal(find(doc,'meta','property','og:image'),null);assert.equal(r.headers['cache-control'],'no-store');assert.equal(r.headers['x-robots-tag'],'noindex, nofollow');
   assert.equal(await resolveKnowledgeShare(ref,Date.parse(card.reviewedAt)-1),null);
   assert.equal(await resolveKnowledgeShare(ref,deadline),null);
+  const retainedPath=await invoke({url:url+'&id='+card.id,at,resolver:resolveKnowledgeShare});
+  assert.equal(retainedPath.status,200);assert.equal(retainedPath.body,r.body);
+  assert.equal((await invoke({url:url+'&id=dlkt-elsewhere-unlisted',at,resolver:resolveKnowledgeShare})).status,400);
+  assert.equal((await invoke({url:url+'&id='+card.id+'&id='+card.id,at,resolver:resolveKnowledgeShare})).status,400);
+  assert.equal((await invoke({url:url+'&id='+card.id,at:deadline,resolver:resolveKnowledgeShare})).status,404);
   assert.equal((await invoke({url,at:deadline,resolver:resolveKnowledgeShare})).status,404);
   assert.equal((await invoke({url:knowledgeReferencePath({...ref,digest:contentHash(knowledgeRightsCandidates[0])}),at,resolver:resolveKnowledgeShare})).status,404);
   assert.equal((await invoke({url:knowledgeReferencePath({...ref,digest:'f'.repeat(64)}),at,resolver:resolveKnowledgeShare})).status,404);
