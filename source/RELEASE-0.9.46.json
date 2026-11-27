@@ -962,7 +962,7 @@
     "tests/knowledge-share.test.mjs": "6cceb3961c9d91d230e13891509956bf7e0e4149d3320a4e6d5d12b9e32080fe",
     "tests/knowledge-stream.test.mjs": "12686685316d49808b608471b2bc8de1c63c14b933130e71409ad333fd971a60",
     "tests/knowledge.test.mjs": "fc86692dc046cfbc0008108c357ac9cd197ef08889d717ae8f809777c012101d",
-    "tests/legal-footer.test.mjs": "20ebcc652b83bab4a26475dedf7332fb53f66ca664623cd9ff1d74d40e768fb4",
+    "tests/legal-footer.test.mjs": "01a25b9a7f9b3c298d4116d691fb108dc14429fc569bff8423492bc1a3e4a28b",
     "tests/live-edition.test.mjs": "dab110d2695c742bc6e4da210cde1b6607d95bd4807afbe18c515089dab66fe2",
     "tests/live-official-ui.test.mjs": "c674a8b238b0abcb663203faa810644e7da1fd70b0f8ce878c2ebd7d6441adce",
     "tests/local-api.test.mjs": "e1aa1002ab2fbb0f50c85cf79d31a22b4d7d20257e7a2c9f01a3d957cfa5bbef",
