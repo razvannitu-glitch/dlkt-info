@@ -112,12 +112,23 @@ function primaryLinks(node:HTMLElement):Links|null{
  }catch{return null;}
  return {title:t,action:a};
 }
+/** Bind only the reader's canonical short stream ID or reviewed story key.
+ * continuationItems uses article:<card.identity> as its SINGLE-story presentation
+ * fallback. That suffix may be a publisher URL, not a short ID. Never retain it,
+ * compare it to a URL, or turn it into the measurement identity. */
+export function readerSourceIntentIdentity(article:unknown,stream:unknown,cat:unknown,story:unknown):Identity|null{
+ if(typeof article!=='string'||!ARTICLE.test(article)||stream!=='article:'+article||!category(cat))return null;
+ if(story===undefined)return {article,key:'article:'+article,category:cat};
+ if(typeof story!=='string')return null;
+ if(STORY.test(story))return {article,key:story,category:cat};
+ // card-validation bounds the canonical card.identity to 3,000 characters.
+ if(story.startsWith('article:')&&story.length>8&&story.length<=3008)return {article,key:'article:'+article,category:cat};
+ return null;
+}
 function bindCard(node:HTMLElement,root:HTMLElement):Bound|null{
- const article=node.dataset.cardId,cat=node.dataset.newsCategory,story=node.dataset.storyKey;
- if(node.parentElement!==root||!node.matches(CARD)||node.hasAttribute('data-home-local-id')||node.hasAttribute('data-knowledge-id')
- ||!article||!ARTICLE.test(article)||node.dataset.newsStreamKey!=='article:'+article||!category(cat)
- ||(story!==undefined&&!STORY.test(story))||!primaryLinks(node))return null;
- return {node,article,key:story??'article:'+article,category:cat};
+ if(node.parentElement!==root||!node.matches(CARD)||node.hasAttribute('data-home-local-id')||node.hasAttribute('data-knowledge-id')||!primaryLinks(node))return null;
+ const identity=readerSourceIntentIdentity(node.dataset.cardId,node.dataset.newsStreamKey,node.dataset.newsCategory,node.dataset.storyKey);
+ return identity?{node,...identity}:null;
 }
 function qualifies(node:HTMLElement,entry:IntersectionObserverEntry|undefined):boolean{
  if(!entry?.isIntersecting||entry.intersectionRatio<0.5||!node.isConnected||node.getClientRects().length===0)return false;

@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {QualifiedSourceIntent,SOURCE_INTENT_VERSION,SOURCE_INTENT_PURPOSE,SOURCE_INTENT_NOTICE,SOURCE_INTENT_CATEGORIES,INTENT_DOCUMENT_LIMIT,readSourceIntentPermit,startEditorialSourceIntent} from '../.build/src/audience/editorial-source-intent.js';
+import {QualifiedSourceIntent,SOURCE_INTENT_VERSION,SOURCE_INTENT_PURPOSE,SOURCE_INTENT_NOTICE,SOURCE_INTENT_CATEGORIES,INTENT_DOCUMENT_LIMIT,readSourceIntentPermit,readerSourceIntentIdentity,startEditorialSourceIntent} from '../.build/src/audience/editorial-source-intent.js';
 import {NEWS_CATEGORIES} from '../.build/src/iceo/news-taxonomy.js';
+import {continuationItems} from '../.build/src/iceo/news-continuation.js';
+import {article as corpusArticle} from './fixtures/news-corpus.mjs';
 
 const article=(n,category='13000000',visible=true)=>{const article=n.toString(16).padStart(24,'0');return {article,key:'article:'+article,category,visible};};
 const frames=(ledger,a,b,cards)=>{for(let t=a;t<=b;t+=100)ledger.frame(t,cards);};
@@ -56,4 +58,30 @@ test('new metric is not an alias for article opens and has no public mount, pers
  for(const path of files)assert.doesNotMatch(readFileSync(new URL(path,import.meta.url),'utf8'),/editorial-source-intent|startEditorialSourceIntent/u);
  const src=readFileSync(new URL('../src/audience/editorial-source-intent.ts',import.meta.url),'utf8');
  assert.doesNotMatch(src,/\bfetch\s*\(|sendBeacon\s*\(|localStorage|sessionStorage|indexedDB|document\.cookie|attributableOpens/u);
+});
+
+test('actual continuationItems single-article presentation key is normalized to its short canonical stream ID',()=>{
+ const card=corpusArticle(960,{now,category:'13000000'});
+ const stream='article:'+card.id;
+ const [item]=continuationItems([{kind:'global',key:stream,category:'13000000',card}],now);
+ assert.equal(item.kind,'global');
+ assert.equal(item.view.storyKey,'article:'+card.identity);
+ assert.ok(item.view.storyKey.startsWith('article:https://'));
+ const identity=readerSourceIntentIdentity(card.id,item.key,item.category,item.view.storyKey);
+ assert.deepEqual(identity,{article:card.id,key:stream,category:'13000000'});
+ assert.doesNotMatch(JSON.stringify(identity),/https?:/);
+ const ledger=new QualifiedSourceIntent();frames(ledger,0,1000,[{...identity,visible:true}]);
+ assert.equal(ledger.activate(identity),true);assert.deepEqual(totals(ledger),[1,1]);
+});
+test('canonical grouped story identity is preserved while malformed stream and presentation keys are rejected',()=>{
+ const {article:id,key:stream}=article(4);
+ const story='story:'+'f'.repeat(64);
+ assert.deepEqual(readerSourceIntentIdentity(id,stream,'13000000',story),{article:id,key:story,category:'13000000'});
+ assert.deepEqual(readerSourceIntentIdentity(id,stream,'13000000',undefined),{article:id,key:stream,category:'13000000'});
+ assert.deepEqual(readerSourceIntentIdentity(id,stream,'13000000','article:'+id),{article:id,key:stream,category:'13000000'});
+ assert.deepEqual(readerSourceIntentIdentity(id,stream,'13000000','article:source-specific-identity'),{article:id,key:stream,category:'13000000'});
+ for(const key of [null,'','article:','article:'+'a'.repeat(3001),'story:bad','https://example.invalid','local:'+id])
+  assert.equal(readerSourceIntentIdentity(id,stream,'13000000',key),null);
+ assert.equal(readerSourceIntentIdentity(id,'article:'+'a'.repeat(24),'13000000',undefined),null);
+ assert.equal(readerSourceIntentIdentity(id,stream,'07000000',undefined),null);
 });

@@ -17,7 +17,17 @@ export async function verifyEditorialIntent({origin,openIsolated,evaluate,loaded
   const run=body=>evaluate(call,'(()=>{'+body+';return true;})()');
   const snapshot=()=>evaluate(call,'window.__editorialQA.controller.snapshot()');
   const sum=async()=>{const s=await snapshot();assert.equal(s.status,'collecting');return s.rows.reduce((a,r)=>({exposures:a.exposures+r.qualifiedImpressions,intents:a.intents+r.sourceIntents}),{exposures:0,intents:0});};
-  const until=async(fn,label)=>{for(let i=0;i<90;i++){if(await fn())return;await pause(100);}throw Error('DLKT_EDITORIAL_INTENT_TIMEOUT_'+label+'_'+format.width);};
+  const until=async(fn,label)=>{
+   for(let i=0;i<90;i++){if(await fn())return;const s=await snapshot();assert.equal(s.status,'collecting','unexpected terminal state during '+label);await pause(100);}
+   // Controlled fixture geometry and identity-shape diagnostics only; never log source URLs or identifiers.
+   const detail=await evaluate(call,`(()=>{const q=window.__editorialQA,n=document.querySelector(q.selector),r=n?.getBoundingClientRect(),v=window.visualViewport;
+    const width=v?.width??innerWidth,height=v?.height??innerHeight,left=v?.offsetLeft??0,top=v?.offsetTop??0;
+    const ratio=r&&r.width>0&&r.height>0?Math.max(0,Math.min(r.right,left+width)-Math.max(r.left,left))*Math.max(0,Math.min(r.bottom,top+height)-Math.max(r.top,top))/(r.width*r.height):null;
+    return {snapshot:q.controller.snapshot(),focused:document.hasFocus(),visibility:document.visibilityState,entryView:document.body.dataset.entryView,exploring:!!document.body.dataset.worldExplore,modal:!!document.querySelector('dialog[open]'),connected:!!n,geometry:{width:r?.width,height:r?.height,ratio,viewportWidth:width,viewportHeight:height},
+     canonicalIdentity:!!(n&&q.module.readerSourceIntentIdentity(n.dataset.cardId,n.dataset.newsStreamKey,n.dataset.newsCategory,n.dataset.storyKey)),storyForm:n?.dataset.storyKey?.startsWith('article:')?'article-fallback':n?.dataset.storyKey?.startsWith('story:')?'grouped':'other'};
+   })()`);
+   throw Error('DLKT_EDITORIAL_INTENT_TIMEOUT_'+label+'_'+format.width+'_'+JSON.stringify(detail));
+  };
   try{
    await call('Emulation.setDeviceMetricsOverride',{...format,deviceScaleFactor:1,scale:1});
    await call('Emulation.setFocusEmulationEnabled',{enabled:true});
@@ -26,6 +36,8 @@ export async function verifyEditorialIntent({origin,openIsolated,evaluate,loaded
    assert.equal(inactive.status,'stopped');assert.deepEqual(inactive.rows,[]);
    const target=await evaluate(call,`(()=>{const q=window.__editorialQA,root=document.getElementById('discovery-cards');const cards=[...root.querySelectorAll(':scope > article.info-card.editorial-card[data-news-category="13000000"][data-edition-part="stream"]')];const card=cards.find(n=>{const t=n.querySelector('h3 > a.card-title-link'),a=n.querySelector('.card-actions > a.source-link'),r=n.getBoundingClientRect();return t&&a&&t.href===a.href&&t.protocol==='https:'&&r.height>0&&r.height<innerHeight*1.9;});if(!card)throw Error('ELIGIBLE_REAL_CARD_REQUIRED');const id=card.dataset.cardId;q.selector='#discovery-cards > article[data-card-id="'+id+'"]';q.originalNodes=[...root.children];document.addEventListener('click',event=>{const a=event.target instanceof Element?event.target.closest('a'):null;if(a&&a.closest(q.selector)){q.gestures.push({trusted:event.isTrusted,primary:a.matches('.card-title-link,.source-link'),prevented:event.defaultPrevented});event.preventDefault();}});return {category:card.dataset.newsCategory,hasPrimaryLinks:true};})()`);
    assert.equal(target.category,'13000000');assert.equal(target.hasPrimaryLinks,true);
+   const canonical=await evaluate(call,`(()=>{const q=window.__editorialQA,n=document.querySelector(q.selector);return !!q.module.readerSourceIntentIdentity(n.dataset.cardId,n.dataset.newsStreamKey,n.dataset.newsCategory,n.dataset.storyKey);})()`);
+   assert.equal(canonical,true,'actual reader presentation key binds to canonical measurement identity');
    const focus=selector=>run("const q=window.__editorialQA,link=document.querySelector(q.selector+' "+selector+"');link.scrollIntoView({block:'center',behavior:'instant'});link.focus({preventScroll:true});if(document.activeElement!==link)throw Error('INTENT_FOCUS')");
    await focus('h3 > a.card-title-link');
    const begin="const q=window.__editorialQA,now=Date.now();q.permit={state:'confirmed',purpose:q.module.SOURCE_INTENT_PURPOSE,noticeVersion:q.module.SOURCE_INTENT_NOTICE,pilotEligible:true,revision:1,issuedAt:now,expiresAt:now+60000};q.controller=q.module.startEditorialSourceIntent(()=>q.permit)";
