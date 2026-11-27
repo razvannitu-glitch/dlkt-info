@@ -12,6 +12,7 @@ import {assessKnowledgeClaimEvidence} from './knowledge-claim-evidence.mjs';
 // Observational evidence only. Never changes a registry, publishes a card,
 // follows a redirect, bypasses a denial or uses credentials.
 const PROBE_GROUPS=Object.freeze({
+  'knowledge-nsw-admission':Object.freeze({id:'dlkt-nsw-exact-admission-evidence-1',duration:45_000,limits:Object.freeze({robots:1,feed:0,article:2}),sources:Object.freeze([{id:'dlkt-elsewhere-nsw-fuelcheck'}])}),
   'knowledge-editorial':Object.freeze({
     id:'dlkt-knowledge-editorial-evidence-1',duration:75_000,limits:Object.freeze({robots:2,feed:0,article:4}),
     sources:Object.freeze([{id:'dlkt-elsewhere-nsw-fuelcheck'},{id:'dlkt-elsewhere-nz-unit-pricing'}]),
@@ -330,33 +331,52 @@ function verifyRobotsParsing(){
   return {state:'passed',cases:16};
 }
 const robotsParserChecks=verifyRobotsParsing();
-if(probeGroup==='knowledge-editorial'){
+if(probeGroup==='knowledge-editorial'||probeGroup==='knowledge-nsw-admission'){
   const [{knowledgeRightsCandidates},{validKnowledgeCard,knowledgeRightsForCard,knowledgeEditorialPayload},{knowledgeContentDigest}]=await Promise.all([
     import('../source/tests/fixtures/knowledge-rights-candidates.mjs'),
     import('../source/.build/src/iceo/knowledge.js'),
     import('../source/.build/src/share/knowledge-resolution.js'),
   ]);
+  const final=probeGroup==='knowledge-nsw-admission';
+  const packet=final?JSON.parse(readFileSync(new URL('../docs/evidence/nsw-fuelcheck-admission-candidate-20261126.json',import.meta.url),'utf8')):null;
+  if(final&&(packet.kind!=='dlkt-editorial-admission-candidate-not-authorized'||packet.activationAllowed!==false||packet.card.id!==SOURCES[0].id||packet.candidateDigest!=='d4c1df98ae87865402292c04c46811d60eee7ed3bde9583f1e16cd243611110e'))throw Error('NSW_ADMISSION_PACKET_INVALID');
   const previous=JSON.parse(readFileSync(new URL('../docs/evidence/knowledge-editorial-observation-20261126.json',import.meta.url),'utf8'));
-  if(previous.kind!=='observed-evidence-not-approval'||previous.workflowRun!==45888933255||previous.commit!=='bad1a13a88cb2c132aaf72f6bd50d600559b6c53'||previous.activationAllowed!==false||!Array.isArray(previous.reports)||previous.reports.length!==SOURCES.length)throw Error('KNOWLEDGE_BASELINE_PROVENANCE_INVALID');
+  if(previous.kind!=='observed-evidence-not-approval'||previous.workflowRun!==45888933255||previous.commit!=='bad1a13a88cb2c132aaf72f6bd50d600559b6c53'||previous.activationAllowed!==false||!Array.isArray(previous.reports)||previous.reports.length!==2)throw Error('KNOWLEDGE_BASELINE_PROVENANCE_INVALID');
   const reports=[];
   for(const source of SOURCES){
     try{
-      const card=knowledgeRightsCandidates.find(item=>item.id===source.id);
+      const card=final?packet.card:knowledgeRightsCandidates.find(item=>item.id===source.id);
       if(!card||!validKnowledgeCard(card))throw Error('KNOWLEDGE_PROBE_CANDIDATE_INVALID');
       const rights=knowledgeRightsForCard(card);
       if(!rights)throw Error('KNOWLEDGE_PROBE_RIGHTS_BINDING_MISSING');
       const candidateDigest=knowledgeContentDigest(card),identity={id:card.id,revision:card.revision,digest:candidateDigest,payload:knowledgeEditorialPayload(card),sourceUrl:card.source.url,policyUrl:rights.policyUrl,reviewedAt:card.reviewedAt,publishAt:card.publishAt,reviewBy:card.reviewBy};
+      if(final&&(candidateDigest!==packet.candidateDigest||card.reviewedAt!==packet.review.reviewedAt||rights.credit!==packet.rights.credit||rights.policyUrl!==packet.rights.policyUrl||rights.licenseUrl!==packet.rights.licenseUrl))throw Error('NSW_FINAL_DIGEST_OR_RIGHTS_MISMATCH');
       const observation=await observeKnowledgeEvidence({id:card.id,revision:card.revision,sourceUrl:card.source.url,policyUrl:rights.policyUrl,candidateDigest,get:boundedGet,parseRobots:robotsPolicy,decideRobots:robotsDecision,clock:Date.now});
       const prior=previous.reports.filter(item=>item.id===card.id);
       if(prior.length!==1)throw Error('KNOWLEDGE_BASELINE_IDENTITY_INVALID');
       // The committed baseline is evidence only, not the latest trusted history.
       // The pilot cannot read approvals or return reusable authorization.
-      const revalidation=compareKnowledgeObservations({identity,observation,baselineObservation:prior[0],now:Date.now()});
+      const revalidation=compareKnowledgeObservations({identity,observation,baselineObservation:final?null:prior[0],now:Date.now()});
       const claimEvidence=assessKnowledgeClaimEvidence(identity,observation);
-      reports.push({...observation,revalidation,claimEvidence});
+      // Compare documents across distinct payload digests, never re-label the lab receipt.
+      let reviewedDocumentContinuity=null;
+      if(final){
+        const reviewed=packet.priorObservation.receipt,old=prior[0],stamp=Date.parse(card.reviewedAt),observed=Date.parse(observation.observedAt);
+        const fingerprints=r=>[r.robots?.bodySha256,r.source?.bodySha256,r.source?.mainSha256,r.terms?.bodySha256,r.terms?.mainSha256];
+        const expected=fingerprints(reviewed),actual=fingerprints(observation);
+        const valid=packet.priorObservation.commit==='52ba5fa3af5359eb2a456a6f5bbab1f9e154d43b'&&packet.priorObservation.workflowRun===45891421555&&packet.priorObservation.workflowJob===140154794291&&
+          reviewed.id===card.id&&reviewed.candidateDigest===old.candidateDigest&&reviewed.activationAllowed===false&&reviewed.claimEvidence?.state==='evidence-ready-for-independent-review'&&
+          reviewed.sourceUrl===identity.sourceUrl&&reviewed.policyUrl===identity.policyUrl&&Date.parse(reviewed.observedAt)<=stamp&&stamp-Date.parse(reviewed.observedAt)<86400000&&
+          observed>=stamp&&Date.now()-observed<86400000&&expected.every(h=>typeof h==='string'&&/^[a-f0-9]{64}$/u.test(h))&&
+          JSON.stringify(expected)===JSON.stringify(fingerprints(old))&&JSON.stringify(expected)===JSON.stringify(actual);
+        reviewedDocumentContinuity={state:valid?'unchanged-from-reviewed-documents':'held',reviewedLabDigest:reviewed.candidateDigest,finalCandidateDigest:candidateDigest,activationAllowed:false};
+      }
+      reports.push({...observation,revalidation,claimEvidence,reviewedDocumentContinuity});
     }catch(error){reports.push({id:source.id,state:'held',activationAllowed:false,reason:clean(error instanceof Error?error.message:'unknown',100)});}
   }
-  const outcome=assessKnowledgeProbeOutcome(reports,SOURCES.map(source=>source.id));
+  const collection=assessKnowledgeProbeOutcome(reports,SOURCES.map(source=>source.id));
+  const continuity=!final||reports.every(report=>report.reviewedDocumentContinuity?.state==='unchanged-from-reviewed-documents');
+  const outcome={...collection,state:collection.complete&&continuity?collection.state:'held',complete:collection.complete&&continuity,...(final?{continuityState:continuity?'unchanged-from-reviewed-documents':'held'}:{})};
   console.log('DLKT_KNOWLEDGE_EVIDENCE '+JSON.stringify({probe:configuration.id,commit:process.env.GITHUB_SHA??null,startedAt:new Date(startedAt).toISOString(),finishedAt:new Date().toISOString(),attempts,limits,robotsParserChecks,...outcome,reports,boundary:'Read-only evidence and fixed-baseline comparison only; no semantic, translation, licence or publication approval.'}));
   if(!outcome.complete)process.exitCode=1;
 }else{

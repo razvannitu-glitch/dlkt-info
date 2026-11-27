@@ -122,11 +122,13 @@ export function knowledgeEditorialPayload(card:KnowledgeCard):string {
 export interface KnowledgeEditorialApproval {
  readonly id:string;readonly revision:number;readonly payload:string;readonly digest:string;
 }
-// Intentionally empty: source terms and deterministic test fixtures are not an
-// actual editorial approval. A decision must be committed after item-level review.
-// CI verifies SHA-256(payload) for every decision. The synchronous browser gate
-// compares the full canonical payload byte-for-byte (no custom crypto in client).
-export const KNOWLEDGE_EDITORIAL_APPROVALS:readonly KnowledgeEditorialApproval[]=Object.freeze([]);
+// Explicit exact-content decisions only. NSW pilot evidence and scope decision:
+// tests/evidence/nsw-fuelcheck-admission-20261126.json. The lab copy and NZ remain denied.
+// CI verifies SHA-256(payload) and the evidence binding. The browser compares
+// the full canonical payload byte-for-byte; no custom crypto in client.
+export const KNOWLEDGE_EDITORIAL_APPROVALS:readonly KnowledgeEditorialApproval[]=Object.freeze([
+ Object.freeze({"id":"dlkt-elsewhere-nsw-fuelcheck","revision":1,"payload":"[\"dlkt-knowledge-editorial-v1\",\"knowledge\",\"dlkt-elsewhere-nsw-fuelcheck\",1,\"04000000\",\"elsewhere\",null,\"cross-border\",[\"NSW Government\",\"https://www.nsw.gov.au/legal-and-justice/consumer-rights-and-protection/advertising-product-packaging-and-pricing-laws/fuel-pricing-discounts-and-signage/check-fuel-prices\"],[\"AU\",[],[\"New South Wales, Australia\",\"New South Wales, Australia\",\"Nuovo Galles del Sud, Australia\"]],[[\"en\",\"Fuel price comparison\",\"In New South Wales, drivers can compare fuel prices before choosing a station.\",\"The NSW Government's free FuelCheck service displays current fuel prices at different stations, helping drivers compare options before refuelling.\",\"Look for a reliable local comparison service, compare the same fuel type, and consider distance. Use your phone only when you are not driving.\"],[\"ro\",\"Compararea prețurilor carburanților\",\"În New South Wales, șoferii pot compara prețurile carburanților înainte să aleagă o benzinărie.\",\"Serviciul gratuit FuelCheck, oferit de autoritățile din NSW, afișează prețurile actuale la diferite benzinării, pentru a facilita compararea opțiunilor înainte de alimentare.\",\"Verifică dacă există un comparator local de încredere, compară același tip de carburant și ia în calcul distanța. Nu folosi telefonul la volan.\"],[\"it\",\"Confronto prezzi carburanti\",\"Nel Nuovo Galles del Sud, gli automobilisti possono confrontare i prezzi dei carburanti prima di scegliere una stazione.\",\"Il servizio gratuito FuelCheck del governo del Nuovo Galles del Sud mostra i prezzi correnti dei carburanti presso diverse stazioni, aiutando a confrontare le opzioni prima del rifornimento.\",\"Cerca un servizio locale affidabile, confronta lo stesso tipo di carburante e considera la distanza. Non usare il telefono mentre guidi.\"]],\"2026-11-26T20:33:43.000Z\",null,\"2026-12-26T20:33:43.000Z\",[\"© State of New South Wales. For current information go to www.nsw.gov.au.\",\"https://creativecommons.org/licenses/by/4.0/\",\"https://www.nsw.gov.au/nsw-government/about-website/copyright\"]]","digest":"d4c1df98ae87865402292c04c46811d60eee7ed3bde9583f1e16cd243611110e"}),
+]);
 export function matchesKnowledgeEditorialApproval(card:KnowledgeCard,approval:KnowledgeEditorialApproval):boolean {
  return validKnowledgeCard(card)&&approval.id===card.id&&approval.revision===card.revision&&
   /^[a-f0-9]{64}$/u.test(approval.digest)&&approval.payload===knowledgeEditorialPayload(card);

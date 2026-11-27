@@ -10,13 +10,13 @@ const ctx={countryCode:'RO',cityId:'683506',timeZone:'Europe/Bucharest'};
 const now=Date.parse('2026-11-27T12:00:00.000Z');
 const select=(cards,at=now)=>selectInlineKnowledge(cards,ctx,at,'rights-lab');
 
-test('both exact candidate bindings are valid but neither candidate is active in the public catalogue',()=>{
- assert.equal(KNOWLEDGE_CARDS.length,25);
- assert.ok(KNOWLEDGE_CARDS.every(card=>knowledgeRightsForCard(card)===null));
+test('both laboratory payloads remain denied; only the separately reviewed NSW edition enters the catalogue',()=>{
+ assert.equal(KNOWLEDGE_CARDS.length,26);
+ assert.deepEqual(KNOWLEDGE_CARDS.filter(card=>knowledgeRightsForCard(card)!==null).map(card=>card.id),[nsw.id]);
  for(const card of knowledgeRightsCandidates){
   assert.equal(validKnowledgeCard(card),true);
   assert.equal(safeKnowledgeSource(card.source.url),true);
-  assert.equal(KNOWLEDGE_CARDS.some(item=>item.id===card.id),false);
+  assert.equal(KNOWLEDGE_CARDS.some(item=>knowledgeEditorialPayload(item)===knowledgeEditorialPayload(card)),false);
   const rights=knowledgeRightsForCard(card);assert.ok(Object.isFrozen(rights));
   assert.equal(rights.licenseUrl,'https://creativecommons.org/licenses/by/4.0/');
   assert.throws(()=>select([card]),/KNOWLEDGE_EDITORIAL_APPROVAL_REQUIRED/);
@@ -88,7 +88,8 @@ test('committed editorial decisions carry verified SHA-256 and unique identities
   assert.ok(card,'no orphaned editorial approval');
   assert.equal(matchesKnowledgeEditorialApproval(card,approval),true);
  }
- assert.equal(KNOWLEDGE_EDITORIAL_APPROVALS.length,0,'lab must not contain real approvals');
+ assert.equal(KNOWLEDGE_EDITORIAL_APPROVALS.length,1,'only the exact NSW reviewed release candidate is admitted');
+ assert.equal(KNOWLEDGE_EDITORIAL_APPROVALS[0].digest,'d4c1df98ae87865402292c04c46811d60eee7ed3bde9583f1e16cd243611110e');
  for(const card of knowledgeRightsCandidates)assert.throws(()=>validateKnowledgeCatalog([card]),/KNOWLEDGE_EDITORIAL_APPROVAL_REQUIRED/);
 });
 
@@ -102,5 +103,6 @@ test('denied fixtures never enter feed selection even within their review window
  const selected=select(KNOWLEDGE_CARDS),news=Object.freeze(Array.from({length:44},(_,i)=>Object.freeze({key:'n-'+i})));
  const items=interleaveKnowledge(news,selected);
  for(const [i,item] of items.filter(item=>item.kind==='news').entries())assert.strictEqual(item.item,news[i]);
- assert.equal(selected.some(item=>knowledgeRightsCandidates.some(card=>card.id===item.card.id)),false);
+ assert.equal(selected.some(item=>knowledgeRightsCandidates.some(card=>knowledgeEditorialPayload(card)===knowledgeEditorialPayload(item.card))),false);
+ assert.ok(selected.some(item=>item.card.id===nsw.id));
 });

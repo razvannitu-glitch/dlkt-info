@@ -13,9 +13,11 @@ export interface KnowledgeShareAdmission {
  readonly id:string;readonly revision:number;readonly digest:string;
  readonly reviewedAt:number;readonly expiresAt:number;
 }
-// Intentionally empty until item-specific standalone distribution review is complete.
-// Do not populate from visitor input, catalogue selection or test fixtures.
-const standaloneAdmissions:readonly KnowledgeShareAdmission[]=Object.freeze([]);
+// Exact standalone decision, separate from feed admission. Evidence and scope:
+// tests/evidence/nsw-fuelcheck-admission-20261126.json. Never use fixture or visitor input.
+const standaloneAdmissions:readonly KnowledgeShareAdmission[]=Object.freeze([
+ Object.freeze({"id":"dlkt-elsewhere-nsw-fuelcheck","revision":1,"digest":"d4c1df98ae87865402292c04c46811d60eee7ed3bde9583f1e16cd243611110e","reviewedAt":1795725223000,"expiresAt":1798317223000}),
+]);
 function validClock(now:number):boolean {
  return Number.isSafeInteger(now)&&Math.abs(now)<=8_640_000_000_000_000-48*3_600_000;
 }
