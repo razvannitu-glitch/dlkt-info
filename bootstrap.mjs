@@ -4,6 +4,7 @@ import {join, resolve} from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {copyVerifiedSource, verifySource} from './lib/source-integrity.mjs';
 import {attestProduction, PROJECT_ID} from './lib/production-attestation.mjs';
+import {attestAudienceConnection} from './lib/audience-attestation.mjs';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
 const source = join(root, 'source');
@@ -28,6 +29,11 @@ if (args[0] === '--check') {
     copyVerifiedSource(source, stage, pin);
     symlinkSync(resolve(root, 'node_modules'), join(stage, 'node_modules'), 'dir');
     execFileSync('npm', ['run', 'build'], {cwd: stage, stdio: 'inherit'});
+    if (args[0] !== '--local' && process.env.DLKT_INFO_AUDIENCE_CONNECTION_CHECK === '1') {
+      const storage = await import(pathToFileURL(join(stage, '.build', 'src', 'audience', 'storage.js')).href);
+      await attestAudienceConnection(process.env, storage);
+      console.log('DLKT_AUDIENCE_CONNECTION_VERIFIED read-only operational readiness and snapshot');
+    }
     const {preparePublicRelease} = await import(pathToFileURL(join(stage, 'scripts', 'prepare-public-release.mjs')).href);
     const release = preparePublicRelease(stage, {projectId: PROJECT_ID, build: true});
     const handlers = Object.keys(expectedConfig.functions).map(file => `/${file.replace(/\.ts$/u, '')}`).sort();
