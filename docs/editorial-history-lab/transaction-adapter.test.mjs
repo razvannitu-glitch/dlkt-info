@@ -20,6 +20,7 @@ const users=Object.freeze({
   attestor:['dlkt_history_ci_attestor','lab-attestor-local-only'],
   reader:['dlkt_history_ci_reader','lab-reader-local-only'],
   reviewer:['dlkt_history_ci_reviewer','lab-reviewer-local-only'],
+  archiver:['dlkt_history_ci_archiver','lab-archiver-local-only'],
 });
 // One psql invocation = one authenticated connection and a completed
 // autocommit SQL statement. No SET ROLE or privileged connection in tests.
@@ -29,7 +30,7 @@ function query(role,statement,passwordOverride){
   const result=spawnSync('docker',['exec','-i','-e','PGPASSWORD='+(passwordOverride??password),container,
     'psql','-X','-qAt','-w','-h','127.0.0.1','-U',user,'-d',db,'-v','ON_ERROR_STOP=1'],{
     input:"SET standard_conforming_strings=on; SET statement_timeout='5s';\nSELECT session_user||':'||current_user||':'||current_database();\n"+statement+';\n',
-    encoding:'utf8',timeout:12000,maxBuffer:256*1024,
+    encoding:'utf8',timeout:12000,maxBuffer:2*1024*1024,
   });
   if(result.status!==0)throw Error('LAB_SQL_REJECTED');
   const lines=result.stdout.trim().split('\n');
@@ -393,5 +394,74 @@ test('simulation rejects missing or altered receipts, stale snapshot, foreign id
   ]){
     const denied=await s.evaluate(patch);neverAuthority(denied);
     assert.equal(denied.feed.state,'held');assert.equal(denied.standalone.state,'held');
+  }
+});
+
+
+const archiveArgs=k=>[q(k.candidate.id),String(k.candidate.revision),q(k.candidate.digest)].join(',');
+const sealSql=(k,id)=>'SELECT to_json(dlkt_history_lab.seal_lab_checkpoint('+archiveArgs(k)+','+q(id)+'::uuid))';
+const checkpointSql=k=>'SELECT dlkt_history_lab.read_lab_checkpoint('+archiveArgs(k)+')';
+const checkpoint=k=>query('reader',checkpointSql(k));
+const seal=(k,id)=>query('archiver',sealSql(k,id));
+function archiveBoundary(r){
+  assert.equal(r.kind,'synthetic-checkpoint-not-authority');assert.equal(r.activationAllowed,false);
+  assert.equal(r.approvalReusable,false);assert.equal(r.rolloverAllowed,false);
+}
+test('archive authority is separated and cannot write observations, decisions or raw checkpoint rows',()=>{
+  const k=makeKey('archive-full'),id=randomUUID(),statement=sealSql(k,id);
+  for(const role of ['worker','attestor','reader','reviewer'])assert.throws(()=>query(role,statement),/LAB_SQL_REJECTED/);
+  assert.throws(()=>query('archiver',checkpointSql(k)),/LAB_SQL_REJECTED/);
+  assert.throws(()=>query('archiver','SELECT row_to_json(t) FROM dlkt_history_lab.start_attempt('+args(k)+') t'),/LAB_SQL_REJECTED/);
+  assert.throws(()=>query('archiver',reviewSql(k,id,'feed','lab-held',null,null)),/LAB_SQL_REJECTED/);
+  assert.throws(()=>query('archiver','SELECT to_json(count(*)) FROM dlkt_history_lab.archive_checkpoints'),/LAB_SQL_REJECTED/);
+  const none=checkpoint(k);archiveBoundary(none);assert.equal(none.state,'no-checkpoint');
+});
+test('seal a saturated complete history including held, failed, abandoned, attestations and all scope reviews',async()=>{
+  const k=makeKey('archive-full'),id=randomUUID();
+  const before=await ports.reader.read(k.candidate);
+  assert.equal(before.state,'capacity-held');assert.equal(before.attempts.length,256);
+  assert.equal(seal(k,id),'sealed');
+  const r=checkpoint(k);archiveBoundary(r);assert.equal(r.state,'sealed-verified');
+  assert.equal(r.checkpoint.checkpointId,id);assert.equal(r.checkpoint.sealedBy,users.archiver[0]);
+  assert.equal(createHash('sha256').update(r.checkpoint.payload,'utf8').digest('hex'),r.checkpoint.payloadSha256);
+  const archive=JSON.parse(r.checkpoint.payload);
+  assert.equal(archive.kind,'dlkt-synthetic-archive-pg17-v1');
+  assert.equal(archive.candidate.tip,256);assert.equal(archive.candidate.card_id,k.candidate.id);
+  assert.equal(archive.activationAllowed,false);assert.equal(archive.approvalReusable,false);assert.equal(archive.rolloverAllowed,false);
+  assert.deepEqual(archive.attempts.map(x=>x.attempt.sequence_no),Array.from({length:256},(_,i)=>i+1));
+  assert.deepEqual(archive.attempts.slice(0,4).map(x=>x.result.outcome),['observed','held','failed','abandoned']);
+  assert.ok(archive.attempts[0].attestation.evidence_digest);
+  assert.ok(archive.attempts[3].attestation.evidence_digest);
+  assert.equal(archive.attempts[3].result.evidence_digest,null);
+  assert.deepEqual(archive.scopeReviewHeads.map(x=>[x.scope,x.tip]),[['feed',2],['standalone',1]]);
+  assert.deepEqual(archive.scopeReviews.map(x=>[x.scope,x.review_no,x.verdict]),[
+    ['feed',1,'lab-permitted'],['feed',2,'lab-held'],['standalone',1,'lab-permitted']]);
+  assert.equal(seal(k,id),'replay');
+  assert.deepEqual(checkpoint(k),r);
+  // A different client/session time zone must not change the sealed bytes.
+  const otherZone=query('reader',"SET TIME ZONE 'Pacific/Auckland'; "+checkpointSql(k));
+  assert.deepEqual(otherZone,r);
+  assert.throws(()=>seal(k,randomUUID()),/LAB_SQL_REJECTED/);
+  assert.equal((await ports.worker.start({...k,attemptId:randomUUID()})).disposition,'capacity-held');
+  const after=await ports.reader.read(k.candidate);
+  assert.deepEqual(after,before);
+  assert.equal(snapshot(k).approvalReusable,false);
+});
+test('open, below-capacity, corrupt or non-synthetic histories cannot be archived as completed',async()=>{
+  for(const name of ['positive','busy','review-corrupt']){
+    const k=makeKey(name);
+    assert.throws(()=>seal(k,randomUUID()),/LAB_SQL_REJECTED/);
+    const r=checkpoint(k);archiveBoundary(r);assert.equal(r.state,'no-checkpoint');
+  }
+  const real={candidate:{id:'dlkt-elsewhere-nsw-fuelcheck',revision:1,
+    digest:'772d754d42ceb10260b4c02c1b4c97fcb1949ddbf61d6b0cd17fb2b88fa1c88b'}};
+  assert.throws(()=>seal(real,randomUUID()),/LAB_SQL_REJECTED/);
+});
+test('rehashing modified archive bytes or changing retained terminal data does not restore integrity',()=>{
+  for(const [name,id] of [['archive-corrupt','40000000-0000-4000-8000-000000000001'],
+    ['archive-live-drift','40000000-0000-4000-8000-000000000002']]){
+    const k=makeKey(name),r=checkpoint(k);archiveBoundary(r);
+    assert.equal(r.state,'integrity-held');assert.equal(r.checkpoint,null);
+    assert.throws(()=>seal(k,id),/LAB_SQL_REJECTED/);
   }
 });
