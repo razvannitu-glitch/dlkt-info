@@ -378,6 +378,12 @@ test('simulation rejects missing or altered receipts, stale snapshot, foreign id
   const good=await s.evaluate();assert.equal(good.feed.state,'would-reuse-in-lab');
   const stored=snapshot(first);
   const mutate=(fn)=>{const copy=structuredClone(stored);fn(copy);return async()=>copy;};
+  // Exercise the adapter's saturated-scope boundary independently of the
+  // separately seeded full SQL journal. These are deliberately modified inputs.
+  const capped=await s.evaluate({read:mutate(x=>{x.scopes.feed.count=256;x.scopes.feed.state='review-capacity-held';})});
+  neverAuthority(capped);assert.equal(capped.feed.state,'held');
+  assert.equal(capped.feed.reason,'synthetic-scope-review-capacity-held');
+  assert.notEqual(capped.standalone.state,'would-reuse-in-lab');
   const changed=structuredClone(s.receipts);changed[0].observation.source.bodySha256='0'.repeat(64);
   const invalidFlags=structuredClone(s.receipts);invalidFlags[0].observation.rightsReviewRequired=false;
   for(const patch of [
@@ -390,6 +396,7 @@ test('simulation rejects missing or altered receipts, stale snapshot, foreign id
     {read:mutate(x=>{x.scopes.feed.latest.evidenceDigest='0'.repeat(64);})},
     {read:mutate(x=>{x.scopes.feed.latest.scope='standalone';})},
     {read:mutate(x=>{x.scopes.feed.state='expired';})},
+    {read:mutate(x=>{x.scopes.feed.count=256;})},
     {read:mutate(x=>{x.history.attempts.pop();})},
     {read:mutate(x=>{x.approvalReusable=true;})},
   ]){
@@ -588,4 +595,29 @@ test('abandoning the final capacity slot preserves capacity and permits sealing,
   assert.equal(seal(k,id),'sealed');
   const saved=checkpoint(k);archiveBoundary(saved);assert.equal(saved.state,'sealed-verified');
   assert.equal(JSON.parse(saved.checkpoint.payload).attempts.at(-1).result.outcome,'abandoned');
+});
+
+test('saturated review journal fails closed before observation capacity is exhausted',async()=>{
+  const base=makeKey('review-cap'),before=await ports.reader.read(base.candidate);
+  assert.equal(before.state,'complete-observation-prefix');assert.equal(before.tip,129);
+  const k={...base,attemptId:before.attempts.at(-1).attemptId};
+  const s=snapshot(k);assert.equal(s.state,'metadata-only');assert.equal(s.scopes.feed.count,256);
+  assert.equal(s.scopes.feed.latest.verdict,'lab-permitted');
+  assert.ok(Date.parse(s.scopes.feed.latest.expiresAt)>Date.now());
+  assert.equal(s.scopes.feed.state,'review-capacity-held');assert.equal(s.scopes.standalone.state,'no-review');
+  assert.equal(s.approvalReusable,false);assert.equal(s.activationAllowed,false);
+  assert.throws(()=>review(k,randomUUID(),'feed','lab-held',s.scopes.feed.latest.evidenceDigest,null),/LAB_SQL_REJECTED/);
+  const original=s.scopes.feed.latest;
+  assert.equal(review(k,original.reviewId,'feed','lab-permitted',original.evidenceDigest,original.expiresAt),'replay');
+  assert.deepEqual(snapshot(k).scopes.feed,s.scopes.feed);
+  const next={...k,attemptId:randomUUID()};
+  assert.equal((await runObservationAttempt(next,ports,observer)).outcome,'observed');
+  const later=snapshot(next);assert.equal(later.history.tip,130);assert.equal(later.scopes.feed.state,'review-capacity-held');
+  assert.equal(later.approvalReusable,false);
+});
+
+test('archive seal replay and readback agree on impossible historical seal time',()=>{
+  const k=makeKey('archive-bad-clock'),r=checkpoint(k);
+  archiveBoundary(r);assert.equal(r.state,'integrity-held');assert.equal(r.checkpoint,null);
+  assert.throws(()=>seal(k,'40000000-0000-4000-8000-000000000003'),/LAB_SQL_REJECTED/);
 });

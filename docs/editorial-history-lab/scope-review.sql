@@ -167,6 +167,7 @@ begin
       when not valid then 'integrity-held'
       when p_card !~ '^lab-' then 'synthetic-only'
       when s.review_id is null then 'no-review'
+      when h.tip>=256 then 'review-capacity-held'
       when s.verdict='lab-held' then 'held'
       when ts>=s.expires_at then 'expired'
       when a.sequence_no<>c.tip or history->>'state' in ('open','expired-open','capacity-held') then 'new-observation-review-required'

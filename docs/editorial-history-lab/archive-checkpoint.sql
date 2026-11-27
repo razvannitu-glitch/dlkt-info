@@ -62,6 +62,21 @@ begin
 end;
 $$;
 
+-- Caller already holds the candidate lock. Both first seal and replay
+-- use the same chronology guard as verified archive readback.
+create function dlkt_history_lab.archive_seal_time_valid(
+  p_card text,p_revision integer,p_digest text,p_sealed timestamptz,p_now timestamptz
+) returns boolean language sql stable strict security invoker
+set search_path=pg_catalog set timezone='UTC' as $$
+  select coalesce(
+    p_sealed<=p_now
+    and p_sealed>=(select max(r.finished_at) from dlkt_history_lab.results r
+      join dlkt_history_lab.attempts t using(attempt_id)
+      where (t.card_id,t.revision,t.digest)=(p_card,p_revision,p_digest))
+    and p_sealed>=coalesce((select max(s.reviewed_at) from dlkt_history_lab.scope_reviews s
+      where (s.card_id,s.revision,s.digest)=(p_card,p_revision,p_digest)),p_sealed),false);
+$$;
+
 create function dlkt_history_lab.seal_lab_checkpoint(
   p_card text,p_revision integer,p_digest text,p_checkpoint uuid
 ) returns text language plpgsql security definer
@@ -78,11 +93,13 @@ begin
   payload:=dlkt_history_lab.archive_payload(p_card,p_revision,p_digest);
   checksum:=encode(sha256(convert_to(payload,'UTF8')),'hex');
   ts:=clock_timestamp();
+  if not dlkt_history_lab.archive_seal_time_valid(p_card,p_revision,p_digest,ts,ts)
+    then raise exception 'LAB_ARCHIVE_INTEGRITY_HELD'; end if;
   select * into prior from dlkt_history_lab.archive_checkpoints k
     where (k.card_id,k.revision,k.digest)=(p_card,p_revision,p_digest);
   if found then
     if prior.payload is distinct from payload or prior.payload_sha256 is distinct from checksum
-      or prior.sealed_at>ts
+      or not dlkt_history_lab.archive_seal_time_valid(p_card,p_revision,p_digest,prior.sealed_at,ts)
       then raise exception 'LAB_ARCHIVE_INTEGRITY_HELD'; end if;
     if prior.checkpoint_id<>p_checkpoint or prior.sealed_by<>session_user::name
       then raise exception 'LAB_ARCHIVE_REPLAY_CONFLICT'; end if;
@@ -117,12 +134,7 @@ begin
     payload:=dlkt_history_lab.archive_payload(p_card,p_revision,p_digest);
     ts:=clock_timestamp();
     valid:=a.payload=payload and a.payload_sha256=encode(sha256(convert_to(payload,'UTF8')),'hex')
-      and a.sealed_at<=ts
-      and a.sealed_at>=(select max(r.finished_at) from dlkt_history_lab.results r
-        join dlkt_history_lab.attempts t using(attempt_id)
-        where (t.card_id,t.revision,t.digest)=(p_card,p_revision,p_digest))
-      and a.sealed_at>=coalesce((select max(s.reviewed_at) from dlkt_history_lab.scope_reviews s
-        where (s.card_id,s.revision,s.digest)=(p_card,p_revision,p_digest)),a.sealed_at);
+      and dlkt_history_lab.archive_seal_time_valid(p_card,p_revision,p_digest,a.sealed_at,ts);
   exception when raise_exception then valid:=false;
   end;
   if valid is distinct from true then
@@ -138,6 +150,7 @@ revoke all on dlkt_history_lab.archive_checkpoints
   from public,anon,authenticated,service_role,dlkt_history_worker,dlkt_history_attestor,
   dlkt_history_reader,dlkt_history_reaper,dlkt_history_reviewer,dlkt_history_archiver;
 revoke execute on function dlkt_history_lab.archive_payload(text,integer,text),
+  dlkt_history_lab.archive_seal_time_valid(text,integer,text,timestamptz,timestamptz),
   dlkt_history_lab.seal_lab_checkpoint(text,integer,text,uuid),
   dlkt_history_lab.read_lab_checkpoint(text,integer,text)
   from public,anon,authenticated,service_role,dlkt_history_worker,dlkt_history_attestor,

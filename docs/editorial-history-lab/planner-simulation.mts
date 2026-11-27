@@ -44,6 +44,7 @@ interface CheckedRow {
 interface ReviewBinding {
   readonly reviewId:string;readonly verdict:'lab-held'|'lab-permitted';
   readonly reviewed:number;readonly expires:number|null;readonly row:CheckedRow;
+  readonly capacityHeld:boolean;
 }
 
 const object=(v:unknown):v is Dict=>v!==null&&typeof v==='object'&&!Array.isArray(v);
@@ -145,15 +146,16 @@ function checkedReview(scopes:Dict,scope:Scope,rows:readonly CheckedRow[],i:Simu
   const next=rows[r.sequence];
   if(!row||r.attemptId!==row.attemptId||r.evidenceDigest!==row.evidenceDigest||reviewed===null||
     reviewed<row.finished||reviewed>now||(next!==undefined&&next.started<reviewed))return false;
+  const capacityHeld=s.count===256;
   if(r.verdict==='lab-held'){
-    if(r.expiresAt!==null||s.state!=='held')return false;
+    if(r.expiresAt!==null||s.state!==(capacityHeld?'review-capacity-held':'held'))return false;
   }else if(expires===null||expires<=reviewed||reviewed-row.observed>=DAY||
     expires>row.observed+DAY||expires>Date.parse(i.reviewBy)||reviewed<Date.parse(i.reviewedAt)||
-    s.state!==(snapshotClock>=expires?'expired':r.sequence===rows.length?'recorded-not-authority':'new-observation-review-required'))return false;
-  return {reviewId:r.reviewId,verdict:r.verdict,reviewed,expires,row};
+    s.state!==(capacityHeld?'review-capacity-held':snapshotClock>=expires?'expired':r.sequence===rows.length?'recorded-not-authority':'new-observation-review-required'))return false;
+  return {reviewId:r.reviewId,verdict:r.verdict,reviewed,expires,row,capacityHeld};
 }
 function simulatedReview(i:SimulationIdentity,scope:Scope,r:ReviewBinding|null):Dict|null{
-  if(r===null||r.verdict!=='lab-permitted'||r.expires===null)return null;
+  if(r===null||r.capacityHeld||r.verdict!=='lab-permitted'||r.expires===null)return null;
   // These verdict fields represent ONLY the hypothetical test scenario.
   // They do not come from real editorial review or prove claim completeness.
   return {scope,id:i.id,revision:i.revision,digest:i.digest,decision:'permitted',
@@ -163,6 +165,7 @@ function simulatedReview(i:SimulationIdentity,scope:Scope,r:ReviewBinding|null):
 }
 function mappedAdvice(value:unknown,r:ReviewBinding|null,now:number):Advice|null{
   if(!object(value)||typeof value.reason!=='string'||value.reason.length>160)return null;
+  if(r?.capacityHeld)return advice('held','synthetic-scope-review-capacity-held');
   if(r?.verdict==='lab-held')return advice('held','synthetic-scope-revoked');
   if(value.state==='held'||value.state==='review-required')return value.validUntil===null?advice(value.state,value.reason):null;
   if(value.state!=='reuse-eligible'||!canonical(value.validUntil)||r===null||r.verdict!=='lab-permitted'||r.expires===null)return null;
