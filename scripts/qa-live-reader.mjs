@@ -4,7 +4,7 @@ import {existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync}
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
-import {KNOWLEDGE_ORIGIN,KNOWLEDGE_IDENTITY,knowledgeCases,knowledgeCanonicalUrl,knowledgeCreditText,knowledgeCreditLinks,knowledgeCopyMessage,readKnowledgeProbeOptions,readKnowledgeReceipt,knowledgeRunBoundary} from './verify-live-knowledge.mjs';
+import {KNOWLEDGE_ORIGIN,KNOWLEDGE_IDENTITY,knowledgeCases,knowledgeCanonicalUrl,knowledgeCreditText,knowledgeCreditLinks,knowledgeCopyMessage,knowledgeEditorialFailures,readKnowledgeProbeOptions,readKnowledgeReceipt,knowledgeRunBoundary} from './verify-live-knowledge.mjs';
 
 const HOST = '127.0.0.1';
 const MAX_WAIT_MS = 18_000;
@@ -129,7 +129,21 @@ export function inspectKnowledgeDocument(){
   const credits=[...a?.querySelectorAll('.card-credits')??[]],credit=credits[0];
   const buttons=[...document.querySelectorAll('#shared-copy')],b=buttons[0];
   const canonical=[...document.querySelectorAll('head link[rel="canonical"]')];
-  return {ready:document.readyState,url:location.href,lang:document.documentElement.lang,articleCount:articles.length,id:a?.getAttribute('data-shared-knowledge-id')??null,
+  const within=selector=>[...a?.querySelectorAll(selector)??[]];
+  const field=(nodes,tag,connection=false)=>{
+    const node=nodes[0],parts=[...node?.childNodes??[]];
+    const nonText=parts.filter(part=>part.nodeType!==3),strong=nonText[0];
+    const structure=Boolean(node&&node.localName===tag&&(connection?
+      nonText.length===1&&parts[0]===strong&&strong.localName==='strong'&&visible(strong)&&[...strong.childNodes].every(child=>child.nodeType===3):
+      nonText.length===0));
+    return {count:nodes.length,visible:visible(node),structure,text:normalize(node?.innerText)};
+  };
+  const guides=within('.card-guide');
+  const editorial={title:field(within('h1'),'h1'),explanation:field(within('.card-context'),'p'),
+    connection:field(guides.length===1?[...guides[0].querySelectorAll('p')]:[],'p',true),
+    geography:field(within('.card-topic'),'span'),publisher:field(within('.card-meta'),'p'),
+    boundary:field(within('p.privacy-note:not([id])'),'p')};
+  return {editorial,ready:document.readyState,url:location.href,lang:document.documentElement.lang,articleCount:articles.length,id:a?.getAttribute('data-shared-knowledge-id')??null,
     expiry:f?.dataset.validUntil??null,canonical:canonical.length===1?canonical[0].href:null,
     source:[...a?.querySelectorAll('a.source-link[href]')??[]].filter(visible).map(n=>n.href),
     creditCount:credits.length,creditVisible:visible(credit),creditText:normalize(credit?.innerText),
@@ -147,6 +161,7 @@ export function assessKnowledgeBrowser(item,state,url,width){
   if(typeof state?.width!=='number'||state.width>width+2)failures.push('horizontal-overflow');
   if(item.status===200){
     if(state?.articleCount!==1||state?.id!==KNOWLEDGE_IDENTITY.id||state.expiry!==String(KNOWLEDGE_IDENTITY.expiresAt)||state.canonical!==knowledgeCanonicalUrl(item.language))failures.push('exact-card');
+    failures.push(...knowledgeEditorialFailures(item.language,state?.editorial));
     if(state?.source?.length!==1||state.source[0]!==KNOWLEDGE_IDENTITY.source)failures.push('source');
     const expected=knowledgeCreditLinks(item.language);
     if(state?.creditCount!==1||!state.creditVisible||state.creditText!==knowledgeCreditText(item.language)||state.creditLinks?.length!==2||

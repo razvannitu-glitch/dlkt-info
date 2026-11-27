@@ -1,4 +1,5 @@
 import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import {parseDocument,DomUtils} from 'htmlparser2';
 import {resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
@@ -12,12 +13,32 @@ const reviewedAt=Date.parse(evidence.reviewedAt);
 const expiresAt=Math.min(Date.parse(evidence.reviewBy),Date.parse(decision[0]?.expiresAt));
 const source=evidence.observation.receipt.sourceUrl, terms=evidence.observation.receipt.policyUrl;
 const labDigest=evidence.priorLabDigest;
+const reviewedPacket=JSON.parse(readFileSync(new URL('../docs/evidence/nsw-fuelcheck-admission-candidate-20261126.json',import.meta.url),'utf8'));
+const reviewedCard=reviewedPacket.card,reviewedRights=reviewedPacket.rights;
+const reviewedLanguages=Object.freeze(['en','ro','it']);
 const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/u.test(value);
 const requireIdentity=evidence.cardId===id&&revision===1&&hash(digest)&&hash(labDigest)&&digest!==labDigest
   &&decision.length===1&&decision[0].id===id&&decision[0].revision===revision&&decision[0].digest===digest
   &&decision[0].decision==='permit-on-verified-release'&&Number.isFinite(reviewedAt)&&expiresAt>reviewedAt
   &&source.startsWith('https://www.nsw.gov.au/')&&terms.startsWith('https://www.nsw.gov.au/');
 if(!requireIdentity)throw Error('DLKT_LIVE_KNOWLEDGE_IDENTITY');
+// The oracle comes from the independently reviewed, committed wording dossier,
+// never from the HTTP response, current catalogue renderer or a fixture.
+// Reproduce the versioned editorial tuple to bind every expected field to the
+// existing admitted digest, not a mutable digest label on the HTML.
+const reviewedPayload=JSON.stringify(['dlkt-knowledge-editorial-v1',reviewedCard.kind,reviewedCard.id,reviewedCard.revision,reviewedCard.category,
+  reviewedCard.format??null,reviewedCard.calendarDay??null,reviewedCard.distribution??null,
+  [reviewedCard.source.publisher,reviewedCard.source.url],
+  [reviewedCard.geography.countryCode,[...reviewedCard.geography.cityIds],reviewedLanguages.map(language=>reviewedCard.geography.label[language])],
+  reviewedLanguages.map(language=>[language,reviewedCard.topic[language],reviewedCard.copy[language].title,reviewedCard.copy[language].explanation,reviewedCard.copy[language].connection]),
+  reviewedCard.reviewedAt,reviewedCard.publishAt??null,reviewedCard.reviewBy,
+  [reviewedRights.credit,reviewedRights.licenseUrl,reviewedRights.policyUrl]]);
+if(reviewedPacket.kind!=='dlkt-editorial-admission-candidate-not-authorized'||reviewedPacket.candidateDigest!==digest||
+  reviewedCard.id!==id||reviewedCard.revision!==revision||reviewedCard.source.url!==source||
+  reviewedRights.policyUrl!==terms||reviewedCard.reviewedAt!==evidence.reviewedAt||reviewedCard.reviewBy!==evidence.reviewBy||
+  reviewedCard.geography.countryCode!=='AU'||reviewedCard.geography.cityIds.length!==0||
+  createHash('sha256').update(reviewedPayload,'utf8').digest('hex')!==digest)
+  throw Error('DLKT_LIVE_KNOWLEDGE_REVIEWED_PAYLOAD');
 export const KNOWLEDGE_IDENTITY=Object.freeze({id,digest,labDigest,revision,reviewedAt,expiresAt,source,terms,
   license:'https://creativecommons.org/licenses/by/4.0/'});
 const MAX_BYTES=128_000;
@@ -41,9 +62,9 @@ export function readKnowledgeProbeOptions(env=process.env){
 }
 // Explicit test oracle for the reviewed NSW attribution and translated controls.
 const labels=Object.freeze({
-  en:Object.freeze({adapted:'Original DLKT synthesis and translations',terms:'Source terms',copied:'DLKT card link copied.'}),
-  ro:Object.freeze({adapted:'Sinteza originala si traduceri DLKT',terms:'Termenii sursei',copied:'Linkul cardului DLKT a fost copiat.'}),
-  it:Object.freeze({adapted:'Sintesi originale e traduzioni DLKT',terms:'Condizioni della fonte',copied:'Link della scheda DLKT copiato.'}),
+  en:Object.freeze({adapted:'Original DLKT synthesis and translations',terms:'Source terms',copied:'DLKT card link copied.',origin:'Works elsewhere',use:'The useful bit',boundary:'This is a DLKT editorial synthesis, not a new live source check or proof of local availability. The exact link is available only during its current review window.'}),
+  ro:Object.freeze({adapted:'Sinteza originala si traduceri DLKT',terms:'Termenii sursei',copied:'Linkul cardului DLKT a fost copiat.',origin:'Functioneaza in alta parte',use:'Ce merita retinut',boundary:'Aceasta este o sinteza editoriala DLKT, nu o noua verificare live a sursei sau o confirmare a disponibilitatii locale. Linkul exact este disponibil doar in perioada sa de verificare.'}),
+  it:Object.freeze({adapted:'Sintesi originale e traduzioni DLKT',terms:'Condizioni della fonte',copied:'Link della scheda DLKT copiato.',origin:'Funziona altrove',use:'Da ricordare',boundary:'Questa è una sintesi editoriale DLKT, non una nuova verifica in tempo reale o una conferma della disponibilità locale. Il link esatto è disponibile solo durante il periodo di verifica corrente.'}),
 });
 function labelFor(language){
   if(!Object.hasOwn(labels,language))throw Error('DLKT_LIVE_KNOWLEDGE_LANGUAGE');
@@ -55,6 +76,17 @@ export function knowledgeCreditText(language){
   return KNOWLEDGE_CREDIT+' · '+label.adapted+' · CC BY 4.0 · '+label.terms;
 }
 export function knowledgeCopyMessage(language){return labelFor(language).copied;}
+export function knowledgeRenderedFields(language){
+  const label=labelFor(language),copy=reviewedCard.copy[language];
+  return Object.freeze({title:copy.title,explanation:copy.explanation,connection:label.use+': '+copy.connection,
+    geography:label.origin+' · '+reviewedCard.geography.label[language],publisher:reviewedCard.source.publisher,boundary:label.boundary});
+}
+export function knowledgeEditorialFailures(language,fields){
+  return Object.entries(knowledgeRenderedFields(language)).flatMap(([name,value])=>{
+    const field=fields?.[name];
+    return field?.count===1&&field.visible===true&&field.structure===true&&field.text===normalizeKnowledgeText(value)?[]:['editorial-'+name];
+  });
+}
 export function knowledgeCanonicalUrl(language){labelFor(language);return KNOWLEDGE_ORIGIN+'/card/'+id+'?v='+revision+'&lang='+language+'&h='+digest;}
 export const normalizeKnowledgeText=value=>typeof value==='string'?value.replace(/\s+/gu,' ').trim():'';
 export function knowledgeCreditLinks(language){
@@ -99,6 +131,26 @@ const declaredVisible=node=>{
   }
   return Boolean(node);
 };
+function inspectHttpEditorial(inside){
+  const field=(nodes,tag,connection=false)=>{
+    const node=nodes[0],parts=node?.children??[];
+    const nonText=parts.filter(part=>part.type!=='text');
+    const strong=nonText[0];
+    const structure=Boolean(node&&node.name===tag&&(connection?
+      nonText.length===1&&parts[0]===strong&&strong.name==='strong'&&declaredVisible(strong)&&strong.children?.every(child=>child.type==='text'):
+      nonText.length===0));
+    return {count:nodes.length,visible:declaredVisible(node),structure,text:textOf(node)};
+  };
+  const guides=findAll(inside,n=>classHas(n,'card-guide'));
+  return {
+    title:field(findAll(inside,n=>n.name==='h1'),'h1'),
+    explanation:field(findAll(inside,n=>classHas(n,'card-context')),'p'),
+    connection:field(guides.length===1?findAll(guides[0].children??[],n=>n.name==='p'):[],'p',true),
+    geography:field(findAll(inside,n=>classHas(n,'card-topic')),'span'),
+    publisher:field(findAll(inside,n=>classHas(n,'card-meta')),'p'),
+    boundary:field(findAll(inside,n=>n.name==='p'&&classHas(n,'privacy-note')&&attr(n,'id')===undefined),'p'),
+  };
+}
 export function assessKnowledgeResponse(item,reading){
   const failures=[];
   const check=(name,ok)=>{if(!ok)failures.push(name);};
@@ -126,6 +178,7 @@ export function assessKnowledgeResponse(item,reading){
     const credit=credits[0],creditAnchors=findAll(credit?.children??[],n=>n.name==='a');
     const creditExpected=knowledgeCreditLinks(item.language);
     check('identity',articles.length===1&&article.name==='article'&&attr(article,'data-shared-knowledge-id')===id);
+    failures.push(...knowledgeEditorialFailures(item.language,inspectHttpEditorial(inside)));
     check('expiry',fresh.length===1&&attr(fresh[0],'data-valid-until')===String(expiresAt));
     check('canonical',links.length===1&&attr(links[0],'href')===canonical);
     check('source',findAll(inside,n=>n.name==='a'&&classHas(n,'source-link')&&attr(n,'href')===source&&declaredVisible(n)).length===1);

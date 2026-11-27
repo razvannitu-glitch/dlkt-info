@@ -122,6 +122,15 @@ export async function verifyKnowledgeDistribution({fixture,origin,openIsolated,e
   assert.equal(await verifyKnowledgeCopy(call,admittedCase),false,'visible but inert button cannot prove recovery');
   assert.deepEqual((await state()).writes,['DLKT-QA-NOT-COPIED']);
   checks.push('hidden-credit-and-inert-copy-rejected');
+  // Verify content attacks using the real compiled renderer in Chromium.
+  const baselineEditorial=await inspect();
+  await evaluate(call,"(document.querySelector('.card-context').hidden=true,true)");
+  assert.ok(assessKnowledgeBrowser(admittedCase,await inspect(),origin+path(admittedLink),390).includes('editorial-explanation'));
+  await evaluate(call,"(()=>{document.querySelector('.card-context').hidden=false;document.querySelector('article h1').textContent='Unreviewed substitute';return true;})()");
+  assert.ok(assessKnowledgeBrowser(admittedCase,await inspect(),origin+path(admittedLink),390).includes('editorial-title'));
+  await evaluate(call,"(()=>{document.querySelector('article h1').textContent="+JSON.stringify(baselineEditorial.editorial.title.text)+";const p=document.querySelector('.card-guide p');p.replaceChildren();return true;})()");
+  assert.ok(assessKnowledgeBrowser(admittedCase,await inspect(),origin+path(admittedLink),390).includes('editorial-connection'));
+  checks.push('hidden-substituted-and-missing-editorial-content-rejected');
   const card=fixture.cards[0],link=await open(card,'en');
   await expire("(document.getElementById('shared-copy').click(),true)");
   disabled(await state());assert.deepEqual((await state()).writes,[]);checks.push('exact-deadline-copy-denied-before-timer');
