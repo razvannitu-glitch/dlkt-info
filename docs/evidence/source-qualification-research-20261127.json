@@ -1,0 +1,244 @@
+{
+  "format": "dlkt-source-preflight-1",
+  "evidenceBasis": "operator-recorded-primary-page-research-not-authenticated-receipts",
+  "entries": [
+    {
+      "id": "abc-au-direct",
+      "targetCountry": "AU",
+      "publisherId": "abc-au",
+      "lane": "direct-news-research",
+      "sourceReference": "https://www.abc.net.au/newssyndication",
+      "plannedCategories": [
+        "world",
+        "business"
+      ],
+      "observedOn": "2026-11-27",
+      "evidence": [
+        {
+          "url": "https://help.abc.net.au/hc/en-us/articles/6147104938383-Why-are-RSS-feeds-no-longer-being-updated",
+          "signal": "feed-retired",
+          "scope": "ABC Help states public RSS feeds are no longer updated."
+        },
+        {
+          "url": "https://www.abc.net.au/newssyndication",
+          "signal": "syndication-offer",
+          "scope": "ABC describes separate commercial syndication for digital platforms; no contract or price obtained."
+        }
+      ],
+      "notes": "Do not probe an obsolete public RSS endpoint. Evaluate separately contracted distribution."
+    },
+    {
+      "id": "rte-ie-direct",
+      "targetCountry": "IE",
+      "publisherId": "rte",
+      "lane": "direct-news-research",
+      "sourceReference": "https://www.rte.ie/documents/eile/2023/11/terms-and-conditions-for-rte.ie-23-october-2023.pdf",
+      "plannedCategories": [
+        "world",
+        "business"
+      ],
+      "observedOn": "2026-11-27",
+      "evidence": [
+        {
+          "url": "https://www.rte.ie/documents/eile/2023/11/terms-and-conditions-for-rte.ie-23-october-2023.pdf",
+          "signal": "commercial-restriction",
+          "scope": "Indexed publisher terms state commercial RSS use requires prior agreement. Direct PDF screenshot requests returned HTTP 403; no bypass."
+        },
+        {
+          "url": "https://www.rte.ie/sport/gaa/2007/0629/219679-qtermsandconditions/",
+          "signal": "commercial-restriction",
+          "scope": "Publisher-hosted older HTML terms corroborate the prior-agreement requirement; not a new rights grant."
+        },
+        {
+          "url": "https://www.rte.ie/documents/eile/2023/11/terms-and-conditions-for-rte.ie-23-october-2023.pdf",
+          "signal": "automated-access-restriction",
+          "scope": "Indexed terms restrict automated data collection. Exact current permission not independently authenticated."
+        }
+      ],
+      "notes": "Hold direct feed research and review the existing acquisition path with the rights owner. No outreach sent."
+    },
+    {
+      "id": "aljazeera-qa-direct",
+      "targetCountry": "QA",
+      "publisherId": "aljazeera",
+      "lane": "direct-news-research",
+      "sourceReference": "https://www.aljazeera.com/terms-and-conditions/",
+      "plannedCategories": [
+        "world"
+      ],
+      "observedOn": "2026-11-27",
+      "evidence": [
+        {
+          "url": "https://www.aljazeera.com/terms-and-conditions/",
+          "signal": "commercial-restriction",
+          "scope": "Section 6 limits service use and requires permission for commercial exploitation of content."
+        },
+        {
+          "url": "https://www.aljazeera.com/terms-and-conditions/",
+          "signal": "automated-access-restriction",
+          "scope": "Section 6 restricts unauthorized scraping and automated collection."
+        }
+      ],
+      "notes": "Do not add direct collection; investigate exact existing discovery/acquisition obligations separately."
+    },
+    {
+      "id": "cna-sg-direct",
+      "targetCountry": "SG",
+      "publisherId": "cna",
+      "lane": "direct-news-research",
+      "sourceReference": "https://www.channelnewsasia.com/rss",
+      "plannedCategories": [
+        "world",
+        "business"
+      ],
+      "observedOn": "2026-11-27",
+      "evidence": [
+        {
+          "url": "https://www.channelnewsasia.com/rss",
+          "signal": "commercial-restriction",
+          "scope": "RSS page describes personal noncommercial use."
+        },
+        {
+          "url": "https://www.channelnewsasia.com/rss/rssterms",
+          "signal": "commercial-restriction",
+          "scope": "Mediacorp RSS terms restrict redistribution and other commercial use."
+        }
+      ],
+      "notes": "Do not configure the published RSS endpoints without separate permission."
+    },
+    {
+      "id": "abs-au-statistics",
+      "targetCountry": "AU",
+      "publisherId": null,
+      "lane": "official-data-research",
+      "sourceReference": "https://www.abs.gov.au/release-calendar/latest-releases",
+      "plannedCategories": [
+        "money",
+        "housing",
+        "family",
+        "work"
+      ],
+      "observedOn": "2026-11-27",
+      "evidence": [
+        {
+          "url": "https://www.abs.gov.au/release-calendar/latest-releases",
+          "signal": "official-release-list",
+          "scope": "Official release calendar includes dated income, jobs, consumer price and other statistical releases."
+        },
+        {
+          "url": "https://www.abs.gov.au/media-centre/media-releases",
+          "signal": "official-release-list",
+          "scope": "Official media-release index includes dated housing, birth and household spending releases."
+        },
+        {
+          "url": "https://www.abs.gov.au/website-privacy-copyright-and-disclaimer",
+          "signal": "open-license-limited",
+          "scope": "ABS site policy grants CC BY 4.0 for covered materials with specific exclusions including third-party content, microdata and branding."
+        }
+      ],
+      "notes": "Prepare a specific statistical series review; verify actual endpoint, data rights, attribution, collection rules and release date. No article ingestion."
+    },
+    {
+      "id": "cso-ie-statistics",
+      "targetCountry": "IE",
+      "publisherId": null,
+      "lane": "official-data-research",
+      "sourceReference": "https://www.cso.ie/en/csolatestreleases/",
+      "plannedCategories": [
+        "money",
+        "housing",
+        "family",
+        "digital-life"
+      ],
+      "observedOn": "2026-11-27",
+      "evidence": [
+        {
+          "url": "https://www.cso.ie/en/csolatestreleases/",
+          "signal": "official-release-list",
+          "scope": "Official current releases cover housing, household prices, children and digital transactions."
+        },
+        {
+          "url": "https://www.cso.ie/en/aboutus/whoweare/copyrightpolicy/",
+          "signal": "open-license-limited",
+          "scope": "CSO copyright policy licenses statistical information CC BY 4.0; logo and otherwise marked materials need separate handling."
+        }
+      ],
+      "notes": "Prepare exact statistical series review, not blanket reuse of the website or press content."
+    },
+    {
+      "id": "qatar-cpi-data",
+      "targetCountry": "QA",
+      "publisherId": null,
+      "lane": "official-data-research",
+      "sourceReference": "https://www.data.gov.qa/explore/dataset/consumer-price-index-cpi-by-expenditure-group-monthly/",
+      "plannedCategories": [
+        "money",
+        "housing"
+      ],
+      "observedOn": "2026-11-27",
+      "evidence": [
+        {
+          "url": "https://www.data.gov.qa/explore/dataset/consumer-price-index-cpi-by-expenditure-group-monthly/",
+          "signal": "dataset-identified",
+          "scope": "Official catalogue identifies the national CPI by expenditure group series covering 2020–2025."
+        },
+        {
+          "url": "https://www.data.gov.qa/explore/dataset/consumer-price-index-cpi-by-expenditure-group-monthly/images/",
+          "signal": "open-license-limited",
+          "scope": "Dataset metadata shows CC BY and annual update frequency."
+        },
+        {
+          "url": "https://www.data.gov.qa/pages/handbook/",
+          "signal": "open-license-limited",
+          "scope": "Government handbook describes commercial reuse of published open data with attribution."
+        },
+        {
+          "url": "https://www.data.gov.qa/pages/terms-of-use/",
+          "signal": "portal-policy-ambiguity",
+          "scope": "General portal terms limit reproduction unless otherwise provided. Resolve applicability of the specific dataset licence."
+        },
+        {
+          "url": "https://www.data.gov.qa/explore/dataset/consumer-price-index-cpi-by-expenditure-group-monthly/",
+          "signal": "historical-data-only",
+          "scope": "Displayed series ends in 2025; not current monthly inflation for November 2026."
+        }
+      ],
+      "notes": "Resolve the licence and freshness at dataset level. No probe or daily inflation claim."
+    },
+    {
+      "id": "hdb-sg-median-resale",
+      "targetCountry": "SG",
+      "publisherId": null,
+      "lane": "official-data-research",
+      "sourceReference": "https://data.gov.sg/datasets/d_b51323a474ba789fb4cc3db58a3116d4/view",
+      "plannedCategories": [
+        "housing",
+        "money"
+      ],
+      "observedOn": "2026-11-27",
+      "evidence": [
+        {
+          "url": "https://data.gov.sg/datasets/d_b51323a474ba789fb4cc3db58a3116d4/view",
+          "signal": "dataset-identified",
+          "scope": "HDB median resale prices by town and flat type; displayed Q2 2007–Q2 2026, last updated 13 August 2026."
+        },
+        {
+          "url": "https://data.gov.sg/datasets/d_b51323a474ba789fb4cc3db58a3116d4/view",
+          "signal": "open-license-limited",
+          "scope": "The specific dataset page states commercial and personal reuse under its Open Data Licence."
+        },
+        {
+          "url": "https://developers.data.gov.sg/open-data-licence",
+          "signal": "open-license-limited",
+          "scope": "Government dataset licence permits commercial use subject to attribution and exclusions, including personal data and third-party rights."
+        },
+        {
+          "url": "https://data.gov.sg/datasets/d_b51323a474ba789fb4cc3db58a3116d4/view",
+          "signal": "historical-data-only",
+          "scope": "Quarterly aggregate prices, not real-time asking or transaction prices."
+        }
+      ],
+      "notes": "Review the exact aggregate dataset endpoint and missing-value handling; do not download raw individual transactions or imply current pricing."
+    }
+  ]
+}
