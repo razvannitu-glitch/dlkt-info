@@ -4,7 +4,9 @@
  * rights decisions, ranking, telemetry, runtime API, cron or production writes.
  */
 import {resolve} from 'node:path';
-import {pathToFileURL} from 'node:url';
+import {fileURLToPath,pathToFileURL} from 'node:url';
+import {readFile} from 'node:fs/promises';
+import {verifySource} from '../lib/source-integrity.mjs';
 import {assessLiveIceo,collectLiveIceo} from './verify-iceo-live.mjs';
 
 // 193 United Nations member states + Holy See (VA) + State of Palestine (PS).
@@ -58,7 +60,9 @@ function groupUnknownProvenance(card,model,groups){
  const exactSource=card.sourceIds?.length===1?model.nonIndexSourceIds.has(card.sourceIds[0])?card.sourceIds[0]:null:null;
  const target=publisher?'publisher:'+publisher.id:exactSource?'source:'+exactSource:'unresolved';
  // Do not infer language/country from host, headline, TLD or headquarters.
- const reason=context===null?'reviewed-edition-context-missing':context.language===null?'reviewed-edition-language-missing':'canonical-provenance-unresolved';
+ const language=model.sourceLanguage(card);
+ const reason=context===null?(language===null?'reviewed-edition-context-missing':'reviewed-language-without-country-edition'):
+  context.language===null?'reviewed-edition-language-missing':'canonical-provenance-unresolved';
  const key=target+'|'+reason;
  const previous=groups.get(key);
  if(previous)previous.count++;else groups.set(key,{target,reason,count:1});
@@ -142,6 +146,10 @@ export function auditSnapshot(sample,now,model){
 }
 
 async function main(){
+ // Record the verified source-file pin, not a claim that the live server
+ // uses this model or that a legacy observation can be reclassified.
+ const pin=JSON.parse(await readFile(new URL('../SOURCE-PIN.json',import.meta.url),'utf8'));
+ verifySource(fileURLToPath(new URL('../source/',import.meta.url)),pin);
  // The existing source modules remain authoritative. Import only after the
  // canonical TypeScript build; packaging fixture tests need no generated JS.
  const [places,cityData,i18n,news,registry,local,taxonomy,editorial,contracts,atlas]=await Promise.all([
@@ -158,7 +166,7 @@ async function main(){
   sources:registry.ICEO_SOURCES,resolvePublicationContext:news.sourcePublicationContext});
  const configured=stateCoverage(configuredCodes,placeCodes);
  const directory=atlas.worldSourceAtlas();
- const baseline={stateReference:WORLD_STATE_CODES.length,operationalEntityReference:WORLD_OPERATIONAL_CODES.length,placeOptions:placeCodes.length,
+ const baseline={classificationSourceSha256:pin.sourceSha256,stateReference:WORLD_STATE_CODES.length,operationalEntityReference:WORLD_OPERATIONAL_CODES.length,placeOptions:placeCodes.length,
   cityOptions:JSON.parse(cityData.cityJson).rows.length,interfaceLocales:i18n.LOCALES.length,
   editorialCategories:editorial.PUBLIC_EDITORIAL_CATEGORIES.length,taxonomyCategories:taxonomy.NEWS_CATEGORIES.length,
   configuredDefinitions:registry.ICEO_SOURCES.length,allowlistedPublishers:news.NEWS_PUBLISHERS.length,
@@ -173,7 +181,7 @@ async function main(){
  const sample=await collectLiveIceo();
  const observed=auditSnapshot(sample,Date.now(),{placeCodes,taxonomy:taxonomy.NEWS_CATEGORIES,
   editorialCategories:editorial.PUBLIC_EDITORIAL_CATEGORIES,validNewsGlobalCard:contracts.validNewsGlobalCard,
-  sourceEditionCountryCode:news.sourceEditionCountryCode,newsLanguageCoverage:news.newsLanguageCoverage,
+  sourceEditionCountryCode:news.sourceEditionCountryCode,sourceLanguage:news.sourceLanguage,newsLanguageCoverage:news.newsLanguageCoverage,
   classifyEvidenceCard:taxonomy.classifyEvidenceCard,editorialCategory:editorial.editorialCategory,
   publisherForNewsUrl:news.publisherForNewsUrl,sourcePublicationContext:news.sourcePublicationContext,
   nonIndexSourceIds:new Set(registry.ICEO_SOURCES.filter(x=>x.adapter!=='news-index').map(x=>x.id))});

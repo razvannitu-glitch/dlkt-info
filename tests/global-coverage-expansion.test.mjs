@@ -75,3 +75,18 @@ test('language without national provenance and non-state places never inflate th
  assert.deepEqual(p.samples.map(x=>x.unknownCountry),[102,95]);
  assert.deepEqual(p.samples.map(x=>x.unknownLanguage),[102,94]);
 });
+
+test('new classification pins cannot be mixed with historical unpinned reports or different classifiers',()=>{
+ const tagged=(document,pin)=>change(document,r=>{r.baseline.classificationSourceSha256=pin;});
+ const pin='a'.repeat(64),other='b'.repeat(64);
+ assert.throws(()=>plan(first,tagged(second,pin)),/EXPANSION_INCOMPARABLE_OR_DUPLICATE/);
+ assert.throws(()=>plan(tagged(first,pin),tagged(second,other)),/EXPANSION_INCOMPARABLE_OR_DUPLICATE/);
+ for(const invalid of [null,'main','A'.repeat(64),123]){
+  assert.throws(()=>plan(first,tagged(second,invalid)),/EXPANSION_CLASSIFICATION_PIN_INVALID/);
+ }
+ const consistent=plan(tagged(first,pin),tagged(second,pin));
+ assert.equal(consistent.classificationSourceSha256,pin);
+ assert.equal(consistent.modelBinding,'reported-source-pin-not-independently-authenticated');
+ assert.equal(consistent.gaps.denominator,244);
+ assert.equal(plan().classificationSourceSha256,null);
+});

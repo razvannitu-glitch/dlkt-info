@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as canonicalNews from '../source/public/news-sources.js';
 import {WORLD_STATE_CODES,WORLD_OPERATIONAL_CODES,assertOperationalCatalogue,operationalGapPlan,stateCoverage,configuredCountryCodes,auditSnapshot} from '../scripts/audit-global-coverage.mjs';
 
 test('global denominator is exactly 193 UN member states plus VA and PS, not the place directory',()=>{
@@ -49,7 +50,7 @@ const model={placeCodes:['RO','HK'],taxonomy:[{id:'04000000'}],editorialCategori
  classifyEvidenceCard:c=>c.taxonomy?{category:c.taxonomy}:null,editorialCategory:c=>c.editorial??null,
  newsLanguageCoverage:rows=>({publications:rows.length}),
  publisherForNewsUrl:url=>url==='https://example.org/article'?{id:'known'}:null,
- sourcePublicationContext:c=>c.context??null,nonIndexSourceIds:new Set(['official'])};
+ sourcePublicationContext:c=>c.context??null,sourceLanguage:c=>c.context?.language??null,nonIndexSourceIds:new Set(['official'])};
 const card=(identity,country,extra={})=>({kind:'publication',current:true,identity,contentHash:'hash-'+identity,country,...extra});
 test('audit counts only eligible unique publications and does not invent categories or country evidence',()=>{
  const a=card('a','RO',{taxonomy:'04000000',editorial:'business'});
@@ -144,4 +145,39 @@ test('shared indexes cannot imply direct national configuration across scoped pu
  assert.deepEqual(configuredCountryCodes({...exact,resolvePublicationContext:()=>({...context('GB'),basis:'unknown'})}),['RO']);
  assert.deepEqual(configuredCountryCodes({...exact,indexes:[{publisherId:'shared',url:'https://foreign.example/edition/explicit'}],resolvePublicationContext:()=>context('GB')}),[]);
  assert.deepEqual(configuredCountryCodes({...exact,publicationScopes:[us,gb,{publisherId:'legacy',countryCode:'RO'},{publisherId:'legacy',countryCode:'IT'}]}),['GB'],'ambiguous legacy scopes cannot borrow a single index');
+});
+
+// Exercise the actual shipped resolver together with the root audit, not a
+// simulated correspondence between a language and a country.
+test('integrated provenance counts scoped editions and language-only originals independently',()=>{
+ const rows=[
+  card('global',null,{publisher:'Global Voices',sourceUrl:'https://globalvoices.org/2026/11/27/controlled-global-language-fixture/'}),
+  card('unknown',null,{publisher:'Global Voices',sourceUrl:'https://globalvoices.org/2026/11/27/controlled-global-language-fixture/?edition=ro'}),
+  card('politico',null,{publisher:'POLITICO',sourceUrl:'https://www.politico.eu/article/controlled-european-politics-fixture/'}),
+  card('us',null,{publisher:'Good Housekeeping',sourceUrl:'https://www.goodhousekeeping.com/what-to-buy/clothing/a123456/controlled-fixture/'}),
+  card('gb',null,{publisher:'Good Housekeeping',sourceUrl:'https://www.goodhousekeeping.com/uk/lifestyle/a123456/controlled-fixture/'}),
+ ];
+ const exactModel={...model,placeCodes:WORLD_OPERATIONAL_CODES,publisherForNewsUrl:canonicalNews.publisherForNewsUrl,
+  sourcePublicationContext:canonicalNews.sourcePublicationContext,sourceEditionCountryCode:canonicalNews.sourceEditionCountryCode,
+  sourceLanguage:canonicalNews.sourceLanguage,newsLanguageCoverage:canonicalNews.newsLanguageCoverage};
+ const before=JSON.stringify(rows),observed=auditSnapshot(fixture([...rows,rows[0]]),NOW,exactModel);
+ assert.equal(observed.eligiblePublicationCount,5);
+ assert.deepEqual(observed.publisherCountryCounts,{BE:1,US:1,GB:1});
+ assert.deepEqual(observed.publisherCountryCoverage.stateCodes,['BE','GB','US']);
+ assert.equal(observed.publisherCountryCoverage.unknownRecordCount,2);
+ assert.deepEqual(observed.languageCoverage,{publications:5,publishers:3,unknownLanguage:1,languages:[{language:'en',count:4}]});
+ assert.deepEqual(observed.unresolvedPublisherProvenance,[
+  {target:'publisher:global-voices',reason:'reviewed-edition-context-missing',count:1},
+  {target:'publisher:global-voices',reason:'reviewed-language-without-country-edition',count:1},
+ ]);
+ assert.equal(JSON.stringify(rows),before);
+});
+
+test('integrated shared Good Housekeeping sitemap cannot inflate national direct-source coverage',()=>{
+ const indexes=canonicalNews.NEWS_DISCOVERY_INDEXES.filter(index=>index.publisherId==='good-housekeeping');
+ assert.ok(indexes.some(index=>index.id==='good-housekeeping-news'));
+ const codes=configuredCountryCodes({indexes,publicationScopes:canonicalNews.NEWS_PUBLICATION_SCOPES,
+  reviewedScopes:[],sources:[],resolvePublicationContext:canonicalNews.sourcePublicationContext});
+ assert.deepEqual(codes,[]);
+ assert.equal(canonicalNews.NEWS_PUBLISHERS.length,77);assert.equal(canonicalNews.NEWS_DISCOVERY_INDEXES.length,31);
 });

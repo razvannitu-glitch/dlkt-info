@@ -54,11 +54,13 @@ test('separate synthetic reviewer and collector signatures bind the exact two re
  await assert.rejects(run(value,async()=>assert.fail('replayed request')),/TRUSTED_COLLECTION_PERMIT_ALREADY_USED/);
 });
 
-test('no caller can use the synthetic permit to enter the real transport path',async t=>{
+test('unenrolled authority blocks every real entrypoint before reservation, including self-issued distinct keys',async t=>{
  const value=await input(t);
- await assert.rejects(collectHdbResearch(value),/TRUSTED_COLLECTION_PERMIT_BINDING/);
- assert.equal((await readdir(value.ledgerDirectory)).length,0);
+ await assert.rejects(collectHdbResearch(value),/TRUSTED_COLLECTION_TRUST_NOT_ENROLLED/);
  const real=replacePermit(value,{evidenceClass:'external-research-capture'});
+ await assert.rejects(collectHdbResearch(real),/TRUSTED_COLLECTION_TRUST_NOT_ENROLLED/);
+ await assert.rejects(collectHdbResearch(null),/TRUSTED_COLLECTION_TRUST_NOT_ENROLLED/);
+ assert.equal((await readdir(value.ledgerDirectory)).length,0);
  await assert.rejects(run(real,async()=>assert.fail('real permit in fixture')),/TRUSTED_COLLECTION_PERMIT_BINDING/);
 });
 

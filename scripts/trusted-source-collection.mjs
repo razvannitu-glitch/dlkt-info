@@ -19,6 +19,11 @@ const PERMIT_KEYS=Object.freeze(['format','evidenceClass','contextSha256','audit
  'collectorKeySha256','nonce','issuedAt','expiresAt','requestUrls','policyEvidence']);
 const PROOF_KEYS=Object.freeze(['kind','url','checkedAt','sha256','decision']);
 const MAX_BODY=128*1024,MAX_REQUEST_MS=10000,MAX_PERMIT_MS=900000,MAX_POLICY_AGE=86400000;
+// Deliberate integration HOLD. A caller can generate two distinct keys and
+// sign its own assertions. Neither that nor an environment flag establishes
+// independent reviewer/collector authority. Lift only in a separately reviewed
+// change with independently enrolled trust and exact source-policy evidence.
+const LIVE_COLLECTION_TRUST_ENROLLED=false;
 const check=(condition,reason)=>{if(!condition)throw Error('TRUSTED_COLLECTION_'+reason);};
 const exact=(value,keys)=>value!==null&&typeof value==='object'&&!Array.isArray(value)&&
  Object.keys(value).length===keys.length&&keys.every(key=>Object.hasOwn(value,key));
@@ -180,7 +185,8 @@ async function collect(input,evidenceClass,transport,clock){
 /** No injectable clock/transport in this entrypoint. A separately managed
  * trust boundary and actual permission evidence are deployment prerequisites.
  * No live permit or private key exists in this repository. */
-export function collectHdbResearch(input){
+export async function collectHdbResearch(input){
+ check(LIVE_COLLECTION_TRUST_ENROLLED,'TRUST_NOT_ENROLLED');
  return collect(input,'external-research-capture',directHttpsTransport,Date.now);
 }
 /** Test-only research path; even an otherwise valid real permit cannot be

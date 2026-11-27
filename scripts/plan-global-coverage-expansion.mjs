@@ -93,8 +93,11 @@ function normalize(document){
  }
  const inventoryKeys=['cityOptions','interfaceLocales','configuredDefinitions','allowlistedPublishers','directDiscoveryIndexes','directIndexPublishers','discoveryOnlyEntries','dedicatedCityNewsFeedCount'];
  requireValid(inventoryKeys.every(key=>Number.isSafeInteger(b[key])&&b[key]>=0)&&h.sourceCount===b.configuredDefinitions,'CONFIGURATION_INVALID');
- const signature=JSON.stringify([inventoryKeys.map(key=>b[key]),configured,sorted(editorial.keys()),sorted(taxonomy.keys())]);
- return {revision:h.revision,checkedAt:h.checkedAt,time,total,configured,country,editorial,languages,unknownCountry,
+ const hasClassificationPin=Object.hasOwn(b,'classificationSourceSha256');
+ const classificationSourceSha256=hasClassificationPin?b.classificationSourceSha256:null;
+ requireValid(!hasClassificationPin||typeof classificationSourceSha256==='string'&&/^[a-f0-9]{64}$/u.test(classificationSourceSha256),'CLASSIFICATION_PIN_INVALID');
+ const signature=JSON.stringify([classificationSourceSha256,inventoryKeys.map(key=>b[key]),configured,sorted(editorial.keys()),sorted(taxonomy.keys())]);
+ return {classificationSourceSha256,revision:h.revision,checkedAt:h.checkedAt,time,total,configured,country,editorial,languages,unknownCountry,
   unknownLanguage:l.unknownLanguage,unclassifiedEditorial:o.uncategorizedEditorial,provenance,signature,documentSha256,reportLineSha256};
 }
 
@@ -102,7 +105,9 @@ const series=values=>({counts:values,observedIn:values.filter(n=>n>0).length,min
 
 /** Legacy audit reports do not embed a model commit. The operator declares
  * their common model, which is not independently authenticated by this tool.
- * Report revisions are compared, never added as unique articles. */
+ * New audit reports carry a verified source-file pin at collection time; the
+ * report is still an unauthenticated assertion. Do not mix pins or legacy and
+ * pinned reports. Report revisions are compared, never added as unique articles. */
 export function buildExpansionPlan(documents,declaredModelCommit){
  requireValid(Array.isArray(documents)&&documents.length>=2&&documents.length<=MAX_SAMPLES,'SAMPLE_COUNT');
  requireValid(typeof declaredModelCommit==='string'&&/^[a-f0-9]{40}$/u.test(declaredModelCommit),'MODEL_RECEIPT_REQUIRED');
@@ -124,7 +129,8 @@ export function buildExpansionPlan(documents,declaredModelCommit){
   .sort((a,b)=>a.maximum-b.maximum||a.minimum-b.minimum||a.category.localeCompare(b.category));
  const observedLanguages=sorted(new Set(samples.flatMap(s=>[...s.languages.keys()]))).map(language=>({language,...series(samples.map(s=>s.languages.get(language)??0))}));
  const latest=samples.at(-1);
- return {status:'EXPANSION_RESEARCH_ONLY',declaredModelCommit,modelBinding:'operator-declared-not-embedded-in-legacy-audits',
+ return {status:'EXPANSION_RESEARCH_ONLY',declaredModelCommit,classificationSourceSha256:latest.classificationSourceSha256,
+  modelBinding:latest.classificationSourceSha256===null?'operator-declared-not-embedded-in-legacy-audits':'reported-source-pin-not-independently-authenticated',
   scope:'historical public snapshot observations; not event geography, demand, unique cross-snapshot articles or current coverage',
   samples:samples.map(({revision,checkedAt,total,unknownCountry,unknownLanguage,unclassifiedEditorial,documentSha256,reportLineSha256})=>({revision,checkedAt,total,unknownCountry,unknownLanguage,unclassifiedEditorial,documentSha256,reportLineSha256})),
   gaps,countries,editorialReview:categories,observedLanguages,
