@@ -127,3 +127,15 @@ test('invalid attestation identities and nonretryable HTTP responses do not ente
  await assert.rejects(requestDatabaseReadiness(fetcher,'https://fixture.supabase.co/rest/v1/rpc/other','sb_publishable_fixture',async()=>{delays++;}),/BUILD_DATABASE_ATTESTATION_REQUEST_INVALID/);
  assert.equal(count,1);assert.equal(delays,0);
 });
+
+// Vercel validates these root entry points before running bootstrap.mjs.
+test('all configured production functions have exact source entry points before build', () => {
+  const root = new URL('../', import.meta.url);
+  const config = JSON.parse(readFileSync(new URL('vercel.json', root), 'utf8'));
+  for (const path of Object.keys(config.functions)) {
+    assert.match(path, /^api\/[a-z][a-z0-9-]*\.ts$/u);
+    const sourcePath = path.replace(/\.ts$/u, '.js');
+    assert.equal(readFileSync(new URL(path, root), 'utf8'), `export {default} from '../source/${sourcePath}';\n`, path);
+    assert.ok(readFileSync(new URL('source/'+path, root), 'utf8').length > 0);
+  }
+});
