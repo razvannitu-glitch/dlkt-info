@@ -44,7 +44,7 @@ create table dlkt_editorial_transport_lab.grants (
  expires_at timestamptz not null check(expires_at>issued_at and expires_at<=issued_at+interval '15 minutes'),
  state text not null default 'active' check(state in ('active','revoked','expired','held')),
  counts integer[],
- check(counts is null or (state='active' and dlkt_editorial_transport_lab.valid_counts(counts)))
+ constraint grant_counts_valid check(counts is null or (state='active' and dlkt_editorial_transport_lab.valid_counts(counts)))
 );
 alter table dlkt_editorial_transport_lab.window_state enable row level security;
 alter table dlkt_editorial_transport_lab.grants enable row level security;

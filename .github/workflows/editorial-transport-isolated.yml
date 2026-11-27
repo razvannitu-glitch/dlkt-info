@@ -55,3 +55,13 @@ jobs:
         env:
           TEST_CONTAINER: ${{ job.services.postgres.id }}
         run: node --experimental-strip-types --test docs/editorial-transport-lab/readback-adapter.test.mjs
+      - name: Install disposable daily window variant only after baseline tests
+        env:
+          TEST_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          docker exec -i "$TEST_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d editorial_transport_test < docs/editorial-transport-lab/daily-window.sql
+      - name: Verify fixed-window sealing, suppression, retention and concurrent withdrawal
+        env:
+          TEST_CONTAINER: ${{ job.services.postgres.id }}
+        run: node --test docs/editorial-transport-lab/daily-window.test.mjs
