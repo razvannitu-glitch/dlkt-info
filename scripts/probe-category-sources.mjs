@@ -1,13 +1,21 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
+import {readFileSync} from 'node:fs';
 import {XMLParser, XMLValidator} from 'fast-xml-parser';
 import {parseDocument, DomUtils} from 'htmlparser2';
 import {readNewsArticleMetadata, readPublisherNewsCandidates} from '../source/.build/src/iceo/news-discovery.js';
 import {NEWS_DISCOVERY_INDEXES, publisherForNewsUrl} from '../source/.build/src/iceo/news-sources.js';
+import {observeKnowledgeEvidence,assessKnowledgeProbeOutcome} from './knowledge-editorial-evidence.mjs';
+import {compareKnowledgeObservations} from './knowledge-editorial-revalidation.mjs';
+import {assessKnowledgeClaimEvidence} from './knowledge-claim-evidence.mjs';
 
 // Observational evidence only. Never changes a registry, publishes a card,
 // follows a redirect, bypasses a denial or uses credentials.
 const PROBE_GROUPS=Object.freeze({
+  'knowledge-editorial':Object.freeze({
+    id:'dlkt-knowledge-editorial-evidence-1',duration:75_000,limits:Object.freeze({robots:2,feed:0,article:4}),
+    sources:Object.freeze([{id:'dlkt-elsewhere-nsw-fuelcheck'},{id:'dlkt-elsewhere-nz-unit-pricing'}]),
+  }),
   'protv-compatibility':Object.freeze({
     id:'dlkt-protv-robots-compatibility-3',duration:65_000,limits:Object.freeze({robots:2,feed:1,article:2}),
     sources:Object.freeze([
@@ -322,6 +330,36 @@ function verifyRobotsParsing(){
   return {state:'passed',cases:16};
 }
 const robotsParserChecks=verifyRobotsParsing();
+if(probeGroup==='knowledge-editorial'){
+  const [{knowledgeRightsCandidates},{validKnowledgeCard,knowledgeRightsForCard,knowledgeEditorialPayload},{knowledgeContentDigest}]=await Promise.all([
+    import('../source/tests/fixtures/knowledge-rights-candidates.mjs'),
+    import('../source/.build/src/iceo/knowledge.js'),
+    import('../source/.build/src/share/knowledge-resolution.js'),
+  ]);
+  const previous=JSON.parse(readFileSync(new URL('../docs/evidence/knowledge-editorial-observation-20261126.json',import.meta.url),'utf8'));
+  if(previous.kind!=='observed-evidence-not-approval'||previous.workflowRun!==45888933255||previous.commit!=='bad1a13a88cb2c132aaf72f6bd50d600559b6c53'||previous.activationAllowed!==false||!Array.isArray(previous.reports)||previous.reports.length!==SOURCES.length)throw Error('KNOWLEDGE_BASELINE_PROVENANCE_INVALID');
+  const reports=[];
+  for(const source of SOURCES){
+    try{
+      const card=knowledgeRightsCandidates.find(item=>item.id===source.id);
+      if(!card||!validKnowledgeCard(card))throw Error('KNOWLEDGE_PROBE_CANDIDATE_INVALID');
+      const rights=knowledgeRightsForCard(card);
+      if(!rights)throw Error('KNOWLEDGE_PROBE_RIGHTS_BINDING_MISSING');
+      const candidateDigest=knowledgeContentDigest(card),identity={id:card.id,revision:card.revision,digest:candidateDigest,payload:knowledgeEditorialPayload(card),sourceUrl:card.source.url,policyUrl:rights.policyUrl,reviewedAt:card.reviewedAt,publishAt:card.publishAt,reviewBy:card.reviewBy};
+      const observation=await observeKnowledgeEvidence({id:card.id,revision:card.revision,sourceUrl:card.source.url,policyUrl:rights.policyUrl,candidateDigest,get:boundedGet,parseRobots:robotsPolicy,decideRobots:robotsDecision,clock:Date.now});
+      const prior=previous.reports.filter(item=>item.id===card.id);
+      if(prior.length!==1)throw Error('KNOWLEDGE_BASELINE_IDENTITY_INVALID');
+      // The committed baseline is evidence only, not the latest trusted history.
+      // The pilot cannot read approvals or return reusable authorization.
+      const revalidation=compareKnowledgeObservations({identity,observation,baselineObservation:prior[0],now:Date.now()});
+      const claimEvidence=assessKnowledgeClaimEvidence(identity,observation);
+      reports.push({...observation,revalidation,claimEvidence});
+    }catch(error){reports.push({id:source.id,state:'held',activationAllowed:false,reason:clean(error instanceof Error?error.message:'unknown',100)});}
+  }
+  const outcome=assessKnowledgeProbeOutcome(reports,SOURCES.map(source=>source.id));
+  console.log('DLKT_KNOWLEDGE_EVIDENCE '+JSON.stringify({probe:configuration.id,commit:process.env.GITHUB_SHA??null,startedAt:new Date(startedAt).toISOString(),finishedAt:new Date().toISOString(),attempts,limits,robotsParserChecks,...outcome,reports,boundary:'Read-only evidence and fixed-baseline comparison only; no semantic, translation, licence or publication approval.'}));
+  if(!outcome.complete)process.exitCode=1;
+}else{
 const reports=[];
 for(const source of SOURCES){
   try{reports.push(await inspectSource(source));}
@@ -336,3 +374,5 @@ console.log(JSON.stringify({probe:configuration.id,probeGroup,commit:process.env
   boundary:'Metadata observations only. This script changes no source registry, publishes no content and makes no assertion of publisher reuse rights.',
   reports},null,2));
 if(incomplete)process.exitCode=1;
+
+}
