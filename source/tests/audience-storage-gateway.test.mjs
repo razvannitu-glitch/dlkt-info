@@ -77,3 +77,19 @@ test('shared abuse gate and disabled collector fail closed; withdrawal can run w
  const withdrawn=res();await handleAudienceGateway(req({action:'withdraw'},{cookie}),withdrawn,disabled);
  assert.equal(withdrawn.statusCode,200);assert.equal(calls.length,1);assert.match(withdrawn.headers.get('Set-Cookie'),/Max-Age=0/);
 });
+
+test('reconciled dashboard preserves authenticated profile counts with a separate first-party snapshot',async()=>{
+ const token='aaaa.bbbb.cccc',calls=[];
+ const current={...env,DLKT_INFO_ADMIN_PROFILE_EDGE_ENABLED:'1',DLKT_INFO_ANALYTICS_READ_ENABLED:'1',DLKT_INFO_ANALYTICS_VERCEL_TOKEN:'unused',DLKT_INFO_ANALYTICS_SINCE:'2026-11-25T18:00:00Z'};
+ const data=await readAnalytics({...core,publishableKey:'sb_publishable_'+'p'.repeat(30)},current,'24h',async(url,init)=>{
+  const u=new URL(url);calls.push(u.pathname);
+  if(u.pathname==='/functions/v1/dlkt-control-profile-count'){
+   assert.equal(u.origin,core.url);assert.equal(init.headers.Authorization,'Bearer '+token);assert.equal(u.searchParams.get('range'),'24h');
+   return json({version:'dlkt-control-profile-count-1',range:'24h',profiles:3,newProfiles:1});
+  }
+  assert.equal(u.pathname,'/rest/v1/rpc/snapshot');assert.equal(u.origin,'https://'+config.projectRef+'.supabase.co');assert.equal(init.headers.Authorization,undefined);return json(raw);
+ },now,token);
+ assert.equal(calls.length,2);assert.equal(data.firstParty.status,'ready');assert.equal(data.profiles,3);assert.equal(data.newProfiles,1);assert.equal(data.totals,null);
+ const html=renderDashboard(data);assert.match(html,/Reader profiles/);assert.match(html,/Consenting browsers/);assert.match(html,/Bucharest/);
+ assert.doesNotMatch(html,/sb_secret_|aaaa\.bbbb/);
+});
