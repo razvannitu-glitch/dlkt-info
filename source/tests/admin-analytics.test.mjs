@@ -186,5 +186,5 @@ test('reader offers a plain voluntary choice link without adding tracking or a m
  const html=readFileSync(new URL('../public/iceo.html',import.meta.url),'utf8');
  assert.equal((html.match(/id="audience-measurement-link"/g)??[]).length,1);
  assert.match(html,/<a class="text-button" id="audience-measurement-link" href="\/cookies#cookies">Optional audience measurement<\/a>/);
- assert.match(html,/<a class="footer-link" href="\/cookies#cookies">Cookies &amp; measurement choices<\/a>/);
+ assert.match(html,/<a class="footer-link" href="\/cookies">Cookies &amp; measurement choices<\/a>/);
 });
