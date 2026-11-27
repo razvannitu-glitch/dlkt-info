@@ -64,24 +64,43 @@ jobs:
             console.log(JSON.stringify({profileEdge:label,status:r.status,noAggregates:true}));
           }
           console.log('DLKT_PROFILE_EDGE_HOSTED_DENIAL_PASS');
-          // Bounded live WAF verification against the intentionally disabled collector.
-          // No credentials, events, consent tokens, or real analytics records.
-          const endpoint='https://www.dlkt.ee/api/audience';
-          const statuses=[];
-          for(let offset=0;offset<36;offset+=6){
-            const batch=await Promise.all(Array.from({length:6},async()=>{
-              const r=await fetch(endpoint,{method:'GET',credentials:'omit',cache:'no-store',redirect:'manual',signal:AbortSignal.timeout(10000)});
-              const body=await r.text();
-              assert.ok(r.status===404||r.status===429,'unexpected collector status '+r.status);
-              assert.ok(!r.headers.has('set-cookie'),'collector issued a cookie while disabled');
-              if(r.status===404)assert.ok(body.includes('NOT_FOUND'),'collector not disabled');
-              return r.status;
-            }));
-            statuses.push(...batch);
-            if(statuses.includes(429))break;
-          }
-          assert.ok(statuses.includes(404)&&statuses.includes(429),'WAF ceiling not observed');
-          console.log('DLKT_AUDIENCE_WAF_BOUNDARY_PASS '+JSON.stringify({requests:statuses.length,disabled:statuses.filter(x=>x===404).length,limited:statuses.filter(x=>x===429).length}));
 
+          // A single synthetic browser. Never log its consent token or provider data.
+          const origin='https://www.dlkt.ee',endpoint=origin+'/api/audience';
+          const event={kind:'pageview',id:'be3f2816-a2a5-4efa-b047-028b5fe0b16a',source:'unknown'};
+          let cookie='';
+          const call=async(body,headers={},token='')=>{
+            const h={'Content-Type':'application/json','Origin':origin,'Sec-Fetch-Site':'same-origin','X-DLKT-Info-Request':'audience-v1',...headers};
+            if(token)h.Cookie=token;
+            const r=await fetch(endpoint,{method:'POST',headers:h,body:JSON.stringify(body),cache:'no-store',redirect:'manual',signal:AbortSignal.timeout(15000)});
+            assert.match(r.headers.get('cache-control')??'',/no-store/);
+            const v=await r.json();
+            return {status:r.status,value:v,setCookie:r.headers.get('set-cookie')??''};
+          };
+          try{
+            const before=await call({action:'status'});
+            assert.equal(before.status,200);assert.deepEqual(before.value,{available:true,hasToken:false});assert.equal(before.setCookie,'');
+            const missing=await call({action:'event',event});assert.equal(missing.status,401);assert.equal(missing.setCookie,'');
+            const gpc=await call({action:'enable'},{'Sec-GPC':'1'});assert.equal(gpc.status,403);assert.equal(gpc.setCookie,'');
+            const foreign=await call({action:'enable'},{Origin:'https://example.invalid'});assert.equal(foreign.status,403);assert.equal(foreign.setCookie,'');
+            const opt=await call({action:'enable'});
+            // Keep the cookie available to finally even if an assertion fails.
+            cookie=opt.setCookie.split(';')[0];
+            assert.equal(opt.status,200);assert.equal(opt.value.enabled,true);
+            assert.ok(cookie.startsWith('__Host-dlkt_audience=v1.'));
+            assert.match(opt.setCookie,/Secure; HttpOnly; SameSite=Lax/i);
+            const view=await call({action:'event',event},{},cookie);
+            assert.equal(view.status,200);assert.equal(view.value.result,'accepted');
+            const retry=await call({action:'event',event},{},cookie);
+            assert.equal(retry.status,200);assert.equal(retry.value.result,'duplicate');
+            console.log('DLKT_AUDIENCE_HOSTED_OPT_IN_PASS '+JSON.stringify({noCookieBeforeConsent:true,gpcBlocked:true,crossOriginBlocked:true,recorded:true,deduplicated:true}));
+          }finally{
+            if(cookie){
+              const revoked=await call({action:'withdraw'},{},cookie);
+              assert.equal(revoked.status,200);assert.equal(revoked.value.enabled,false);assert.match(revoked.setCookie,/Max-Age=0/);
+              const replay=await call({action:'event',event},{},cookie);assert.equal(replay.status,401);
+              console.log('DLKT_AUDIENCE_HOSTED_WITHDRAWAL_PASS');
+            }
+          }
           console.log('DLKT_ADMIN_LIVE_ANONYMOUS_PASS '+JSON.stringify({requests:checks.length,scope:'public HTTPS; no authenticated browser or analytics data tested'}));
           JS
