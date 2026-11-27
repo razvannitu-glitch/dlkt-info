@@ -56,6 +56,7 @@ export function collectionPlan(documents,model,ledgerText,packetText,asOf){
 function verifyPermit(input,evidenceClass,now){
  const {documents,model,ledgerText,packetText,permit,permitSignature,reviewerPublicKey,collectorPrivateKey}=input;
  const bytes=collectionPermitSigningBytes(permit);
+ check(permit.evidenceClass===evidenceClass,'PERMIT_BINDING');
  const plan=collectionPlan(documents,model,ledgerText,packetText,new Date(now).toISOString());
  check(reviewerPublicKey instanceof KeyObject&&reviewerPublicKey.type==='public'&&reviewerPublicKey.asymmetricKeyType==='ed25519'&&
   collectorPrivateKey instanceof KeyObject&&collectorPrivateKey.type==='private'&&collectorPrivateKey.asymmetricKeyType==='ed25519','KEYS');
