@@ -18,6 +18,52 @@ const code=value=>typeof value==='string'&&/^[A-Z]{2}$/u.test(value)&&value!=='Z
 const sorted=values=>[...new Set(values)].sort();
 const boundedArray=value=>Array.isArray(value)&&value.length<=5000;
 
+// The owner approved the exact 244 location codes already represented in
+// the canonical place picker. The 49 additional entries have different
+// legal statuses; this operational inventory is not a sovereignty claim.
+export const WORLD_OPERATIONAL_CODES=Object.freeze(sorted([...WORLD_STATE_CODES,...'AI AS AW AX BL BM BQ CC CK CW CX EH FK FO GF GG GI GL GP GS GU HK IM JE KY MF MO MP MQ MS NC NF NU PF PM PN PR RE SH SJ SX TC TF TW VG VI WF XK YT'.split(' ')]));
+const operationalCodes=new Set(WORLD_OPERATIONAL_CODES);
+if(operationalCodes.size!==244||WORLD_OPERATIONAL_CODES.length!==244)throw Error('GLOBAL_OPERATIONAL_REFERENCE_INVALID');
+
+/** A changed place catalogue requires an explicit reference review, not a
+ * silently inflated or reduced worldwide denominator. */
+export function assertOperationalCatalogue(placeCodes){
+ if(!boundedArray(placeCodes)||placeCodes.some(x=>!code(x))||placeCodes.length!==WORLD_OPERATIONAL_CODES.length||
+  new Set(placeCodes).size!==placeCodes.length||placeCodes.some(x=>!operationalCodes.has(x)))throw Error('GLOBAL_OPERATIONAL_CATALOGUE_DRIFT');
+}
+
+/** Independent measures: an entity with a direct registration need not have
+ * a current publication; an observed publisher may arrive through discovery.
+ * Neither fact establishes event geography or coverage of every category. */
+export function operationalGapPlan(configuredCodes,publisherCountryCounts){
+ if(!boundedArray(configuredCodes)||configuredCodes.some(x=>!code(x))||publisherCountryCounts===null||
+  typeof publisherCountryCounts!=='object'||Array.isArray(publisherCountryCounts)||
+  Object.entries(publisherCountryCounts).some(([k,v])=>!code(k)||!Number.isSafeInteger(v)||v<1||v>5000))
+  throw Error('GLOBAL_OPERATIONAL_GAP_INPUT_INVALID');
+ const configured=new Set(configuredCodes),observed=new Set(Object.keys(publisherCountryCounts));
+ const buckets={configuredAndObserved:[],observedWithoutDirect:[],directWithoutObserved:[],neitherInThisAudit:[]};
+ for(const entity of WORLD_OPERATIONAL_CODES){
+  const hasDirect=configured.has(entity),hasObserved=observed.has(entity);
+  buckets[hasDirect?(hasObserved?'configuredAndObserved':'directWithoutObserved'):(hasObserved?'observedWithoutDirect':'neitherInThisAudit')].push(entity);
+ }
+ return {denominator:WORLD_OPERATIONAL_CODES.length,
+  configuredCount:WORLD_OPERATIONAL_CODES.filter(x=>configured.has(x)).length,
+  observedCount:WORLD_OPERATIONAL_CODES.filter(x=>observed.has(x)).length,
+  buckets,unexpectedConfiguredCodes:sorted(configuredCodes.filter(x=>!operationalCodes.has(x))),
+  unexpectedObservedCodes:sorted([...observed].filter(x=>!operationalCodes.has(x)))};
+}
+
+function groupUnknownProvenance(card,model,groups){
+ const publisher=model.publisherForNewsUrl(card.sourceUrl),context=model.sourcePublicationContext(card);
+ const exactSource=card.sourceIds?.length===1?model.nonIndexSourceIds.has(card.sourceIds[0])?card.sourceIds[0]:null:null;
+ const target=publisher?'publisher:'+publisher.id:exactSource?'source:'+exactSource:'unresolved';
+ // Do not infer language/country from host, headline, TLD or headquarters.
+ const reason=context===null?'reviewed-edition-context-missing':context.language===null?'reviewed-edition-language-missing':'canonical-provenance-unresolved';
+ const key=target+'|'+reason;
+ const previous=groups.get(key);
+ if(previous)previous.count++;else groups.set(key,{target,reason,count:1});
+}
+
 export function stateCoverage(codes,placeCodes){
  if(!boundedArray(codes)||!boundedArray(placeCodes)||codes.some(x=>x!==null&&!code(x))||placeCodes.some(x=>!code(x)))throw Error('GLOBAL_COVERAGE_INPUT_INVALID');
  const places=new Set(placeCodes);
@@ -53,10 +99,12 @@ export function auditSnapshot(sample,now,model){
  }
  const publications=[...unique.values()];
  const byCountry={},byTaxonomy=Object.fromEntries(model.taxonomy.map(x=>[x.id,0])),byEditorial=Object.fromEntries(model.editorialCategories.map(x=>[x,0]));
+ const unknownProvenance=new Map();
  let uncategorizedTaxonomy=0,uncategorizedEditorial=0;
  const countries=publications.map(card=>{
   const country=model.sourceEditionCountryCode(card);
   if(country!==null){if(!code(country))throw Error('GLOBAL_COVERAGE_COUNTRY_INVALID');byCountry[country]=(byCountry[country]??0)+1;}
+  else groupUnknownProvenance(card,model,unknownProvenance);
   const taxonomy=model.classifyEvidenceCard(card)?.category??null;
   const editorial=model.editorialCategory(card);
   if(taxonomy!==null&&Object.hasOwn(byTaxonomy,taxonomy))byTaxonomy[taxonomy]++;else uncategorizedTaxonomy++;
@@ -68,6 +116,7 @@ export function auditSnapshot(sample,now,model){
  return {status:'GLOBAL_COVERAGE_OBSERVED',health,scope:'public ICEO snapshot only, not the full paginated corpus, event geography or audience',
   sourceStates:sourcesByState,eligiblePublicationCount:publications.length,
   publisherCountryCoverage:stateCoverage(countries,model.placeCodes),publisherCountryCounts:byCountry,
+  unresolvedPublisherProvenance:[...unknownProvenance.values()].sort((a,b)=>b.count-a.count||a.target.localeCompare(b.target)||a.reason.localeCompare(b.reason)),
   languageCoverage:model.newsLanguageCoverage(publications),
   taxonomyCounts:byTaxonomy,uncategorizedTaxonomy,editorialCounts:byEditorial,uncategorizedEditorial};
 }
@@ -83,11 +132,13 @@ async function main(){
   import('../source/.build/src/iceo/news-page-contracts.js'),import('../source/.build/src/iceo/world-source-atlas.js'),
  ]);
  const placeCodes=places.listCountries().map(x=>x.code);
- const configured=stateCoverage(configuredCountryCodes({indexes:news.NEWS_DISCOVERY_INDEXES,
+ assertOperationalCatalogue(placeCodes);
+ const configuredCodes=configuredCountryCodes({indexes:news.NEWS_DISCOVERY_INDEXES,
   publicationScopes:news.NEWS_PUBLICATION_SCOPES,reviewedScopes:news.REVIEWED_FEED_PUBLICATION_SCOPES,
-  sources:registry.ICEO_SOURCES}),placeCodes);
+  sources:registry.ICEO_SOURCES});
+ const configured=stateCoverage(configuredCodes,placeCodes);
  const directory=atlas.worldSourceAtlas();
- const baseline={stateReference:WORLD_STATE_CODES.length,placeOptions:placeCodes.length,
+ const baseline={stateReference:WORLD_STATE_CODES.length,operationalEntityReference:WORLD_OPERATIONAL_CODES.length,placeOptions:placeCodes.length,
   cityOptions:JSON.parse(cityData.cityJson).rows.length,interfaceLocales:i18n.LOCALES.length,
   editorialCategories:editorial.PUBLIC_EDITORIAL_CATEGORIES.length,taxonomyCategories:taxonomy.NEWS_CATEGORIES.length,
   configuredDefinitions:registry.ICEO_SOURCES.length,allowlistedPublishers:news.NEWS_PUBLISHERS.length,
@@ -103,8 +154,11 @@ async function main(){
  const observed=auditSnapshot(sample,Date.now(),{placeCodes,taxonomy:taxonomy.NEWS_CATEGORIES,
   editorialCategories:editorial.PUBLIC_EDITORIAL_CATEGORIES,validNewsGlobalCard:contracts.validNewsGlobalCard,
   sourceEditionCountryCode:news.sourceEditionCountryCode,newsLanguageCoverage:news.newsLanguageCoverage,
-  classifyEvidenceCard:taxonomy.classifyEvidenceCard,editorialCategory:editorial.editorialCategory});
- console.log('DLKT_GLOBAL_COVERAGE '+JSON.stringify({baseline,observed}));
+  classifyEvidenceCard:taxonomy.classifyEvidenceCard,editorialCategory:editorial.editorialCategory,
+  publisherForNewsUrl:news.publisherForNewsUrl,sourcePublicationContext:news.sourcePublicationContext,
+  nonIndexSourceIds:new Set(registry.ICEO_SOURCES.filter(x=>x.adapter!=='news-index').map(x=>x.id))});
+ const operational=observed.status==='GLOBAL_COVERAGE_OBSERVED'?operationalGapPlan(configuredCodes,observed.publisherCountryCounts):null;
+ console.log('DLKT_GLOBAL_COVERAGE '+JSON.stringify({baseline,observed,operational}));
  if(observed.status!=='GLOBAL_COVERAGE_OBSERVED')process.exitCode=1;
 }
 const invoked=process.argv[1]&&pathToFileURL(resolve(process.argv[1])).href===import.meta.url;

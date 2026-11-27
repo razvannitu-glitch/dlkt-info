@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {WORLD_STATE_CODES,stateCoverage,configuredCountryCodes,auditSnapshot} from '../scripts/audit-global-coverage.mjs';
+import {WORLD_STATE_CODES,WORLD_OPERATIONAL_CODES,assertOperationalCatalogue,operationalGapPlan,stateCoverage,configuredCountryCodes,auditSnapshot} from '../scripts/audit-global-coverage.mjs';
 
 test('global denominator is exactly 193 UN member states plus VA and PS, not the place directory',()=>{
  assert.equal(WORLD_STATE_CODES.length,195);
@@ -47,7 +47,9 @@ const fixture=cards=>({status:200,redirected:false,headers:{'content-type':'appl
 const model={placeCodes:['RO','HK'],taxonomy:[{id:'04000000'}],editorialCategories:['business'],
  validNewsGlobalCard:c=>c.kind==='publication'&&c.current===true,sourceEditionCountryCode:c=>c.country,
  classifyEvidenceCard:c=>c.taxonomy?{category:c.taxonomy}:null,editorialCategory:c=>c.editorial??null,
- newsLanguageCoverage:rows=>({publications:rows.length})};
+ newsLanguageCoverage:rows=>({publications:rows.length}),
+ publisherForNewsUrl:url=>url==='https://example.org/article'?{id:'known'}:null,
+ sourcePublicationContext:c=>c.context??null,nonIndexSourceIds:new Set(['official'])};
 const card=(identity,country,extra={})=>({kind:'publication',current:true,identity,contentHash:'hash-'+identity,country,...extra});
 test('audit counts only eligible unique publications and does not invent categories or country evidence',()=>{
  const a=card('a','RO',{taxonomy:'04000000',editorial:'business'});
@@ -57,6 +59,7 @@ test('audit counts only eligible unique publications and does not invent categor
  assert.equal(r.publisherCountryCoverage.stateCount,1);
  assert.deepEqual(r.publisherCountryCoverage.otherPlaceCodes,['HK']);
  assert.equal(r.publisherCountryCoverage.unknownRecordCount,1);
+ assert.deepEqual(r.unresolvedPublisherProvenance,[{target:'unresolved',reason:'reviewed-edition-context-missing',count:1}]);
  assert.equal(r.taxonomyCounts['04000000'],1);
  assert.equal(r.editorialCounts.business,1);
  assert.equal(r.uncategorizedTaxonomy,2);
@@ -72,4 +75,55 @@ test('stale or broken snapshots return held and no observed geography',()=>{
  const r=auditSnapshot(sample,NOW,model);
  assert.equal(r.status,'GLOBAL_COVERAGE_HELD');
  assert.equal(r.observed,null);
+});
+
+test('approved operational reference includes all 195 states and exactly 49 other geographic entities',()=>{
+ assert.equal(WORLD_OPERATIONAL_CODES.length,244);
+ assert.equal(new Set(WORLD_OPERATIONAL_CODES).size,244);
+ assert.ok(WORLD_STATE_CODES.every(x=>WORLD_OPERATIONAL_CODES.includes(x)));
+ assert.equal(WORLD_OPERATIONAL_CODES.filter(x=>!WORLD_STATE_CODES.includes(x)).length,49);
+ for(const x of ['HK','MO','PR','GL','TW','XK','CK','NU'])assert.ok(WORLD_OPERATIONAL_CODES.includes(x));
+ assert.doesNotThrow(()=>assertOperationalCatalogue([...WORLD_OPERATIONAL_CODES].reverse()));
+});
+test('catalogue drift is explicit, never silently normalized to an inflated denominator',()=>{
+ const a=[...WORLD_OPERATIONAL_CODES];
+ for(const invalid of [a.slice(1),[...a,'AQ'],[...a.slice(1),a[1]],[...a.slice(1),'AQ'],[...a.slice(1),'ro']])
+  assert.throws(()=>assertOperationalCatalogue(invalid),/GLOBAL_OPERATIONAL_CATALOGUE_DRIFT/);
+});
+test('all operational entities are allocated exactly once across configuration and observation gaps',()=>{
+ const r=operationalGapPlan(['RO','RO','HK','AQ'],{RO:5,PR:2,US:1,XX:3});
+ assert.equal(r.denominator,244);
+ assert.equal(r.configuredCount,2);
+ assert.equal(r.observedCount,3);
+ assert.deepEqual(r.buckets.configuredAndObserved,['RO']);
+ assert.deepEqual(r.buckets.observedWithoutDirect,['PR','US']);
+ assert.deepEqual(r.buckets.directWithoutObserved,['HK']);
+ assert.equal(r.buckets.neitherInThisAudit.length,240);
+ const all=Object.values(r.buckets).flat().sort();
+ assert.deepEqual(all,[...WORLD_OPERATIONAL_CODES]);
+ assert.deepEqual(r.unexpectedConfiguredCodes,['AQ']);
+ assert.deepEqual(r.unexpectedObservedCodes,['XX']);
+});
+test('operational gap planning rejects fake observations and malformed codes',()=>{
+ for(const bad of [{RO:0},{RO:-1},{RO:1.5},{ro:1},{RO:'2'},null,[]])
+  assert.throws(()=>operationalGapPlan(['RO'],bad),/GLOBAL_OPERATIONAL_GAP_INPUT_INVALID/);
+ assert.throws(()=>operationalGapPlan(['ZZ'],{}),/GLOBAL_OPERATIONAL_GAP_INPUT_INVALID/);
+});
+test('unresolved provenance is grouped for review, not fabricated or automatically resolved',()=>{
+ const cards=[
+  card('a',null,{sourceUrl:'https://example.org/article'}),
+  card('b',null,{sourceUrl:'https://example.org/article'}),
+  card('c',null,{sourceUrl:'https://example.org/article',context:{language:null}}),
+  card('d',null,{sourceIds:['official']}),
+  card('e',null,{sourceIds:['unknown']}),
+  card('f','RO')
+ ];
+ const r=auditSnapshot(fixture(cards),NOW,model);
+ assert.equal(r.publisherCountryCoverage.unknownRecordCount,5);
+ assert.equal(r.unresolvedPublisherProvenance.reduce((n,x)=>n+x.count,0),5);
+ assert.deepEqual(r.unresolvedPublisherProvenance.find(x=>x.count===2),{target:'publisher:known',reason:'reviewed-edition-context-missing',count:2});
+ assert.ok(r.unresolvedPublisherProvenance.some(x=>x.target==='publisher:known'&&x.reason==='reviewed-edition-language-missing'));
+ assert.ok(r.unresolvedPublisherProvenance.some(x=>x.target==='source:official'));
+ assert.ok(r.unresolvedPublisherProvenance.some(x=>x.target==='unresolved'));
+ assert.deepEqual(r.publisherCountryCounts,{RO:1});
 });
