@@ -16,7 +16,8 @@ export async function handleAudience(req:IncomingMessage,res:ServerResponse,deps
   environment,store,secret,
   available:()=>store.operationalReady(),
   permit:async(_req,action)=>action==='withdraw'||(edgeReady&&await store.admit(action==='enable'?'enable':'event')),
-  trustedMetadata:env.DLKT_INFO_AUDIENCE_TRUSTED_INGRESS==='1'&&env.VERCEL==='1'
+  // Geography is accepted only from the verified canonical production ingress.
+  trustedMetadata:env.DLKT_INFO_AUDIENCE_TRUSTED_INGRESS==='1'&&env.VERCEL==='1'&&env.VERCEL_ENV==='production'&&req.headers.host==='www.dlkt.ee'
  });
 }
 export default handleAudience;
