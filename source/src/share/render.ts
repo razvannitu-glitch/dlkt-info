@@ -1,5 +1,5 @@
 import {displayPhotoFor} from '../media/catalog.js';
-import {articlePhotoPath} from '../media/article-photo-reference.js';
+import {articlePhotoPath,photoPublisher} from '../media/article-photo-reference.js';
 import {shareDestinations,knowledgeShareDestinations} from './actions.js';
 import {knowledgeRightsForCard,type KnowledgeLanguage} from '../iceo/knowledge.js';
 import {knowledgeContentDigest,type SharedKnowledgeView} from './knowledge-resolution.js';
@@ -29,7 +29,7 @@ function photograph(card:EvidenceCard,now:number):string{
  const p=displayPhotoFor(card,now);
  if(!p){
   if(card.kind!=='publication'||!Number.isFinite(now))return '';
-  const source=safeLink(card.sourceUrl);if(!source)return '';
+  const source=safeLink(card.sourceUrl);if(!source||photoPublisher(card.sourceUrl)===null)return '';
   let path:string;try{path=articlePhotoPath({id:card.id,revision:card.contentHash});}catch{return '';}
   return `<figure class="card-photo" data-photo-id="article:${e(card.id)}:${e(card.contentHash)}" data-photo-kind="source"><div class="card-photo-frame"><img src="${e(path)}" width="960" height="540" alt="Source photo" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-article-photo="${e(card.id)}"><span class="card-photo-label" data-i18n="photoSourceLabel" hidden>Source photo</span></div><figcaption class="card-photo-caption" hidden><a href="${e(source)}" target="_blank" rel="noopener noreferrer" data-i18n="photoSourceLabel">Source photo</a></figcaption></figure>`;
  }

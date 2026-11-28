@@ -81,3 +81,13 @@ test('public photo modules exactly match compilation and make only validated sam
  assert.match(browser,/articlePhotoPath\(reference\)/u);assert.match(browser,/naturalWidth === 0/u);assert.match(browser,/addEventListener\('error'/u);
  assert.match(reference,/\/api\/article-photo/u);assert.doesNotMatch(reference,/fetch\(|node:|document|localStorage/u);
 });
+
+test('unsupported source-photo publisher emits no guaranteed-miss image request on shared recipient pages',()=>{
+ const sourceUrl='https://www.ign.com/articles/photo-policy-fixture',card={...cards[0],id:'d'.repeat(24),identity:sourceUrl,sourceUrl,title:'A complete original gaming report',publisher:'IGN',sourceIds:['news-gaming'],topic:'culture',contentHash:'e'.repeat(64)};
+ const checkedAt=Math.max(...CONTEXT_PHOTOS.map(photo=>Date.parse(photo.reviewedAt)))+1000;
+ assert.equal(displayPhotoFor(card,checkedAt),null);
+ const output=renderSharedCard({card,insight:null,now:checkedAt,validUntil:checkedAt+60000,changed:false,partial:false});
+ const doc=parseDocument(output);
+ assert.equal(DomUtils.findAll(node=>node.name==='img'&&node.attribs['data-article-photo'],doc.children).length,0);
+ assert.ok(output.includes(card.title));assert.ok(output.includes('Open original source'));assert.ok(output.includes('Download share image'));
+});
