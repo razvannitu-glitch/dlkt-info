@@ -163,7 +163,7 @@ test('configured primary sources do not invent live availability, Dutch translat
   assert.deepEqual(unrelatedLanguage.configuredPublisherIds,[]);assert.equal(unrelatedLanguage.state,'unconnected');
  }
  const profiles=countryEditionProfiles(listCountries(),'en');assert.equal(profiles.length,244);
- assert.equal(profiles.filter(profile=>profile.countryEditionLanguages.length).length,16);
+ assert.equal(profiles.filter(profile=>profile.countryEditionLanguages.length).length,17);
  assert.equal(countryEditionProfile(country('CA'),'en',zero).state,'unconnected');
  assert.equal(countryEditionProfile(country('BR'),'pt',zero).state,'unconnected');
  const older=extracted('beehive-news',{published:NOW-25*3600000}),stored=epoch([older]);

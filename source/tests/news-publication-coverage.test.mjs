@@ -20,10 +20,10 @@ const profiles=[
 test('two existing English editorial profiles extend provenance without enabling origins or feeds',()=>{
  assert.equal(NEWS_PUBLISHERS.length,77);
  const codes=new Set(NEWS_PUBLICATION_SCOPES.map(profile=>profile.countryCode));
- assert.deepEqual([...codes].sort(),['AU','DE','FR','GB','HK','IE','IN','IT','JP','QA','RO','SG','US']);
- assert.equal(codes.size,13);assert.equal(NEWS_PUBLICATION_SCOPES.length,26);
+ assert.deepEqual([...codes].sort(),['AU','BE','DE','FR','GB','HK','IE','IN','IT','JP','QA','RO','SG','US']);
+ assert.equal(codes.size,14);assert.equal(NEWS_PUBLICATION_SCOPES.length,29);
  assert.equal(sourceEditionCountryCode('https://www.sanews.gov.za/south-africa/controlled-fixture'),'ZA');
- assert.equal(new Set([...codes,'ZA']).size,14,'14 configured country/territory provenance codes, not 14 live or native-language feeds');
+ assert.equal(new Set([...codes,'ZA']).size,15,'15 configured country/territory provenance codes, not 15 live or native-language feeds');
  for(const profile of profiles){
   assert.equal(NEWS_DISCOVERY_INDEXES.some(index=>index.publisherId===profile.id),false,'no discovery index is added');
   for(const url of [profile.url,profile.additional]){

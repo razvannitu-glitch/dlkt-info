@@ -65,14 +65,20 @@ export function parseKnowledgeCardReference(raw) {
     const direct = /^\/card\/(dlkt-elsewhere-[a-z0-9][a-z0-9-]{0,64})$/u.exec(path);
     if (!direct && path !== '/api/card')
         return null;
-    const allowed = direct ? ['v', 'lang', 'h'] : ['id', 'v', 'lang', 'h'];
+    // A Vercel rewrite can retain the public pathname while appending its
+    // captured id to the query. Accept only one redundant, identical id.
+    // The pathname remains authoritative; unknown or duplicate keys fail closed.
     const pairs = query.split('&');
-    if (pairs.length !== allowed.length || pairs.some(pair => !/^(?:id|v|lang|h)=[a-z0-9-]+$/u.test(pair)))
+    if (pairs.length < 3 || pairs.length > 4 || pairs.some(pair => !/^(?:id|v|lang|h)=[a-z0-9-]+$/u.test(pair)))
         return null;
     const params = new URLSearchParams(query);
-    if ([...params.keys()].some(key => !allowed.includes(key)) || allowed.some(key => params.getAll(key).length !== 1))
+    const required = direct ? ['v', 'lang', 'h'] : ['id', 'v', 'lang', 'h'];
+    if (required.some(key => params.getAll(key).length !== 1) || params.getAll('id').length > 1)
         return null;
-    const id = direct?.[1] ?? params.get('id'), version = params.get('v'), language = params.get('lang'), digest = params.get('h');
+    const passedId = params.get('id');
+    if (direct && passedId !== null && passedId !== direct[1])
+        return null;
+    const id = direct?.[1] ?? passedId, version = params.get('v'), language = params.get('lang'), digest = params.get('h');
     if (typeof id !== 'string' || !KNOWLEDGE_SHARE_ID.test(id) || version === null || !/^[1-9]\d{0,15}$/u.test(version) || !validKnowledgeShareLanguage(language) || digest === null || !/^[a-f0-9]{64}$/u.test(digest))
         return null;
     const revision = Number(version);

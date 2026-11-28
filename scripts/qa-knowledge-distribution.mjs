@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import {writeFileSync} from 'node:fs';
 import {join} from 'node:path';
+import {inspectKnowledgeDocument,assessKnowledgeBrowser,verifyKnowledgeCopy} from './qa-live-reader.mjs';
+import {knowledgeCases} from './verify-live-knowledge.mjs';
 
 /** Loopback-only test adapter around the actual compiled HTTP handler.
  * Synthetic decisions exercise behavior; never populate runtime admissions.
@@ -37,6 +39,11 @@ export async function knowledgeDistributionFixture(){
   configure({enabled=true,allow=true,at=now,until=now+60000,licensedLayout=false}={}){active=enabled;approved=allow;clock=at;deadline=until;layoutOnly=licensedLayout;},
   handle(req,res,url){
    if(!active||!(url.pathname.startsWith('/card/dlkt-elsewhere-')||(url.pathname==='/api/card'&&url.searchParams.get('id')?.startsWith('dlkt-elsewhere-'))))return false;
+   // Model the retained public pathname plus the single captured id added
+   // by the configured rewrite. The live checks, not this fixture, attest
+   // the real production transport behavior.
+   const direct=/^\/card\/(dlkt-elsewhere-[a-z0-9][a-z0-9-]{0,64})$/u.exec(url.pathname);
+   if(direct&&typeof req.url==='string')req.url+=(url.search?'&':'?')+'id='+direct[1];
    void handleCard(req,res,failIO,failIO,()=>clock,null,resolve).catch(()=>{if(!res.headersSent)res.writeHead(500);res.end();});
    return true;
   },
@@ -70,7 +77,7 @@ export async function verifyKnowledgeDistribution({fixture,origin,openIsolated,e
  try{
   await call('Page.bringToFront');await call('Network.enable');
   await call('Network.setBlockedURLs',{urls:['https://*']});
-  await call('Page.addScriptToEvaluateOnNewDocument',{source:"globalThis.__qaNow="+fixture.now+";globalThis.__qaWrites=[];globalThis.__qaClipboardMode='write';Date.now=()=>globalThis.__qaNow;Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async value=>{if(globalThis.__qaClipboardMode==='reject')throw Error('controlled clipboard denial');globalThis.__qaWrites.push(value);}}});"});
+  await call('Page.addScriptToEvaluateOnNewDocument',{source:"globalThis.__qaNow="+fixture.now+";globalThis.__qaWrites=[];globalThis.__qaClipboardMode='write';Date.now=()=>globalThis.__qaNow;Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async value=>{if(globalThis.__qaClipboardMode==='reject')throw Error('controlled clipboard denial');globalThis.__qaWrites.push(value);},readText:async()=>globalThis.__qaWrites.at(-1)??''}});"});
   for(const [card,language,width,licensedLayout,runtimeAdmission=false] of [
    [fixture.cards[0],'en',320,false],[fixture.cards[1],'ro',390,false],[fixture.cards[0],'it',1440,false],[fixture.licensed,'en',320,true],[fixture.licensed,'it',768,true],
    [fixture.admitted,'en',320,false,true],[fixture.admitted,'ro',390,false,true],[fixture.admitted,'it',1440,false,true],
@@ -84,10 +91,46 @@ export async function verifyKnowledgeDistribution({fixture,origin,openIsolated,e
    if(licensedLayout||runtimeAdmission)assert.ok(view.credits.includes('https://creativecommons.org/licenses/by/4.0/'),'licensed renderer shows credit and licence');
    if(runtimeAdmission){assert.ok(view.credits.includes('https://www.nsw.gov.au/nsw-government/about-website/copyright'));assert.ok(view.body.includes('© State of New South Wales. For current information go to www.nsw.gov.au.'));}
    for(const a of (await state()).links){assert.equal(a.disabled,'false');assert.equal(a.tabIndex,0);const target=new URL(a.href);assert.ok([...target.searchParams.values()].includes(link));}
-   await focusSelector(call,'#shared-copy');await keyboard(call,'Enter');
-   await wait('globalThis.__qaWrites.length===1');assert.deepEqual((await state()).writes,[link]);
+   if(runtimeAdmission){
+    const item=knowledgeCases(Date.parse(card.reviewedAt)+1000).find(item=>item.key==='canonical-'+language);
+    assert.ok(item);
+    const liveShape=await evaluate(call,'('+inspectKnowledgeDocument.toString()+')()');
+    assert.deepEqual(assessKnowledgeBrowser(item,liveShape,origin+path(link),width),[]);
+    const copyVerified=await verifyKnowledgeCopy(call,item),copyState=await state();
+    assert.equal(copyVerified,true,'live copy probe with controlled clipboard; writes='+copyState.writes.length+'; enabled='+!copyState.buttonDisabled+'; fallbackHidden='+copyState.fallbackHidden);
+    assert.deepEqual(copyState.writes,['DLKT-QA-NOT-COPIED',link]);
+   }else{
+    await focusSelector(call,'#shared-copy');await keyboard(call,'Enter');
+    await wait('globalThis.__qaWrites.length===1');assert.deepEqual((await state()).writes,[link]);
+   }
    layouts.push({width,language,id:card.id,licensedRendererOnly:licensedLayout,runtimeAdmission,documentWidth:view.scrollWidth,screenshot:await save('dlkt-knowledge-share-'+width+'-'+language+'-'+(runtimeAdmission?'admission':licensedLayout?'licensed':'ordinary')+'.png')});
   }
+  checks.push('live-credit-and-copy-probe-controlled-clipboard');
+  // Exercise the false-success cases from the independent review in real
+  // Chromium against the loopback fixture only, not a deployed page.
+  const admittedCard=fixture.admitted,admittedAt=Date.parse(admittedCard.reviewedAt)+1000;
+  const admittedLink=await open(admittedCard,'en',{width:390,runtimeAdmission:true,at:admittedAt,until:Date.parse(admittedCard.reviewBy)});
+  await evaluate(call,'(globalThis.__qaNow='+String(admittedAt)+',true)');
+  const admittedCase=knowledgeCases(admittedAt).find(item=>item.key==='canonical-en');
+  assert.ok(admittedCase);
+  const inspect=()=>evaluate(call,'('+inspectKnowledgeDocument.toString()+')()');
+  assert.deepEqual(assessKnowledgeBrowser(admittedCase,await inspect(),origin+path(admittedLink),390),[]);
+  await evaluate(call,"(document.querySelector('.card-credits').hidden=true,true)");
+  assert.ok(assessKnowledgeBrowser(admittedCase,await inspect(),origin+path(admittedLink),390).includes('visible-exact-credit'));
+  await evaluate(call,"(()=>{document.querySelector('.card-credits').hidden=false;const b=document.getElementById('shared-copy');b.replaceWith(b.cloneNode(true));return true;})()");
+  assert.deepEqual(assessKnowledgeBrowser(admittedCase,await inspect(),origin+path(admittedLink),390),[]);
+  assert.equal(await verifyKnowledgeCopy(call,admittedCase),false,'visible but inert button cannot prove recovery');
+  assert.deepEqual((await state()).writes,['DLKT-QA-NOT-COPIED']);
+  checks.push('hidden-credit-and-inert-copy-rejected');
+  // Verify content attacks using the real compiled renderer in Chromium.
+  const baselineEditorial=await inspect();
+  await evaluate(call,"(document.querySelector('.card-context').hidden=true,true)");
+  assert.ok(assessKnowledgeBrowser(admittedCase,await inspect(),origin+path(admittedLink),390).includes('editorial-explanation'));
+  await evaluate(call,"(()=>{document.querySelector('.card-context').hidden=false;document.querySelector('article h1').textContent='Unreviewed substitute';return true;})()");
+  assert.ok(assessKnowledgeBrowser(admittedCase,await inspect(),origin+path(admittedLink),390).includes('editorial-title'));
+  await evaluate(call,"(()=>{document.querySelector('article h1').textContent="+JSON.stringify(baselineEditorial.editorial.title.text)+";const p=document.querySelector('.card-guide p');p.replaceChildren();return true;})()");
+  assert.ok(assessKnowledgeBrowser(admittedCase,await inspect(),origin+path(admittedLink),390).includes('editorial-connection'));
+  checks.push('hidden-substituted-and-missing-editorial-content-rejected');
   const card=fixture.cards[0],link=await open(card,'en');
   await expire("(document.getElementById('shared-copy').click(),true)");
   disabled(await state());assert.deepEqual((await state()).writes,[]);checks.push('exact-deadline-copy-denied-before-timer');

@@ -116,11 +116,13 @@ test('the signed cursor binds national context and old cursor versions expire wi
  const london=city('London','GB'),turin=city('Torino','IT'),edition=epoch(Array.from({length:45},(_,i)=>article(i+1)));
  const service=new NewsPageService(new CorpusMemoryStore([edition]),KEY,()=>NOW+1000),page=await service.read(request('en',london.id));
  const [encoded]=page.nextCursor.split('.'),payload=JSON.parse(Buffer.from(encoded,'base64url').toString('utf8'));
- assert.equal(payload.orderVersion,'iptc17-local-national-world-publisher-rounds-20261125-r7');
+ assert.equal(payload.orderVersion,'iptc17-local-national-world-publisher-rounds-20261127-r9');
  assert.equal(payload.version,'news-cursor-6');assert.equal(payload.sourceScope,'edition');assert.equal(payload.countryCode,'GB');assert.equal(payload.kind,'page');assert.equal(payload.storyKey,null);
  const sign=value=>{const body=Buffer.from(JSON.stringify(value)).toString('base64url'),key=createHmac('sha256',KEY).update('dlkt-info/news-page/cursor-key/v1').digest();
   return body+'.'+createHmac('sha256',key).update('dlkt-info/news-page/cursor/v1:'+body).digest('base64url');};
  const changed=sign({...payload,countryCode:'IT'});
+ await assert.rejects(service.read(request('en',london.id,'all',sign({...payload,orderVersion:'iptc17-local-national-world-publisher-rounds-20261127-r8'}))),/NEWS_EDITION_EXPIRED/,'pre-language-separation offsets cannot be reused after reading eligibility changes');
+ await assert.rejects(service.read(request('en',london.id,'all',sign({...payload,orderVersion:'iptc17-local-national-world-publisher-rounds-20261125-r7'}))),/NEWS_EDITION_EXPIRED/,'pre-provenance edition offsets cannot be reused after national edition grouping changes');
  await assert.rejects(service.read(request('en',london.id,'all',sign({...payload,orderVersion:'iptc17-source-scope-publisher-rounds-20261124-r6'}))),/NEWS_EDITION_EXPIRED/,'old mixed-geography offsets expire under continuous bands');
  await assert.rejects(service.read(request('en',london.id,'all',sign({...payload,orderVersion:'iptc17-country-day-local-first-20261123'}))),/NEWS_EDITION_EXPIRED/);
  await assert.rejects(service.read(request('en',london.id,'all',changed)),/NEWS_CONTEXT_MISMATCH/);
