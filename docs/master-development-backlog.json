@@ -110,7 +110,7 @@
       "dependsOn": [],
       "scope": "Review isolated anonymous-account monitor correction, not yet adopted.",
       "acceptance": "Exact two-path diff against current integrated head; 2880/2880 tests and static gates pass on isolated head; independent review confirms monitor failure remains visible, cancellation respected, offline prerequisites enforced; do not treat successful fixture CI as hosted proof.",
-      "nextAction": "Use existing branch and review exact head; do not duplicate the fix. Record independent result before adoption.",
+      "nextAction": "Read PR #117 exact-head review receipt and threads; if accepted, verify current PR #116 base and head plus full diff/CI before F-02. No duplicate review or adoption on pending evidence.",
       "evidence": [
         {
           "url": "https://github.com/razvannitu-glitch/dlkt-info/commit/d89db45c081a712aa2d2846a006096352b7cf96a",
@@ -123,6 +123,18 @@
           "sha": "d89db45c081a712aa2d2846a006096352b7cf96a",
           "status": "PASS",
           "detail": "155 + 2725 tests, zero failures/skips, npm audit zero, 15/15."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/117",
+          "sha": "d89db45c081a712aa2d2846a006096352b7cf96a",
+          "status": "DRAFT",
+          "detail": "Exact two-file review-only follow-up; targets integrated draft, not main."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/117#issuecomment-7243662872",
+          "sha": "d89db45c081a712aa2d2846a006096352b7cf96a",
+          "status": "IN_PROGRESS",
+          "detail": "Independent Code Review confirmed running on exact head; no completed verdict yet."
         }
       ],
       "approval": "none"
@@ -259,11 +271,11 @@
       "id": "I-03",
       "track": "I",
       "priority": 0,
-      "state": "READY",
+      "state": "IN_PROGRESS",
       "dependsOn": [],
       "scope": "Reconcile editorial decisions for candidate content and standalone distribution.",
       "acceptance": "For every changed public admission, verify exact identity/revision/digest, reviewed rights, attribution, source validity and expiry; unknown rights/content stay withheld. Human decision recorded where needed; existing source activation holds respected.",
-      "nextAction": "Read existing reviewed NSW evidence, distinguish code eligibility from editorial approval, produce decision packet; do not add admissions or activate sources.",
+      "nextAction": "Reconcile existing public admission authorization and exact release evidence; determine whether a new admission or fresh revalidation is required, record current source/rights evidence under approved scope, preserve all held material. Do not equate historical observation or unchanged files with new editorial authorization.",
       "evidence": [
         {
           "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/101",
@@ -272,6 +284,18 @@
         {
           "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/116",
           "status": "HOLD"
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/blob/b376b9791aebb2c207e17a270e29d0b1818e1dd5/docs/iceo-nsw-admission-20261126.md",
+          "sha": "b376b9791aebb2c207e17a270e29d0b1818e1dd5",
+          "status": "REVIEW",
+          "detail": "Recorded independent wording suitability and separate scoped decisions; requires fresh observation at actual admission (<24h) and exact release review."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/blob/b376b9791aebb2c207e17a270e29d0b1818e1dd5/source/tests/evidence/nsw-fuelcheck-admission-20261126.json",
+          "sha": "b376b9791aebb2c207e17a270e29d0b1818e1dd5",
+          "status": "REVIEW",
+          "detail": "Receipt, catalogue and standalone resolver are byte-identical to current main. Existing scoped card digest unchanged; source observation 2026-11-26T20:37:56.081Z is older than 24h on 2026-11-28. Review window ends 2026-12-26T20:33:43Z. No evidence of a newly admitted card in those files."
         }
       ],
       "approval": "explicit-editorial-if-needed"
@@ -536,12 +560,19 @@
       "id": "O-02",
       "track": "O",
       "priority": 0,
-      "state": "READY",
+      "state": "IN_PROGRESS",
       "dependsOn": [],
       "scope": "Prepare rollback and protected-release operating checklist.",
       "acceptance": "Identify current alias and actual active receipt, last known-good rollback candidate, approved environment, backup/restore evidence or explicit NOT TESTED; no promotion or restore. Never equate Vercel READY deployment with public alias.",
-      "nextAction": "Read deployment metadata and existing runbooks; prepare evidence-backed recovery decision without changing settings.",
-      "evidence": [],
+      "nextAction": "Reconcile current public build receipt with confirmed active Vercel alias; identify independently evidenced rollback target, backup/restore and protection posture. Prepare staging decision packet without deployment, protection changes or restore.",
+      "evidence": [
+        {
+          "url": "https://www.dlkt.ee",
+          "sha": "2005ad5cf04f6ea0f04080eeb66a99f6d895b55d",
+          "status": "OBSERVED",
+          "detail": "Authenticated Vercel get_alias/get_deployment confirm official alias maps to dpl_GbXYPoLSrNwH3QeMgPdCEgxtbAea, READY, production, main. Not the latest READY candidate. No alias change or direct new hosted probe performed."
+        }
+      ],
       "approval": "none"
     },
     {
