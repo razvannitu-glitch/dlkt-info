@@ -8,7 +8,7 @@
     "pr": 116,
     "branch": "codex/dlkt-ui-browser-smoke-integrated-20261128",
     "base": "2005ad5cf04f6ea0f04080eeb66a99f6d895b55d",
-    "head": "b376b9791aebb2c207e17a270e29d0b1818e1dd5",
+    "head": "d89db45c081a712aa2d2846a006096352b7cf96a",
     "state": "HOLD",
     "authority": "Draft only. No merge, staging, deployment, production or source activation without separate explicit authorization.",
     "evidence": [
@@ -52,6 +52,34 @@
         "status": "FAIL",
         "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46172292410",
         "detail": "Old public SHA returned canonical NSW HTTP 400; matching API 200. Existing defect, not demonstrated candidate regression."
+      },
+      {
+        "kind": "post-adoption-release-ci",
+        "sha": "d89db45c081a712aa2d2846a006096352b7cf96a",
+        "status": "PASS",
+        "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46175189769",
+        "detail": "2880/2880 tests, no failures/skips; 15/15 static controls; npm audit zero."
+      },
+      {
+        "kind": "post-adoption-offline-browser",
+        "sha": "d89db45c081a712aa2d2846a006096352b7cf96a",
+        "status": "PASS",
+        "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46175189768",
+        "detail": "Exact-head offline browser passed; not hosted."
+      },
+      {
+        "kind": "post-adoption-public-monitor",
+        "sha": "d89db45c081a712aa2d2846a006096352b7cf96a",
+        "status": "FAIL",
+        "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46175189787",
+        "detail": "Old production SHA 2005ad5c canonical NSW 400; API 200. Separate anonymous account boundary 20/20 passed despite browser failure. No waiver."
+      },
+      {
+        "kind": "post-adoption-iceo",
+        "sha": "d89db45c081a712aa2d2846a006096352b7cf96a",
+        "status": "PASS",
+        "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46175189950",
+        "detail": "Public freshness monitor; not candidate hosting evidence."
       }
     ]
   },
@@ -106,11 +134,11 @@
       "id": "F-01",
       "track": "F",
       "priority": 0,
-      "state": "REVIEW",
+      "state": "DONE",
       "dependsOn": [],
       "scope": "Review isolated anonymous-account monitor correction, not yet adopted.",
       "acceptance": "Exact two-path diff against current integrated head; 2880/2880 tests and static gates pass on isolated head; independent review confirms monitor failure remains visible, cancellation respected, offline prerequisites enforced; do not treat successful fixture CI as hosted proof.",
-      "nextAction": "Read PR #117 exact-head review receipt and threads; if accepted, verify current PR #116 base and head plus full diff/CI before F-02. No duplicate review or adoption on pending evidence.",
+      "nextAction": "Independently reviewed and adopted into integrated draft; preserve original monitor failure and the distinct anonymous account result.",
       "evidence": [
         {
           "url": "https://github.com/razvannitu-glitch/dlkt-info/commit/d89db45c081a712aa2d2846a006096352b7cf96a",
@@ -135,6 +163,18 @@
           "sha": "d89db45c081a712aa2d2846a006096352b7cf96a",
           "status": "IN_PROGRESS",
           "detail": "Independent Code Review confirmed running on exact head; no completed verdict yet."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/117#issuecomment-7243662872",
+          "sha": "d89db45c081a712aa2d2846a006096352b7cf96a",
+          "status": "PASS",
+          "detail": "Exact-head Code Review completed, no findings or unresolved findings. No review threads."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46175189787/job/141072171510",
+          "sha": "d89db45c081a712aa2d2846a006096352b7cf96a",
+          "status": "PASS",
+          "detail": "After the live reader failure, 9/9 account fixtures and all 20 anonymous HTTP boundary checks ran and passed; 403 unauthorized origin, 200 anonymous session, 401 protected account. Old public release only; no authenticated or cross-user tests."
         }
       ],
       "approval": "none"
@@ -143,18 +183,36 @@
       "id": "F-02",
       "track": "F",
       "priority": 0,
-      "state": "BLOCKED",
+      "state": "DONE",
       "dependsOn": [
         "F-01"
       ],
       "scope": "Adopt only independently accepted QA correction into the single integrated draft.",
       "acceptance": "Verify PR base and head, fast-forward only after exact-head evidence, no unrelated diff; reread head and repeat release and browser gates.",
-      "nextAction": "Use compare and a non-force ref update with expected head. Keep draft and record new SHA.",
+      "nextAction": "Adoption verified on exact PR #116 head. Both post-integration release and offline browser workflows passed; proceed to F-03. Overall public reader monitor remains FAIL on old production SHA; hosted recovery not verified.",
       "evidence": [
         {
           "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/116",
           "sha": "b376b9791aebb2c207e17a270e29d0b1818e1dd5",
           "status": "HOLD"
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/116",
+          "sha": "d89db45c081a712aa2d2846a006096352b7cf96a",
+          "status": "PASS",
+          "detail": "Non-force fast-forward from b376b97, exact two changed paths among 1208 tracked leaves, source pin unchanged. GitHub recognized #117 as merged into integrated draft. main unchanged; no deployment."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46175189769",
+          "sha": "d89db45c081a712aa2d2846a006096352b7cf96a",
+          "status": "PASS",
+          "detail": "155 + 2725 tests, 2880/2880, zero failures/skips; npm audit zero; 15/15."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46175189768",
+          "sha": "d89db45c081a712aa2d2846a006096352b7cf96a",
+          "status": "PASS",
+          "detail": "Post-adoption PR offline Chromium passed."
         }
       ],
       "approval": "none"
@@ -163,19 +221,25 @@
       "id": "F-03",
       "track": "F",
       "priority": 0,
-      "state": "BLOCKED",
+      "state": "IN_PROGRESS",
       "dependsOn": [
         "F-02"
       ],
       "scope": "Certify final integrated head technically and independently for security.",
       "acceptance": "Exact-head release CI, Chromium, CodeQL scope, independent code and explicitly security-scoped review; no open critical/high or unclassified security findings; all residual limitations recorded. Do not equate CodeQL or ordinary review to dedicated security review.",
-      "nextAction": "Resolve actual dedicated-review capability or obtain a separately documented independent security review; if missing, keep HOLD and work on independent tracks.",
+      "nextAction": "Read final exact-head Code Review (requested 7243721553; confirmed running) and determine real dedicated-security review path. Prior comparative CodeQL belongs to b376b97, not this new SHA; exact-head security evidence required. No repeat ordinary review masquerading as security. Maintain HOLD.",
       "evidence": [
         {
           "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/116#issuecomment-7241529577",
           "sha": "b376b9791aebb2c207e17a270e29d0b1818e1dd5",
           "status": "HOLD",
           "detail": "Code review complete; security review state absent."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/116#issuecomment-7243721553",
+          "sha": "d89db45c081a712aa2d2846a006096352b7cf96a",
+          "status": "IN_PROGRESS",
+          "detail": "Final independent exact-head code review requested; summary confirmed running. Dedicated security review still absent."
         }
       ],
       "approval": "none"
@@ -230,16 +294,28 @@
       "id": "I-01",
       "track": "I",
       "priority": 1,
-      "state": "READY",
+      "state": "VALIDATED",
       "dependsOn": [],
       "scope": "Reconcile the integrated global coverage and source provenance evidence.",
       "acceptance": "Inventory all configured geographic entities, distinguish catalog classification from actual source coverage; review evidence and rights freshness; do not imply worldwide live coverage from a country list.",
-      "nextAction": "Read existing PRs #106–#114 and their exact CI, coverage audit and evidence files; inventory actual gaps by region/language without adding sources.",
+      "nextAction": "Bounded inventory and observed-provenance audit complete. Historical unpinned reports cannot be compared to this pinned model for a trend. Continue I-02 with a second separately timed observation on the same pin and source-qualification research; no new activation.",
       "evidence": [
         {
           "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/114",
           "sha": "b29976835cda39218c2f2ae7167db2bb673eebaa",
           "status": "DRAFT"
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46175296397/job/141072506991",
+          "sha": "d89db45c081a712aa2d2846a006096352b7cf96a",
+          "status": "PASS",
+          "detail": "Read-only audit on exact checked-out integrated tree becc8ea7, classifier source pin 73774a7746fba30fb685d40f96f08173c065ac0f15a1a9a94710e5085b743344. 29/29 tests and immutable tracked checkout passed. Public snapshot revision 4825 checked 2026-11-28T18:20:52.585Z; partial, 49/51 available, 287 eligible publications; 176 known country, 111 unresolved in 26 groups; 177 known language, 110 unknown; 150 unknown direct editorial, 109 unknown taxonomy. 244 exact entities partitioned 8 configured+observed, 4 observed only (AU/BE/QA/SG), 3 configured only (JP/NL/NZ), 229 neither. 11 configured direct states, 12 observed states; two city news feeds in one city. Scope: one public snapshot, not event geography, full corpus, current rights or market demand."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/blob/d89db45c081a712aa2d2846a006096352b7cf96a/docs/evidence/source-qualification-research-20261127.json",
+          "sha": "d89db45c081a712aa2d2846a006096352b7cf96a",
+          "status": "REVIEW",
+          "detail": "Eight historical operator research records, not authenticated rights receipts: ABC retired RSS; RTE/Al Jazeera/CNA restrictions; ABS/CSO/HDB dataset-specific review only; Qatar CPI exact licence scope ambiguous. No permission/activation inferred."
         }
       ],
       "approval": "none"
@@ -248,13 +324,13 @@
       "id": "I-02",
       "track": "I",
       "priority": 1,
-      "state": "BLOCKED",
+      "state": "READY",
       "dependsOn": [
         "I-01"
       ],
       "scope": "Improve evidence-first source qualification and research-only data ingestion.",
       "acceptance": "Reproducible fixtures, source/edition/geographic separation, provenance and licence evidence, bounded request budget, duplicate/expiry/failure handling; no acquisition or publication activation.",
-      "nextAction": "Reuse existing research gateways, plan smallest validated improvements against observed gaps.",
+      "nextAction": "Reuse the existing isolated audit workflow 46175296397, after a distinct later ICEO revision, for a second same-pin observation. Preserve both exact aggregate receipts; do not combine with legacy unpinned reports. Prioritize diagnosis of configured-but-unobserved JP/NL/NZ and the largest unresolved edition groups (Variety, Euronews, Billboard, CNBC, Engadget, Eurogamer); keep language-only evidence separate from national origin. Verify primary edition/rights evidence and actual source permissions, then implement only a justified bounded correction with negative fixtures. No new source probes or activation.",
       "evidence": [
         {
           "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/110",
@@ -263,6 +339,12 @@
         {
           "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/113",
           "status": "DRAFT"
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46175296397",
+          "sha": "d89db45c081a712aa2d2846a006096352b7cf96a",
+          "status": "OBSERVED",
+          "detail": "First comparable pinned observation, revision 4825. Family and digital-life direct editorial count 0; money 1. 111 unresolved provenance records; no fabricated country assignment."
         }
       ],
       "approval": "none"
