@@ -144,8 +144,8 @@ test('anonymous account checks survive unrelated browser failure without weakeni
   assert.match(fixtures,/\n        id: account_fixtures\n/u);
   assert.equal(condition(fixtures),"${{ !cancelled() && env.DLKT_KNOWLEDGE_PROBE_MODE == 'monitor' && steps.checkout_source.outcome == 'success' && steps.setup_node.outcome == 'success' }}");
   assert.equal(condition(live),"${{ !cancelled() && env.DLKT_KNOWLEDGE_PROBE_MODE == 'monitor' && steps.account_fixtures.outcome == 'success' }}");
-  assert.match(fixtures,/\n        run: node --test tests\/anonymous-account-live\.test\.mjs\n/u);
-  assert.match(live,/\n        run: node scripts\/verify-anonymous-account\.mjs\n/u);
+  assert.ok(fixtures.split('\n').includes('        run: node --test tests/anonymous-account-live.test.mjs'));
+  assert.ok(live.split('\n').includes('        run: node scripts/verify-anonymous-account.mjs'));
   assert.ok(steps.indexOf(fixtures)>steps.indexOf(step('Inspect public homepage on four viewports')));
   assert.ok(steps.indexOf(live)>steps.indexOf(fixtures));
   assert.doesNotMatch(reader,/\bcontinue-on-error\s*:/u);
