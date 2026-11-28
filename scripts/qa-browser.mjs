@@ -1413,16 +1413,55 @@ async function verifyKnowledgeExposure(call,format,fixture,origin,outputDir){
   assert.ok(typeof picture==='string'&&picture.length>=1000);
   writeFileSync(join(outputDir,screenshot),Buffer.from(picture,'base64'),{mode:0o600});
   await emitVisualPreview(call,'owned-card',format.width);
-  assert.ok(await evaluate(call,'window.scrollY')>100,'owned card exposure must leave a genuinely scrolled homepage');
-  await call('Page.reload',{ignoreCache:true});await loaded(call);await selectControlledEdition(call,fixture);
-  await pause(150);
-  assert.ok(await evaluate(call,'window.scrollY')<=1,'plain homepage reload must reset without a test-side scroll command');
-  let reloaded=null;
-  for(let attempt=0;attempt<60;attempt++){
-   reloaded=await read();
-   if(reloaded.ownedIds.length>0&&reloaded.news.length===20)break;
-   if(attempt===59)throw Error('DLKT_UI_OWNED_RELOAD_TIMEOUT_'+JSON.stringify(reloaded));await pause(100);
+  // Measure a real reload, not a reload followed by another locale navigation.
+  // The chosen locale and location already belong to this controlled visit.
+  // A readyState read alone may still describe the document being replaced.
+  const reloadState=()=>evaluate(call,`(()=>{const root=document.querySelector('#discovery-cards');return {
+   timeOrigin:performance.timeOrigin,navigation:performance.getEntriesByType('navigation')[0]?.type??null,
+   href:location.href,hash:location.hash,ready:document.readyState,scroll:window.scrollY,
+   restoration:history.scrollRestoration,locale:document.documentElement.lang,
+   scope:root?.dataset.sourceScope??null,busy:root?.getAttribute('aria-busy')??null,
+   news:root?.querySelectorAll('article[data-news-stream-key]:not([data-knowledge-id])').length??0,
+   owned:root?.querySelectorAll('article[data-knowledge-id]').length??0,
+   city:document.querySelector('#glance-city-label')?.textContent??null,
+   localIds:[...document.querySelectorAll('#home-local-cards article[data-local-id]')].map(card=>card.dataset.localId),
+   guardPresent:Boolean(document.querySelector('script[src="/entry-reload.js"]'))
+  };})()`);
+  const priorReload=await reloadState();
+  assert.ok(priorReload.scroll>100,'owned card exposure must leave a genuinely scrolled homepage');
+  assert.equal(priorReload.hash,'','the reload scenario is a plain homepage, not a deep link');
+  assert.equal(priorReload.locale,'ro','the chosen locale is already in effect before reload');
+  assert.equal(priorReload.scope,'all');
+  assert.equal(priorReload.guardPresent,true,'the packaged page includes the early reload guard');
+  await call('Page.reload',{ignoreCache:true});
+  let observed=null,reloaded=null;
+  for(let attempt=0;attempt<120;attempt++){
+   // Execution contexts can disappear during the actual navigation.
+   try{observed=await reloadState();}catch(error){
+    if(!/^DLKT_UI_(?:CDP_|EVAL_FAILED)/u.test(String(error?.message??'')))throw error;
+    observed=null;
+   }
+   if(observed&&observed.timeOrigin!==priorReload.timeOrigin&&observed.ready==='complete'){
+    assert.equal(observed.navigation,'reload','measure the new reload document');
+    assert.equal(observed.href,priorReload.href,'reload retains the existing selected-locale URL');
+    assert.equal(observed.guardPresent,true,'reload serves the actual packaged guard');
+    if(observed.locale==='ro'&&observed.scope==='all'&&observed.busy==='false'&&observed.news===fixture.storyCount&&observed.owned>0&&
+       observed.city===fixture.city.name&&JSON.stringify(observed.localIds)===JSON.stringify(fixture.localIds)){
+     reloaded=await read();break;
+    }
+   }
+   if(attempt===119)throw Error('DLKT_UI_OWNED_RELOAD_TIMEOUT_'+JSON.stringify(observed));
+   await pause(100);
   }
+  assert.ok(reloaded,'a new fully populated document was observed without changing preferences');
+  // Wait for paint/scroll settlement; never send a test-side scroll or change event.
+  await evaluate(call,'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve(true))))');
+  const settledReload=await reloadState();
+  console.log('DLKT_UI_RELOAD_OBSERVATION '+JSON.stringify({viewport:format.width,before:priorReload,ready:observed,settled:settledReload}));
+  assert.equal(settledReload.timeOrigin,observed.timeOrigin,'settlement stays in the observed reload document');
+  assert.equal(settledReload.href,priorReload.href,'settlement does not navigate away');
+  assert.ok(observed.scroll<=1&&settledReload.scroll<=1,'plain homepage reload must reset and remain at the top without a test-side scroll command');
+  reloaded=await read();
   assert.equal(reloaded.seen.includes(id),true,'the real local history survives reload');
   assert.equal(reloaded.ownedIds.includes(id),false,'an exposed stableID does not recur after reload');
   // The existing theme assigns a new random six-surface cycle on navigation.
