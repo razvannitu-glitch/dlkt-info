@@ -1,0 +1,577 @@
+{
+  "schemaVersion": 1,
+  "product": "DLKT INFO",
+  "repository": "razvannitu-glitch/dlkt-info",
+  "planningBranch": "planning/dlkt-master-development",
+  "initialObservationDate": "2026-11-28",
+  "release": {
+    "pr": 116,
+    "branch": "codex/dlkt-ui-browser-smoke-integrated-20261128",
+    "base": "2005ad5cf04f6ea0f04080eeb66a99f6d895b55d",
+    "head": "b376b9791aebb2c207e17a270e29d0b1818e1dd5",
+    "state": "HOLD",
+    "authority": "Draft only. No merge, staging, deployment, production or source activation without separate explicit authorization.",
+    "evidence": [
+      {
+        "kind": "release-ci",
+        "sha": "b376b9791aebb2c207e17a270e29d0b1818e1dd5",
+        "status": "PASS",
+        "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46172292432",
+        "detail": "154 packaging + 2725 application tests; zero failures/skips; npm audit zero; 15/15 static controls."
+      },
+      {
+        "kind": "offline-browser",
+        "sha": "b376b9791aebb2c207e17a270e29d0b1818e1dd5",
+        "status": "PASS",
+        "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46172292352",
+        "detail": "Offline Chromium with fixtures, not hosted release."
+      },
+      {
+        "kind": "iceo-monitor",
+        "sha": "b376b9791aebb2c207e17a270e29d0b1818e1dd5",
+        "status": "PASS",
+        "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46172292394",
+        "detail": "Public freshness monitor; not candidate hosting evidence."
+      },
+      {
+        "kind": "codeql",
+        "sha": "b376b9791aebb2c207e17a270e29d0b1818e1dd5",
+        "status": "PASS",
+        "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46171614473",
+        "detail": "21 baseline scanner results, zero candidate results; not security certification."
+      },
+      {
+        "kind": "code-review",
+        "sha": "b376b9791aebb2c207e17a270e29d0b1818e1dd5",
+        "status": "PASS",
+        "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/116#issuecomment-7243438589",
+        "detail": "Exact-head Code Review, no findings; separate security review unconfirmed."
+      },
+      {
+        "kind": "public-monitor",
+        "status": "FAIL",
+        "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46172292410",
+        "detail": "Old public SHA returned canonical NSW HTTP 400; matching API 200. Existing defect, not demonstrated candidate regression."
+      }
+    ]
+  },
+  "tracks": [
+    {
+      "id": "F",
+      "name": "Foundation"
+    },
+    {
+      "id": "I",
+      "name": "Intelligence"
+    },
+    {
+      "id": "P",
+      "name": "Personalization"
+    },
+    {
+      "id": "X",
+      "name": "Experience"
+    },
+    {
+      "id": "H",
+      "name": "Habit Engine"
+    },
+    {
+      "id": "V",
+      "name": "Viral Engine"
+    },
+    {
+      "id": "E",
+      "name": "Editorial and Business Intelligence"
+    },
+    {
+      "id": "M",
+      "name": "Monetization"
+    },
+    {
+      "id": "O",
+      "name": "Autonomous Infrastructure"
+    }
+  ],
+  "states": [
+    "READY",
+    "IN_PROGRESS",
+    "REVIEW",
+    "BLOCKED",
+    "VALIDATED",
+    "DONE"
+  ],
+  "tasks": [
+    {
+      "id": "F-01",
+      "track": "F",
+      "priority": 0,
+      "state": "REVIEW",
+      "dependsOn": [],
+      "scope": "Review isolated anonymous-account monitor correction, not yet adopted.",
+      "acceptance": "Exact two-path diff against current integrated head; 2880/2880 tests and static gates pass on isolated head; independent review confirms monitor failure remains visible, cancellation respected, offline prerequisites enforced; do not treat successful fixture CI as hosted proof.",
+      "nextAction": "Use existing branch and review exact head; do not duplicate the fix. Record independent result before adoption.",
+      "evidence": [
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/commit/d89db45c081a712aa2d2846a006096352b7cf96a",
+          "sha": "d89db45c081a712aa2d2846a006096352b7cf96a",
+          "status": "PASS",
+          "detail": "Two-file QA correction, source pin unchanged."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46174243618",
+          "sha": "d89db45c081a712aa2d2846a006096352b7cf96a",
+          "status": "PASS",
+          "detail": "155 + 2725 tests, zero failures/skips, npm audit zero, 15/15."
+        }
+      ],
+      "approval": "none"
+    },
+    {
+      "id": "F-02",
+      "track": "F",
+      "priority": 0,
+      "state": "BLOCKED",
+      "dependsOn": [
+        "F-01"
+      ],
+      "scope": "Adopt only independently accepted QA correction into the single integrated draft.",
+      "acceptance": "Verify PR base and head, fast-forward only after exact-head evidence, no unrelated diff; reread head and repeat release and browser gates.",
+      "nextAction": "Use compare and a non-force ref update with expected head. Keep draft and record new SHA.",
+      "evidence": [
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/116",
+          "sha": "b376b9791aebb2c207e17a270e29d0b1818e1dd5",
+          "status": "HOLD"
+        }
+      ],
+      "approval": "none"
+    },
+    {
+      "id": "F-03",
+      "track": "F",
+      "priority": 0,
+      "state": "BLOCKED",
+      "dependsOn": [
+        "F-02"
+      ],
+      "scope": "Certify final integrated head technically and independently for security.",
+      "acceptance": "Exact-head release CI, Chromium, CodeQL scope, independent code and explicitly security-scoped review; no open critical/high or unclassified security findings; all residual limitations recorded. Do not equate CodeQL or ordinary review to dedicated security review.",
+      "nextAction": "Resolve actual dedicated-review capability or obtain a separately documented independent security review; if missing, keep HOLD and work on independent tracks.",
+      "evidence": [
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/116#issuecomment-7241529577",
+          "sha": "b376b9791aebb2c207e17a270e29d0b1818e1dd5",
+          "status": "HOLD",
+          "detail": "Code review complete; security review state absent."
+        }
+      ],
+      "approval": "none"
+    },
+    {
+      "id": "F-04",
+      "track": "F",
+      "priority": 0,
+      "state": "BLOCKED",
+      "dependsOn": [
+        "F-03",
+        "I-03",
+        "O-02"
+      ],
+      "scope": "Prepare and authorize isolated protected staging.",
+      "acceptance": "Explicit user authorization; exact candidate, isolated approved environment, protection preserved, read-only smoke scope and rollback procedure; verify no public alias movement and no writes to production DB.",
+      "nextAction": "Produce a precise staging decision packet; no deployment before authorization.",
+      "evidence": [],
+      "approval": "explicit-staging"
+    },
+    {
+      "id": "F-05",
+      "track": "F",
+      "priority": 0,
+      "state": "BLOCKED",
+      "dependsOn": [
+        "F-04"
+      ],
+      "scope": "Certify hosted recovery and regression behavior.",
+      "acceptance": "Exact release receipt and manifest; canonical and API status, duplicate/mismatch denial, locale/credit/clipboard, expiry and geo context; protected transport authorized, no mutation; record real browser/HTTP evidence and limits.",
+      "nextAction": "Run hosted tests only under separate approved staging scope; fail closed on protection or transport blockers.",
+      "evidence": [],
+      "approval": "authorized-staging-only"
+    },
+    {
+      "id": "F-06",
+      "track": "F",
+      "priority": 0,
+      "state": "BLOCKED",
+      "dependsOn": [
+        "F-05",
+        "I-03",
+        "O-02"
+      ],
+      "scope": "Make production release decision, not an automatic promotion.",
+      "acceptance": "Explicit approval for exact SHA and environment; successful hosted gates, source rights review, rollback target and monitored post-release checks. No unresolved release blockers.",
+      "nextAction": "Present one decision with evidence and residual risks; execute only if separately authorized.",
+      "evidence": [],
+      "approval": "explicit-production"
+    },
+    {
+      "id": "I-01",
+      "track": "I",
+      "priority": 1,
+      "state": "READY",
+      "dependsOn": [],
+      "scope": "Reconcile the integrated global coverage and source provenance evidence.",
+      "acceptance": "Inventory all configured geographic entities, distinguish catalog classification from actual source coverage; review evidence and rights freshness; do not imply worldwide live coverage from a country list.",
+      "nextAction": "Read existing PRs #106–#114 and their exact CI, coverage audit and evidence files; inventory actual gaps by region/language without adding sources.",
+      "evidence": [
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/114",
+          "sha": "b29976835cda39218c2f2ae7167db2bb673eebaa",
+          "status": "DRAFT"
+        }
+      ],
+      "approval": "none"
+    },
+    {
+      "id": "I-02",
+      "track": "I",
+      "priority": 1,
+      "state": "BLOCKED",
+      "dependsOn": [
+        "I-01"
+      ],
+      "scope": "Improve evidence-first source qualification and research-only data ingestion.",
+      "acceptance": "Reproducible fixtures, source/edition/geographic separation, provenance and licence evidence, bounded request budget, duplicate/expiry/failure handling; no acquisition or publication activation.",
+      "nextAction": "Reuse existing research gateways, plan smallest validated improvements against observed gaps.",
+      "evidence": [
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/110",
+          "status": "DRAFT"
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/113",
+          "status": "DRAFT"
+        }
+      ],
+      "approval": "none"
+    },
+    {
+      "id": "I-03",
+      "track": "I",
+      "priority": 0,
+      "state": "READY",
+      "dependsOn": [],
+      "scope": "Reconcile editorial decisions for candidate content and standalone distribution.",
+      "acceptance": "For every changed public admission, verify exact identity/revision/digest, reviewed rights, attribution, source validity and expiry; unknown rights/content stay withheld. Human decision recorded where needed; existing source activation holds respected.",
+      "nextAction": "Read existing reviewed NSW evidence, distinguish code eligibility from editorial approval, produce decision packet; do not add admissions or activate sources.",
+      "evidence": [
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/101",
+          "status": "DRAFT"
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/116",
+          "status": "HOLD"
+        }
+      ],
+      "approval": "explicit-editorial-if-needed"
+    },
+    {
+      "id": "P-01",
+      "track": "P",
+      "priority": 1,
+      "state": "READY",
+      "dependsOn": [],
+      "scope": "Verify location, locale and local selection boundaries.",
+      "acceptance": "Fixtures for estimated IP hint vs manual choice, stale requests, permission denial, coordinate coarsening, unavailable coverage, refresh/navigation, independent editorial language; no precise location leakage or fabricated location.",
+      "nextAction": "Review existing #115/integrated tests and build gap matrix. Only fix reproducible defects in isolated branches.",
+      "evidence": [
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/115",
+          "sha": "838fefb0c2cbba7c458b5ced18375af5d6332ea2",
+          "status": "DRAFT"
+        }
+      ],
+      "approval": "none"
+    },
+    {
+      "id": "P-02",
+      "track": "P",
+      "priority": 2,
+      "state": "BLOCKED",
+      "dependsOn": [
+        "I-01",
+        "P-01"
+      ],
+      "scope": "Define and validate useful global, national and hyperlocal daily composition.",
+      "acceptance": "Proposed 20–40 useful cards when verified supply supports it; no filler, duplicates or false locality. Test multiple locale/city scenarios and clear unavailable states; measure relevance with reviewed sample.",
+      "nextAction": "Derive deterministic fixture cases and ranking alternatives; do not change production ranking without approval.",
+      "evidence": [],
+      "approval": "none"
+    },
+    {
+      "id": "X-01",
+      "track": "X",
+      "priority": 1,
+      "state": "READY",
+      "dependsOn": [],
+      "scope": "Audit actual reader behavior, accessibility and existing design contract.",
+      "acceptance": "Check keyboard/focus, small screen layout, scrolling, loading/error states, canonical distribution and locale retention; preserve visual identity unless specifically approved.",
+      "nextAction": "Reconcile #115 and exact integrated Chromium reports; distinguish offline fixtures from hosted/human review.",
+      "evidence": [
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46172292352",
+          "sha": "b376b9791aebb2c207e17a270e29d0b1818e1dd5",
+          "status": "PASS",
+          "detail": "Offline only."
+        }
+      ],
+      "approval": "none"
+    },
+    {
+      "id": "X-02",
+      "track": "X",
+      "priority": 1,
+      "state": "READY",
+      "dependsOn": [],
+      "scope": "Identify and remove proven waste in existing reader and photo request path.",
+      "acceptance": "Measure request counts, cache impact, representative latency and correctness; no fabricated savings. Preserve supported photos, layout, source and security boundaries.",
+      "nextAction": "Review #82 exact CI and current main compatibility before creating any new work; record measured baseline and propose minimal adoption.",
+      "evidence": [
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/82",
+          "sha": "9718b204256547a7088cf72747d4e278454264f9",
+          "status": "DRAFT"
+        }
+      ],
+      "approval": "none"
+    },
+    {
+      "id": "H-01",
+      "track": "H",
+      "priority": 2,
+      "state": "BLOCKED",
+      "dependsOn": [
+        "P-02",
+        "E-01"
+      ],
+      "scope": "Define a daily utility and return-use experiment without dark patterns.",
+      "acceptance": "One distinct recurring use case, hypothesis, voluntary measurement, activation and seven-day return definition; predefine audience and denominator; no fake retention uplift.",
+      "nextAction": "Review existing daily-life features and choose a low-cost fixture prototype, not a notification or tracking activation.",
+      "evidence": [],
+      "approval": "none"
+    },
+    {
+      "id": "V-01",
+      "track": "V",
+      "priority": 1,
+      "state": "READY",
+      "dependsOn": [],
+      "scope": "Audit viral card sharing recovery and distribution contracts.",
+      "acceptance": "Verify exact canonical identity, expiry, visible attribution, privacy-preserving links and fallback. Offline acceptance is not hosted recovery.",
+      "nextAction": "Reuse #101 and #116 evidence; map residual hosted tests to F-05 rather than duplicating implementation.",
+      "evidence": [
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/101",
+          "status": "DRAFT"
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46172292410",
+          "status": "FAIL",
+          "detail": "Existing public monitor failure."
+        }
+      ],
+      "approval": "none"
+    },
+    {
+      "id": "V-02",
+      "track": "V",
+      "priority": 2,
+      "state": "BLOCKED",
+      "dependsOn": [
+        "V-01",
+        "E-01"
+      ],
+      "scope": "Design a differentiated organic-distribution experiment.",
+      "acceptance": "Measure valid share intent separately from actual referred visit; no claimed impressions or success without source evidence; evaluate usefulness and acquisition cost.",
+      "nextAction": "Propose a low-risk prototype and metrics; no social posting or referral tracking activation.",
+      "evidence": [],
+      "approval": "none"
+    },
+    {
+      "id": "E-01",
+      "track": "E",
+      "priority": 1,
+      "state": "READY",
+      "dependsOn": [],
+      "scope": "Reconcile editorial measurement candidates and consent/privacy contracts.",
+      "acceptance": "Inspect exact heads of #103 and #105; distinguish exposure, outbound source intent and actual article reads; consent, minimization, withdrawal, retention, no identity linkage, no public telemetry activation.",
+      "nextAction": "Review existing code, CI and proposed data contracts; choose consolidated lab path or record blocker, avoid duplicating measurement work.",
+      "evidence": [
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/103",
+          "sha": "52acc6867a806f7be7296cce1f389457c2b4e097",
+          "status": "DRAFT"
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/105",
+          "sha": "4bae4103963eb277c2fc6f3dc2258a6af23e25c1",
+          "status": "DRAFT"
+        }
+      ],
+      "approval": "none"
+    },
+    {
+      "id": "E-02",
+      "track": "E",
+      "priority": 2,
+      "state": "READY",
+      "dependsOn": [],
+      "scope": "Reconcile editorial observation ledger laboratory.",
+      "acceptance": "Verify #94 exact-head SQL and concurrency evidence, role separation, time/replay/deletion boundaries; synthetic evidence is not production readiness.",
+      "nextAction": "Inspect existing lab and its outstanding security/producer gates; no production migration.",
+      "evidence": [
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/94",
+          "sha": "50e7d39ee283dbfe08ffb94ea76767bdecbb9e7f",
+          "status": "DRAFT"
+        }
+      ],
+      "approval": "none"
+    },
+    {
+      "id": "E-03",
+      "track": "E",
+      "priority": 2,
+      "state": "BLOCKED",
+      "dependsOn": [
+        "E-01",
+        "E-02"
+      ],
+      "scope": "Specify DLKT Control scorecard and safe data-backed editorial decision flow.",
+      "acceptance": "Metric definitions, exposure denominator, quality/freshness, missing/low-sample states, costs, privacy boundaries, and manual editorial override; never turn synthetic counts into live rankings.",
+      "nextAction": "Produce an evidence-backed metric contract using existing capabilities before wiring any collector.",
+      "evidence": [],
+      "approval": "none"
+    },
+    {
+      "id": "M-01",
+      "track": "M",
+      "priority": 1,
+      "state": "READY",
+      "dependsOn": [],
+      "scope": "Reconcile existing Premium foundation, runtime guard and billing lab.",
+      "acceptance": "Review #78 and its constituent PRs, exact CI, fiscal and runtime gate evidence. Distinguish sandbox, configured and tested real journeys; no billing activation.",
+      "nextAction": "Read existing consolidated acceptance record; inventory open acceptance gates, dependency and production drift.",
+      "evidence": [
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/78",
+          "sha": "0b4c69393f12f8377ee6d05b13782c626ab989c4",
+          "status": "HOLD"
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/67",
+          "status": "DRAFT"
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/73",
+          "status": "DRAFT"
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/76",
+          "status": "DRAFT"
+        }
+      ],
+      "approval": "none"
+    },
+    {
+      "id": "M-02",
+      "track": "M",
+      "priority": 2,
+      "state": "BLOCKED",
+      "dependsOn": [
+        "M-01",
+        "E-01"
+      ],
+      "scope": "Validate value proposition and commercial model before activating payment.",
+      "acceptance": "Identify paying segment, recurring problem, distinct paid benefit, pricing hypothesis, variable cost and acquisition/retention assumptions; seek evidence, no promised revenue.",
+      "nextAction": "Prioritize one low-cost demand-validation experiment; no spending or real charge.",
+      "evidence": [],
+      "approval": "none"
+    },
+    {
+      "id": "M-03",
+      "track": "M",
+      "priority": 2,
+      "state": "BLOCKED",
+      "dependsOn": [
+        "M-01",
+        "M-02"
+      ],
+      "scope": "Prepare billing acceptance decision.",
+      "acceptance": "Sandbox end-to-end checkout, webhook verification, entitlement isolation, refund/cancellation and reconciliation, fiscal/consumer review and recovery. No real charging, migrations or paid feature activation without explicit approval.",
+      "nextAction": "Use existing lab, close verifiable gates or request only necessary decision.",
+      "evidence": [],
+      "approval": "explicit-billing-and-infrastructure"
+    },
+    {
+      "id": "O-01",
+      "track": "O",
+      "priority": 1,
+      "state": "READY",
+      "dependsOn": [],
+      "scope": "Map operating health and independent monitoring.",
+      "acceptance": "Measure actual observable scheduler/refresh continuity, errors and public readbacks; distinguish skipped monitors, missing evidence and real incidents; no production writes.",
+      "nextAction": "Read approved existing GitHub monitor and read-only observability evidence; identify high-value monitoring gaps. F-01 handles known account monitor gap.",
+      "evidence": [
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46172292394",
+          "sha": "b376b9791aebb2c207e17a270e29d0b1818e1dd5",
+          "status": "PASS"
+        }
+      ],
+      "approval": "none"
+    },
+    {
+      "id": "O-02",
+      "track": "O",
+      "priority": 0,
+      "state": "READY",
+      "dependsOn": [],
+      "scope": "Prepare rollback and protected-release operating checklist.",
+      "acceptance": "Identify current alias and actual active receipt, last known-good rollback candidate, approved environment, backup/restore evidence or explicit NOT TESTED; no promotion or restore. Never equate Vercel READY deployment with public alias.",
+      "nextAction": "Read deployment metadata and existing runbooks; prepare evidence-backed recovery decision without changing settings.",
+      "evidence": [],
+      "approval": "none"
+    },
+    {
+      "id": "O-03",
+      "track": "O",
+      "priority": 2,
+      "state": "BLOCKED",
+      "dependsOn": [
+        "O-01",
+        "X-02"
+      ],
+      "scope": "Define cost/performance guardrails.",
+      "acceptance": "Measure observable request volume, cache behavior, error rates, runtime/DB cost drivers; define explicit proposed budgets, no inferred financial savings or plan changes.",
+      "nextAction": "Compare measured baseline and candidate before proposing optimizations; get authorization for any spend.",
+      "evidence": [],
+      "approval": "none"
+    },
+    {
+      "id": "O-04",
+      "track": "O",
+      "priority": 1,
+      "state": "BLOCKED",
+      "dependsOn": [
+        "F-06"
+      ],
+      "scope": "Post-release measurement and controlled incident response.",
+      "acceptance": "Only after authorized release, verify active exact receipt, public monitors, anonymous boundary, freshness, and error trends; record observed coverage and rollback decision if needed.",
+      "nextAction": "Run read-only checks, never roll back or promote without authorization.",
+      "evidence": [],
+      "approval": "authorized-release-only"
+    }
+  ]
+}
