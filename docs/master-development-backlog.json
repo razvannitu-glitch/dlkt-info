@@ -8,7 +8,7 @@
     "pr": 116,
     "branch": "codex/dlkt-ui-browser-smoke-integrated-20261128",
     "base": "2005ad5cf04f6ea0f04080eeb66a99f6d895b55d",
-    "head": "d89db45c081a712aa2d2846a006096352b7cf96a",
+    "head": "ab84af3578888b43dccbd8598883f6feeb75b570",
     "state": "HOLD",
     "authority": "Draft only. No merge, staging, deployment, production or source activation without separate explicit authorization.",
     "evidence": [
@@ -80,6 +80,34 @@
         "status": "PASS",
         "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46175189950",
         "detail": "Public freshness monitor; not candidate hosting evidence."
+      },
+      {
+        "kind": "post-provenance-release-ci",
+        "sha": "ab84af3578888b43dccbd8598883f6feeb75b570",
+        "status": "PASS",
+        "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46176361278",
+        "detail": "158 + 2725 tests = 2883/2883, zero failures/skips, npm audit reports zero; 15/15 static controls."
+      },
+      {
+        "kind": "post-provenance-offline-browser",
+        "sha": "ab84af3578888b43dccbd8598883f6feeb75b570",
+        "status": "PASS",
+        "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46176361296",
+        "detail": "Exact-head offline Chromium and knowledge distribution fixture checks passed; no hosted recovery attested."
+      },
+      {
+        "kind": "post-provenance-public-monitor",
+        "sha": "ab84af3578888b43dccbd8598883f6feeb75b570",
+        "status": "FAIL",
+        "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46176361325",
+        "detail": "Old public SHA 2005ad5c canonical NSW 400, APIs 200. Separate anonymous account fixture and live 20/20 HTTP boundary passed; no waiver."
+      },
+      {
+        "kind": "post-provenance-iceo",
+        "sha": "ab84af3578888b43dccbd8598883f6feeb75b570",
+        "status": "PASS",
+        "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46176361210",
+        "detail": "Live ICEO freshness monitor passed, not candidate hosted validation."
       }
     ]
   },
@@ -227,7 +255,7 @@
       ],
       "scope": "Certify final integrated head technically and independently for security.",
       "acceptance": "Exact-head release CI, Chromium, CodeQL scope, independent code and explicitly security-scoped review; no open critical/high or unclassified security findings; all residual limitations recorded. Do not equate CodeQL or ordinary review to dedicated security review.",
-      "nextAction": "Final Code Review for d89db45c completed without findings. Dedicated security review is unconfirmed; exact-head comparative CodeQL remains outstanding. Establish actual independent security review path; do not treat ordinary Code Review, npm audit or earlier-head CodeQL as current security certification. Maintain HOLD; reconcile new research-only PR #118 before repeating final release checks.",
+      "nextAction": "Read exact-head Code Review request 7243879241 on #116 and comparative CodeQL run 46176446203. Audit harness is pinned to current integrated ab84af3 and base 2005ad5c. Both exact trees, comparator checksum, recipient certificate and scanner setup verified. Do not equate static scan or ordinary Code Review with separate security certification. Maintain HOLD; keep current integrated candidate stable while parallel photo optimization is isolated. Resolve dedicated security review and protected hosted validation under separate explicit approval.",
       "evidence": [
         {
           "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/116#issuecomment-7241529577",
@@ -246,6 +274,18 @@
           "sha": "d89db45c081a712aa2d2846a006096352b7cf96a",
           "status": "PASS",
           "detail": "Independent exact-head ordinary Code Review completed, no major issues and no unresolved findings; separate security review state absent."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/116#issuecomment-7243879241",
+          "sha": "ab84af3578888b43dccbd8598883f6feeb75b570",
+          "status": "IN_PROGRESS",
+          "detail": "Independent integrated exact-head Code Review requested and confirmed running."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46176446203",
+          "sha": "ab84af3578888b43dccbd8598883f6feeb75b570",
+          "status": "IN_PROGRESS",
+          "detail": "Existing isolated comparative CodeQL harness updated in audit commit 92eb6371f5632d524e12658d9d68969c9c45c046, exact trees verified, original baseline/suite/CLI and encrypted output preserved. Analysis running; no result or security certification yet."
         }
       ],
       "approval": "none"
@@ -330,13 +370,13 @@
       "id": "I-02",
       "track": "I",
       "priority": 1,
-      "state": "REVIEW",
+      "state": "IN_PROGRESS",
       "dependsOn": [
         "I-01"
       ],
       "scope": "Improve evidence-first source qualification and research-only data ingestion.",
       "acceptance": "Reproducible fixtures, source/edition/geographic separation, provenance and licence evidence, bounded request budget, duplicate/expiry/failure handling; no acquisition or publication activation.",
-      "nextAction": "Read independent exact-head review of PR #118 and any review threads; exact release CI passed 2883/2883 and 15/15, source pin unchanged. If review passes with no findings, recheck full tree and ref identities and adopt by non-force fast-forward into #116 draft only; repeat applicable integrated gates. Preserve rights holds and no source activation.",
+      "nextAction": "Recurring provenance review is independently accepted and adopted into integrated draft. Continue primary exact-origin/edition evidence and rights qualification, prioritizing JP/NL/NZ configured-source diagnosis and recurring unresolved publisher groups. No country inferred from language, no publisher acquisition probe or activation without explicit approval. Keep evidence and rights review distinct; prepare only justified bounded follow-up after the current release certification is stable.",
       "evidence": [
         {
           "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/110",
@@ -393,6 +433,18 @@
           "sha": "ab84af3578888b43dccbd8598883f6feeb75b570",
           "status": "IN_PROGRESS",
           "detail": "Independent Code Review confirmed running on exact head."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/118#issuecomment-7243847835",
+          "sha": "ab84af3578888b43dccbd8598883f6feeb75b570",
+          "status": "PASS",
+          "detail": "Independent exact-head Code Review completed, no findings or unresolved review threads."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/116",
+          "sha": "ab84af3578888b43dccbd8598883f6feeb75b570",
+          "status": "PASS",
+          "detail": "Non-force fast-forward of PR #118 from d89db45c; exactly five root-only paths verified across complete trees (1208 to 1211 leaves), source pin unchanged. GitHub recognized #118 merged into the integrated draft, not main. Post-integration release and offline browser passed."
         }
       ],
       "approval": "none"
@@ -486,16 +538,46 @@
       "id": "X-02",
       "track": "X",
       "priority": 1,
-      "state": "READY",
+      "state": "IN_PROGRESS",
       "dependsOn": [],
       "scope": "Identify and remove proven waste in existing reader and photo request path.",
       "acceptance": "Measure request counts, cache impact, representative latency and correctness; no fabricated savings. Preserve supported photos, layout, source and security boundaries.",
-      "nextAction": "Review #82 exact CI and current main compatibility before creating any new work; record measured baseline and propose minimal adoption.",
+      "nextAction": "Existing #82 optimization reconciled into isolated compatibility branch codex/generate-photo-preflight-reconciliation-20261128, authored SHA ac5deda70db21820ecd2e628abde12324b11b1c1. Verify generator 46176580770; import only exact generated changes with verified framed payload, per-file/base SHA-256, full pin/manifest parity and ref lease. Normal CI 46176580763 failed stale pre-generation source integrity; never waive the pin. After canonical import, verify full exact-head release and browser tests and independent review. Keep separate from #116 while release certification runs; no performance-savings claim until measured, no deployment.",
       "evidence": [
         {
           "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/82",
           "sha": "9718b204256547a7088cf72747d4e278454264f9",
           "status": "DRAFT"
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/82",
+          "sha": "9718b204256547a7088cf72747d4e278454264f9",
+          "status": "REVIEW",
+          "detail": "All six currently recorded exact-head CI runs have success; original historical incident comment recorded live monitor failure then. Prior corpus sample 208/325 (64%) on unsupported photo domains is potential guaranteed misses, not actual traffic/billing savings. Three overlap paths with integrated candidate: two generated manifests and share/render.ts."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/45871308934",
+          "sha": "9718b204256547a7088cf72747d4e278454264f9",
+          "status": "PASS",
+          "detail": "Existing optimization release CI passed on its own base, not proof of current integration."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/commit/ac5deda70db21820ecd2e628abde12324b11b1c1",
+          "sha": "ac5deda70db21820ecd2e628abde12324b11b1c1",
+          "status": "IN_PROGRESS",
+          "detail": "Reused eight exact PR82 blobs only where original base and current integrated blob/mode matched. Applied the two original photograph-policy line edits to current share renderer, preserving knowledge distribution. Nine changed paths only. No manifest import yet; isolated lab, not release adoption."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46176580770",
+          "sha": "ac5deda70db21820ecd2e628abde12324b11b1c1",
+          "status": "IN_PROGRESS",
+          "detail": "Canonical strict compilation, sync, release manifest and source pin generation steps passed; generated release verification and export pending at observation."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46176580763",
+          "sha": "ac5deda70db21820ecd2e628abde12324b11b1c1",
+          "status": "FAIL",
+          "detail": "Ordinary verification on authored pre-generation commit: 157/158 packaging tests; one failure SOURCE_INTEGRITY:public/article-photo-reference.js because committed pin still describes old file. Requires validated generated import and new exact-head CI. No bypass."
         }
       ],
       "approval": "none"
