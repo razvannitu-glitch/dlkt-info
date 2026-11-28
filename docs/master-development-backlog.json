@@ -108,6 +108,20 @@
         "status": "PASS",
         "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46176361210",
         "detail": "Live ICEO freshness monitor passed, not candidate hosted validation."
+      },
+      {
+        "kind": "current-code-review",
+        "sha": "ab84af3578888b43dccbd8598883f6feeb75b570",
+        "status": "PASS",
+        "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/116#issuecomment-7243912250",
+        "detail": "Ordinary independent Code Review exact head, no findings; distinct security review not established."
+      },
+      {
+        "kind": "current-codeql",
+        "sha": "ab84af3578888b43dccbd8598883f6feeb75b570",
+        "status": "PASS",
+        "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46176446203",
+        "detail": "Exact-tree comparison 21 baseline, 0 candidate findings, selected security-extended suite. Static scan, no release approval."
       }
     ]
   },
@@ -255,7 +269,7 @@
       ],
       "scope": "Certify final integrated head technically and independently for security.",
       "acceptance": "Exact-head release CI, Chromium, CodeQL scope, independent code and explicitly security-scoped review; no open critical/high or unclassified security findings; all residual limitations recorded. Do not equate CodeQL or ordinary review to dedicated security review.",
-      "nextAction": "Read exact-head Code Review request 7243879241 on #116 and comparative CodeQL run 46176446203. Audit harness is pinned to current integrated ab84af3 and base 2005ad5c. Both exact trees, comparator checksum, recipient certificate and scanner setup verified. Do not equate static scan or ordinary Code Review with separate security certification. Maintain HOLD; keep current integrated candidate stable while parallel photo optimization is isolated. Resolve dedicated security review and protected hosted validation under separate explicit approval.",
+      "nextAction": "Current integrated ab84af3 exact-head ordinary Code Review completed without findings, and exact-tree comparative CodeQL 46176446203 completed successfully (21 baseline findings; zero candidate findings in selected suite). Separate security review remains unconfirmed and is not interchangeable with CodeQL or ordinary review. Preserve HOLD; resolve distinct independent security assessment, editorial review and expressly authorized protected hosted validation. Keep PR119 optimization isolated until separately accepted.",
       "evidence": [
         {
           "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/116#issuecomment-7241529577",
@@ -286,6 +300,18 @@
           "sha": "ab84af3578888b43dccbd8598883f6feeb75b570",
           "status": "IN_PROGRESS",
           "detail": "Existing isolated comparative CodeQL harness updated in audit commit 92eb6371f5632d524e12658d9d68969c9c45c046, exact trees verified, original baseline/suite/CLI and encrypted output preserved. Analysis running; no result or security certification yet."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/116#issuecomment-7243912250",
+          "sha": "ab84af3578888b43dccbd8598883f6feeb75b570",
+          "status": "PASS",
+          "detail": "Independent exact-head ordinary Code Review completed without findings or unresolved findings. Separate security review state absent."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46176446203/job/141076131801",
+          "sha": "ab84af3578888b43dccbd8598883f6feeb75b570",
+          "status": "PASS",
+          "detail": "Verified exact baseline 2005ad5c and integrated ab84af3 trees, comparator self-test, CodeQL 2.27.6, same security-extended suite. 21 baseline findings, zero candidate findings, 103 rule metadata entries, zero unresolved or unmatched candidate results. Sealed report; no raw findings uploaded, no release authorization. Static scan scope is not exploitability or separate security certification."
         }
       ],
       "approval": "none"
@@ -542,7 +568,7 @@
       "dependsOn": [],
       "scope": "Identify and remove proven waste in existing reader and photo request path.",
       "acceptance": "Measure request counts, cache impact, representative latency and correctness; no fabricated savings. Preserve supported photos, layout, source and security boundaries.",
-      "nextAction": "Existing #82 optimization reconciled into isolated compatibility branch codex/generate-photo-preflight-reconciliation-20261128, authored SHA ac5deda70db21820ecd2e628abde12324b11b1c1. Verify generator 46176580770; import only exact generated changes with verified framed payload, per-file/base SHA-256, full pin/manifest parity and ref lease. Normal CI 46176580763 failed stale pre-generation source integrity; never waive the pin. After canonical import, verify full exact-head release and browser tests and independent review. Keep separate from #116 while release certification runs; no performance-savings claim until measured, no deployment.",
+      "nextAction": "Review isolated #119 exact head ddb90043d4ad2d4e17080da2ee952e045d438d82 against ab84af3. Verify committed-head release CI 46177042582, exact-head offline browser run 46177157289 and independent review requested 7243973218; preserve current integrated certification head. Generator passed and only two canonical manifest files imported after complete export, prior hash and pin/manifest parity verification. No adoption on pending/failed/ambiguous evidence. Measure request-volume reduction before financial-savings claim; no deployment.",
       "evidence": [
         {
           "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/82",
@@ -578,6 +604,36 @@
           "sha": "ac5deda70db21820ecd2e628abde12324b11b1c1",
           "status": "FAIL",
           "detail": "Ordinary verification on authored pre-generation commit: 157/158 packaging tests; one failure SOURCE_INTEGRITY:public/article-photo-reference.js because committed pin still describes old file. Requires validated generated import and new exact-head CI. No bypass."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46176580770/job/141076554804",
+          "sha": "ac5deda70db21820ecd2e628abde12324b11b1c1",
+          "status": "PASS",
+          "detail": "Canonical generator strict compilation, synchronized modules, release/pin generation, generated release verification, package build and export all passed: 158 + 2729 = 2887 tests, zero failures/skips, npm audit reports zero. Initial stale-pin failure remains historical and was not waived."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/commit/ddb90043d4ad2d4e17080da2ee952e045d438d82",
+          "sha": "ddb90043d4ad2d4e17080da2ee952e045d438d82",
+          "status": "PASS",
+          "detail": "Verified export 76 ordered frames, 233377 bytes, SHA-256 498d9e54983f255aab019f14025eecf76d34e1c5299d464a1c420eac36b9a911; exact old and new file hashes, 1076 source pin keys and 1024 manifest bindings, nine authored path digests, unchanged news projection; imported only two generated files. New source pin a3c062b710bdea2b19637cfb58d99129b35a21f8954c4e28ca08c722d47e7921. Not application or production verification."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/119",
+          "sha": "ddb90043d4ad2d4e17080da2ee952e045d438d82",
+          "status": "DRAFT",
+          "detail": "Eleven-path isolated follow-up targets integrated draft, not main. Exact-head independent review requested in comment 7243973218; no adoption yet."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46177042582",
+          "sha": "ddb90043d4ad2d4e17080da2ee952e045d438d82",
+          "status": "IN_PROGRESS",
+          "detail": "committed-head release CI: in_progress/pending; offline not hosted evidence."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46177157289",
+          "sha": "ddb90043d4ad2d4e17080da2ee952e045d438d82",
+          "status": "IN_PROGRESS",
+          "detail": "exact-head offline browser QA: in_progress/pending; offline not hosted evidence."
         }
       ],
       "approval": "none"
