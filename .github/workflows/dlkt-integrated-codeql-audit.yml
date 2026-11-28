@@ -1,0 +1,133 @@
+name: DLKT INFO isolated CodeQL comparison
+on:
+  push:
+    branches:
+      - 'audit/dlkt-integrated-codeql-20261128'
+permissions:
+  contents: read
+concurrency:
+  group: dlkt-integrated-codeql-audit
+  cancel-in-progress: false
+jobs:
+  differential-static-audit:
+    name: Exact candidate versus production-base security scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    if: github.repository == 'razvannitu-glitch/dlkt-info' && github.ref == 'refs/heads/audit/dlkt-integrated-codeql-20261128'
+    steps:
+      - name: Checkout immutable release candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: '6baed8c3a185231a5aaf56b9683986e6065e9a2e'
+          path: candidate
+          persist-credentials: false
+      - name: Checkout immutable comparison base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: '2005ad5cf04f6ea0f04080eeb66a99f6d895b55d'
+          path: baseline
+          persist-credentials: false
+      - name: Verify both exact Git trees
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C candidate rev-parse HEAD)" = '6baed8c3a185231a5aaf56b9683986e6065e9a2e'
+          test "$(git -C candidate rev-parse 'HEAD^{tree}')" = '33851b47c11894d87a14fdf3512e17cfcce6aea3'
+          test "$(git -C baseline rev-parse HEAD)" = '2005ad5cf04f6ea0f04080eeb66a99f6d895b55d'
+          test "$(git -C baseline rev-parse 'HEAD^{tree}')" = '8f74f34fe21d388595f584e319441d648cc760f6'
+          test -z "$(git -C candidate status --porcelain)"
+          test -z "$(git -C baseline status --porcelain)"
+          printf 'DLKT_CODEQL_EXACT_TREES_PASS\n'
+      - name: Install pinned official CodeQL CLI
+        id: codeql
+        uses: github/codeql-action/setup-codeql@915412ff23e8b7659517e607487dbeae018f2934 # v4.39.5
+        with:
+          tools: linked
+          languages: javascript-typescript
+      - name: Compare both source trees with the same security-extended suite
+        shell: bash
+        env:
+          CODEQL: ${{ steps.codeql.outputs.codeql-path }}
+        run: |
+          set -euo pipefail
+          test -x "$CODEQL"
+          "$CODEQL" version --format=json
+          node --version
+          root="$(mktemp -d "$RUNNER_TEMP/dlkt-codeql.XXXXXX")"
+          chmod 700 "$root"
+          trap 'rm -rf -- "$root"' EXIT
+          suite='codeql/javascript-queries:codeql-suites/javascript-security-extended.qls'
+          for target in baseline candidate; do
+            echo "DLKT_CODEQL_SCAN_START $target"
+            if ! "$CODEQL" database create "$root/$target-db" --language=javascript-typescript --source-root="$GITHUB_WORKSPACE/$target" --threads=2 --ram=5000 >"$root/$target-create.log" 2>&1; then
+              echo "DLKT_CODEQL_EXTRACTION_FAILED $target"
+              exit 1
+            fi
+            if ! "$CODEQL" database analyze "$root/$target-db" "$suite" --format=sarifv2.1.0 --output="$root/$target.sarif" --threads=2 --ram=5000 >"$root/$target-analyze.log" 2>&1; then
+              echo "DLKT_CODEQL_ANALYSIS_FAILED $target"
+              exit 1
+            fi
+            test -s "$root/$target.sarif"
+            echo "DLKT_CODEQL_SCAN_COMPLETE $target"
+          done
+          # Public repository: disclose aggregate counts only, never raw SARIF,
+          # snippets, finding locations, paths, or attack details.
+          python3 - "$root" <<'PY'
+          import collections, json, math, pathlib, sys
+          root = pathlib.Path(sys.argv[1])
+          def summarize(label):
+              doc = json.loads((root / (label + '.sarif')).read_text(encoding='utf-8'))
+              if doc.get('version') != '2.1.0' or not isinstance(doc.get('runs'), list) or not doc['runs']:
+                  raise ValueError('invalid or empty SARIF')
+              buckets = collections.Counter()
+              rules = set()
+              invocation_errors = 0
+              for run in doc['runs']:
+                  driver = run.get('tool', {}).get('driver', {})
+                  if 'codeql' not in driver.get('name', '').lower():
+                      raise ValueError('unexpected scanner')
+                  rule_map = {r.get('id'): r for r in driver.get('rules', [])}
+                  rules.update(rule_map)
+                  for invocation in run.get('invocations', []):
+                      if invocation.get('executionSuccessful') is False:
+                          invocation_errors += 1
+                      invocation_errors += sum(n.get('level') == 'error' for n in invocation.get('toolExecutionNotifications', []))
+                  for result in run.get('results', []):
+                      rule = rule_map.get(result.get('ruleId'), {})
+                      raw = rule.get('properties', {}).get('security-severity')
+                      try:
+                          score = float(raw)
+                      except (ValueError, TypeError):
+                          score = -1
+                      if not math.isfinite(score) or score < 0 or score > 10:
+                          level = 'unclassified'
+                      elif score >= 9:
+                          level = 'critical'
+                      elif score >= 7:
+                          level = 'high'
+                      elif score >= 4:
+                          level = 'medium'
+                      else:
+                          level = 'low'
+                      buckets[level] += 1
+              if invocation_errors:
+                  raise ValueError('scanner reported unsuccessful invocation')
+              if not rules:
+                  raise ValueError('no evaluated rule metadata')
+              return {'totalResults': sum(buckets.values()), 'ruleMetadataCount': len(rules), 'severity': {k: buckets[k] for k in ('critical', 'high', 'medium', 'low', 'unclassified')}}
+          result = {
+              'scope': 'exact Git trees; JS/TS; official CodeQL security-extended; static analysis only',
+              'baselineSha': '2005ad5cf04f6ea0f04080eeb66a99f6d895b55d',
+              'candidateSha': '6baed8c3a185231a5aaf56b9683986e6065e9a2e',
+              'baseline': summarize('baseline'),
+              'candidate': summarize('candidate'),
+              'rawFindingsUploaded': False,
+              'releaseApproval': False,
+          }
+          # Counts are not finding identity or evidence of exploitability.
+          print('DLKT_CODEQL_AGGREGATE ' + json.dumps(result, separators=(',', ':')))
+          if result['candidate']['totalResults']:
+              print('DLKT_CODEQL_TRIAGE_REQUIRED')
+              sys.exit(2)
+          print('DLKT_CODEQL_NO_RESULTS_IN_SELECTED_SUITE')
+          PY
