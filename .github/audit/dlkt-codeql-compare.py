@@ -334,7 +334,7 @@ def main():
     candidate, cr = summarize(json.loads((root / 'candidate.sarif').read_text(encoding='utf-8')), workspace / 'candidate', tracked(workspace / 'candidate'))
     require(br == cr)
     matched = compare(base, candidate)
-    report = {'format': 'dlkt-codeql-private-triage-v1', 'baselineSha': '2005ad5cf04f6ea0f04080eeb66a99f6d895b55d', 'candidateSha': 'b376b9791aebb2c207e17a270e29d0b1818e1dd5', 'baseline': base, 'candidate': candidate}
+    report = {'format': 'dlkt-codeql-private-triage-v1', 'baselineSha': '2005ad5cf04f6ea0f04080eeb66a99f6d895b55d', 'candidateSha': 'ab84af3578888b43dccbd8598883f6feeb75b570', 'baseline': base, 'candidate': candidate}
     plain = gzip.compress(canonical(report), mtime=0)
     require(len(plain) <= MAX_REPORT)
     sealed = subprocess.run(['openssl', 'cms', '-encrypt', '-binary', '-aes-256-gcm', '-outform', 'DER', str(certificate)], input=plain, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=True).stdout

@@ -27,13 +27,13 @@ jobs:
           set -euo pipefail
           test "$(git -C audit-harness rev-parse HEAD)" = "$GITHUB_SHA"
           printf '%s\n' \
-            'b7c84a2d59682a0988acc48935a7ff855baccfe6aeaf834171384ff0f6649b23  audit-harness/.github/audit/dlkt-codeql-compare.py' \
+            '9f5356ed50f353dbccedd11f6b5de08169733213faa090a02a51726cd92f4994  audit-harness/.github/audit/dlkt-codeql-compare.py' \
             '49f985590d569e0077d2498f2b0512a6fe5aede255c4a5387481a92450afbed1  audit-harness/.github/audit/dlkt-codeql-recipient.pem' | sha256sum --check
           python3 "audit-harness/.github/audit/dlkt-codeql-compare.py" --self-test
       - name: Checkout immutable release candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: 'b376b9791aebb2c207e17a270e29d0b1818e1dd5'
+          ref: 'ab84af3578888b43dccbd8598883f6feeb75b570'
           path: candidate
           persist-credentials: false
       - name: Checkout immutable comparison base
@@ -46,8 +46,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git -C candidate rev-parse HEAD)" = 'b376b9791aebb2c207e17a270e29d0b1818e1dd5'
-          test "$(git -C candidate rev-parse 'HEAD^{tree}')" = 'e6ea3436408c55f6fba0b3308ed65829eb4eb44f'
+          test "$(git -C candidate rev-parse HEAD)" = 'ab84af3578888b43dccbd8598883f6feeb75b570'
+          test "$(git -C candidate rev-parse 'HEAD^{tree}')" = '3eb630ddb383cceef979e8a27106e74727bf237e'
           test "$(git -C baseline rev-parse HEAD)" = '2005ad5cf04f6ea0f04080eeb66a99f6d895b55d'
           test "$(git -C baseline rev-parse 'HEAD^{tree}')" = '8f74f34fe21d388595f584e319441d648cc760f6'
           test -z "$(git -C candidate status --porcelain)"
