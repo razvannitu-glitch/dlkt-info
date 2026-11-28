@@ -67,10 +67,12 @@ jobs:
     timeout-minutes: 7
     steps:
       - name: Checkout exact tested source
+        id: checkout_source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Set up Node.js 22
+        id: setup_node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
@@ -88,11 +90,14 @@ jobs:
         run: node --check scripts/qa-live-reader.mjs
       - name: Inspect public homepage on four viewports
         run: node scripts/qa-live-reader.mjs
+      # Account evidence must survive unrelated reader/Chromium failures.
+      # Both prerequisites must still have completed successfully.
       - name: Verify credential-free account probe against offline fixtures
-        if: env.DLKT_KNOWLEDGE_PROBE_MODE == 'monitor'
+        id: account_fixtures
+        if: ${{ !cancelled() && env.DLKT_KNOWLEDGE_PROBE_MODE == 'monitor' && steps.checkout_source.outcome == 'success' && steps.setup_node.outcome == 'success' }}
         run: node --test tests/anonymous-account-live.test.mjs
       - name: Verify production anonymous account and session HTTP boundary
-        if: env.DLKT_KNOWLEDGE_PROBE_MODE == 'monitor'
+        if: ${{ !cancelled() && env.DLKT_KNOWLEDGE_PROBE_MODE == 'monitor' && steps.account_fixtures.outcome == 'success' }}
         run: node scripts/verify-anonymous-account.mjs
       - name: Preserve screenshots and measured browser report
         if: always()
