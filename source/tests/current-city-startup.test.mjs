@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {initializeCurrentCity} from '../.build/src/local/startup.js';
+import {initializeCurrentCity,coarseLocationRequest} from '../.build/src/local/startup.js';
 
 const bucharest=Object.freeze({id:'683506',name:'Bucharest',countryCode:'RO',country:'Romania',region:'Bucharest',lat:44.4323,lon:26.1063,timezone:'Europe/Bucharest'});
 const london=Object.freeze({id:'2643743',name:'London',countryCode:'GB',country:'United Kingdom',region:'England',lat:51.5085,lon:-0.1257,timezone:'Europe/London'});
@@ -59,4 +59,23 @@ test('unknown, country-only, malformed and non-estimated hints never become a cu
 
 test('a selection failure is not reported as a completed location selection',async()=>{
   await assert.rejects(initializeCurrentCity({readHint:async()=>({city:bucharest,estimated:true}),maySelect:()=>true,select:async()=>{throw Error('SELECTION_FAILED');}}),/SELECTION_FAILED/u);
+});
+
+test('conflicting connection country and city fail closed rather than changing the edition',async()=>{
+ for(const countryCode of ['GB',null,'ro']){
+  let selected=false;
+  const result=await initializeCurrentCity({readHint:async()=>({city:bucharest,countryCode,estimated:true}),maySelect:()=>true,select:async()=>{selected=true;}});
+  assert.equal(result,'unavailable');assert.equal(selected,false);
+ }
+});
+test('coarse device suggestions conservatively account for rounding and retain only necessary fields',()=>{
+ const now=Date.parse('2026-11-28T12:00:00Z');
+ const result=coarseLocationRequest(44.4349,26.1049,100,now,now);
+ assert.deepEqual(Object.keys(result).sort(),['accuracy','lat','lon','timestamp']);
+ assert.equal(result.lat,44.43);assert.equal(result.lon,26.1);
+ assert.ok(result.accuracy>=100+112000*(0.0049+0.0049));
+ assert.deepEqual(coarseLocationRequest(result.lat,result.lon,result.accuracy,result.timestamp,now),result,'already coarsened coordinates must not be inflated twice');
+ for(const args of [[44.4349,26.1049,4999,now,now],[44,26,-1,now,now],[44,26,100,now-120001,now],[44,26,100,now+5001,now],[91,26,100,now,now],[44,181,100,now,now],[NaN,26,100,now,now],[44,26,100,now,NaN]]){
+  assert.equal(coarseLocationRequest(...args),null);
+ }
 });

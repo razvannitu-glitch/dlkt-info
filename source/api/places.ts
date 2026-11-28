@@ -1,6 +1,7 @@
 import type {IncomingMessage,ServerResponse} from 'node:http';
 import {searchCities,findCity,suggestCity,nearbyCities,cityAliases,listCountries} from '../src/local/cities.js';
-import {object,finite} from '../src/local/contracts.js';
+import {object} from '../src/local/contracts.js';
+import {coarseLocationRequest} from '../src/local/startup.js';
 import {bodyJson,sameOrigin} from '../src/account/http.js';
 function header(req:IncomingMessage,key:string):string{const v=req.headers[key];return typeof v==='string'&&v.length<=200?v:'';}
 export async function handlePlaces(req:IncomingMessage,res:ServerResponse):Promise<void>{
@@ -22,8 +23,10 @@ export async function handlePlaces(req:IncomingMessage,res:ServerResponse):Promi
  }
  if(req.method==='POST'){
   if(entries.length||!sameOrigin(req,'local-place-1')){send(403,{error:'ORIGIN_REQUIRED'});return;}
-  const data:unknown=await bodyJson(req,512);if(!object(data)||Object.keys(data).sort().join(',')!=='accuracy,lat,lon,timestamp'||!finite(data.lat,-90,90)||!finite(data.lon,-180,180)||!finite(data.accuracy,0,5000)||!finite(data.timestamp,Date.now()-120000,Date.now()+5000)){send(400,{error:'LOCATION_NOT_PRECISE_OR_CURRENT'});return;}
-  const lat=Math.round(data.lat*100)/100,lon=Math.round(data.lon*100)/100;send(200,{nearby:nearbyCities(lat,lon),estimated:true,scope:'Nearby city centres, not proof that you are inside a city.'});return;
+  const data:unknown=await bodyJson(req,512);
+  const coarse=object(data)&&Object.keys(data).sort().join(',')==='accuracy,lat,lon,timestamp'?coarseLocationRequest(data.lat,data.lon,data.accuracy,data.timestamp,Date.now()):null;
+  if(coarse===null){send(400,{error:'LOCATION_NOT_PRECISE_OR_CURRENT'});return;}
+  send(200,{nearby:nearbyCities(coarse.lat,coarse.lon),estimated:true,scope:'Nearby city centres, not proof that you are inside a city.'});return;
  }
  res.setHeader('Allow','GET, POST');send(405,{error:'METHOD_NOT_ALLOWED'});
  }catch{send(400,{error:'PLACE_REQUEST_INVALID'});}

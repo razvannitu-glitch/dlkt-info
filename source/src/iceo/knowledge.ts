@@ -194,15 +194,35 @@ export function selectKnowledgeCards(cards:readonly KnowledgeCard[],filter:Knowl
  if(!Number.isFinite(now)||typeof seed!=='string'||seed.length>100)throw Error('KNOWLEDGE_CONTEXT_INVALID');
  const day=knowledgeCalendar(now,timeZone).day;
  const valid=validateKnowledgeCatalog(cards).filter(card=>Date.parse(card.publishAt??card.reviewedAt)<=now&&now<Date.parse(card.reviewBy)&&(filter==='all'||card.category===filter)&&(card.format!=='on-this-day'||card.calendarDay===day.slice(-5)));
- const groups=new Map<NewsCategoryId,KnowledgeCard[]>();
- for(const card of valid){const group=groups.get(card.category)??[];group.push(card);groups.set(card.category,group);}
- for(const group of groups.values())group.sort((a,b)=>score(seed+a.id)-score(seed+b.id)||a.id.localeCompare(b.id));
- const result:KnowledgeCard[]=[];let round=0,last:NewsCategoryId|null=null;
+ // Category rounds remain the hard diversity constraint. Within each
+ // round, schedule the format furthest behind its proportional share of
+ // the complete eligible inventory. Rare formats are spread rather than
+ // consumed at the start; seeded tie-breaks keep the visit reproducible.
+ type Format=KnowledgeFormat|'general';
+ const groups=new Map<NewsCategoryId,Map<Format,KnowledgeCard[]>>();
+ const totalByFormat=new Map<Format,number>(),servedByFormat=new Map<Format,number>();
+ for(const card of valid){
+  const format:Format=card.format??'general',group=groups.get(card.category)??new Map<Format,KnowledgeCard[]>();
+  const queue=group.get(format)??[];queue.push(card);group.set(format,queue);groups.set(card.category,group);
+  totalByFormat.set(format,(totalByFormat.get(format)??0)+1);
+ }
+ for(const group of groups.values())for(const queue of group.values())queue.sort((a,b)=>score(seed+':'+a.id)-score(seed+':'+b.id)||a.id.localeCompare(b.id));
+ const result:KnowledgeCard[]=[],pending=new Set<NewsCategoryId>();
+ let round=0,last:NewsCategoryId|null=null,lastFormat:Format|null=null;
  while(groups.size){
-  const order=[...groups.keys()].sort((a,b)=>score(seed+round+a)-score(seed+round+b)||a.localeCompare(b));
-  if(order.length>1&&order[0]===last){const first=order.shift();if(first)order.push(first);}
-  for(const category of order){const group=groups.get(category),card=group?.shift();if(card){result.push(card);last=category;}if(!group?.length)groups.delete(category);}
-  round++;
+  if(pending.size===0){for(const category of groups.keys())pending.add(category);round++;}
+  const different=[...pending].filter(category=>category!==last);
+  const categories=different.length?different:[...pending];
+  const candidates=categories.flatMap(category=>[...groups.get(category)!].flatMap(([format,queue])=>queue[0]===undefined?[]:[{category,format,card:queue[0]}]));
+  const deficit=(format:Format)=>(result.length+1)*(totalByFormat.get(format)??0)-(servedByFormat.get(format)??0)*valid.length;
+  candidates.sort((a,b)=>deficit(b.format)-deficit(a.format)
+   ||Number(a.format===lastFormat)-Number(b.format===lastFormat)
+   ||score(seed+':'+round+':'+a.card.id)-score(seed+':'+round+':'+b.card.id)||a.card.id.localeCompare(b.card.id));
+  const next=candidates[0];if(next===undefined)throw Error('KNOWLEDGE_SELECTION_EXHAUSTED');
+  const group=groups.get(next.category)!,queue=group.get(next.format)!;
+  queue.shift();if(queue.length===0)group.delete(next.format);if(group.size===0)groups.delete(next.category);
+  pending.delete(next.category);result.push(next.card);last=next.category;lastFormat=next.format;
+  servedByFormat.set(next.format,(servedByFormat.get(next.format)??0)+1);
  }
  return result;
 }

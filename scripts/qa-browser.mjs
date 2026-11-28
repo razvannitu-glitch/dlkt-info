@@ -1413,8 +1413,10 @@ async function verifyKnowledgeExposure(call,format,fixture,origin,outputDir){
   assert.ok(typeof picture==='string'&&picture.length>=1000);
   writeFileSync(join(outputDir,screenshot),Buffer.from(picture,'base64'),{mode:0o600});
   await emitVisualPreview(call,'owned-card',format.width);
+  assert.ok(await evaluate(call,'window.scrollY')>100,'owned card exposure must leave a genuinely scrolled homepage');
   await call('Page.reload',{ignoreCache:true});await loaded(call);await selectControlledEdition(call,fixture);
-  await evaluate(call,'(()=>{window.scrollTo({top:0,behavior:"instant"});return true;})()');
+  await pause(150);
+  assert.ok(await evaluate(call,'window.scrollY')<=1,'plain homepage reload must reset without a test-side scroll command');
   let reloaded=null;
   for(let attempt=0;attempt<60;attempt++){
    reloaded=await read();
