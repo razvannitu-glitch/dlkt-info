@@ -27,7 +27,7 @@ jobs:
           set -euo pipefail
           test "$(git -C audit-harness rev-parse HEAD)" = "$GITHUB_SHA"
           printf '%s\n' \
-            '8fa1e416c88964b4713a56feb14c5307ea8d7f5fc3fddbbfc824453782167a48  audit-harness/.github/audit/dlkt-codeql-compare.py' \
+            '5eb28cee0e464a28ac5084f3b7c182973605d0765a2b08b6b7b68be85a718e64  audit-harness/.github/audit/dlkt-codeql-compare.py' \
             '49f985590d569e0077d2498f2b0512a6fe5aede255c4a5387481a92450afbed1  audit-harness/.github/audit/dlkt-codeql-recipient.pem' | sha256sum --check
           python3 "audit-harness/.github/audit/dlkt-codeql-compare.py" --self-test
       - name: Checkout immutable release candidate

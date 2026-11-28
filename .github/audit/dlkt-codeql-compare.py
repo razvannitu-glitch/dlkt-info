@@ -70,38 +70,128 @@ class UnresolvedLocation(Exception):
     pass
 
 
-def artifact_path(loc, run, root, files):
-    loc = dict(loc)
-    if not isinstance(loc.get('uri'), str):
-        index = loc.get('index')
-        artifacts = run.get('artifacts', [])
-        if not isinstance(index, int) or not 0 <= index < len(artifacts):
-            raise UnresolvedLocation()
-        loc = {**artifacts[index].get('location', {}), **loc}
-    uri = loc.get('uri')
-    if not isinstance(uri, str):
-        raise UnresolvedLocation()
-    base_id = loc.get('uriBaseId')
-    if base_id:
-        base = run.get('originalUriBaseIds', {}).get(base_id)
-        if not isinstance(base, dict) or base.get('uriBaseId') or not isinstance(base.get('uri'), str):
-            raise UnresolvedLocation()
-        uri = urllib.parse.urljoin(base['uri'], uri)
-    parsed = urllib.parse.urlsplit(uri)
-    if parsed.scheme not in ('', 'file') or parsed.netloc not in ('', 'localhost') or parsed.query or parsed.fragment:
-        raise UnresolvedLocation()
-    raw = urllib.parse.unquote(parsed.path)
-    if not raw or '\\' in raw or '\x00' in raw or '..' in pathlib.PurePosixPath(raw).parts:
-        raise UnresolvedLocation()
-    path = pathlib.Path(raw)
+def location_error(reason):
+    raise UnresolvedLocation(reason)
+
+
+def local_uri(uri, allow_empty=False):
+    if not isinstance(uri, str) or len(uri) > 4096 or (not uri and not allow_empty):
+        location_error('invalid-uri')
+    if any(ord(c) < 32 or ord(c) == 127 for c in uri) or '\\' in uri:
+        location_error('invalid-uri-characters')
     try:
-        relative = (path if path.is_absolute() else root / path).resolve().relative_to(root).as_posix()
-    except (ValueError, OSError):
-        raise UnresolvedLocation() from None
+        parsed = urllib.parse.urlsplit(uri)
+        raw = urllib.parse.unquote(parsed.path, errors='strict')
+    except (ValueError, UnicodeError):
+        location_error('malformed-uri')
+    if parsed.scheme not in ('', 'file') or parsed.netloc not in ('', 'localhost') or parsed.query or parsed.fragment:
+        location_error('nonlocal-uri')
+    if any(ord(c) < 32 or ord(c) == 127 for c in raw) or '\\' in raw or '..' in pathlib.PurePosixPath(raw).parts:
+        location_error('unsafe-path')
+    if not raw and not allow_empty:
+        location_error('empty-path')
+    return pathlib.Path(raw)
+
+
+def artifact_path(loc, run, root, files):
+    # The caller binds root to a separately verified exact Git checkout and
+    # passes that same directory as CodeQL --source-root. SARIF producers may
+    # omit the optional originalUriBaseIds mapping for %SRCROOT%.
+    if not isinstance(loc, dict):
+        location_error('invalid-artifact-location')
+    loc = dict(loc)
+    # SARIF uses -1 as the sentinel for an absent artifact index.
+    if 'index' in loc and not (type(loc['index']) is int and loc['index'] == -1):
+        index = loc['index']
+        artifacts = run.get('artifacts', [])
+        if type(index) is not int or not isinstance(artifacts, list) or not 0 <= index < len(artifacts):
+            location_error('invalid-artifact-index')
+        inherited = artifacts[index].get('location', {})
+        if not isinstance(inherited, dict):
+            location_error('invalid-index-location')
+        for key in ('uri', 'uriBaseId'):
+            if key in inherited:
+                if key in loc and loc[key] != inherited[key]:
+                    location_error('conflicting-artifact-index')
+                loc.setdefault(key, inherited[key])
+    root = root.resolve()
+    bases = run.get('originalUriBaseIds', {})
+    if not isinstance(bases, dict):
+        location_error('invalid-base-map')
+
+    def resolve_base(base_id, seen=()):
+        if not isinstance(base_id, str) or not base_id or base_id in seen or len(seen) >= 8:
+            location_error('invalid-or-cyclic-base')
+        if base_id not in bases:
+            if base_id == '%SRCROOT%':
+                return root
+            location_error('unknown-base')
+        base = bases[base_id]
+        if not isinstance(base, dict):
+            location_error('invalid-base')
+        path = local_uri(base.get('uri', ''), allow_empty=True)
+        parent = base.get('uriBaseId')
+        if parent is not None:
+            prefix = resolve_base(parent, (*seen, base_id))
+        else:
+            prefix = root
+        if path.is_absolute():
+            if parent is not None:
+                location_error('absolute-nested-base')
+            resolved = path
+        else:
+            resolved = prefix / path
+        if base_id == '%SRCROOT%' and resolved != root:
+            location_error('source-root-mismatch')
+        return resolved
+
+    path = local_uri(loc.get('uri'))
+    base_id = loc.get('uriBaseId')
+    if path.is_absolute():
+        if base_id is not None:
+            resolve_base(base_id)
+        absolute = path
+    else:
+        absolute = (resolve_base(base_id) if base_id is not None else root) / path
+    try:
+        relative = absolute.relative_to(root).as_posix()
+        if absolute.resolve() != absolute:
+            location_error('noncanonical-path')
+    except (ValueError, OSError, RuntimeError):
+        location_error('outside-source-root')
     if relative not in files:
-        raise UnresolvedLocation()
+        location_error('untracked-path')
     return relative, files[relative]
 
+
+def location_diagnostic(loc, run, reason):
+    # Only the encrypted private report receives these bounded diagnostics.
+    def small(value):
+        return str(value)[:360]
+    result = {'reason': small(reason)}
+    if isinstance(loc, dict):
+        result['uri'] = small(loc.get('uri', ''))
+        result['uriBaseId'] = small(loc.get('uriBaseId', ''))
+        result['index'] = small(loc.get('index', ''))
+        bases = run.get('originalUriBaseIds', {})
+        if isinstance(bases, dict):
+            result['declaredBaseIds'] = [small(key) for key in list(bases)[:8]]
+            base_id = loc.get('uriBaseId')
+            chain = []
+            seen = set()
+            while isinstance(base_id, str) and base_id in bases and base_id not in seen and len(chain) < 8:
+                seen.add(base_id)
+                base = bases[base_id]
+                if not isinstance(base, dict):
+                    break
+                chain.append({'id': small(base_id), 'uri': small(base.get('uri', '')), 'parent': small(base.get('uriBaseId', ''))})
+                base_id = base.get('uriBaseId')
+            result['baseChain'] = chain
+        index = loc.get('index')
+        artifacts = run.get('artifacts', [])
+        if type(index) is int and isinstance(artifacts, list) and 0 <= index < len(artifacts):
+            result['indexedLocation'] = small(artifacts[index].get('location', {}))
+    return result
 
 def finding(result, run, root, files, rules):
     rule_id = result.get('ruleId')
@@ -109,6 +199,7 @@ def finding(result, run, root, files, rules):
     level = severity(rules[rule_id])
     points = []
     unresolved = 0
+    diagnostics = []
 
     def normalize(value):
         nonlocal unresolved
@@ -124,8 +215,10 @@ def finding(result, run, root, files, rules):
                     output[key] = {'path': relative, 'blob': oid}
                     region = value.get('region', {})
                     points.append({'path': relative, **{k: region[k] for k in ('startLine', 'endLine', 'startColumn', 'endColumn') if k in region}})
-                except UnresolvedLocation:
+                except UnresolvedLocation as error:
                     unresolved += 1
+                    if len(diagnostics) < 12:
+                        diagnostics.append(location_diagnostic(item, run, error))
                     output[key] = {'unresolved': True}
             else:
                 output[key] = normalize(item)
@@ -137,7 +230,8 @@ def finding(result, run, root, files, rules):
     primary = points[0]['path'] if points else ''
     signature = digest(canonical(evidence)) if points and not unresolved else None
     return {'rule': rule_id, 'severity': level, 'surface': surface(primary), 'signature': signature,
-            'unresolvedLocations': unresolved, 'locations': list({canonical(p): p for p in points}.values())[:24],
+            'unresolvedLocations': unresolved, 'locations': list({canonical(p): p for p in points}.values())[:64],
+            'locationDiagnostics': diagnostics,
             'message': str(result.get('message', {}).get('text', ''))[:800]}
 
 
@@ -194,6 +288,39 @@ def self_test():
     require(a['signature'] != changed['signature'] and a['signature'] != moved['signature'] and escaped['signature'] is None)
     counts = compare([a], [b, dict(b), changed, moved, escaped])
     require(counts == {'exact-recorded-evidence-match': 1, 'unmatched': 3, 'unresolved-location': 1})
+    # Real CodeQL-style source-root-relative, indexed and chained SARIF locations.
+    normal = {'uri': 'source/src/demo.ts', 'uriBaseId': '%SRCROOT%'}
+    empty = {'artifacts': []}
+    require(artifact_path(normal, empty, root, files) == ('source/src/demo.ts', 'a' * 40))
+    indexed = {'artifacts': [{'location': normal}]}
+    require(artifact_path({'index': 0}, indexed, root, files) == ('source/src/demo.ts', 'a' * 40))
+    require(artifact_path({'index': 0, **normal}, indexed, root, files) == ('source/src/demo.ts', 'a' * 40))
+    require(artifact_path({'index': -1, **normal}, indexed, root, files) == ('source/src/demo.ts', 'a' * 40))
+    nested = {'originalUriBaseIds': {'PROJECT': {'uri': root.as_uri() + '/'}, 'SUB': {'uri': 'source/', 'uriBaseId': 'PROJECT'}}}
+    require(artifact_path({'uri': 'src/demo.ts', 'uriBaseId': 'SUB'}, nested, root, files) == ('source/src/demo.ts', 'a' * 40))
+    require(artifact_path({'uri': (root / 'source/src/demo.ts').as_uri()}, empty, root, files) == ('source/src/demo.ts', 'a' * 40))
+    require(artifact_path({'uri': 'source/src/demo.ts'}, empty, root, files) == ('source/src/demo.ts', 'a' * 40))
+    percent_files = {**files, 'source/src/a b.ts': 'd' * 40}
+    require(artifact_path({'uri': 'source/src/a%20b.ts', 'uriBaseId': '%SRCROOT%'}, empty, root, percent_files)[0] == 'source/src/a b.ts')
+    implicit = finding(result('source/src/demo.ts'), empty, root, files, rules)
+    require(implicit['signature'] == a['signature'])
+    rejects = [({'uri': 'source/src/demo.ts', 'uriBaseId': 'UNKNOWN'}, empty),
+               ({'uri': 'source/src/%2e%2e/demo.ts'}, empty),
+               ({'uri': 'source/src/demo.ts?x=1'}, empty),
+               ({'uri': 'file:///outside/source/src/demo.ts'}, empty),
+               ({'uri': 'source/src/not-tracked.ts'}, empty),
+               ({'uri': 'source/src/demo.ts', 'uriBaseId': 'LOOP'}, {'originalUriBaseIds': {'LOOP': {'uri': 'source/', 'uriBaseId': 'LOOP'}}}),
+               ({'index': 0, 'uri': 'source/public/demo.js'}, indexed),
+               ({'index': 2}, indexed),
+               ({'uri': 'source/src/demo.ts', 'uriBaseId': '%SRCROOT%'}, {'originalUriBaseIds': {'%SRCROOT%': {'uri': 'file:///outside/'}}})]
+    for loc, doc in rejects:
+        try:
+            artifact_path(loc, doc, root, files)
+        except UnresolvedLocation:
+            continue
+        raise ValueError('invalid location was accepted')
+    bad = finding(result('source/src/not-tracked.ts'), empty, root, files, rules)
+    require(bad['signature'] is None and bad['locationDiagnostics'][0]['reason'] == 'untracked-path')
     print('DLKT_CODEQL_COMPARISON_SELF_TEST_PASS')
 
 
