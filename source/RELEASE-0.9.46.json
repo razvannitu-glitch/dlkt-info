@@ -62,7 +62,7 @@
   "expectedSchemaFingerprint": "fc6df8a25190ef8c4b4f906873a3015b7aa805e21ce1a44f9117b8eefeed3b91",
   "reviewPublicationMode": "human-review-private-no-auto-publication",
   "revision": "iceo-primary-mesh-1",
-  "createdAt": "2026-11-28T17:09:31.502Z",
+  "createdAt": "2026-11-28T17:34:34.406Z",
   "palette": {
     "black": "#000000",
     "white": "#FFFFFF",
@@ -816,7 +816,7 @@
     "tests/brand-hover.test.mjs": "a79c4206443e51614050d5df0b05c815d1854302f6b8ebb0fc353429ca66e4d2",
     "tests/briefing-history-ui.test.mjs": "f7b094239666c7c8f11a735e7622aa4e13c860884404afa2476af906d19a59ea",
     "tests/briefing-history.test.mjs": "1a8381e06eed58449b12a9991af61e98a3569a701c4611a79e0f8f88ef215218",
-    "tests/browser-artifacts.test.mjs": "aff1c2ce73bdaf1d26060b3359abcc6b65fa27864b7b5a974f07309d141326e0",
+    "tests/browser-artifacts.test.mjs": "317bdaf9fdf45f9e6b3a22fe04fcd6cdbdaad7ab3a33f637461a7b1b251dc263",
     "tests/browser/clear-entry.mjs": "7897625ed63aa84a89c35d6028f06d62c0195e7cb8544a3f7531aa10625f6117",
     "tests/browser/clear-return.mjs": "b7a0c395e7cc5b3010d259f22c8c605e36711dd4fe475446e40dbf604393fe64",
     "tests/browser/direct-cards.mjs": "586a770c05bf1f3b5f2639819d01a62a7f6dd14305cf0ee64de18cfce5079d19",
