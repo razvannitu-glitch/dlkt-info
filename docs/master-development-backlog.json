@@ -330,13 +330,13 @@
       "id": "I-02",
       "track": "I",
       "priority": 1,
-      "state": "IN_PROGRESS",
+      "state": "REVIEW",
       "dependsOn": [
         "I-01"
       ],
       "scope": "Improve evidence-first source qualification and research-only data ingestion.",
       "acceptance": "Reproducible fixtures, source/edition/geographic separation, provenance and licence evidence, bounded request budget, duplicate/expiry/failure handling; no acquisition or publication activation.",
-      "nextAction": "Review existing #118 exact head ab84af3578888b43dccbd8598883f6feeb75b570, base d89db45c. Confirm standard release CI 46176016492 and independent review requested in comment 7243827701, exact five-path root-only diff and unchanged source pin. Resolve real findings with bounded corrections; only then adopt into integrated draft. Investigate recurring publisher-edition gaps by primary evidence; keep Euronews expansion held pending rights and exact-origin scope review, and do not infer geography for language-only editions. No source probe/activation.",
+      "nextAction": "Read independent exact-head review of PR #118 and any review threads; exact release CI passed 2883/2883 and 15/15, source pin unchanged. If review passes with no findings, recheck full tree and ref identities and adopt by non-force fast-forward into #116 draft only; repeat applicable integrated gates. Preserve rights holds and no source activation.",
       "evidence": [
         {
           "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/110",
@@ -381,6 +381,18 @@
           "sha": "ab84af3578888b43dccbd8598883f6feeb75b570",
           "status": "REVIEW",
           "detail": "Primary pages identify English Euronews edition and multilingual international service; terms restrict commercial reuse. Existing acquisition/reuse permissions remain unverified. No new national scope or runtime edition rule; Eurogamer inaccessible, no bypass."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46176016492/job/141074730817",
+          "sha": "ab84af3578888b43dccbd8598883f6feeb75b570",
+          "status": "PASS",
+          "detail": "Exact release CI: 158 packaging + 2725 application tests, all 2883 passed, zero failures/skips; all three new regression groups passed; npm audit zero; 15/15 static controls."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/118#issuecomment-7243830410",
+          "sha": "ab84af3578888b43dccbd8598883f6feeb75b570",
+          "status": "IN_PROGRESS",
+          "detail": "Independent Code Review confirmed running on exact head."
         }
       ],
       "approval": "none"
