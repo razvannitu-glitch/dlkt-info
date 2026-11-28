@@ -90,3 +90,47 @@ test('new classification pins cannot be mixed with historical unpinned reports o
  assert.equal(consistent.gaps.denominator,244);
  assert.equal(plan().classificationSourceSha256,null);
 });
+
+const pinnedFirst=readFileSync(new URL('../docs/evidence/global-coverage-pinned-4825-20261128.txt',import.meta.url),'utf8');
+const pinnedSecond=readFileSync(new URL('../docs/evidence/global-coverage-pinned-4828-20261128.txt',import.meta.url),'utf8');
+const pinnedModel='d89db45c081a712aa2d2846a006096352b7cf96a';
+const pinnedPlan=(a=pinnedFirst,b=pinnedSecond)=>buildExpansionPlan([a,b],pinnedModel);
+
+test('incomplete historical provenance evidence never becomes a zero-filled comparison',()=>{
+ const review=plan().provenanceReview;
+ assert.deepEqual(review,{status:'incomplete-evidence',revisions:[4077,4083],missingRevisions:[4077],groups:null});
+ assert.equal(plan().latestProvenanceReview.revision,4083);
+ const missing=change(pinnedSecond,r=>{delete r.observed.unresolvedPublisherProvenance;});
+ assert.deepEqual(pinnedPlan(pinnedFirst,missing).provenanceReview,{status:'incomplete-evidence',revisions:[4825,4828],missingRevisions:[4828],groups:null});
+});
+
+test('same pinned actual observations prioritize recurring unresolved publisher editions without conflating language or countries',()=>{
+ const p=pinnedPlan(pinnedSecond,pinnedFirst),review=p.provenanceReview;
+ assert.equal(p.classificationSourceSha256,'73774a7746fba30fb685d40f96f08173c065ac0f15a1a9a94710e5085b743344');
+ assert.deepEqual(review.revisions,[4825,4828]);assert.equal(review.status,'complete-evidence');
+ assert.deepEqual(review.missingRevisions,[]);assert.equal(review.groups.length,26);
+ assert.deepEqual(review.groups[0],{target:'publisher:variety',reason:'reviewed-edition-context-missing',review:'review-publisher-edition',counts:[12,12],observedIn:2,minimum:12,maximum:12});
+ const choose=id=>review.groups.find(x=>x.target===id);
+ assert.deepEqual(choose('publisher:euronews').counts,[11,9]);
+ assert.deepEqual(choose('publisher:engadget').counts,[9,11]);
+ assert.equal(choose('source:ec-press').review,'review-registered-source-context');
+ assert.deepEqual(choose('publisher:global-voices'),{target:'publisher:global-voices',reason:'reviewed-language-without-country-edition',review:'preserve-language-only',counts:[1,1],observedIn:2,minimum:1,maximum:1});
+ assert.equal(review.groups.at(-1).target,'publisher:global-voices');
+ assert.deepEqual(review.revisions.map((_,i)=>review.groups.reduce((n,g)=>n+g.counts[i],0)),[111,114]);
+ assert.deepEqual(p.samples.map(x=>x.total),[287,260]);
+ assert.deepEqual(p.gaps.buckets.directWithoutObserved,['JP','NL','NZ']);
+ assert.equal(p.authorization,'NO_SOURCE_ACTIVATION');
+});
+
+test('group reason changes remain distinct and zero is allowed only with complete group evidence',()=>{
+ const changed=change(pinnedSecond,r=>{
+  r.observed.unresolvedPublisherProvenance.find(x=>x.target==='publisher:global-voices').reason='reviewed-edition-context-missing';
+ });
+ const groups=pinnedPlan(pinnedFirst,changed).provenanceReview.groups.filter(x=>x.target==='publisher:global-voices');
+ assert.deepEqual(groups.map(x=>[x.review,x.counts,x.observedIn]),[
+  ['review-publisher-edition',[0,1],1],['preserve-language-only',[1,0],1],
+ ]);
+ const malformed=change(pinnedSecond,r=>{r.observed.unresolvedPublisherProvenance.pop();});
+ assert.throws(()=>pinnedPlan(pinnedFirst,malformed),/EXPANSION_PROVENANCE_CONSERVATION/);
+ assert.throws(()=>pinnedPlan(pinnedFirst,pinnedFirst),/EXPANSION_INCOMPARABLE_OR_DUPLICATE/);
+});

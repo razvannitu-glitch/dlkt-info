@@ -103,6 +103,31 @@ function normalize(document){
 
 const series=values=>({counts:values,observedIn:values.filter(n=>n>0).length,minimum:Math.min(...values),maximum:Math.max(...values)});
 
+/** Compare exhaustive aggregate provenance groups only. A missing group
+ * collection is not zero evidence. Keep intentional language-only context
+ * separate from unresolved edition and registered-source review; no country,
+ * rights, acquisition eligibility or cross-snapshot unique count is inferred.
+ */
+function buildProvenanceReview(samples){
+ const revisions=samples.map(sample=>sample.revision);
+ const missingRevisions=samples.filter(sample=>sample.provenance===null).map(sample=>sample.revision);
+ if(missingRevisions.length)return {status:'incomplete-evidence',revisions,missingRevisions,groups:null};
+ const maps=samples.map(sample=>new Map(sample.provenance.map(group=>[group.target+'|'+group.reason,group])));
+ const keys=sorted(new Set(maps.flatMap(map=>[...map.keys()])));
+ const groups=keys.map(key=>{
+  const entry=maps.find(map=>map.has(key)).get(key);
+  const review=entry.reason==='reviewed-language-without-country-edition'?'preserve-language-only':
+   entry.reason==='reviewed-edition-context-missing'&&entry.target.startsWith('publisher:')?'review-publisher-edition':
+   entry.reason==='reviewed-edition-context-missing'&&entry.target.startsWith('source:')?'review-registered-source-context':
+   'investigate-unresolved-identity';
+  return {target:entry.target,reason:entry.reason,review,...series(maps.map(map=>map.get(key)?.count??0))};
+ });
+ const order=['review-publisher-edition','review-registered-source-context','investigate-unresolved-identity','preserve-language-only'];
+ groups.sort((a,b)=>order.indexOf(a.review)-order.indexOf(b.review)||b.observedIn-a.observedIn||
+  b.minimum-a.minimum||b.maximum-a.maximum||a.target.localeCompare(b.target)||a.reason.localeCompare(b.reason));
+ return {status:'complete-evidence',revisions,missingRevisions,groups};
+}
+
 /** Legacy audit reports do not embed a model commit. The operator declares
  * their common model, which is not independently authenticated by this tool.
  * New audit reports carry a verified source-file pin at collection time; the
@@ -134,7 +159,8 @@ export function buildExpansionPlan(documents,declaredModelCommit){
   scope:'historical public snapshot observations; not event geography, demand, unique cross-snapshot articles or current coverage',
   samples:samples.map(({revision,checkedAt,total,unknownCountry,unknownLanguage,unclassifiedEditorial,documentSha256,reportLineSha256})=>({revision,checkedAt,total,unknownCountry,unknownLanguage,unclassifiedEditorial,documentSha256,reportLineSha256})),
   gaps,countries,editorialReview:categories,observedLanguages,
-  latestProvenanceReview:{revision:latest.revision,groups:latest.provenance},authorization:'NO_SOURCE_ACTIVATION'};
+  latestProvenanceReview:{revision:latest.revision,groups:latest.provenance},
+  provenanceReview:buildProvenanceReview(samples),authorization:'NO_SOURCE_ACTIVATION'};
 }
 
 async function boundedRead(path){
