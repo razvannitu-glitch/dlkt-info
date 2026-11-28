@@ -227,7 +227,7 @@
       ],
       "scope": "Certify final integrated head technically and independently for security.",
       "acceptance": "Exact-head release CI, Chromium, CodeQL scope, independent code and explicitly security-scoped review; no open critical/high or unclassified security findings; all residual limitations recorded. Do not equate CodeQL or ordinary review to dedicated security review.",
-      "nextAction": "Read final exact-head Code Review (requested 7243721553; confirmed running) and determine real dedicated-security review path. Prior comparative CodeQL belongs to b376b97, not this new SHA; exact-head security evidence required. No repeat ordinary review masquerading as security. Maintain HOLD.",
+      "nextAction": "Final Code Review for d89db45c completed without findings. Dedicated security review is unconfirmed; exact-head comparative CodeQL remains outstanding. Establish actual independent security review path; do not treat ordinary Code Review, npm audit or earlier-head CodeQL as current security certification. Maintain HOLD; reconcile new research-only PR #118 before repeating final release checks.",
       "evidence": [
         {
           "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/116#issuecomment-7241529577",
@@ -240,6 +240,12 @@
           "sha": "d89db45c081a712aa2d2846a006096352b7cf96a",
           "status": "IN_PROGRESS",
           "detail": "Final independent exact-head code review requested; summary confirmed running. Dedicated security review still absent."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/116#issuecomment-7243750655",
+          "sha": "d89db45c081a712aa2d2846a006096352b7cf96a",
+          "status": "PASS",
+          "detail": "Independent exact-head ordinary Code Review completed, no major issues and no unresolved findings; separate security review state absent."
         }
       ],
       "approval": "none"
@@ -324,13 +330,13 @@
       "id": "I-02",
       "track": "I",
       "priority": 1,
-      "state": "READY",
+      "state": "IN_PROGRESS",
       "dependsOn": [
         "I-01"
       ],
       "scope": "Improve evidence-first source qualification and research-only data ingestion.",
       "acceptance": "Reproducible fixtures, source/edition/geographic separation, provenance and licence evidence, bounded request budget, duplicate/expiry/failure handling; no acquisition or publication activation.",
-      "nextAction": "Reuse the existing isolated audit workflow 46175296397, after a distinct later ICEO revision, for a second same-pin observation. Preserve both exact aggregate receipts; do not combine with legacy unpinned reports. Prioritize diagnosis of configured-but-unobserved JP/NL/NZ and the largest unresolved edition groups (Variety, Euronews, Billboard, CNBC, Engadget, Eurogamer); keep language-only evidence separate from national origin. Verify primary edition/rights evidence and actual source permissions, then implement only a justified bounded correction with negative fixtures. No new source probes or activation.",
+      "nextAction": "Review existing #118 exact head ab84af3578888b43dccbd8598883f6feeb75b570, base d89db45c. Confirm standard release CI 46176016492 and independent review requested in comment 7243827701, exact five-path root-only diff and unchanged source pin. Resolve real findings with bounded corrections; only then adopt into integrated draft. Investigate recurring publisher-edition gaps by primary evidence; keep Euronews expansion held pending rights and exact-origin scope review, and do not infer geography for language-only editions. No source probe/activation.",
       "evidence": [
         {
           "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/110",
@@ -345,6 +351,36 @@
           "sha": "d89db45c081a712aa2d2846a006096352b7cf96a",
           "status": "OBSERVED",
           "detail": "First comparable pinned observation, revision 4825. Family and digital-life direct editorial count 0; money 1. 111 unresolved provenance records; no fabricated country assignment."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46175296397/job/141074198475",
+          "sha": "d89db45c081a712aa2d2846a006096352b7cf96a",
+          "status": "PASS",
+          "detail": "Second exact pinned audit, attempt 2, revision 4828 at 2026-11-28T18:26:53.565Z; 29/29 tests, 51/51 available sources; 260 eligible publications, 146 known country, 114 unresolved country, 113 unknown language, 137 unknown direct editorial category. Same 26 unresolved groups and operational buckets as revision 4825. Counts per snapshot; no cross-snapshot unique or long-term trend claim."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/118",
+          "sha": "ab84af3578888b43dccbd8598883f6feeb75b570",
+          "status": "DRAFT",
+          "detail": "Implemented additive per-revision provenance review lanes with explicit incomplete evidence and three regression groups, preserving two aggregate observations and evidence dossier. Five root-only paths; source pin unchanged, no runtime changes. Exact-head release CI and independent review required."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46176016492",
+          "sha": "ab84af3578888b43dccbd8598883f6feeb75b570",
+          "status": "IN_PROGRESS",
+          "detail": "Exact-head release CI for research-only candidate. No production authorization."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/118#issuecomment-7243827701",
+          "sha": "ab84af3578888b43dccbd8598883f6feeb75b570",
+          "status": "REVIEW_REQUESTED",
+          "detail": "Independent exact-head review requested; result not yet verified."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/blob/ab84af3578888b43dccbd8598883f6feeb75b570/docs/iceo-provenance-review-series-20261128.md",
+          "sha": "ab84af3578888b43dccbd8598883f6feeb75b570",
+          "status": "REVIEW",
+          "detail": "Primary pages identify English Euronews edition and multilingual international service; terms restrict commercial reuse. Existing acquisition/reuse permissions remain unverified. No new national scope or runtime edition rule; Eurogamer inaccessible, no bypass."
         }
       ],
       "approval": "none"
