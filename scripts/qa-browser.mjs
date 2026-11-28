@@ -1337,6 +1337,97 @@ function knowledgeExposureProbe(seenKey,selectedId=null){
  };
 }
 
+// Diagnostic only. An unsuccessful, uninstrumented acceptance run stays failed.
+// Repeat the reload with the same offline fixture to observe lifecycle and native
+// scroll/focus calls, without substituting this repetition for acceptance.
+async function diagnosePlainReload(call,prior,viewport,reloadState){
+ let identifier=null;
+ try{
+  const source='('+function traceReload(){
+   if(window!==window.top||location.hostname!=='127.0.0.1'||location.pathname!=='/')return;
+   const trace=[],cleanup=[];
+   let frame=null,lastState='',active=true;
+   const record=(kind,stack=null)=>{
+    if(!active||trace.length>=96)return;
+    trace.push({kind,ms:Math.round(performance.now()),scroll:window.scrollY,
+     restoration:history.scrollRestoration,ready:document.readyState,
+     navigation:performance.getEntriesByType('navigation')[0]?.type??null,
+     ...(stack?{stack}: {})});
+   };
+   const watch=(target,event)=>{
+    const handler=()=>record(event);
+    target.addEventListener(event,handler,{capture:true,passive:true});
+    cleanup.push(()=>target.removeEventListener(event,handler,true));
+   };
+   const wrap=(target,name,label)=>{
+    let owner=target;
+    while(owner&&!Object.hasOwn(owner,name))owner=Object.getPrototypeOf(owner);
+    if(!owner)return;
+    const descriptor=Object.getOwnPropertyDescriptor(owner,name);
+    if(!descriptor||typeof descriptor.value!=='function'||!descriptor.writable)return;
+    const native=descriptor.value;
+    const wrapped=function(...args){
+     const stack=String(new Error().stack??'').split('\n').slice(2,7).map(line=>line.trim().replace(/http:\/\/127\.0\.0\.1:\d+/gu,'[fixture]'));
+     record(label+':before',stack);
+     try{return Reflect.apply(native,this,args);}finally{record(label+':after');}
+    };
+    Object.defineProperty(owner,name,{...descriptor,value:wrapped});
+    cleanup.push(()=>{if(owner[name]===wrapped)Object.defineProperty(owner,name,descriptor);});
+   };
+   for(const name of ['scroll','scrollTo','scrollBy'])wrap(window,name,'window.'+name);
+   wrap(Element.prototype,'scrollIntoView','Element.scrollIntoView');
+   wrap(HTMLElement.prototype,'focus','HTMLElement.focus');
+   for(const event of ['scroll','load','pageshow','hashchange','wheel','touchstart','pointerdown','keydown','focusin'])watch(window,event);
+   for(const event of ['readystatechange','DOMContentLoaded'])watch(document,event);
+   record('new-document');
+   const sample=()=>{
+    if(!active)return;
+    const state=window.scrollY+':'+history.scrollRestoration+':'+document.readyState;
+    if(state!==lastState){lastState=state;record('frame-change');}
+    if(performance.now()<6500&&trace.length<96)frame=requestAnimationFrame(sample);
+   };
+   frame=requestAnimationFrame(sample);
+   Object.defineProperty(window,'__dlktOfflineReloadDiagnostic',{configurable:true,value:{
+    finish(){
+     record('finish');active=false;if(frame!==null)cancelAnimationFrame(frame);
+     for(const stop of cleanup.reverse())stop();
+     delete window.__dlktOfflineReloadDiagnostic;
+     return trace;
+    }
+   }});
+  }.toString()+')()';
+  const registration=await call('Page.addScriptToEvaluateOnNewDocument',{source});
+  identifier=registration.identifier;
+  if(typeof identifier!=='string')throw Error('DLKT_UI_RELOAD_DIAGNOSTIC_REGISTRATION');
+  // Reposition only for the separate diagnostic repetition, after the original
+  // acceptance observation has been captured. This cannot make the test pass.
+  await evaluate(call,'(()=>{window.scrollTo({top:'+JSON.stringify(prior.scroll)+',behavior:"instant"});return true;})()');
+  await evaluate(call,'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve(true))))');
+  const before=await reloadState();
+  await call('Page.reload',{ignoreCache:true});
+  let after=null;
+  for(let attempt=0;attempt<80;attempt++){
+   try{after=await reloadState();}catch(error){
+    if(!/^DLKT_UI_(?:CDP_|EVAL_FAILED)/u.test(String(error?.message??'')))throw error;
+    after=null;
+   }
+   if(after&&after.timeOrigin!==before.timeOrigin&&after.ready==='complete'&&after.busy==='false'&&after.news===prior.news&&after.city===prior.city&&JSON.stringify(after.localIds)===JSON.stringify(prior.localIds))break;
+   await pause(100);
+  }
+  await pause(500);
+  after=await reloadState();
+  const events=await evaluate(call,'window.__dlktOfflineReloadDiagnostic?.finish()??null');
+  console.log('DLKT_UI_RELOAD_DIAGNOSTIC '+JSON.stringify({viewport,acceptance:false,before,after,events}));
+ }catch(error){
+  console.log('DLKT_UI_RELOAD_DIAGNOSTIC_UNAVAILABLE '+String(error?.message??error).slice(0,240));
+ }finally{
+  if(typeof identifier==='string'){
+   try{await call('Page.removeScriptToEvaluateOnNewDocument',{identifier});}catch{/* Preserve the original acceptance failure. */}
+  }
+  try{await evaluate(call,'(()=>{window.__dlktOfflineReloadDiagnostic?.finish();return true;})()');}catch{/* Preserve the original acceptance failure. */}
+ }
+}
+
 async function verifyKnowledgeExposure(call,format,fixture,origin,outputDir){
  const seenKey='dlkt-info-knowledge-seen-v1',group='dlkt-owned-exposure-'+format.width;
  let heldNews=null;
@@ -1413,14 +1504,56 @@ async function verifyKnowledgeExposure(call,format,fixture,origin,outputDir){
   assert.ok(typeof picture==='string'&&picture.length>=1000);
   writeFileSync(join(outputDir,screenshot),Buffer.from(picture,'base64'),{mode:0o600});
   await emitVisualPreview(call,'owned-card',format.width);
-  await call('Page.reload',{ignoreCache:true});await loaded(call);await selectControlledEdition(call,fixture);
-  await evaluate(call,'(()=>{window.scrollTo({top:0,behavior:"instant"});return true;})()');
-  let reloaded=null;
-  for(let attempt=0;attempt<60;attempt++){
-   reloaded=await read();
-   if(reloaded.ownedIds.length>0&&reloaded.news.length===20)break;
-   if(attempt===59)throw Error('DLKT_UI_OWNED_RELOAD_TIMEOUT_'+JSON.stringify(reloaded));await pause(100);
+  // Measure a real reload, not a reload followed by another locale navigation.
+  // The chosen locale and location already belong to this controlled visit.
+  // A readyState read alone may still describe the document being replaced.
+  const reloadState=()=>evaluate(call,`(()=>{const root=document.querySelector('#discovery-cards');return {
+   timeOrigin:performance.timeOrigin,navigation:performance.getEntriesByType('navigation')[0]?.type??null,
+   href:location.href,hash:location.hash,ready:document.readyState,scroll:window.scrollY,
+   restoration:history.scrollRestoration,locale:document.documentElement.lang,
+   scope:root?.dataset.sourceScope??null,busy:root?.getAttribute('aria-busy')??null,
+   news:root?.querySelectorAll('article[data-news-stream-key]:not([data-knowledge-id])').length??0,
+   owned:root?.querySelectorAll('article[data-knowledge-id]').length??0,
+   city:document.querySelector('#glance-city-label')?.textContent??null,
+   localIds:[...document.querySelectorAll('#home-local-cards article[data-local-id]')].map(card=>card.dataset.localId),
+   guardPresent:Boolean(document.querySelector('script[src="/entry-reload.js"]'))
+  };})()`);
+  const priorReload=await reloadState();
+  assert.ok(priorReload.scroll>100,'owned card exposure must leave a genuinely scrolled homepage');
+  assert.equal(priorReload.hash,'','the reload scenario is a plain homepage, not a deep link');
+  assert.equal(priorReload.locale,'ro','the chosen locale is already in effect before reload');
+  assert.equal(priorReload.scope,'all');
+  assert.equal(priorReload.guardPresent,true,'the packaged page includes the early reload guard');
+  await call('Page.reload',{ignoreCache:true});
+  let observed=null,reloaded=null;
+  for(let attempt=0;attempt<120;attempt++){
+   // Execution contexts can disappear during the actual navigation.
+   try{observed=await reloadState();}catch(error){
+    if(!/^DLKT_UI_(?:CDP_|EVAL_FAILED)/u.test(String(error?.message??'')))throw error;
+    observed=null;
+   }
+   if(observed&&observed.timeOrigin!==priorReload.timeOrigin&&observed.ready==='complete'){
+    assert.equal(observed.navigation,'reload','measure the new reload document');
+    assert.equal(observed.href,priorReload.href,'reload retains the existing selected-locale URL');
+    assert.equal(observed.guardPresent,true,'reload serves the actual packaged guard');
+    if(observed.locale==='ro'&&observed.scope==='all'&&observed.busy==='false'&&observed.news===fixture.storyCount&&observed.owned>0&&
+       observed.city===fixture.city.name&&JSON.stringify(observed.localIds)===JSON.stringify(fixture.localIds)){
+     reloaded=await read();break;
+    }
+   }
+   if(attempt===119)throw Error('DLKT_UI_OWNED_RELOAD_TIMEOUT_'+JSON.stringify(observed));
+   await pause(100);
   }
+  assert.ok(reloaded,'a new fully populated document was observed without changing preferences');
+  // Wait for paint/scroll settlement; never send a test-side scroll or change event.
+  await evaluate(call,'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve(true))))');
+  const settledReload=await reloadState();
+  console.log('DLKT_UI_RELOAD_OBSERVATION '+JSON.stringify({viewport:format.width,before:priorReload,ready:observed,settled:settledReload}));
+  assert.equal(settledReload.timeOrigin,observed.timeOrigin,'settlement stays in the observed reload document');
+  assert.equal(settledReload.href,priorReload.href,'settlement does not navigate away');
+  if(!(observed.scroll<=1&&settledReload.scroll<=1))await diagnosePlainReload(call,priorReload,format.width,reloadState);
+  assert.ok(observed.scroll<=1&&settledReload.scroll<=1,'plain homepage reload must reset and remain at the top without a test-side scroll command');
+  reloaded=await read();
   assert.equal(reloaded.seen.includes(id),true,'the real local history survives reload');
   assert.equal(reloaded.ownedIds.includes(id),false,'an exposed stableID does not recur after reload');
   // The existing theme assigns a new random six-surface cycle on navigation.

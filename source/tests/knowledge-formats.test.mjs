@@ -43,3 +43,19 @@ test('knowledge and new formats retain news order and never fake infinite cards'
  assert.equal(new Set(items.filter(item=>item.kind==='knowledge').map(item=>item.item.card.id)).size,4);
  assert.deepEqual(items.filter(item=>item.kind==='knowledge').map(item=>item.afterNews),[11,22,33,44]);
 });
+
+test('weighted format variety preserves category rounds and spreads rare formats through the complete eligible inventory',()=>{
+ const base=KNOWLEDGE_CARDS[0];assert.ok(base&&base.format===undefined);
+ const now=Date.parse('2026-11-23T12:00:00Z');
+ const cards=Array.from({length:24},(_,index)=>({...structuredClone(base),id:'format-fixture-'+index,
+  format:index%2===0?(index%4===0?undefined:'did-you-know'):'useful'}));
+ const a=selectKnowledgeCards(cards,'all',now,'format-balanced');
+ assert.equal(a.length,24);assert.equal(new Set(a.map(card=>card.id)).size,24);
+ assert.deepEqual(a,selectKnowledgeCards([...cards].reverse(),'all',now,'format-balanced'));
+ for(let i=1;i<a.length;i++)assert.notEqual(a[i-1].format??'did-you-know',a[i].format??'did-you-know');
+ const skewed=Array.from({length:24},(_,index)=>({...structuredClone(base),id:'format-skewed-'+index,
+  format:index===23?'useful':'did-you-know'}));
+ const b=selectKnowledgeCards(skewed,'all',now,'format-skewed');
+ const rare=b.findIndex(card=>card.format==='useful');
+ assert.equal(b.length,24);assert.ok(rare>=8&&rare<=16,'a single rare format should not be consumed immediately or hidden at the end');
+});

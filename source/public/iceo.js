@@ -1238,7 +1238,9 @@ function renderDiscovery() {
         pruneInsights();
         return;
     }
-    const anchors = [...target.querySelectorAll('article')].flatMap(node => { const rect = node.getBoundingClientRect(); return rect.top < innerHeight && rect.bottom > 0 ? [{ node, top: rect.top }] : []; });
+    // At the top, late local data must not move the reader to a previously visible card.
+    // Preserve a visible reading anchor only when the viewport is already scrolled.
+    const anchors = window.scrollY > 1 ? [...target.querySelectorAll('article')].flatMap(node => { const rect = node.getBoundingClientRect(); return rect.top < innerHeight && rect.bottom > 0 ? [{ node, top: rect.top }] : []; }) : [];
     const now = Date.now();
     const localNeedsCheck = contextualLocalState === 'unavailable' || contextualLocal !== null && now - Date.parse(contextualLocal.checkedAt) >= 300_000;
     if (contextualCity && contextualLocalState !== 'loading' && localNeedsCheck && document.visibilityState === 'visible' && now - lastLocalLanguageRefresh >= 120_000) {

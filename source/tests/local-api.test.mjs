@@ -37,3 +37,8 @@ test('an approximate country can choose the language even when no catalog city m
   const hint=await invalid.json();assert.equal(hint.countryCode,null);assert.equal(hint.city,null);
  }
 });
+
+test('coordinate rounding cannot turn an uncertain position into an eligible city-centre request',async()=>{
+ const r=await post({lat:44.4349,lon:26.1049,accuracy:4999,timestamp:Date.now()});
+ assert.equal(r.status,400);assert.equal((await r.json()).error,'LOCATION_NOT_PRECISE_OR_CURRENT');
+});
