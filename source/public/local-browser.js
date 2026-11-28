@@ -1,4 +1,4 @@
-import { initializeCurrentCity } from './local-startup.js';
+import { initializeCurrentCity, coarseLocationRequest } from './local-startup.js';
 import { localCardNode } from './local-card-node.js';
 import { localDiscovery, cardInterest } from './local-discovery.js';
 import { contextPhotoNode } from './card-photo-browser.js';
@@ -70,7 +70,7 @@ export function renderLocalPlace(place, c, placeCheck = null, now = Date.now()) 
 export function setupLocal() {
     const chooser = get('place-dialog'), input = get('place-query'), results = get('place-results'), message = get('place-message'), location = get('choose-place'), section = get('local-briefing'), cards = get('local-cards'), status = get('local-status'), follow = get('follow-place'), forget = get('forget-place'), refresh = get('refresh-local'), difference = get('local-changes');
     let expiryTimer, manualSelection = false, autoSuppressed = document.body.dataset.entryView !== 'start';
-    let city = null, snapshot = null, memory = null, sequence = 0, searchSequence = 0, lookup = null, timer, busy = false, storageFailed = false, storageLoaded = false, estimatedCity = false;
+    let city = null, snapshot = null, memory = null, sequence = 0, searchSequence = 0, lookup = null, localLoad = null, timer, busy = false, storageFailed = false, storageLoaded = false, estimatedCity = false;
     let interest = 'all';
     document.addEventListener('input', event => { if (event.target instanceof Element && event.target.closest('#entry-search,#place-dialog'))
         autoSuppressed = true; }, { capture: true });
@@ -92,21 +92,24 @@ export function setupLocal() {
         if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)
             chooser.close();
     } });
-    function showCandidates(list, nearby = false) { results.replaceChildren(); for (const c of list) {
+    function cancelCandidates() { ++searchSequence; clearTimeout(timer); lookup?.abort(); lookup = null; results.replaceChildren(); }
+    function showCandidates(list, nearby = false) { const ticket = searchSequence; results.replaceChildren(); for (const c of list) {
         const b = node('button', `${c.name} · ${c.region} · ${c.country}`, 'secondary place-option');
         b.type = 'button';
         b.dataset.cityId = c.id;
-        b.addEventListener('click', () => { ++searchSequence; lookup?.abort(); chooser.close(); void select(c); });
+        b.addEventListener('click', () => { if (ticket !== searchSequence || !chooser.open)
+            return; cancelCandidates(); chooser.close(); void select(c); });
         results.append(b);
     } message.textContent = list.length ? (nearby ? 'Nearby city centres. Choose the correct city; proximity does not establish your address.' : 'Choose your city. Nothing is selected automatically.') : 'No matching city in this catalog. Try another spelling or a nearby listed city.'; }
-    async function search() { const q = input.value.trim(), ticket = ++searchSequence; lookup?.abort(); results.replaceChildren(); if (!q) {
+    async function search() { const q = input.value.trim(); cancelCandidates(); if (!chooser.open)
+        return; const ticket = searchSequence; if (!q) {
         message.textContent = 'Start typing a city. Suggestions begin with the first letter.';
         return;
-    } lookup = new AbortController(); message.textContent = 'Finding cities…'; try {
-        const data = await json('/api/places?q=' + encodeURIComponent(q), { signal: lookup.signal });
-        if (ticket !== searchSequence)
+    } const controller = lookup = new AbortController(); message.textContent = 'Finding cities…'; try {
+        const data = await json('/api/places?q=' + encodeURIComponent(q), { signal: controller.signal });
+        if (ticket !== searchSequence || !chooser.open)
             return;
-        if (!object(data) || !Array.isArray(data.cities) || !data.cities.every(validCity))
+        if (!object(data) || !Array.isArray(data.cities) || data.cities.length > 8 || !data.cities.every(validCity) || new Set(data.cities.map(c => c.id)).size !== data.cities.length)
             throw Error('CITY_RESPONSE_INVALID');
         showCandidates(data.cities);
     }
@@ -115,28 +118,54 @@ export function setupLocal() {
             return;
         message.textContent = 'City search is unavailable. Your existing selection has not changed.';
     } }
-    input.addEventListener('input', () => { clearTimeout(timer); ++searchSequence; lookup?.abort(); timer = setTimeout(() => { void search(); }, 100); });
+    input.addEventListener('input', () => { cancelCandidates(); timer = setTimeout(() => { void search(); }, 100); });
     document.getElementById('glance-locate')?.addEventListener('click', () => { autoSuppressed = true; if (!chooser.open)
         chooser.showModal(); const locate = get('locate-place'); locate.focus(); locate.click(); });
-    get('locate-place').addEventListener('click', () => { autoSuppressed = true; if (!navigator.geolocation) {
-        message.textContent = 'Location is not supported here. Search for your city instead.';
-        return;
-    } const ticket = ++searchSequence; lookup?.abort(); results.replaceChildren(); message.textContent = 'Waiting for location permission…'; navigator.geolocation.getCurrentPosition(position => { if (ticket !== searchSequence)
-        return; const { latitude, longitude, accuracy } = position.coords; if (!Number.isFinite(accuracy) || accuracy > 5000 || Date.now() - position.timestamp > 120000 || position.timestamp > Date.now() + 5000) {
-        message.textContent = 'The position is old or too imprecise. Choose your city manually.';
-        return;
-    } void (async () => { try {
-        const data = await json('/api/places', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-DLKT-Info-Request': 'local-place-1' }, body: JSON.stringify({ lat: Math.round(latitude * 100) / 100, lon: Math.round(longitude * 100) / 100, accuracy, timestamp: position.timestamp }) });
-        if (ticket !== searchSequence)
+    get('locate-place').addEventListener('click', () => {
+        autoSuppressed = true;
+        cancelCandidates();
+        const ticket = searchSequence;
+        if (!navigator.geolocation) {
+            message.textContent = 'Location is not supported here. Search for your city instead.';
             return;
-        if (!object(data) || !Array.isArray(data.nearby) || !data.nearby.every(r => object(r) && validCity(r.city)))
-            throw Error('CITY_RESPONSE_INVALID');
-        showCandidates(data.nearby.map(r => r.city), true);
-    }
-    catch {
-        message.textContent = 'Nearby cities could not be checked. Search manually; your selection is unchanged.';
-    } })(); }, error => { if (ticket !== searchSequence)
-        return; message.textContent = error.code === 1 ? 'Location permission was declined. Search for your city instead.' : error.code === 3 ? 'Location request timed out. Search for your city instead.' : 'Location is unavailable. Search for your city instead.'; }, { maximumAge: 0, timeout: 10000, enableHighAccuracy: false }); });
+        }
+        const current = () => ticket === searchSequence && chooser.open;
+        message.textContent = 'Waiting for location permission…';
+        navigator.geolocation.getCurrentPosition(position => {
+            if (!current())
+                return;
+            const { latitude, longitude, accuracy } = position.coords;
+            const coarse = coarseLocationRequest(latitude, longitude, accuracy, position.timestamp, Date.now());
+            if (coarse === null) {
+                message.textContent = 'The position is old or too imprecise. Choose your city manually.';
+                return;
+            }
+            const controller = lookup = new AbortController();
+            void (async () => {
+                try {
+                    const data = await json('/api/places', { method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json', 'X-DLKT-Info-Request': 'local-place-1' }, body: JSON.stringify(coarse) });
+                    if (!current())
+                        return;
+                    if (!object(data) || data.estimated !== true || !Array.isArray(data.nearby) || data.nearby.length > 5)
+                        throw Error('CITY_RESPONSE_INVALID');
+                    const nearby = [];
+                    for (const row of data.nearby) {
+                        if (!object(row) || !validCity(row.city) || typeof row.distanceKm !== 'number' || !Number.isFinite(row.distanceKm) || row.distanceKm < 0 || row.distanceKm > 50)
+                            throw Error('CITY_RESPONSE_INVALID');
+                        nearby.push(row.city);
+                    }
+                    if (new Set(nearby.map(c => c.id)).size !== nearby.length)
+                        throw Error('CITY_RESPONSE_INVALID');
+                    showCandidates(nearby, true);
+                }
+                catch {
+                    if (current())
+                        message.textContent = 'Nearby cities could not be checked. Search manually; your selection is unchanged.';
+                }
+            })();
+        }, error => { if (current())
+            message.textContent = error.code === 1 ? 'Location permission was declined. Search for your city instead.' : error.code === 3 ? 'Location request timed out. Search for your city instead.' : 'Location is unavailable. Search for your city instead.'; }, { maximumAge: 0, timeout: 10000, enableHighAccuracy: true });
+    });
     function renderExplore(c) {
         const explore = get('local-explore');
         explore.replaceChildren();
@@ -210,12 +239,17 @@ export function setupLocal() {
     }
     else
         difference.hidden = true; }
-    async function select(c, restoring = false, estimated = false) { if (!restoring && !estimated)
-        manualSelection = true; estimatedCity = estimated; interest = 'all'; for (const button of interests.querySelectorAll('button'))
+    async function select(c, restoring = false, estimated = false) { if (!restoring && !estimated) {
+        manualSelection = true;
+        autoSuppressed = true;
+        cancelCandidates();
+        if (chooser.open)
+            chooser.close();
+    } estimatedCity = estimated; interest = 'all'; for (const button of interests.querySelectorAll('button'))
         button.setAttribute('aria-pressed', String(button.dataset.localInterest === 'all')); clearTimeout(expiryTimer); city = c; document.dispatchEvent(new CustomEvent('dlkt:city-selected', { detail: { city: c, restored: restoring, estimated } })); snapshot = null; cards.replaceChildren(); difference.hidden = true; section.hidden = document.body.dataset.entryView !== 'local'; get('local-title').textContent = `For ${c.name}`; location.textContent = `${c.name}, ${c.countryCode} · Change`; feedback(estimated ? 'Approximate city from your connection. Change it if needed; it has not been saved.' : 'This city is selected for this visit. Remember it only on your own browser.'); renderExplore(c); get('local-city-context').textContent = estimated ? `Near ${c.name}? Approximate location from your connection. Nothing is saved automatically.` : `Your local view for ${c.name}.`; await load(); }
     async function load() { if (!city)
-        return; const requested = city, ticket = ++sequence; refresh.disabled = true; follow.disabled = true; status.textContent = 'Checking local sources…'; try {
-        const value = await json('/api/local?city=' + encodeURIComponent(requested.id));
+        return; const requested = city, ticket = ++sequence; localLoad?.abort(); const controller = localLoad = new AbortController(); refresh.disabled = true; follow.disabled = true; status.textContent = 'Checking local sources…'; try {
+        const value = await json('/api/local?city=' + encodeURIComponent(requested.id), { signal: controller.signal });
         if (ticket !== sequence)
             return;
         if (!currentLocalSnapshot(value, requested, Date.now()))
@@ -236,20 +270,23 @@ export function setupLocal() {
         follow.disabled = true;
     }
     finally {
-        if (ticket === sequence)
+        if (ticket === sequence) {
+            localLoad = null;
             refresh.disabled = false;
+        }
     } }
     refresh.addEventListener('click', () => { void load(); });
     follow.addEventListener('click', () => { if (!snapshot || busy || !storageLoaded || storageFailed)
         return; if (memory && !window.confirm('Replace the saved city and comparison in this browser?'))
-        return; busy = true; render(); void writeLocalMemory(snapshot, memory?.revision ?? null).then(v => { memory = v; estimatedCity = false; feedback('City and comparison saved only in this browser. Checked again when you open this page or refresh; no background alerts.'); }).catch(() => { feedback('Not saved. Browser storage may be blocked or another tab changed the saved city. Reload before trying again.'); }).finally(() => { busy = false; render(); }); });
+        return; busy = true; render(); void writeLocalMemory(snapshot, memory?.revision ?? null).then(v => { memory = v; feedback('City and comparison saved only in this browser. Checked again when you open this page or refresh; no background alerts.'); }).catch(() => { feedback('Not saved. Browser storage may be blocked or another tab changed the saved city. Reload before trying again.'); }).finally(() => { busy = false; render(); }); });
     forget.addEventListener('click', () => { if (!memory || busy || !window.confirm('Forget the saved city and local comparison? Your other saved cards stay unchanged.'))
         return; busy = true; void writeLocalMemory(null, memory.revision).then(() => { memory = null; feedback('Saved city and local comparison removed.'); }).catch(() => feedback('Removal could not be confirmed. Reload and try again.')).finally(() => { busy = false; render(); forget.hidden = !memory; }); });
     chooser.addEventListener('keydown', event => { if (event.key === 'Escape') {
         event.preventDefault();
         chooser.close();
     } });
-    chooser.addEventListener('close', () => { ++searchSequence; lookup?.abort(); });
+    chooser.addEventListener('close', () => { if (!chooser.open)
+        cancelCandidates(); });
     // Public reading is independent of storage; no automatic background source polling.
     document.addEventListener('dlkt:city-request', event => { if (event instanceof CustomEvent && validCity(event.detail))
         void select(event.detail); });
@@ -268,7 +305,7 @@ export function setupLocal() {
     void initializeCurrentCity({
         readHint: async () => {
             const hint = await json('/api/places?hint=1');
-            if (object(hint) && hint.estimated === true && typeof hint.countryCode === 'string' && /^[A-Z]{2}$/u.test(hint.countryCode))
+            if (object(hint) && hint.estimated === true && typeof hint.countryCode === 'string' && /^[A-Z]{2}$/u.test(hint.countryCode) && (hint.city === null || validCity(hint.city) && hint.city.countryCode === hint.countryCode))
                 document.dispatchEvent(new CustomEvent('dlkt:country-detected', { detail: { countryCode: hint.countryCode, estimated: true } }));
             return hint;
         },
