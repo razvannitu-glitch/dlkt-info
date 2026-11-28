@@ -1,0 +1,51 @@
+name: DLKT INFO isolated pinned global coverage observation
+
+on:
+  push:
+    branches:
+      - audit/dlkt-global-coverage-observation-20261128
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dlkt-isolated-global-coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  observe:
+    name: Audit exact classifier against one public snapshot
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Checkout exact integrated candidate (not the audit branch)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 'd89db45c081a712aa2d2846a006096352b7cf96a'
+          persist-credentials: false
+      - name: Verify immutable checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 'd89db45c081a712aa2d2846a006096352b7cf96a'
+          test "$(git rev-parse 'HEAD^{tree}')" = 'becc8ea7ccb4ea441a55cb92877f71b5243c1507'
+          test -z "$(git status --porcelain)"
+          echo 'DLKT_COVERAGE_EXACT_CHECKOUT_PASS'
+      - name: Set up Node.js 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install existing locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify exact candidate coverage audit contract
+        run: node --test tests/global-coverage-audit.test.mjs tests/global-coverage-expansion.test.mjs tests/global-source-qualification.test.mjs
+      - name: Observe existing public ICEO snapshot with the pinned classifier
+        run: node scripts/audit-global-coverage.mjs
+      - name: Verify tracked checkout remained unchanged
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 'd89db45c081a712aa2d2846a006096352b7cf96a'
+          git diff --exit-code HEAD --
