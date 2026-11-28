@@ -197,3 +197,23 @@ test('Digi24 joins only its bound Article local date with the same explicit head
   const borrowed=document().replaceAll(row.sourceUrl,other.sourceUrl);
   assert.equal(readNewsArticleMetadata(borrowed,other,other.sourceUrl,metadataNow),null,'publisher-specific metadata must not relax other origins');
 });
+
+test('acquisition-derived facts are scoped to one invocation and never cache mutable selection or retention decisions',()=>{
+ const rows=Array.from({length:96},(_,i)=>candidate(i));
+ const baseline=newsAcquisitionOrder(rows,12,now);
+ assert.equal(baseline.length,12);
+ const retained=baseline.slice(0,4).map(row=>card(Number(row.sourceUrl.slice(-5))));
+ const featured=new Set([rows[95].sourceUrl]);
+ const next=now+NEWS_ACQUISITION_ROTATION_MS;
+ const selection=newsAcquisitionOrder(rows,12,next,featured,retained);
+ assert.equal(selection.length,12);
+ assert.deepEqual(selection,newsAcquisitionOrder(rows.map(row=>({...row})),12,next,new Set(featured),retained.map(row=>({...row}))));
+ assert.ok(selection.every(row=>!retained.some(prior=>prior.sourceUrl===row.sourceUrl)));
+ // Reuse the original candidate objects with a changed title, new feature set
+ // and clock. A later pass must equal one with newly allocated inputs.
+ rows[95].title='Regulator investigates artificial intelligence software maker after new evidence';
+ featured.clear();featured.add(rows[94].sourceUrl);
+ assert.deepEqual(newsAcquisitionOrder(rows,12,next,featured,retained),newsAcquisitionOrder(rows.map(row=>({...row})),12,next,new Set(featured),retained));
+ assert.deepEqual(newsAcquisitionOrder(rows,12,now,new Set(),[]),newsAcquisitionOrder(rows.map(row=>({...row})),12,now,new Set(),[]));
+ assert.equal(new Set(selection.map(row=>row.sourceUrl)).size,selection.length);
+});
