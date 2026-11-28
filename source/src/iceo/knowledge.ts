@@ -198,11 +198,11 @@ export function selectKnowledgeCards(cards:readonly KnowledgeCard[],filter:Knowl
  // round, schedule the format furthest behind its proportional share of
  // the complete eligible inventory. Rare formats are spread rather than
  // consumed at the start; seeded tie-breaks keep the visit reproducible.
- type Format=KnowledgeFormat|'general';
+ type Format=KnowledgeFormat;
  const groups=new Map<NewsCategoryId,Map<Format,KnowledgeCard[]>>();
  const totalByFormat=new Map<Format,number>(),servedByFormat=new Map<Format,number>();
  for(const card of valid){
-  const format:Format=card.format??'general',group=groups.get(card.category)??new Map<Format,KnowledgeCard[]>();
+  const format:Format=card.format??'did-you-know',group=groups.get(card.category)??new Map<Format,KnowledgeCard[]>();
   const queue=group.get(format)??[];queue.push(card);group.set(format,queue);groups.set(card.category,group);
   totalByFormat.set(format,(totalByFormat.get(format)??0)+1);
  }
