@@ -483,7 +483,7 @@
       "dependsOn": [],
       "scope": "Reconcile editorial decisions for candidate content and standalone distribution.",
       "acceptance": "For every changed public admission, verify exact identity/revision/digest, reviewed rights, attribution, source validity and expiry; unknown rights/content stay withheld. Human decision recorded where needed; existing source activation holds respected.",
-      "nextAction": "Reconcile existing public admission authorization and exact release evidence; determine whether a new admission or fresh revalidation is required, record current source/rights evidence under approved scope, preserve all held material. Do not equate historical observation or unchanged files with new editorial authorization.",
+      "nextAction": "Main 2005ad5c and integrated ab84af3 contain byte-identical NSW catalogue, standalone permission resolver and exact admission receipt. Changed selection and URL parser affect ordering/distribution, not exact NSW digest/revision or approval window. Both existing decisions are permit-on-verified-release, not unconditional new publication permission. Existing 2026-11-26T20:37:56.081Z observation exceeds the <24h admission threshold on 2026-11-28. Before any new admission, require fresh approved observation and separate editorial/rights decision; reconcile whether restoration of previously admitted material requires fresh evidence under existing policy. No source probe/activation or change to admission registry. Preserve HOLD.",
       "evidence": [
         {
           "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/101",
@@ -504,6 +504,12 @@
           "sha": "b376b9791aebb2c207e17a270e29d0b1818e1dd5",
           "status": "REVIEW",
           "detail": "Receipt, catalogue and standalone resolver are byte-identical to current main. Existing scoped card digest unchanged; source observation 2026-11-26T20:37:56.081Z is older than 24h on 2026-11-28. Review window ends 2026-12-26T20:33:43Z. No evidence of a newly admitted card in those files."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/compare/2005ad5cf04f6ea0f04080eeb66a99f6d895b55d...ab84af3578888b43dccbd8598883f6feeb75b570",
+          "sha": "ab84af3578888b43dccbd8598883f6feeb75b570",
+          "status": "REVIEW",
+          "detail": "Full tree comparison: knowledge-catalog.ts, share/knowledge-resolution.ts and nsw-fuelcheck-admission-20261126.json byte-identical; inspected knowledge.ts ordering and share/link.ts matching redundant rewrite id change. NSW exact digest d4c1df98ae87865402292c04c46811d60eee7ed3bde9583f1e16cd243611110e, revision 1, scoped feed and standalone decisions unchanged. Historical observation not new rights authorization."
         }
       ],
       "approval": "explicit-editorial-if-needed"
@@ -564,11 +570,11 @@
       "id": "X-02",
       "track": "X",
       "priority": 1,
-      "state": "IN_PROGRESS",
+      "state": "REVIEW",
       "dependsOn": [],
       "scope": "Identify and remove proven waste in existing reader and photo request path.",
       "acceptance": "Measure request counts, cache impact, representative latency and correctness; no fabricated savings. Preserve supported photos, layout, source and security boundaries.",
-      "nextAction": "Review isolated #119 exact head ddb90043d4ad2d4e17080da2ee952e045d438d82 against ab84af3. Verify committed-head release CI 46177042582, exact-head offline browser run 46177157289 and independent review requested 7243973218; preserve current integrated certification head. Generator passed and only two canonical manifest files imported after complete export, prior hash and pin/manifest parity verification. No adoption on pending/failed/ambiguous evidence. Measure request-volume reduction before financial-savings claim; no deployment.",
+      "nextAction": "Exact PR #119 head passed release CI, offline Chromium and independent ordinary review. The isolated identical-harness HTTP comparison completed: 545→234 image GETs (311 fewer, 57.1% observed reduction); 542→231 image 404s; 3 successful image responses in each arm. Total endpoint requests 554→237, including 9→3 non-image requests. Exact paired immutable trees and identical QA script SHA-256 verified. One controlled run per arm, no-store loopback fixture; dynamic navigation/request timing and differing non-image counts limit attribution and reproducibility; no live cache, representative latency or financial evidence. Preserve #116 certification head and HOLD; assess repeatability/cache/latency and complete remaining acceptance before any adoption. No production reads or writes for this measurement.",
       "evidence": [
         {
           "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/82",
@@ -634,6 +640,36 @@
           "sha": "ddb90043d4ad2d4e17080da2ee952e045d438d82",
           "status": "IN_PROGRESS",
           "detail": "exact-head offline browser QA: in_progress/pending; offline not hosted evidence."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46177042582/job/141077989254",
+          "sha": "ddb90043d4ad2d4e17080da2ee952e045d438d82",
+          "status": "PASS",
+          "detail": "Exact head release CI: 158 packaging + 2729 application = 2887/2887 tests; zero failed/skipped; npm audit zero; static preflight 15/15."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46177157289/job/141078345185",
+          "sha": "ddb90043d4ad2d4e17080da2ee952e045d438d82",
+          "status": "PASS",
+          "detail": "Exact head Chromium and shared knowledge fixture QA passed. Not hosted."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/119#issuecomment-7243976178",
+          "sha": "ddb90043d4ad2d4e17080da2ee952e045d438d82",
+          "status": "PASS",
+          "detail": "Exact-head ordinary independent code review completed, no findings or unresolved findings; separate security review not established."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46177550989/job/141079571336",
+          "sha": "ab84af3578888b43dccbd8598883f6feeb75b570",
+          "status": "PASS",
+          "detail": "Baseline controlled browser receipt: exact tree 3eb630ddb383cceef979e8a27106e74727bf237e; 554 total endpoint requests, 545 image GETs (3 HTTP 200, 542 HTTP 404), 9 other; no-store fixture. Tracked checkout unchanged."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46177550989/job/141079571629",
+          "sha": "ddb90043d4ad2d4e17080da2ee952e045d438d82",
+          "status": "PASS",
+          "detail": "Candidate controlled browser receipt: exact tree d03aeb2837627821bea8f041135d8b217e067789; 237 total endpoint requests, 234 image GETs (3 HTTP 200, 231 HTTP 404), 3 other. Same QA script digest fe0b4fd22b2c8a00b20ba5147802b28766c07c52fb02d75059d0e7af44b5e51e and fixture inventory; no-store fixture. Tracked checkout unchanged. No production, cache/latency or savings claim."
         }
       ],
       "approval": "none"
@@ -814,12 +850,24 @@
       "dependsOn": [],
       "scope": "Map operating health and independent monitoring.",
       "acceptance": "Measure actual observable scheduler/refresh continuity, errors and public readbacks; distinguish skipped monitors, missing evidence and real incidents; no production writes.",
-      "nextAction": "Read approved existing GitHub monitor and read-only observability evidence; identify high-value monitoring gaps. F-01 handles known account monitor gap.",
+      "nextAction": "Reconfirmed latest integrated public freshness watch 46176361210 passed and distinct public reader monitor 46176361325 failed on current old production alias; these are discrete observations, not proof of continuous cadence. Attempted historical workflow-run enumeration via connector was unsupported (HTTP 400). Use allowed recent-run listing/read-only monitor logs for continuity; do not infer missing intervals or availability.",
       "evidence": [
         {
           "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46172292394",
           "sha": "b376b9791aebb2c207e17a270e29d0b1818e1dd5",
           "status": "PASS"
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46176361210",
+          "sha": "ab84af3578888b43dccbd8598883f6feeb75b570",
+          "status": "PASS",
+          "detail": "Exact integrated head freshness workflow success. Public monitor reads active production, not hosted candidate."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46176361325",
+          "sha": "ab84af3578888b43dccbd8598883f6feeb75b570",
+          "status": "FAIL",
+          "detail": "Distinct public reader monitor remains failure on old active production revision; no proof of recovery."
         }
       ],
       "approval": "none"
@@ -832,13 +880,24 @@
       "dependsOn": [],
       "scope": "Prepare rollback and protected-release operating checklist.",
       "acceptance": "Identify current alias and actual active receipt, last known-good rollback candidate, approved environment, backup/restore evidence or explicit NOT TESTED; no promotion or restore. Never equate Vercel READY deployment with public alias.",
-      "nextAction": "Reconcile current public build receipt with confirmed active Vercel alias; identify independently evidenced rollback target, backup/restore and protection posture. Prepare staging decision packet without deployment, protection changes or restore.",
+      "nextAction": "Reconfirmed active www.dlkt.ee alias on dlkt-info (DLKT Group OÜ), deployment dpl_GbXYPoLSrNwH3QeMgPdCEgxtbAea, READY production main 2005ad5c; SSO protection applies to non-custom-domain deployments. Vercel rollback-candidate listing returned HTTP 403 (deploymentRollback read permission); no authorized fallback demonstrated. Last-known-good rollback artifact and backup/restore remain NOT TESTED; require permitted read evidence and approved protected validation scope before staging decision. No protection, alias, backup, restore or infrastructure change.",
       "evidence": [
         {
           "url": "https://www.dlkt.ee",
           "sha": "2005ad5cf04f6ea0f04080eeb66a99f6d895b55d",
           "status": "OBSERVED",
           "detail": "Authenticated Vercel get_alias/get_deployment confirm official alias maps to dpl_GbXYPoLSrNwH3QeMgPdCEgxtbAea, READY, production, main. Not the latest READY candidate. No alias change or direct new hosted probe performed."
+        },
+        {
+          "url": "https://www.dlkt.ee",
+          "sha": "2005ad5cf04f6ea0f04080eeb66a99f6d895b55d",
+          "status": "OBSERVED",
+          "detail": "2026-11-28 authenticated Vercel project, alias and deployment metadata reconfirmed exact production revision and SSO protection for non-custom domains. No hosted candidate validation."
+        },
+        {
+          "url": "https://vercel.com/dlkt-group-ou/dlkt-info/deployments",
+          "status": "BLOCKED",
+          "detail": "Scoped rollback-candidate list returned HTTP 403 for deploymentRollback. No verified rollback target or restore evidence; access restriction respected."
         }
       ],
       "approval": "none"
