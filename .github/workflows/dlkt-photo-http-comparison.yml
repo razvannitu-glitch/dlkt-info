@@ -1,0 +1,58 @@
+name: DLKT INFO isolated photo HTTP comparison
+on:
+  push:
+    branches:
+      - 'audit/dlkt-photo-request-comparison-20261128'
+permissions:
+  contents: read
+concurrency:
+  group: dlkt-photo-http-comparison
+  cancel-in-progress: false
+jobs:
+  compare:
+    name: Controlled photo HTTP measurement — ${{ matrix.role }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - role: baseline
+            sha: 'ab84af3578888b43dccbd8598883f6feeb75b570'
+            tree: '3eb630ddb383cceef979e8a27106e74727bf237e'
+          - role: candidate
+            sha: 'ddb90043d4ad2d4e17080da2ee952e045d438d82'
+            tree: 'd03aeb2837627821bea8f041135d8b217e067789'
+    steps:
+      - name: Checkout isolated instrumentation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          path: harness
+          persist-credentials: false
+      - name: Checkout immutable measured revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ matrix.sha }}
+          path: measured
+          persist-credentials: false
+      - name: Set up Node.js 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install existing locked dependencies
+        working-directory: measured
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Build exact local package and verify source integrity
+        working-directory: measured
+        run: npm run package:local && npm run qa:prelaunch && npm run build
+      - name: Resolve installed headless browser
+        shell: bash
+        run: |
+          set -euo pipefail
+          browser="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          test -n "$browser"
+          printf 'DLKT_CHROME_BIN=%s\n' "$browser" >> "$GITHUB_ENV"
+      - name: Count HTTP requests in the existing offline browser fixture
+        run: node harness/.github/audit/dlkt-photo-http-comparison.mjs '${{ matrix.role }}' measured '${{ matrix.sha }}' '${{ matrix.tree }}'
