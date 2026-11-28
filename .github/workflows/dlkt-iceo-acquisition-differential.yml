@@ -1,0 +1,69 @@
+name: DLKT ICEO isolated acquisition differential benchmark
+
+on:
+  push:
+    branches:
+      - audit/dlkt-iceo-acquisition-differential-20261128
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dlkt-iceo-acquisition-differential
+  cancel-in-progress: false
+
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    if: github.repository == 'razvannitu-glitch/dlkt-info' && github.ref == 'refs/heads/audit/dlkt-iceo-acquisition-differential-20261128'
+    steps:
+      - name: Checkout audit harness
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: harness
+          persist-credentials: false
+      - name: Checkout exact baseline
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 'ab84af3578888b43dccbd8598883f6feeb75b570'
+          path: baseline
+          persist-credentials: false
+      - name: Checkout exact authored candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: '88173bde62695418d872be7c5ce642f46e412443'
+          path: candidate
+          persist-credentials: false
+      - name: Verify exact comparison identities and lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C baseline rev-parse HEAD)" = 'ab84af3578888b43dccbd8598883f6feeb75b570'
+          test "$(git -C baseline rev-parse 'HEAD^{tree}')" = '3eb630ddb383cceef979e8a27106e74727bf237e'
+          test "$(git -C candidate rev-parse HEAD)" = '88173bde62695418d872be7c5ce642f46e412443'
+          test "$(git -C candidate rev-parse 'HEAD^{tree}')" = '0fe8a3dddf235878566f7cfae413c45a0cc7fbbf'
+          cmp baseline/package-lock.json candidate/package-lock.json
+          cmp baseline/source/package-lock.json candidate/source/package-lock.json
+          echo 'DLKT_ICEO_ACQUISITION_EXACT_TREES_PASS'
+      - name: Set up Node.js 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Compile both exact versions using locked dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          for arm in baseline candidate; do
+            (cd "$arm" && npm ci --ignore-scripts --no-audit --no-fund && npm --prefix source run build)
+          done
+      - name: Verify exact output parity and measure bounded offline performance
+        run: node harness/scripts/audit-iceo-acquisition-differential.mjs baseline candidate
+      - name: Verify tracked comparison trees unchanged
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C baseline diff --exit-code HEAD --
+          git -C candidate diff --exit-code HEAD --
