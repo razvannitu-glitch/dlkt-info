@@ -930,6 +930,96 @@
       "nextAction": "Run read-only checks, never roll back or promote without authorization.",
       "evidence": [],
       "approval": "authorized-release-only"
+    },
+    {
+      "id": "I-04",
+      "track": "I",
+      "priority": 1,
+      "state": "IN_PROGRESS",
+      "dependsOn": [
+        "I-01"
+      ],
+      "scope": "Maximum Intelligence per Request: reduce repeated work in the existing bounded global acquisition planner without weakening editorial, source or rights gates.",
+      "acceptance": "Exact baseline/candidate output parity for complete merged and selected records, stable ordering, duplicate and retention semantics; no changed request budget or source authorization; benchmark paired offline CPU and wall time, canonical generated integrity, exact committed-head release/browser and independent code review. No production performance or financial claim without measurement.",
+      "nextAction": "Review isolated #120 head e57ecc6c7e83a4c75188fa433cb8133555ac6c2b, base ab84af3. Generator and controlled benchmark passed on authored code; verify exact final release CI 46181526644/46181590852, offline Chromium 46181590856, and independent review requested 7244604196. Keep separate from #119 and current #116 certification. Reconcile only after exact evidence and review; no automatic main merge or deployment.",
+      "evidence": [
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/commit/88173bde62695418d872be7c5ce642f46e412443",
+          "sha": "88173bde62695418d872be7c5ce642f46e412443",
+          "status": "PASS",
+          "detail": "Authored per-pass memoization of candidate rank, language, subject, publisher, headline and retained-unchanged predicate, plus cross-invocation regression. No global cache or acquisition policy change. Strict compilation passed."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46181355401/job/141091405949",
+          "sha": "88173bde62695418d872be7c5ce642f46e412443",
+          "status": "PASS",
+          "detail": "Exact-tree differential benchmark, 3 paired repeats each on 200/1000/5000 synthetic candidates; complete ordered merge/selection equality in all runs. Median wall ms 35.181→11.621, 176.140→61.780, 857.175→193.460; largest case CPU 875.726→210.068ms. No production network, latency or savings claim."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46181285346/job/141091182539",
+          "sha": "88173bde62695418d872be7c5ce642f46e412443",
+          "status": "FAIL",
+          "detail": "Authored pre-generation ordinary verification failed old source pin (SOURCE_INTEGRITY:src/iceo/news-discovery.ts). No waiver."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46181285371/job/141091182529",
+          "sha": "88173bde62695418d872be7c5ce642f46e412443",
+          "status": "PASS",
+          "detail": "Canonical generated release: 158 + 2726 = 2884 tests, zero failures/skips, npm audit reports zero; strict compilation, package build and framed export passed."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/commit/e57ecc6c7e83a4c75188fa433cb8133555ac6c2b",
+          "sha": "e57ecc6c7e83a4c75188fa433cb8133555ac6c2b",
+          "status": "PASS",
+          "detail": "Verified 76 ordered frames, 233377 bytes, SHA-256 3e19e87f58622adc87fe43c023e809f1297013a591b4ccfc79d27514a2932e0f, exact changed source/test digests, 1076 source pin keys, 1024 manifest bindings, unchanged news projection. Imported only two generated files. New source pin 00832eab039288fc26d6e72b11b324ac74178aa39a9b23bb125229ff2b2e5034."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/pull/120",
+          "sha": "e57ecc6c7e83a4c75188fa433cb8133555ac6c2b",
+          "status": "DRAFT",
+          "detail": "Five-path follow-up to integrated draft only; exact-head independent review requested 7244604196."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46181526644",
+          "sha": "e57ecc6c7e83a4c75188fa433cb8133555ac6c2b",
+          "status": "IN_PROGRESS",
+          "detail": "Exact committed-head verification."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/actions/runs/46181590856",
+          "sha": "e57ecc6c7e83a4c75188fa433cb8133555ac6c2b",
+          "status": "IN_PROGRESS",
+          "detail": "Exact committed-head offline Chromium."
+        }
+      ],
+      "approval": "none"
+    },
+    {
+      "id": "I-05",
+      "track": "I",
+      "priority": 1,
+      "state": "READY",
+      "dependsOn": [
+        "I-01"
+      ],
+      "scope": "Measure and improve evidence-grounded global information retrieval and catalog quality; distinguish acquisition discovery from reader query retrieval.",
+      "acceptance": "Baseline the existing canonical corpus and category/locale/period/provenance filters. Design a bounded offline evaluation with curated multilingual query intents, exact source identities, event/source geography separation, graded relevance and explicit unknown or no-match outcomes; compare precision/recall at k only against known judged fixtures. Evaluate verified unique information yield per acquisition request, catalog coverage, freshness, duplicated stories, deterministic results and measured resource cost. No invented editorial demand or superiority; no production search endpoint, tracking, paid services or new acquisition without authorization.",
+      "nextAction": "Read canonical news-page, corpus, source classification, ranking and discovery contracts; identify the minimal reusable retrieval extension and evaluation corpus. Current inspected news-page accepts lang/category/city/cursor/period/sourceScope, not arbitrary text query. Establish quality baselines before proposing runtime search or classification changes. Coordinate with P-02 and E-01 rather than duplicate personalization or telemetry.",
+      "evidence": [
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/blob/ab84af3578888b43dccbd8598883f6feeb75b570/source/src/iceo/news-page.ts",
+          "sha": "ab84af3578888b43dccbd8598883f6feeb75b570",
+          "status": "OBSERVED",
+          "detail": "Canonical query parser has an explicit six-key allowlist; current committed-corpus reader supports editions and category filters. No arbitrary text query in this inspected contract. Existing corpus and pagination must remain authoritative; this observation does not establish all possible product surfaces."
+        },
+        {
+          "url": "https://github.com/razvannitu-glitch/dlkt-info/blob/ab84af3578888b43dccbd8598883f6feeb75b570/source/src/iceo/news-discovery.ts",
+          "sha": "ab84af3578888b43dccbd8598883f6feeb75b570",
+          "status": "OBSERVED",
+          "detail": "Existing bounded acquisition planner, 17 IPTC categories, reviewed language opportunities and original metadata gate. Reuse rather than create a parallel ingestion engine."
+        }
+      ],
+      "approval": "none"
     }
   ]
 }
