@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync,rmSync,statSync,symlinkSync} from 'node:fs';
+import {closeSync,constants,fstatSync,openSync,readFileSync,rmSync,statSync,symlinkSync} from 'node:fs';
 import {join} from 'node:path';
 import {createBrowserArtifacts} from './browser/qa-artifacts.mjs';
 
@@ -9,16 +9,24 @@ function fixture(t){
  t.after(()=>rmSync(artifacts.directory,{recursive:true,force:true}));
  return artifacts;
 }
+function readPrivateArtifact(file){
+ const fd=openSync(file,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
+ try{
+  const info=fstatSync(fd);
+  assert.ok(info.isFile());
+  assert.equal(info.mode&0o777,0o600);
+  return readFileSync(fd);
+ }finally{closeSync(fd);}
+}
 test('browser artifact runs use distinct private directories and private exclusive files',t=>{
  const first=fixture(t),second=fixture(t);
  assert.notEqual(first.directory,second.directory);
  assert.equal(statSync(first.directory).mode&0o777,0o700);
  const bytes=Buffer.from([0,1,255]),file=first.write('sample.bin',bytes);
- assert.deepEqual(readFileSync(file),bytes);
- assert.equal(statSync(file).mode&0o777,0o600);
+ assert.deepEqual(readPrivateArtifact(file),bytes);
  assert.throws(()=>first.write('sample.bin','replacement'),{code:'EEXIST'});
- assert.equal(readFileSync(second.write('sample.bin','second'),'utf8'),'second');
- assert.deepEqual(readFileSync(file),bytes);
+ assert.equal(readPrivateArtifact(second.write('sample.bin','second')).toString('utf8'),'second');
+ assert.deepEqual(readPrivateArtifact(file),bytes);
 });
 test('browser artifacts reject invalid basenames, data and labels',t=>{
  const artifacts=fixture(t);
