@@ -51,6 +51,7 @@ function likelyCountryLanguage(code) {
         return null;
     }
 }
+const scopedPublishers = new Set(NEWS_PUBLICATION_SCOPES.filter(scope => scope.origins !== undefined).map(scope => scope.publisherId));
 function indexLanguage(index) {
     if (index.language)
         return index.language;
@@ -73,7 +74,16 @@ export function countryEditionProfile(country, language, coverage, navigatorLang
     const defaultLanguageSupported = likelyLanguage !== null && newsLanguageMatches(likelyLanguage, resolveLocale(likelyLanguage));
     const countryEditions = configured.filter(edition => edition.countryCode === country.code);
     const configuredPublisherIds = uniqueSorted(countryEditions.filter(edition => edition.languages.some(value => newsLanguageMatches(value, language))).map(edition => edition.publisherId));
-    const configuredIndexIds = uniqueSorted(NEWS_DISCOVERY_INDEXES.filter(index => configuredPublisherIds.includes(index.publisherId) && newsLanguageMatches(indexLanguage(index), language)).map(index => index.id));
+    const configuredIndexIds = uniqueSorted(NEWS_DISCOVERY_INDEXES.filter(index => {
+        if (!configuredPublisherIds.includes(index.publisherId))
+            return false;
+        // A shared sitemap is not proof of an edition-specific index.
+        if (scopedPublishers.has(index.publisherId)) {
+            const context = sourcePublicationContext(index.url);
+            return context !== null && context.publisherCountryCode === country.code && newsLanguageMatches(context.language, language);
+        }
+        return newsLanguageMatches(indexLanguage(index), language);
+    }).map(index => index.id));
     const counts = coverage === undefined ? null : Object.freeze({ ...coverage });
     const state = counts && counts.national + counts.local > 0 ? 'available'
         : configuredPublisherIds.length === 0 ? 'unconnected' : counts ? 'currentNoArticles' : 'unknown';

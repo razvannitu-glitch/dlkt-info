@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {writeFileSync} from 'node:fs';
+import {createBrowserArtifacts} from './qa-artifacts.mjs';
 import {join} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import chromium from '@sparticuz/chromium';
@@ -8,6 +8,8 @@ import {chromium as playwright} from 'playwright-core';
 import {setupLambdaEnvironment} from './node_modules/@sparticuz/chromium/build/helper.js';
 import {inflate} from './node_modules/@sparticuz/chromium/build/lambdafs.js';
 
+const artifacts=createBrowserArtifacts('event-calendar');
+console.log(JSON.stringify({artifactDirectory:artifacts.directory}));
 const base=process.env.ICEO_BASE??'http://127.0.0.1:3100',sourceRoot=process.env.DLKT_SOURCE;
 assert.ok(sourceRoot,'DLKT_SOURCE must identify the compiled source under review');
 const [publications,arcub,cities]=await Promise.all(['publications','arcub','cities'].map(name=>import(pathToFileURL(join(sourceRoot,'.build/src/local/'+name+'.js')).href)));
@@ -42,12 +44,12 @@ try{
   if(label==='palma')check('reservation-and-capacity-conditions-survive-real-download',plain.includes('entrada libre con reserva previa (aforo limitado)'));
   check(label+'-download-does-not-claim-booking-or-confirmed-status',plain.includes('not a booking')&&!/^STATUS:CONFIRMED/mu.test(plain));
   check(label+'-ui-describes-preparation-without-claiming-calendar-import',await nodeFor(card).locator('[role=status]').innerText().then(text=>text.includes('Calendar file prepared')&&text.includes('Open it in your calendar')));
-  writeFileSync('/tmp/dlkt-event-calendar-'+label+'.ics',bytes);report.downloads.push({label,filename:download.suggestedFilename(),bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')});
+  artifacts.write('dlkt-event-calendar-'+label+'.ics',bytes);report.downloads.push({label,filename:download.suggestedFilename(),bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')});
  }
  await page.clock.setFixedTime(new Date(now+300000));await nodeFor(palmaCard).getByRole('button',{name:'Add to calendar',exact:true}).click();
  check('expired-source-check-stops-a-late-click',await nodeFor(palmaCard).getByRole('button',{name:'Add to calendar',exact:true}).isDisabled()&&await nodeFor(palmaCard).locator('[role=status]').innerText().then(text=>text.includes('fresh check'))&&downloadCount===2);
  await page.setViewportSize({width:390,height:844});
  check('calendar-control-and-feedback-remain-readable-on-mobile',await nodeFor(palmaCard).locator('[role=status]').isVisible()&&await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
  check('no-page-errors',report.errors.length===0);
- writeFileSync('/tmp/dlkt-event-calendar-browser-report.json',JSON.stringify(report,null,2));console.log(JSON.stringify({passed:report.checks.filter(item=>item.passed).length,total:report.checks.length,downloads:report.downloads.length}));
-}catch(error){writeFileSync('/tmp/dlkt-event-calendar-browser-report.json',JSON.stringify(report,null,2));throw error;}finally{await browser.close();}
+ artifacts.write('dlkt-event-calendar-browser-report.json',JSON.stringify(report,null,2));console.log(JSON.stringify({passed:report.checks.filter(item=>item.passed).length,total:report.checks.length,downloads:report.downloads.length}));
+}catch(error){artifacts.write('dlkt-event-calendar-browser-failure.json',JSON.stringify(report,null,2));throw error;}finally{await browser.close();}

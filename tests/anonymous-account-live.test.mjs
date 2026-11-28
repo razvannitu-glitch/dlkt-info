@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {readFileSync} from 'node:fs';
 import assert from 'node:assert/strict';
 import {
   ACCOUNT_ORIGIN,
@@ -121,4 +122,31 @@ test('oversized bodies and redirects fail closed',async()=>{
 test('invalid report input is rejected, never treated as success',()=>{
   assert.throws(()=>assessAnonymousAccountBoundary(null),/DLKT_ACCOUNT_AUDIT_INPUT/);
   assert.throws(()=>assessAnonymousAccountBoundary({session:{}}),/DLKT_ACCOUNT_AUDIT_INPUT/);
+});
+
+// Verify the workflow wiring; GitHub Actions executes the status expressions.
+test('anonymous account checks survive unrelated browser failure without weakening the job gate',()=>{
+  const workflow=readFileSync(new URL('../.github/workflows/dlkt-live-reader-qa.yml',import.meta.url),'utf8');
+  const jobs=workflow.split('\n  anonymous-public-reader:\n');
+  assert.equal(jobs.length,2);
+  const reader=jobs[1];
+  const steps=reader.split('\n      - name: ').slice(1);
+  const step=name=>{
+    const matches=steps.filter(value=>value.split('\n',1)[0]===name);
+    assert.equal(matches.length,1,name);
+    return matches[0];
+  };
+  const condition=value=>value.split('\n').find(line=>line.startsWith('        if: '))?.slice(12);
+  assert.match(step('Checkout exact tested source'),/\n        id: checkout_source\n/u);
+  assert.match(step('Set up Node.js 22'),/\n        id: setup_node\n/u);
+  const fixtures=step('Verify credential-free account probe against offline fixtures');
+  const live=step('Verify production anonymous account and session HTTP boundary');
+  assert.match(fixtures,/\n        id: account_fixtures\n/u);
+  assert.equal(condition(fixtures),"${{ !cancelled() && env.DLKT_KNOWLEDGE_PROBE_MODE == 'monitor' && steps.checkout_source.outcome == 'success' && steps.setup_node.outcome == 'success' }}");
+  assert.equal(condition(live),"${{ !cancelled() && env.DLKT_KNOWLEDGE_PROBE_MODE == 'monitor' && steps.account_fixtures.outcome == 'success' }}");
+  assert.ok(fixtures.split('\n').includes('        run: node --test tests/anonymous-account-live.test.mjs'));
+  assert.ok(live.split('\n').includes('        run: node scripts/verify-anonymous-account.mjs'));
+  assert.ok(steps.indexOf(fixtures)>steps.indexOf(step('Inspect public homepage on four viewports')));
+  assert.ok(steps.indexOf(live)>steps.indexOf(fixtures));
+  assert.doesNotMatch(reader,/\bcontinue-on-error\s*:/u);
 });

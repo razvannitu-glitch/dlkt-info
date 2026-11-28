@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
-import {readFileSync,writeFileSync} from 'node:fs';
+import {readFileSync} from 'node:fs';
+import {createBrowserArtifacts} from './qa-artifacts.mjs';
 import chromium from '@sparticuz/chromium';
 import {chromium as playwright} from 'playwright-core';
 import {setupLambdaEnvironment} from './node_modules/@sparticuz/chromium/build/helper.js';
 import {inflate} from './node_modules/@sparticuz/chromium/build/lambdafs.js';
 
+const artifacts=createBrowserArtifacts('editorial-top');
+console.log(JSON.stringify({artifactDirectory:artifacts.directory}));
 const base=process.env.ICEO_BASE??'http://127.0.0.1:3100/iceo.html';
 const real=process.env.DLKT_REAL_PUBLIC==='1';
 const report={base,checkedAt:new Date().toISOString(),mode:real?'live public deployment':'real acquired public snapshot in browser',checks:[],errors:[],views:[]};
@@ -49,7 +52,7 @@ try{
   report.sharePath=sharePath;check('new-publication-share-preserves-exact-id',sharePath?.startsWith('/card/'+selected[0].id+'?v='));
   await page.setViewportSize({width:390,height:844});check('share-dialog-fits-mobile',await dialog.isVisible()&&await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   await dialog.getByRole('button',{name:'Close sharing options'}).click();
-  await page.screenshot({path:'/tmp/dlkt-editorial-mobile.webp',type:'webp',quality:65});
+  artifacts.write('dlkt-editorial-mobile.webp',await page.screenshot({type:'webp',quality:65}));
   check('no-browser-script-errors',report.errors.length===0);
   console.log(JSON.stringify({checks:report.checks.length,passed:report.checks.filter(row=>row.passed).length,cards:selected.length,categories:20,errors:report.errors.length}));
-}finally{writeFileSync('/tmp/dlkt-editorial-browser-report.json',JSON.stringify(report,null,2));await browser.close();}
+}finally{try{artifacts.write('dlkt-editorial-browser-report.json',JSON.stringify(report,null,2));}finally{await browser.close();}}

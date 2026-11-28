@@ -117,8 +117,16 @@ export interface SourcePublicationContext {
   readonly basis:'reviewed-publisher';
 }
 interface PublicationEdition {readonly path:string;readonly language:NewsSourceLanguage}
-interface PublicationScope {readonly publisherId:string;readonly countryCode:string;readonly countryName:string;readonly coverage:string;readonly editions:readonly PublicationEdition[]}
+interface PublicationScope {readonly publisherId:string;readonly countryCode:string;readonly countryName:string;readonly coverage:string;readonly editions:readonly PublicationEdition[];readonly origins?:readonly string[]}
 const publication=(publisherId:string,countryCode:string,countryName:string,coverage:string,...editions:readonly (readonly [string,NewsSourceLanguage])[]):PublicationScope=>Object.freeze({publisherId,countryCode,countryName,coverage,editions:Object.freeze(editions.map(([path,language])=>Object.freeze({path,language})))});
+/** Exact-origin edition rules refine existing publisher provenance only.
+ * Never use an origin/path rule to approve an additional acquisition host. */
+const scopedPublication=(publisherId:string,origins:readonly string[],countryCode:string,countryName:string,coverage:string,...editions:readonly (readonly [string,NewsSourceLanguage])[]):PublicationScope=>{
+  const publisher=NEWS_PUBLISHERS.find(value=>value.id===publisherId);
+  if(!publisher||origins.length===0||new Set(origins).size!==origins.length||origins.some(origin=>!publisher.origins.includes(origin))||
+    editions.length===0||editions.some(([path])=>!/^\/[a-z0-9-]+(?:\/[a-z0-9-]+)*\/$/u.test(path)))throw Error('NEWS_EDITION_SCOPE_INVALID');
+  return Object.freeze({...publication(publisherId,countryCode,countryName,coverage,...editions),origins:Object.freeze([...origins])});
+};
 /** Publication provenance only. A publisher's country or edition never establishes a story's location. */
 export const NEWS_PUBLICATION_SCOPES:readonly PublicationScope[]=Object.freeze([
   // Romanian primary editions: exact publisher RSS channel identities verified 2026-11-22.
@@ -160,6 +168,13 @@ export const NEWS_PUBLICATION_SCOPES:readonly PublicationScope[]=Object.freeze([
   publication('rte','IE','Ireland','Ireland and global reporting',['/news/','en']),
   publication('cna','SG','Singapore','Singapore, Asia and global reporting',['/','en']),
   publication('straits-times','SG','Singapore','Singapore, Asia and global reporting',['/','en']),
+  // Edition identity evidence: docs/iceo-provenance-pilot-20261127.md.
+  // European POLITICO publication, based in Brussels; not the US publisher edition.
+  scopedPublication('politico',['https://www.politico.eu'],'BE','Belgium','English-language European politics and policy reporting',['/article/','en'],['/podcast/','en']),
+  // Hearst US and Hearst UK publish distinct editions on the same origin.
+  // Do not infer the edition from a bare host, a shopping topic or an unknown path.
+  scopedPublication('good-housekeeping',['https://www.goodhousekeeping.com'],'US','United States','US consumer and lifestyle editorial edition',['/what-to-buy/','en'],['/entertainment/','en'],['/holidays/','en']),
+  scopedPublication('good-housekeeping',['https://www.goodhousekeeping.com'],'GB','United Kingdom','UK consumer and lifestyle editorial edition',['/uk/','en']),
   // The New York Times also publishes other language editions. Only its dated English path is declared below.
   publication('nytimes','US','United States','United States and global reporting'),
 ]);
@@ -187,7 +202,8 @@ export const REVIEWED_FEED_PUBLICATION_SCOPES:readonly ReviewedFeedPublicationSc
   reviewedPublication('beehive-news','https://www.beehive.govt.nz',['/release/','/speech/'],'NZ','New Zealand','en','New Zealand Government releases and speeches'),
 ]);
 type PublicationSource=string|{readonly sourceUrl:string;readonly sourceIds?:readonly string[]};
-const publicationScopes=new Map(NEWS_PUBLICATION_SCOPES.map(value=>[value.publisherId,value]));
+const publicationScopes=new Map<string,readonly PublicationScope[]>();
+for(const scope of NEWS_PUBLICATION_SCOPES)publicationScopes.set(scope.publisherId,Object.freeze([...(publicationScopes.get(scope.publisherId)??[]),scope]));
 const editionPath=(path:string,prefix:string):boolean=>prefix==='/'||path===prefix.slice(0,-1)||path.startsWith(prefix);
 /** Source-edition language, not automatic detection of the language of an individual article. */
 export function sourcePublicationContext(value:PublicationSource):SourcePublicationContext|null{
@@ -203,13 +219,57 @@ export function sourcePublicationContext(value:PublicationSource):SourcePublicat
       &&(!Array.isArray(value.sourceIds)||value.sourceIds.length!==1||value.sourceIds[0]!==reviewed.sourceId))return null;
     return Object.freeze({language:reviewed.language,publisherCountryCode:reviewed.countryCode,publisherCountryName:reviewed.countryName,coverage:reviewed.coverage,basis:'reviewed-publisher'});
   }
-  const publisher=byOrigin.get(url.origin),scope=publisher?publicationScopes.get(publisher.id):undefined;
-  if(!scope)return null;
-  const edition=scope.editions.find(value=>editionPath(url.pathname,value.path));
-  const language=edition?.language??(scope.publisherId==='nytimes'&&/^\/\d{4}\//u.test(url.pathname)?'en':null);
+  const publisher=byOrigin.get(url.origin),scopes=publisher?publicationScopes.get(publisher.id):undefined;
+  if(!scopes)return null;
+  // Legacy single-scope publisher behavior is preserved. New scoped rules
+  // require a canonical exact origin and an actual reviewed section path.
+  if(scopes.length===1&&scopes[0]?.origins===undefined){
+    const scope=scopes[0]!;
+    const edition=scope.editions.find(value=>editionPath(url.pathname,value.path));
+    const language=edition?.language??(scope.publisherId==='nytimes'&&/^\/\d{4}\//u.test(url.pathname)?'en':null);
+    return Object.freeze({language,publisherCountryCode:scope.countryCode,publisherCountryName:scope.countryName,coverage:scope.coverage,basis:'reviewed-publisher'});
+  }
+  if(raw!==url.href||url.search||url.hash||/%(?:2e|2f|5c)/iu.test(url.pathname)||url.pathname.includes('//'))return null;
+  const matches=scopes.flatMap(scope=>{
+    if(!scope.origins?.includes(url.origin))return [];
+    return scope.editions.filter(edition=>url.pathname.startsWith(edition.path)&&url.pathname.length>edition.path.length)
+      .map(edition=>({scope,language:edition.language}));
+  });
+  // An overlapping or contradictory future rule must not silently win.
+  if(matches.length!==1)return null;
+  const {scope,language}=matches[0]!;
   return Object.freeze({language,publisherCountryCode:scope.countryCode,publisherCountryName:scope.countryName,coverage:scope.coverage,basis:'reviewed-publisher'});
 }
-export function sourceLanguage(value:PublicationSource):NewsSourceLanguage|null{return sourcePublicationContext(value)?.language??null;}
+/** Independent editorial-language evidence. This does not register a publisher
+ * country, a new acquisition source, an event location, or reuse rights.
+ * The reviewed global edition is explicitly labelled English by its publisher.
+ * Other language subdomains and non-article paths are not admitted by this rule.
+ * Primary evidence: docs/iceo-editorial-language-pilot-20261127.md.
+ */
+interface EditorialLanguageScope {readonly publisherId:string;readonly origin:string;readonly articlePath:RegExp;readonly language:NewsSourceLanguage}
+const editorialLanguageScope=(publisherId:string,origin:string,articlePath:RegExp,language:NewsSourceLanguage):EditorialLanguageScope=>{
+  const publisher=NEWS_PUBLISHERS.find(value=>value.id===publisherId);
+  if(!publisher?.origins.includes(origin)||publicationScopes.has(publisherId)||articlePath.global||articlePath.sticky)
+    throw Error('NEWS_EDITORIAL_LANGUAGE_SCOPE_INVALID');
+  return Object.freeze({publisherId,origin,articlePath:Object.freeze(articlePath),language});
+};
+const editorialLanguageScopes:readonly EditorialLanguageScope[]=Object.freeze([
+  editorialLanguageScope('global-voices','https://globalvoices.org',/^\/\d{4}\/(?:0[1-9]|1[0-2])\/(?:0[1-9]|[12]\d|3[01])\/[a-z0-9]+(?:-[a-z0-9]+)*\/$/u,'en'),
+]);
+function independentEditorialLanguage(value:PublicationSource):NewsSourceLanguage|null{
+  const raw=typeof value==='string'?value:value.sourceUrl;
+  const publisher=publisherForNewsUrl(raw);if(!publisher)return null;
+  const url=new URL(raw);
+  if(raw!==url.href||url.search||url.hash||/%(?:2e|2f|5c)/iu.test(url.pathname)||url.pathname.includes('//'))return null;
+  const matches=editorialLanguageScopes.filter(scope=>scope.publisherId===publisher.id&&scope.origin===url.origin&&scope.articlePath.test(url.pathname));
+  return matches.length===1?matches[0]?.language??null:null;
+}
+/** The reading language is independent of geographic edition provenance.
+ * Existing reviewed national/feed contracts retain their original semantics. */
+export function sourceLanguage(value:PublicationSource):NewsSourceLanguage|null{
+  const context=sourcePublicationContext(value);
+  return context===null?independentEditorialLanguage(value):context.language;
+}
 /** Reviewed edition provenance only. This never establishes an article's event location or city coverage. */
 export function sourceEditionCountryCode(value:PublicationSource):string|null{
   const context=sourcePublicationContext(value);

@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
-import {writeFileSync} from 'node:fs';
+import {createBrowserArtifacts} from './qa-artifacts.mjs';
 import chromium from '@sparticuz/chromium';
 import {chromium as playwright} from 'playwright-core';
 import {setupLambdaEnvironment} from './node_modules/@sparticuz/chromium/build/helper.js';
 import {inflate} from './node_modules/@sparticuz/chromium/build/lambdafs.js';
 
+const artifacts=createBrowserArtifacts('publisher-excerpt');
+console.log(JSON.stringify({artifactDirectory:artifacts.directory}));
 const base=process.env.ICEO_BASE??'http://127.0.0.1:3100';
 const report={base,checkedAt:new Date().toISOString(),environment:'controlled source records in a real browser',checks:[],errors:[]};
 const check=(name,pass)=>{report.checks.push({name,passed:Boolean(pass)});assert.ok(pass,name);};
@@ -35,5 +37,5 @@ try{
  await page.setViewportSize({width:390,height:844});
  check('excerpt-remains-readable-on-mobile',await procurement.locator('.publisher-excerpt').isVisible()&&await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
  check('no-page-errors',report.errors.length===0);
- writeFileSync('/tmp/dlkt-publisher-excerpt-browser-report.json',JSON.stringify(report,null,2));console.log(JSON.stringify({passed:report.checks.filter(item=>item.passed).length,total:report.checks.length}));
-}catch(error){writeFileSync('/tmp/dlkt-publisher-excerpt-browser-report.json',JSON.stringify(report,null,2));throw error;}finally{await browser.close();}
+ artifacts.write('dlkt-publisher-excerpt-browser-report.json',JSON.stringify(report,null,2));console.log(JSON.stringify({passed:report.checks.filter(item=>item.passed).length,total:report.checks.length}));
+}catch(error){artifacts.write('dlkt-publisher-excerpt-browser-failure.json',JSON.stringify(report,null,2));throw error;}finally{await browser.close();}

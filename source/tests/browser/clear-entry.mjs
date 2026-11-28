@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
-import {writeFileSync} from 'node:fs';
+import {createBrowserArtifacts} from './qa-artifacts.mjs';
 import chromium from '@sparticuz/chromium';
 import {chromium as playwright} from 'playwright-core';
 import {setupLambdaEnvironment} from './node_modules/@sparticuz/chromium/build/helper.js';
 import {inflate} from './node_modules/@sparticuz/chromium/build/lambdafs.js';
+const artifacts=createBrowserArtifacts('clear-entry');
+console.log(JSON.stringify({artifactDirectory:artifacts.directory}));
 const base=process.env.ICEO_BASE??'http://127.0.0.1:3100';
 const report={base,checkedAt:new Date().toISOString(),checks:[],pageErrors:[],externalRequests:[],viewports:[],controlledScenarios:['late restoration after typing','unavailable city endpoint','city document mismatch','blocked browser storage','geolocation refused']};
 const check=(name,pass,detail=null)=>{report.checks.push({name,passed:Boolean(pass),detail});assert.ok(pass,name);};
@@ -20,7 +22,7 @@ try{
  check('explicit-city-and-topic-modes',await page.locator('[data-entry-mode]').count()===2);
  check('nothing-persisted-on-first-visit',await page.evaluate(async()=>{const{DeviceMemory}=await import('/device-memory.js');const{readLocalMemory}=await import('/local-memory.js');const d=await new DeviceMemory().read();return !d.focus&&!d.cards.length&&!(await readLocalMemory());}));
  check('exact-brand-palette',await page.evaluate(()=>['--black','--white','--coral'].map(k=>getComputedStyle(document.documentElement).getPropertyValue(k).trim()).join('|')==='#000000|#ffffff|#f66061'));
- await page.screenshot({path:'/tmp/r099-desktop-final.png'});
+ artifacts.write('r099-desktop-final.png',await page.screenshot());
  await page.locator('#entry-query').fill('B');await page.locator('.entry-city').first().waitFor();
  check('suggestions-from-first-letter',await page.locator('.entry-city').count()>0&&await page.locator('.entry-city').count()<=8);
  check('city-candidates-include-context',await page.locator('.entry-city span').allTextContents().then(v=>v.every(t=>t.includes(' · '))));
@@ -78,12 +80,12 @@ try{
  check('wrong-city-document-remains-blocked',await page.locator('#local-cards>.local-card').count()===0);await page.unroute('**/api/local?city=683506');
  await page.locator('#entry-return').click();await page.locator('#entry-query').fill('');await page.locator('#entry-query').press('Escape');
  for(const[width,height]of[[320,780],[390,844],[768,1024],[1440,1000]]){
-   await page.setViewportSize({width,height});const data=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,input:document.querySelector('#entry-search').getBoundingClientRect().bottom}));report.viewports.push(data);check('entry-no-overflow-'+width,data.scroll<=width);check('main-action-within-first-screen-'+width,data.input<height);if(width===390)await page.screenshot({path:'/tmp/r099-mobile-final.png'});
+   await page.setViewportSize({width,height});const data=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,input:document.querySelector('#entry-search').getBoundingClientRect().bottom}));report.viewports.push(data);check('entry-no-overflow-'+width,data.scroll<=width);check('main-action-within-first-screen-'+width,data.input<height);if(width===390)artifacts.write('r099-mobile-final.png',await page.screenshot());
  }
  await page.setViewportSize({width:640,height:1000});await page.evaluate(()=>document.documentElement.style.zoom='2');check('entry-reflows-at-css-200-percent',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.evaluate(()=>document.documentElement.style.zoom='1');
  await page.setViewportSize({width:1440,height:1000});await page.locator('#personalise-button').hover();check('requested-coral-hover-preserved',await page.locator('#personalise-button').evaluate(n=>{const s=getComputedStyle(n);return s.backgroundColor==='rgb(246, 96, 97)'&&s.color==='rgb(0, 0, 0)';}));
  await page.locator('#entry-weather').hover();check('new-shortcuts-use-coral-hover',await page.locator('#entry-weather').evaluate(n=>getComputedStyle(n).backgroundColor==='rgb(246, 96, 97)'));
  const blocked=await context.newPage();await blocked.setViewportSize({width:390,height:844});blocked.on('pageerror',e=>report.pageErrors.push(e.message));await blocked.addInitScript(()=>Object.defineProperty(window,'indexedDB',{get(){throw new DOMException('Blocked','SecurityError');}}));await blocked.goto(base,{waitUntil:'networkidle'});await blocked.locator('[data-entry-topic=technology]').click();await blocked.locator('#cards>.info-card').first().waitFor();check('reading-does-not-require-browser-storage',await blocked.locator('#cards>.info-card').count()>0);await blocked.close();
  check('no-javascript-errors',report.pageErrors.length===0,report.pageErrors);check('no-third-party-browser-requests',report.externalRequests.length===0,report.externalRequests);
- report.passed=report.checks.filter(c=>c.passed).length;report.total=report.checks.length;writeFileSync('/tmp/r099-entry-browser-report.json',JSON.stringify(report,null,2));console.log(JSON.stringify({base,passed:report.passed,total:report.total,viewports:report.viewports}));
-}catch(error){writeFileSync('/tmp/r099-entry-browser-failure.json',JSON.stringify(report,null,2));throw error;}finally{await browser.close();}
+ report.passed=report.checks.filter(c=>c.passed).length;report.total=report.checks.length;artifacts.write('r099-entry-browser-report.json',JSON.stringify(report,null,2));console.log(JSON.stringify({base,passed:report.passed,total:report.total,viewports:report.viewports}));
+}catch(error){artifacts.write('r099-entry-browser-failure.json',JSON.stringify(report,null,2));throw error;}finally{await browser.close();}

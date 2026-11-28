@@ -8,7 +8,7 @@ import {NEWS_PUBLISHERS,NEWS_PUBLICATION_SCOPES,NEWS_DISCOVERY_INDEXES,sourceLan
 
 const countries=listCountries(),zero=Object.freeze({national:0,local:0,international:0});
 function country(code){const value=countries.find(country=>country.code===code);assert.ok(value,'existing GeoNames country '+code);return value;}
-const configuredCountries=['AU','DE','FR','GB','HK','IE','IN','IT','JP','NL','NZ','QA','RO','SG','US','ZA'];
+const configuredCountries=['AU','BE','DE','FR','GB','HK','IE','IN','IT','JP','NL','NZ','QA','RO','SG','US','ZA'];
 
 test('every actual GeoNames country remains selectable regardless of configured publishers',t=>{
  const before=JSON.stringify(countries),profiles=countryEditionProfiles(countries);
@@ -116,7 +116,7 @@ test('SAnews retains its existing reviewed-feed provenance without enabling a ne
  assert.deepEqual(profile.configuredPublisherIds,['sanews']);assert.deepEqual(profile.countryEditionLanguages,['en']);
  assert.deepEqual(profile.configuredIndexIds,[]);assert.equal(profile.state,'currentNoArticles');
  assert.equal(NEWS_PUBLISHERS.some(source=>source.id==='sanews'),false);
- assert.equal(NEWS_PUBLISHERS.length,77);assert.equal(NEWS_PUBLICATION_SCOPES.length,26);assert.equal(NEWS_DISCOVERY_INDEXES.length,31);
+ assert.equal(NEWS_PUBLISHERS.length,77);assert.equal(NEWS_PUBLICATION_SCOPES.length,29);assert.equal(NEWS_DISCOVERY_INDEXES.length,31);
 });
 
 test('country and coverage inputs are bounded, immutable and fail closed on malformed data',()=>{

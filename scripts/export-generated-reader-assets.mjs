@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
-import {lstatSync, readFileSync} from 'node:fs';
+import {readStableRegularFile} from '../lib/stable-local-read.mjs';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {sha256, verifySource} from '../lib/source-integrity.mjs';
@@ -83,17 +83,20 @@ function baseline(file) {
 }
 
 function readText(file) {
-  const absolute = join(root, file), info = lstatSync(absolute);
-  if (info.isSymbolicLink() || !info.isFile() || (info.mode & 0o111) !== 0) {
-    throw new Error('READER_EXPORT_FILE_TYPE');
+  let bytes;
+  try {
+    bytes = readStableRegularFile(join(root, file), {maxBytes: MAX_OUTPUT_BYTES, rejectExecutable: true});
+  } catch (error) {
+    if (error?.message === 'DLKT_LOCAL_READ_SIZE') throw new Error('READER_EXPORT_FILE_BYTES');
+    if (error?.message === 'DLKT_LOCAL_READ_TYPE' || error?.code === 'ELOOP') throw new Error('READER_EXPORT_FILE_TYPE');
+    throw new Error('READER_EXPORT_FILE_READ');
   }
-  if (info.size > MAX_OUTPUT_BYTES) throw new Error('READER_EXPORT_FILE_BYTES');
-  const bytes = readFileSync(absolute), content = decodeUtf8(bytes);
+  const content = decodeUtf8(bytes);
   return {content, bytes: bytes.length, sha256: sha256(bytes)};
 }
 
 function newsRegistryProjection() {
-  const compiled = decodeUtf8(readFileSync(join(root, 'source/.build/src/iceo/news-sources.js')))
+  const compiled = decodeUtf8(readStableRegularFile(join(root, 'source/.build/src/iceo/news-sources.js'), {maxBytes: MAX_OUTPUT_BYTES, rejectExecutable: true}))
     .replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu, '');
   const shipped = readText('source/public/news-sources.js');
   if (compiled !== shipped.content) throw new Error('READER_EXPORT_NEWS_PROJECTION');

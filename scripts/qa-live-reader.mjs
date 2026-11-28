@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {join,resolve} from 'node:path';
+import {pathToFileURL} from 'node:url';
+import {KNOWLEDGE_ORIGIN,KNOWLEDGE_IDENTITY,knowledgeCases,knowledgeCanonicalUrl,knowledgeCreditText,knowledgeCreditLinks,knowledgeCopyMessage,knowledgeEditorialFailures,readKnowledgeProbeOptions,readKnowledgeReceipt,knowledgeRunBoundary} from './verify-live-knowledge.mjs';
 
-const ORIGIN = 'https://www.dlkt.ee';
 const HOST = '127.0.0.1';
 const MAX_WAIT_MS = 18_000;
 const VIEWPORTS = Object.freeze([
@@ -58,8 +59,8 @@ async function connectChrome(port) {
   ]);
   return ws;
 }
-async function evaluate(call,expression) {
-  const result=await call('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});
+async function evaluate(call,expression,userGesture=false) {
+  const result=await call('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true,userGesture});
   if(result.exceptionDetails) {
     const firstLine=String(result.exceptionDetails.exception?.description??result.exceptionDetails.text??'unknown')
       .split('\\n')[0].slice(0,160);
@@ -113,7 +114,120 @@ async function waitForEdition(call){
   }
   return last;
 }
+// Executed inside the real Chromium document, not against server HTML strings.
+export function inspectKnowledgeDocument(){
+  const normalize=value=>typeof value==='string'?value.replace(/\s+/gu,' ').trim():'';
+  const visible=node=>{
+    if(!node||node.getClientRects().length===0||node.getBoundingClientRect().width<=0||node.getBoundingClientRect().height<=0)return false;
+    for(let n=node;n;n=n.parentElement){
+      const style=getComputedStyle(n);
+      if(n.hidden||n.getAttribute('aria-hidden')==='true'||style.display==='none'||style.visibility!=='visible'||Number(style.opacity)===0||style.contentVisibility==='hidden')return false;
+    }
+    return true;
+  };
+  const articles=[...document.querySelectorAll('[data-shared-knowledge-id]')],a=articles[0],f=a?.querySelector('#shared-freshness');
+  const credits=[...a?.querySelectorAll('.card-credits')??[]],credit=credits[0];
+  const buttons=[...document.querySelectorAll('#shared-copy')],b=buttons[0];
+  const canonical=[...document.querySelectorAll('head link[rel="canonical"]')];
+  const within=selector=>[...a?.querySelectorAll(selector)??[]];
+  const field=(nodes,tag,connection=false)=>{
+    const node=nodes[0],parts=[...node?.childNodes??[]];
+    const nonText=parts.filter(part=>part.nodeType!==3),strong=nonText[0];
+    const structure=Boolean(node&&node.localName===tag&&(connection?
+      nonText.length===1&&parts[0]===strong&&strong.localName==='strong'&&visible(strong)&&[...strong.childNodes].every(child=>child.nodeType===3):
+      nonText.length===0));
+    return {count:nodes.length,visible:visible(node),structure,text:normalize(node?.innerText)};
+  };
+  const guides=within('.card-guide');
+  const editorial={title:field(within('h1'),'h1'),explanation:field(within('.card-context'),'p'),
+    connection:field(guides.length===1?[...guides[0].querySelectorAll('p')]:[],'p',true),
+    geography:field(within('.card-topic'),'span'),publisher:field(within('.card-meta'),'p'),
+    boundary:field(within('p.privacy-note:not([id])'),'p')};
+  return {editorial,ready:document.readyState,url:location.href,lang:document.documentElement.lang,articleCount:articles.length,id:a?.getAttribute('data-shared-knowledge-id')??null,
+    expiry:f?.dataset.validUntil??null,canonical:canonical.length===1?canonical[0].href:null,
+    source:[...a?.querySelectorAll('a.source-link[href]')??[]].filter(visible).map(n=>n.href),
+    creditCount:credits.length,creditVisible:visible(credit),creditText:normalize(credit?.innerText),
+    creditLinks:[...credit?.querySelectorAll('a')??[]].map(n=>({href:n.href,text:normalize(n.innerText),visible:visible(n)})),
+    copyCount:buttons.length,copyVisible:visible(b),copyEnabled:Boolean(b&&!b.disabled&&a?.contains(b)),copyUrl:b?.dataset.cardUrl??null,
+    main:document.querySelectorAll('main').length,width:document.documentElement.scrollWidth,
+    status:performance.getEntriesByType('navigation')[0]?.responseStatus??null};
+}
+export function assessKnowledgeBrowser(item,state,url,width){
+  const failures=[];
+  if(state?.ready!=='complete'||state.url!==url)failures.push('document');
+  if(state?.lang!==item.language)failures.push('language');
+  if(state?.status!==item.status)failures.push('http-status');
+  if(state?.main!==1)failures.push('main');
+  if(typeof state?.width!=='number'||state.width>width+2)failures.push('horizontal-overflow');
+  if(item.status===200){
+    if(state?.articleCount!==1||state?.id!==KNOWLEDGE_IDENTITY.id||state.expiry!==String(KNOWLEDGE_IDENTITY.expiresAt)||state.canonical!==knowledgeCanonicalUrl(item.language))failures.push('exact-card');
+    failures.push(...knowledgeEditorialFailures(item.language,state?.editorial));
+    if(state?.source?.length!==1||state.source[0]!==KNOWLEDGE_IDENTITY.source)failures.push('source');
+    const expected=knowledgeCreditLinks(item.language);
+    if(state?.creditCount!==1||!state.creditVisible||state.creditText!==knowledgeCreditText(item.language)||state.creditLinks?.length!==2||
+      !expected.every((link,i)=>state.creditLinks[i]?.visible&&state.creditLinks[i].href===link.href&&state.creditLinks[i].text===link.text))failures.push('visible-exact-credit');
+    if(state?.copyCount!==1||!state.copyVisible||!state.copyEnabled||state.copyUrl!==knowledgeCanonicalUrl(item.language))failures.push('copy-control');
+  }else if(state?.articleCount!==0||state?.copyCount!==0)failures.push('unexpected-admission');
+  return failures;
+}
+export async function verifyKnowledgeCopy(cdp,item){
+  const canonical=knowledgeCanonicalUrl(item.language),message=knowledgeCopyMessage(item.language);
+  // This clipboard belongs to the disposable browser runner. Seed a known
+  // different value so a stale clipboard cannot satisfy the assertion.
+  const seeded=await evaluate(cdp,"(async()=>{await navigator.clipboard.writeText('DLKT-QA-NOT-COPIED');return (await navigator.clipboard.readText())==='DLKT-QA-NOT-COPIED';})()",true);
+  if(!seeded)return false;
+  const focused=await evaluate(cdp,"(()=>{const b=document.getElementById('shared-copy');if(!b||b.hidden||b.disabled)return false;b.scrollIntoView({block:'center',inline:'nearest'});b.focus();const r=b.getBoundingClientRect();return document.activeElement===b&&r.width>0&&r.height>0;})()");
+  if(!focused)return false;
+  // Match the native Enter activation already exercised by offline browser QA.
+  await cdp('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,text:'\r',unmodifiedText:'\r'});
+  await cdp('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
+  for(let i=0;i<30;i++){
+    const result=await evaluate(cdp,"(async()=>{const b=document.getElementById('shared-copy'),f=document.getElementById('shared-fallback'),m=document.getElementById('shared-message');return {copied:await navigator.clipboard.readText(),message:m?.innerText??null,enabled:Boolean(b&&!b.hidden&&!b.disabled),fallbackHidden:Boolean(f&&f.hidden)};})()",true);
+    if(result?.copied===canonical&&result.message===message&&result.enabled&&result.fallbackHidden)return true;
+    await pause(100);
+  }
+  return false;
+}
+async function probeKnowledgeBrowser(cdp,options,started,before){
+  const items=knowledgeCases(started).filter(item=>item.key.startsWith('canonical-')),results=[];
+  const expression='('+inspectKnowledgeDocument.toString()+')()';
+  let clipboardReady=false;
+  if(items.some(item=>item.status===200)){
+    try{
+      await cdp('Page.bringToFront');
+      await cdp('Browser.grantPermissions',{origin:options.origin,permissions:['clipboardReadWrite','clipboardSanitizedWrite']});
+      clipboardReady=true;
+    }catch{/* An unavailable clipboard is a failed active-admission check. */}
+  }
+  for(const item of items){
+    const url=options.origin+item.path,view=item.language==='it'?VIEWPORTS[3]:item.language==='ro'?VIEWPORTS[1]:VIEWPORTS[0];
+    const failures=[];let state=null,copyVerified=false;
+    try{
+      await cdp('Emulation.setDeviceMetricsOverride',{width:view.width,height:view.height,deviceScaleFactor:1,mobile:view.mobile,scale:1});
+      await cdp('Page.navigate',{url});
+      const deadline=Date.now()+MAX_WAIT_MS;
+      while(Date.now()<deadline){
+        try{state=await evaluate(cdp,expression);}catch{state=null;}
+        if(state?.ready==='complete'&&state.url===url&&(state.status!==200||state.copyEnabled&&state.copyVisible||item.status!==200))break;
+        await pause(250);
+      }
+    }catch{failures.push('navigation');}
+    failures.push(...assessKnowledgeBrowser(item,state,url,view.width));
+    if(item.status===200&&failures.length===0&&clipboardReady){
+      try{copyVerified=await verifyKnowledgeCopy(cdp,item)&&await evaluate(cdp,'location.href')===url;}catch{/* Fail closed. */}
+    }
+    if(item.status===200&&!copyVerified)failures.push('clipboard-copy');
+    results.push({language:item.language,viewport:view.width,expected:item.status,observed:state?.status??null,copyVerified,failures});
+  }
+  const after=await readKnowledgeReceipt(fetch,options),completed=Date.now();
+  const boundary=knowledgeRunBoundary(before,after,started,completed,options);
+  const passed=boundary.failures.length===0&&results.every(item=>item.failures.length===0);
+  const recoveryVerified=passed&&options.mode==='recovery';
+  const status=!passed?'LIVE_KNOWLEDGE_BROWSER_BLOCKED':recoveryVerified?'LIVE_KNOWLEDGE_BROWSER_RECOVERY_PASS':boundary.activeAtStart?'LIVE_KNOWLEDGE_BROWSER_MONITOR_PASS':'LIVE_KNOWLEDGE_BROWSER_DENIAL_PASS';
+  return {status,passed,recoveryVerified,mode:options.mode,activeAtStart:boundary.activeAtStart,commit:boundary.stable?before.commit:null,manifest:boundary.stable?before.manifest:null,failures:boundary.failures,results};
+}
 async function main(){
+  const options=readKnowledgeProbeOptions(),origin=options.origin;
   assert.equal(typeof WebSocket,'function','Node 22 WebSocket required');
   const bin=process.env.DLKT_CHROME_BIN??'/usr/bin/google-chrome';
   if(!existsSync(bin))throw Error('LIVE_BROWSER_CHROME_MISSING');
@@ -147,16 +261,17 @@ async function main(){
     ws.addEventListener('message',event=>{
       let eventData;try{eventData=JSON.parse(String(event.data));}catch{return;}
       const request=eventData.method==='Network.requestWillBeSent'?eventData.params?.request:null;
-      if(request&&typeof request.url==='string'&&request.url.startsWith(ORIGIN+'/api/')
+      if(request&&typeof request.url==='string'&&[origin,KNOWLEDGE_ORIGIN].some(value=>request.url.startsWith(value+'/api/'))
         &&['POST','PUT','PATCH','DELETE'].includes(request.method))mutatingFirstPartyRequests++;
     });
     await cdp('Network.enable');
+    const started=Date.now(),before=await readKnowledgeReceipt(fetch,options);
     for(const view of VIEWPORTS){
       const failures=[];
       await cdp('Emulation.setDeviceMetricsOverride',{
         width:view.width,height:view.height,deviceScaleFactor:1,mobile:view.mobile,scale:1,
       });
-      await cdp('Page.navigate',{url:ORIGIN+'/'});
+      await cdp('Page.navigate',{url:origin+'/'});
       const state=await waitForEdition(cdp);
       if(state.main!==1)failures.push('missing-main');
       if(!state.header||!state.brand||!state.title)failures.push('brand-or-header');
@@ -189,19 +304,21 @@ async function main(){
         screenshot:name,failures,
       });
     }
-    const status=results.every(item=>item.failures.length===0)&&mutatingFirstPartyRequests===0
-      ?'LIVE_READER_PASS':'LIVE_READER_BLOCKED';
+    const knowledgeDistribution=await probeKnowledgeBrowser(cdp,options,started,before);
+    const passed=results.every(item=>item.failures.length===0)&&mutatingFirstPartyRequests===0&&knowledgeDistribution.passed;
+    const recoveryVerified=passed&&knowledgeDistribution.recoveryVerified;
+    const status=!passed?'LIVE_READER_BLOCKED':recoveryVerified?'LIVE_READER_RECOVERY_PASS':knowledgeDistribution.activeAtStart?'LIVE_READER_MONITOR_PASS':'LIVE_READER_DENIAL_PASS';
     const report={
-      version:'dlkt-info-live-browser-smoke-1',status,origin:ORIGIN,
-      anonymous:true,mutatingFirstPartyRequests,viewports:results,
+      version:'dlkt-info-live-browser-smoke-1',status,origin,mode:options.mode,recoveryVerified,
+      anonymous:true,mutatingFirstPartyRequests,viewports:results,knowledgeDistribution,
       limitations:[
-        'Anonymous public homepage only; no OTP, wallet, payments, geo targeting or third-party article accuracy checked.',
+        'Anonymous homepage and exact NSW standalone links at the selected origin; no OTP, wallet, payments, authenticated Control, geo targeting or third-party article accuracy checked.',
         'Screenshots and browser DOM checks do not replace human visual review.',
       ],
     };
     writeFileSync(join(destination,'report.json'),JSON.stringify(report,null,2)+'\n',{mode:0o600});
     console.log('DLKT_LIVE_BROWSER_QA '+JSON.stringify(report));
-    if(status!=='LIVE_READER_PASS')process.exitCode=1;
+    if(!passed)process.exitCode=1;
   }finally{
     try{ws?.close();}catch{}
     if(chrome&&chrome.exitCode===null){
@@ -211,4 +328,4 @@ async function main(){
     catch(error){if(!['ENOTEMPTY','EBUSY'].includes(error?.code))throw error;}
   }
 }
-await main();
+if(process.argv[1]&&pathToFileURL(resolve(process.argv[1])).href===import.meta.url)await main();
