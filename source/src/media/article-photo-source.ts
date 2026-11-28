@@ -1,6 +1,6 @@
 import {parseDocument,DomUtils} from 'htmlparser2';
-import {publisherForNewsUrl} from '../iceo/news-sources.js';
-import {newsSourceForUrl} from '../local/news-policy.js';
+import {photoPublisher,parseArticlePhotoUrl as url,articlePhotoAssetPaths} from './article-photo-reference.js';
+export {photoPublisher} from './article-photo-reference.js';
 
 export interface PhotoArticle {
  readonly id:string; readonly revision:string; readonly sourceUrl:string; readonly title:string;
@@ -16,42 +16,10 @@ export const PHOTO_HTML_LIMIT=1_048_576;
 const object=(value:unknown):value is Record<string,unknown>=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 const clean=(value:unknown,limit=500):string|null=>typeof value==='string'&&value.length<=limit&&!/[\u0000-\u001f\u007f<>]/u.test(value)?value.replace(/\s+/gu,' ').trim()||null:null;
 const normalize=(value:string):string=>value.normalize('NFKC').toLowerCase().replace(/[‘’]/gu,"'").replace(/[“”]/gu,'"').replace(/\s+/gu,' ').trim();
-function url(value:unknown,base?:string):URL|null {
- if(typeof value!=='string'||value.length>3000||/[\u0000-\u0020\u007f<>\\]/u.test(value))return null;
- try{const parsed=base?new URL(value,base):new URL(value);
-  return parsed.protocol==='https:'&&!parsed.username&&!parsed.password&&!parsed.port?parsed:null;
- }catch{return null;}
-}
-export function photoPublisher(articleUrl:string):string|null {
- const parsed=url(articleUrl);if(!parsed||parsed.hash||parsed.href!==articleUrl||parsed.pathname==='/')return null;
- if(parsed.origin==='https://arcub.ro'&&!parsed.search&&/^\/eveniment\/[a-z0-9-]+$/u.test(parsed.pathname))return'bucharest-arcub';
- const local=newsSourceForUrl(articleUrl);if(local)return local.id;
- const reviewed=publisherForNewsUrl(articleUrl);if(reviewed)return Object.hasOwn(ASSET_PATHS,reviewed.id)?reviewed.id:null;
- if(['www.nasa.gov','science.nasa.gov'].includes(parsed.hostname))return'nasa';
- return null;
-}
-const ASSET_PATHS:Readonly<Record<string,Readonly<Record<string,readonly string[]>>>>=Object.freeze({
- // ARCUB original page-header images, observed in probe45726653109; generic social metadata is excluded below.
- 'bucharest-arcub':{'arcub.ro':['/img/']},
- 'bucharest-b365':{'b365.ro':['/wp-content/uploads/']},
- 'bucharest-buletin':{'buletin.de':['/bucuresti/wp-content/uploads/','/wp-content/uploads/']},
- // Exact article metadata and same-origin upload path verified by primary probe45051739949.
- 'hotnews':{'hotnews.ro':['/wp-content/uploads/']},
- 'digi24':{'s.iw.ro':['/gateway/g/']},
- // Primary metadata receipt45070034177: both originals bind this exact publisher CDN upload path.
- 'repubblica':{'www.repstatic.it':['/content/nazionale/img/']},
- 'guardian':{'i.guim.co.uk':['/img/media/'],'media.guim.co.uk':['/']},
- 'bbc':{'ichef.bbci.co.uk':['/news/','/ace/','/images/ic/'],'ichef.bbci.co.uk.edgesuite.net':['/news/']},
- 'the-hindu':{'th-i.thgim.com':['/public/','/incoming/'],'www.thehindu.com':['/incoming/','/news/','/sport/']},
- 'france24':{'s.france24.com':['/media/display/']},
- 'dw':{'static.dw.com':['/image/']},
- 'global-voices':{'globalvoices.org':['/wp-content/uploads/'],'www.globalvoices.org':['/wp-content/uploads/']},
- 'nasa':{'www.nasa.gov':['/wp-content/uploads/'],'science.nasa.gov':['/wp-content/uploads/'],'images-assets.nasa.gov':['/image/']},
-});
 /** Only publisher-owned, reviewed raster paths. Never accept an arbitrary proxy URL. */
 export function articleImageUrl(value:unknown,articleUrl:string):string|null {
  const article=url(articleUrl),publisher=photoPublisher(articleUrl);if(!article||!publisher)return null;
- const candidate=url(value,articleUrl),paths=candidate?ASSET_PATHS[publisher]?.[candidate.hostname]:undefined;
+ const candidate=url(value,articleUrl),paths=candidate?articlePhotoAssetPaths(publisher,candidate.hostname):undefined;
  if(!candidate||candidate.hash||!paths?.some(path=>candidate.pathname.startsWith(path)))return null;
  let pathname:string;try{pathname=decodeURIComponent(candidate.pathname);}catch{return null;}
  if(/[\\\u0000-\u0020\u007f]/u.test(pathname)||/(?:^|\/)\.\.?(?:\/|$)/u.test(pathname)
