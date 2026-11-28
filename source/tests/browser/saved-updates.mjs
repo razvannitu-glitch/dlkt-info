@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
-import {writeFileSync} from 'node:fs';
+import {createBrowserArtifacts} from './qa-artifacts.mjs';
 import chromium from '@sparticuz/chromium';
 import {chromium as playwright} from 'playwright-core';
 import {setupLambdaEnvironment} from './node_modules/@sparticuz/chromium/build/helper.js';
 import {inflate} from './node_modules/@sparticuz/chromium/build/lambdafs.js';
 
+const artifacts=createBrowserArtifacts('saved-updates');
+console.log(JSON.stringify({artifactDirectory:artifacts.directory}));
 const base=process.env.ICEO_BASE??'http://127.0.0.1:3100';
 const report={base,checkedAt:new Date().toISOString(),environment:'controlled public-source fixtures in a real browser',checks:[],errors:[],publicRequests:[]};
 const check=(name,pass)=>{report.checks.push({name,passed:Boolean(pass)});assert.ok(pass,name);};
@@ -63,5 +65,5 @@ try{
  check('storage-failure-keeps-reading-and-never-claims-save',await blocked.locator('#discovery-cards .info-card').count()>0&&await blocked.locator('#memory-status').textContent().then(value=>value.includes('Reading still works')));await blocked.close();
  check('saved-identities-never-enter-public-requests',report.publicRequests.every(request=>new URL(request.url).pathname==='/api/iceo'&&!new URL(request.url).search&&request.method==='GET'&&request.body===null));
  check('no-page-errors',report.errors.length===0);
- writeFileSync('/tmp/dlkt-saved-updates-browser-report.json',JSON.stringify(report,null,2));console.log(JSON.stringify({passed:report.checks.filter(item=>item.passed).length,total:report.checks.length}));
-}catch(error){writeFileSync('/tmp/dlkt-saved-updates-browser-report.json',JSON.stringify(report,null,2));throw error;}finally{await browser.close();}
+ artifacts.write('dlkt-saved-updates-browser-report.json',JSON.stringify(report,null,2));console.log(JSON.stringify({passed:report.checks.filter(item=>item.passed).length,total:report.checks.length}));
+}catch(error){artifacts.write('dlkt-saved-updates-browser-failure.json',JSON.stringify(report,null,2));throw error;}finally{await browser.close();}

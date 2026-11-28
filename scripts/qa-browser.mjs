@@ -3,7 +3,8 @@ import {createHash} from 'node:crypto';
 import {deflateSync} from 'node:zlib';
 import {spawn} from 'node:child_process';
 import {createServer} from 'node:http';
-import {existsSync,mkdtempSync,readFileSync,writeFileSync,mkdirSync,rmSync,statSync} from 'node:fs';
+import {existsSync,mkdtempSync,readFileSync,writeFileSync,mkdirSync,rmSync} from 'node:fs';
+import {readStableRegularFile} from '../lib/stable-local-read.mjs';
 import {tmpdir} from 'node:os';
 import {extname,join,resolve,sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -79,9 +80,9 @@ function localServer(fixture,personal,knowledge,audience){
   const file=resolve(publicDir,'.'+candidate);
   if(!file.startsWith(publicDir+sep)){res.writeHead(403).end();return;}
   try{
-   if(!statSync(file).isFile())throw Error('not-file');
+   const bytes=readStableRegularFile(file,{maxBytes:16*1024*1024});
    res.setHeader('Content-Type',MIME[extname(file).toLowerCase()]??'application/octet-stream');
-   res.writeHead(200).end(req.method==='HEAD'?undefined:readFileSync(file));
+   res.writeHead(200).end(req.method==='HEAD'?undefined:bytes);
   }catch{res.writeHead(404).end('not found');}
  });
 }

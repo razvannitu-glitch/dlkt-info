@@ -153,7 +153,7 @@ test('explicit mainEntityOfPage binds the record and stale JSONLD cannot be repl
 });
 test('a failed alternative cannot make an individually verified card unavailable to Share',async()=>{
  const good=candidate(),bad={...candidate('technology',1),sourceUrl:'https://www.bbc.com/technology/fixture-1',publisher:'BBC'};
- const result=await discoverNews(async url=>String(url)===NEWS_INDEX_URL?xmlResponse(rss([good,bad])):String(url).includes('bbc.com')?new Response('denied',{status:403}):htmlResponse(html(good)),now);
+ const result=await discoverNews(async url=>String(url)===NEWS_INDEX_URL?xmlResponse(rss([good,bad])):String(url)===bad.sourceUrl?new Response('denied',{status:403}):htmlResponse(html(good)),now);
  const row=result.find(r=>r.health.id==='news-technology');assert.equal(row.cards.length,1);assert.equal(row.health.state,'partial');assert.equal(row.health.error,null);assert.equal(row.health.rejected,1);
 });
 

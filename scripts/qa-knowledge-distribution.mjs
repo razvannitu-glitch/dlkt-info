@@ -88,8 +88,8 @@ export async function verifyKnowledgeDistribution({fixture,origin,openIsolated,e
    assert.equal(view.id,card.id);assert.equal(view.language,language);assert.equal(view.title,card.copy[language].title);assert.ok(view.body.includes(card.copy[language].connection));
    assert.ok(view.body.includes(card.geography.label[language]));assert.equal(view.source,card.source.url);assert.equal(view.canonical,link);assert.equal(view.meta,link);
    assert.equal(view.until,fixture.deadline);assert.ok(view.scrollWidth<=view.width+2,'standalone layout overflow at '+width+'px');
-   if(licensedLayout||runtimeAdmission)assert.ok(view.credits.includes('https://creativecommons.org/licenses/by/4.0/'),'licensed renderer shows credit and licence');
-   if(runtimeAdmission){assert.ok(view.credits.includes('https://www.nsw.gov.au/nsw-government/about-website/copyright'));assert.ok(view.body.includes('© State of New South Wales. For current information go to www.nsw.gov.au.'));}
+   if(licensedLayout||runtimeAdmission)assert.ok(view.credits.some(credit=>credit==='https://creativecommons.org/licenses/by/4.0/'),'licensed renderer shows credit and licence');
+   if(runtimeAdmission){assert.ok(view.credits.some(credit=>credit==='https://www.nsw.gov.au/nsw-government/about-website/copyright'));assert.ok(view.body.includes('© State of New South Wales. For current information go to www.nsw.gov.au.'));}
    for(const a of (await state()).links){assert.equal(a.disabled,'false');assert.equal(a.tabIndex,0);const target=new URL(a.href);assert.ok([...target.searchParams.values()].includes(link));}
    if(runtimeAdmission){
     const item=knowledgeCases(Date.parse(card.reviewedAt)+1000).find(item=>item.key==='canonical-'+language);

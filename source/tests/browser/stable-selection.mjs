@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
-import {writeFileSync} from 'node:fs';
+import {createBrowserArtifacts} from './qa-artifacts.mjs';
 import chromium from '@sparticuz/chromium';
 import {chromium as pw} from 'playwright-core';
 import {setupLambdaEnvironment} from './node_modules/@sparticuz/chromium/build/helper.js';
 import {inflate} from './node_modules/@sparticuz/chromium/build/lambdafs.js';
+const artifacts=createBrowserArtifacts('stable-selection');
+console.log(JSON.stringify({artifactDirectory:artifacts.directory}));
 const base=process.env.ICEO_BASE??'http://127.0.0.1:3100';
 const report={base,checkedAt:new Date().toISOString(),checks:[],errors:[],scope:'Real source metadata; controlled changed-record and outage responses only inside isolated browser'};
 const check=(name,pass,details=null)=>{report.checks.push({name,passed:!!pass,details});assert.ok(pass,name);};
@@ -45,5 +47,5 @@ try{
  check('no-overflow-390',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  await page.setViewportSize({width:320,height:780});check('no-overflow-320',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  check('no-javascript-errors',report.errors.length===0,report.errors);
- report.passed=report.checks.filter(c=>c.passed).length;report.total=report.checks.length;writeFileSync('/tmp/r0912-stability-browser.json',JSON.stringify(report,null,2));console.log(JSON.stringify({base,passed:report.passed,total:report.total,compared:first.edition.comparison.length}));
-}catch(e){writeFileSync('/tmp/r0912-stability-browser-failure.json',JSON.stringify(report,null,2));throw e;}finally{await browser.close();}
+ report.passed=report.checks.filter(c=>c.passed).length;report.total=report.checks.length;artifacts.write('r0912-stability-browser.json',JSON.stringify(report,null,2));console.log(JSON.stringify({base,passed:report.passed,total:report.total,compared:first.edition.comparison.length}));
+}catch(e){artifacts.write('r0912-stability-browser-failure.json',JSON.stringify(report,null,2));throw e;}finally{await browser.close();}

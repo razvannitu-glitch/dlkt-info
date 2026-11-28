@@ -115,11 +115,15 @@ test('failed acquisition cannot stamp a new successful photo check',async()=>{
  const service=new ArticlePhotoService(async()=>{throw Error('source denied');},()=>now);
  assert.equal(await service.read(article),null);
 });
+// The HTTP fixture targets an independently fixed public record reference.
+// Fail if the catalog changes; no file-supplied value chooses a request URL.
+const photoFixtureRef=Object.freeze({id:'0fd635ccc5e937da8c9f0f42',revision:'47188a0a93b76d2f3807074221ec0de61d10e505f235cc29aa0998756ff35f50'});
 const card=JSON.parse(readFileSync('tests/fixtures/card-photos.json','utf8'))[0];
+assert.deepEqual({id:card.id,revision:card.contentHash},photoFixtureRef);
 const snapshot={generatedAt:new Date(now).toISOString(),state:'ready',cards:[card]};
 const services={global:async()=>snapshot,local:async()=>({articles:[],sources:[]}),photos:{read:async value=>({bytes:pixels,mime:'image/png',width:640,height:360,sha256:'d'.repeat(64),metadata:{articleUrl:value.sourceUrl,imageUrl:image,basis:'article-opengraph',alt:'',credit:null,caption:null},checkedAt:now,until:now+60000})},clock:()=>now};
 test('API resolves only exact current article IDs and revisions, rejecting stale or absent catalog records',async()=>{
- const ref={id:card.id,revision:card.contentHash};
+ const ref=photoFixtureRef;
  assert.equal((await resolvePhotoArticle(ref,services)).sourceUrl,card.sourceUrl);
  assert.equal(await resolvePhotoArticle({...ref,revision:'f'.repeat(64)},services),null);
  assert.equal(await resolvePhotoArticle({...ref,id:'e'.repeat(24)},services),null);
@@ -128,21 +132,21 @@ test('API resolves only exact current article IDs and revisions, rejecting stale
 });
 test('API returns a source-bound raster, HEAD and ETag; rejects URL injection and wrong revisions',async()=>{
  const server=createServer((req,res)=>{void handleArticlePhoto(req,res,services);}).listen(0,'127.0.0.1');await once(server,'listening');
- const base='http://127.0.0.1:'+server.address().port,path=articlePhotoPath({id:card.id,revision:card.contentHash});
+ const base='http://127.0.0.1:'+server.address().port,path=articlePhotoPath(photoFixtureRef);
  try{
   const response=await fetch(base+path);assert.equal(response.status,200);assert.equal(response.headers.get('content-type'),'image/png');assert.equal(response.headers.get('x-content-type-options'),'nosniff');assert.match(response.headers.get('link'),/globalvoices/);assert.deepEqual(Buffer.from(await response.arrayBuffer()),pixels);
   const head=await fetch(base+path,{method:'HEAD'});assert.equal(head.status,200);assert.equal(await head.text(),'');
   const unchanged=await fetch(base+path,{headers:{'If-None-Match':'"'+('d'.repeat(64))+'"'}});assert.equal(unchanged.status,304);
   assert.equal((await fetch(base+path,{method:'POST'})).status,405);
-  for(const query of ['?url=https://evil.test',path.slice(path.indexOf('?'))+'&url=https://evil.test',path.slice(path.indexOf('?'))+'&id='+card.id])assert.equal((await fetch(base+'/api/article-photo'+query)).status,400);
-  assert.equal((await fetch(base+articlePhotoPath({id:card.id,revision:'e'.repeat(64)}))).status,404);
-  assert.equal((await fetch(base+articlePhotoPath({id:card.id,revision:card.contentHash})+'&city=683506')).status,400);
+  for(const query of ['?url=https://evil.test',path.slice(path.indexOf('?'))+'&url=https://evil.test',path.slice(path.indexOf('?'))+'&id='+photoFixtureRef.id])assert.equal((await fetch(base+'/api/article-photo'+query)).status,400);
+  assert.equal((await fetch(base+articlePhotoPath({...photoFixtureRef,revision:'e'.repeat(64)}))).status,404);
+  assert.equal((await fetch(base+articlePhotoPath(photoFixtureRef)+'&city=683506')).status,400);
  }finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
 });
 test('API never returns photo bytes bound to a different source article',async()=>{
  const altered={...services,photos:{read:async value=>({...await services.photos.read(value),metadata:{articleUrl:'https://wrong.example/',imageUrl:image,basis:'article-opengraph',alt:'',credit:null,caption:null}})}};
  const server=createServer((req,res)=>{void handleArticlePhoto(req,res,altered);}).listen(0,'127.0.0.1');await once(server,'listening');
- try{assert.equal((await fetch('http://127.0.0.1:'+server.address().port+articlePhotoPath({id:card.id,revision:card.contentHash}))).status,404);}
+ try{assert.equal((await fetch('http://127.0.0.1:'+server.address().port+articlePhotoPath(photoFixtureRef))).status,404);}
  finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
 });
 

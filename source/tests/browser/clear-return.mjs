@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
-import {writeFileSync} from 'node:fs';
+import {createBrowserArtifacts} from './qa-artifacts.mjs';
 import chromium from '@sparticuz/chromium';
 import {chromium as pw} from 'playwright-core';
 import {setupLambdaEnvironment} from './node_modules/@sparticuz/chromium/build/helper.js';
 import {inflate} from './node_modules/@sparticuz/chromium/build/lambdafs.js';
+const artifacts=createBrowserArtifacts('clear-return');
+console.log(JSON.stringify({artifactDirectory:artifacts.directory}));
 const base=process.env.ICEO_BASE??'http://127.0.0.1:3100';
 const report={base,checkedAt:new Date().toISOString(),checks:[],errors:[],scenarios:['live source selection and saved return','controlled publisher-title change','controlled unavailable source','clock-only 1-hour source expiry','controlled operational expiry','local date rollover','persisted-page restoration']};
 const check=(name,pass,details=null)=>{report.checks.push({name,passed:!!pass,details});assert.ok(pass,name);};
@@ -76,5 +78,5 @@ try{
  check('not-today-removes-only-that-version-until-local-midnight',await midnight.locator(`[data-daily-id="${id}"]`).count()===0);await midnight.clock.fastForward(31000);
  check('next-local-date-restores-card-without-reload',await midnight.locator(`[data-daily-id="${id}"]`).count()===1);await midnight.close();
  check('no-javascript-errors-in-live-and-controlled-scenarios',report.errors.length===0,report.errors);
- report.passed=report.checks.filter(c=>c.passed).length;report.total=report.checks.length;writeFileSync('/tmp/r0911-clear-return-browser.json',JSON.stringify(report,null,2));console.log(JSON.stringify({base,passed:report.passed,total:report.total,errors:report.errors}));
-}catch(e){writeFileSync('/tmp/r0911-clear-return-failure.json',JSON.stringify(report,null,2));throw e;}finally{await browser.close();}
+ report.passed=report.checks.filter(c=>c.passed).length;report.total=report.checks.length;artifacts.write('r0911-clear-return-browser.json',JSON.stringify(report,null,2));console.log(JSON.stringify({base,passed:report.passed,total:report.total,errors:report.errors}));
+}catch(e){artifacts.write('r0911-clear-return-failure.json',JSON.stringify(report,null,2));throw e;}finally{await browser.close();}
